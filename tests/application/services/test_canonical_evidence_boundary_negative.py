@@ -432,10 +432,15 @@ class _CanonicalInputRecordingSignalEngine:
 
 class _RecordingCandidateEvidenceBuilder:
     """Strict fake for the setup-phase collaborator. Setup phase is outside
-    this flow-only parity test; it performs no repository access."""
+    this flow-only parity test; it performs no repository access.
+
+    Exposes setup_phase_history_repository so AccumulationCandidateSignalAssessor
+    can resolve the ADR-058 ledger port (None = no production memory in this test).
+    """
 
     def __init__(self) -> None:
         self.calls: list[dict] = []
+        self.setup_phase_history_repository = None
 
     def resolve_preliminary_setup_family_result(self, candidate):
         from src.application.services.primary_setup_family_resolver import (

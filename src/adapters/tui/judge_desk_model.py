@@ -23,6 +23,13 @@ from src.adapters.shared.decision_display import (
     readiness_and_family,
 )
 from src.adapters.shared.screen_accum_board_fields import extract_screen_accum_board_fields
+from src.adapters.shared.trade_action_labels import (
+    ACTION_BLOCK,
+    ACTION_ENTER,
+    AVOID_LIKE,
+    ENTER_LIKE,
+    WATCH_LIKE,
+)
 from src.adapters.tui.phase_sequence import PhaseSequenceFact, format_phase_sequence_section
 from src.adapters.tui.presenters.accum_presenter import AccumRowView, build_accum_focus
 
@@ -337,7 +344,7 @@ def _card_risk(source: Any) -> JudgeCard:
         else:
             chip_parts.append(f"✓{short}")
 
-    tone = "block" if blocked or "BLOCK" in verdict_s.upper() else "open"
+    tone = "block" if blocked or ACTION_BLOCK in verdict_s.upper() else "open"
     if blocked:
         chips = " ".join(chip_parts[:8]) if chip_parts else "—"
         lines = (rat_s or "blocked", chips)
@@ -552,7 +559,7 @@ def _card_named_setups(source: Any) -> JudgeCard | None:
         CARD_NAMED,
         "Named setups",
         "diagnostic" if empty_family else str(family),
-        (g, "MATCH ≠ ENTER"),
+        (g, f"MATCH ≠ {ACTION_ENTER}"),
         tone="neutral",
     )
 
@@ -603,11 +610,11 @@ def _card_signal(source: Any) -> JudgeCard | None:
 def _tone_from_action_gate(action: str, gate: str) -> str:
     a = (action or "").strip().upper()
     g = (gate or "").strip().upper()
-    if a in {"AVOID", "BLOCK", "SELL"} or g in {"BLOCK", "BLOCKED", "FAIL", "CLOSED"}:
+    if a in AVOID_LIKE or g in {ACTION_BLOCK, "BLOCKED", "FAIL", "CLOSED"}:
         return "block"
-    if a in {"ENTER", "BUY"} or g in {"OPEN", "PASS", "CLEAR"}:
+    if a in ENTER_LIKE or g in {"OPEN", "PASS", "CLEAR"}:
         return "open"
-    if a in {"WATCH", "HOLD"}:
+    if a in WATCH_LIKE:
         return "watch"
     return "neutral"
 
@@ -619,11 +626,11 @@ def _strip_markup(s: str) -> str:
 
 def action_css_class(action: str) -> str:
     a = (action or "").strip().upper()
-    if a in {"ENTER", "BUY"}:
+    if a in ENTER_LIKE:
         return "action-enter"
-    if a in {"AVOID", "BLOCK", "SELL"}:
+    if a in AVOID_LIKE:
         return "action-avoid"
-    if a in {"WATCH", "HOLD"}:
+    if a in WATCH_LIKE:
         return "action-watch"
     return "action-other"
 
@@ -632,6 +639,6 @@ def gate_css_class(gate: str) -> str:
     g = (gate or "").strip().upper()
     if g in {"OPEN", "PASS", "CLEAR"}:
         return "gate-open"
-    if g in {"BLOCK", "BLOCKED", "FAIL", "CLOSED"}:
+    if g in {ACTION_BLOCK, "BLOCKED", "FAIL", "CLOSED"}:
         return "gate-block"
     return "gate-other"

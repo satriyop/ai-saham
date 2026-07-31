@@ -25,11 +25,12 @@ FORBIDDEN_NON_COMPOSITION_IMPORTS = (
     "src.domain.services",
     "src.infrastructure",
 )
+# Filesystem / process write surfaces only. Do NOT include generic methods like
+# str.replace or datetime.replace — those are presentation math, not disk IO.
 FORBIDDEN_WRITE_CALLS = {
     "mkdir",
     "open",
     "rename",
-    "replace",
     "rmdir",
     "system",
     "touch",
@@ -37,6 +38,8 @@ FORBIDDEN_WRITE_CALLS = {
     "write_bytes",
     "write_text",
 }
+# Path.replace(target) is filesystem; str.replace(a,b) is not. Distinguish by arity.
+_PATH_REPLACE = "replace"
 # Milestone B authorizes explicit watchlist Save/Compare in the TUI (roadmap
 # docs/roadmap/roadmap_tui.md). SQLiteWatchlistRepository and
 # SaveScreenWatchlistUseCase are therefore constructed by composition and are
@@ -120,6 +123,14 @@ def _find_tui_boundary_violations(root: Path) -> list[TuiBoundaryViolation]:
                 violations.append(
                     TuiBoundaryViolation(path, node.lineno, f"forbidden write call {call_name}")
                 )
+                continue
+            # Path.replace(dst) is one positional arg (no keywords).
+            # str.replace(old, new[, count]) has 2+ args; datetime.replace uses keywords.
+            if call_name == _PATH_REPLACE and isinstance(node.func, ast.Attribute):
+                if len(node.args) == 1 and not node.keywords:
+                    violations.append(
+                        TuiBoundaryViolation(path, node.lineno, f"forbidden write call {call_name}")
+                    )
     return violations
 
 

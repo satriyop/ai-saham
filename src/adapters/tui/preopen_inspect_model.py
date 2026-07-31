@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.adapters.shared.trade_action_labels import ACTION_SCAN_TOKENS
 from src.adapters.tui.presenters.preopen_presenter import format_preopen_why
 
 FLAG_DEFS: tuple[tuple[str, str], ...] = (
@@ -53,7 +54,7 @@ class PreOpenInspectModel:
 
     def body_contains_action_authority(self) -> bool:
         text = f"{self.why} {self.footer}".upper()
-        for token in (" ENTER ", " WATCH ", " AVOID "):
+        for token in ACTION_SCAN_TOKENS[:3]:
             if token in f" {text} ":
                 return True
         return False

@@ -1,7 +1,7 @@
 """Structured Broker desk-home model (present-only).
 
 Builds from ViewBrokerDeskShowResult + DeskSessionPulse — no ranking,
-no fetch policy. Browse-only: never carries Action / ENTER / WATCH.
+no fetch policy. Browse-only: never carries Action tokens.
 
 Layer: Adapter
 """
@@ -12,6 +12,12 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from src.adapters.shared.trade_action_labels import (
+    ACTION_AVOID,
+    ACTION_ENTER,
+    ACTION_SCAN_TOKENS,
+    ACTION_WATCH,
+)
 from src.adapters.shared.view_number_format import format_value
 from src.domain.entities.broker_flow import BrokerType
 
@@ -69,10 +75,10 @@ class BrokerDeskHomeModel:
         ]
         text = " ".join(blobs).upper()
         # Exact Action tokens only — avoid matching substrings in ticker codes.
-        for token in (" ENTER ", " WATCH ", " AVOID ", "ENTER/", "WATCH/", "AVOID/"):
+        for token in ACTION_SCAN_TOKENS:
             if token in f" {text} ":
                 return True
-        if text.strip() in {"ENTER", "WATCH", "AVOID"}:
+        if text.strip() in {ACTION_ENTER, ACTION_WATCH, ACTION_AVOID}:
             return True
         return False
 

@@ -11,6 +11,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
+from src.adapters.shared.trade_action_labels import ACTION_BLOCK
 from src.adapters.tui.preopen_inspect_model import (
     EXPANDABLE_FLAGS,
     FLAG_DEFS,
@@ -193,7 +194,7 @@ class PreopenInspectDesk(Vertical):
         risk_el = self.query_one("#poi-risk", Static)
         risk_el.remove_class("block")
         risk_u = (model.risk or "").upper()
-        if risk_u in {"BLOCK", "BLOCKED", "WARN", "HIGH"}:
+        if risk_u in {ACTION_BLOCK, "BLOCKED", "WARN", "HIGH"}:
             risk_el.add_class("block")
         risk_el.update(f" Risk {model.risk} ")
         # Compact why line when why panel closed

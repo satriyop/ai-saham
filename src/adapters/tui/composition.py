@@ -766,8 +766,10 @@ class _LocalPlanStructureRunner:
         from datetime import date
         from pathlib import Path as PathType
 
-        from src.adapters.cli.plan_swing_command_config import load_plan_swing_command_config
-        from src.adapters.cli.plan_swing_workflow_factory import create_plan_swing_workflow
+        from src.adapters.composition.plan_swing_command_config import (
+            load_plan_swing_command_config,
+        )
+        from src.adapters.composition.plan_swing_workflow_factory import create_plan_swing_workflow
         from src.application.dto.plan_swing import PlanSwingWorkflowRequest
         from src.application.services.swing_trade_plan_builder import build_swing_trade_plan
         from src.application.services.swing_trade_plan_store import (
@@ -949,7 +951,7 @@ class _LocalPaperLogFromPlanRunner:
     def __call__(self, ticker: str) -> Any:
         from datetime import date as date_cls
 
-        from src.adapters.cli.trade_accum_workflow_factory import (
+        from src.adapters.composition.trade_accum_workflow_factory import (
             create_log_accumulation_trade_workflow,
         )
         from src.adapters.tui.paper_log_result import PaperLogResult, refuse_paper_log

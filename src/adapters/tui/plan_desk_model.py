@@ -11,6 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.adapters.shared.trade_action_labels import (
+    AVOID_LIKE,
+    ENTER_LIKE,
+    WATCH_LIKE,
+)
 from src.adapters.tui.plan_structure_result import (
     PlanStructureResult,
     plan_structure_from_runner_object,
@@ -255,11 +260,11 @@ def _cards(
 
 def _tone_action(action: str) -> str:
     a = (action or "").strip().upper()
-    if a in {"ENTER", "BUY"}:
+    if a in ENTER_LIKE:
         return "open"
-    if a in {"AVOID", "BLOCK", "SELL"}:
+    if a in AVOID_LIKE:
         return "block"
-    if a in {"WATCH", "HOLD"}:
+    if a in WATCH_LIKE:
         return "watch"
     return "neutral"
 

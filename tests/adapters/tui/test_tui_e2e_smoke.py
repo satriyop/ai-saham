@@ -279,7 +279,7 @@ def test_e2e_snapshot_open_marks_limited_judge_chrome(tmp_path: Path):
             },
         ),
     )
-    from src.adapters.tui.board_snapshot import write_accum_board_snapshot
+    from src.adapters.composition.board_snapshot_store import write_accum_board_snapshot
 
     write_accum_board_snapshot(path, snap)
 

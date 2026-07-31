@@ -75,6 +75,52 @@ class FakeLearningObservationsRepository:
         return rows
 
 
+class FakeSetupPhaseHistoryRepository:
+    """ADR-058 production phase memory for sequence validation tests."""
+
+    def __init__(self, phases: tuple[str, ...], *, ticker: str = "BBCA") -> None:
+        from src.domain.ports.setup_phase_history_repository import (
+            SCHEMA_VERSION_V1,
+            SOURCE_WORKFLOW_SCREEN_ACCUM,
+            SetupPhaseLedgerRow,
+        )
+        from src.domain.value_objects.setup_phase import SetupPhaseState
+
+        self._rows: list[SetupPhaseLedgerRow] = []
+        start = date(2026, 6, 1)
+        for idx, phase_name in enumerate(phases):
+            day = start + timedelta(days=idx)
+            self._rows.append(
+                SetupPhaseLedgerRow(
+                    entry_id=f"test-{ticker}-{day.isoformat()}",
+                    ticker=ticker.upper(),
+                    as_of_date=day,
+                    phase=SetupPhaseState(phase_name),
+                    setup_family="foreign-bounce",
+                    source_workflow=SOURCE_WORKFLOW_SCREEN_ACCUM,
+                    recorded_at=datetime(
+                        day.year, day.month, day.day, 9, 0, tzinfo=IDX_TIMEZONE
+                    ).isoformat(),
+                    schema_version=SCHEMA_VERSION_V1,
+                )
+            )
+
+    def list_rows_before(self, *, ticker: str, before_date: date, limit: int | None = None):
+        rows = [r for r in self._rows if r.ticker == ticker.upper() and r.as_of_date < before_date]
+        if limit is not None:
+            rows = rows[-limit:]
+        return rows
+
+    def list_rows_before_many(self, *, tickers, before_date: date):
+        wanted = {str(t).upper() for t in tickers}
+        return [r for r in self._rows if r.ticker in wanted and r.as_of_date < before_date]
+
+    def record_phase(self, **kwargs):
+        from src.domain.ports.setup_phase_history_repository import SetupPhaseRecordResult
+
+        return SetupPhaseRecordResult.SKIPPED_POLICY
+
+
 class FakeRegistry:
     def compute(self, name: str, candles: list[Candle], period: int):
         if name == "ATR":

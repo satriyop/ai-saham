@@ -260,7 +260,7 @@ def _build_diagnostic_evidence_collector(
     """
     from decimal import Decimal
 
-    from src.adapters.cli.plan_swing_optional_fetchers import fetch_swing_sentiment
+    from src.adapters.composition.swing_optional_fetchers import fetch_swing_sentiment
     from src.application.services.screen_judgment_diagnostic_evidence import (
         collect_screen_judgment_diagnostic_evidence,
     )

@@ -28,7 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # themselves — the resolver is handed off to the use case.
 ADAPTER_FACTORY_FILES = (
     "src/adapters/composition/screen_accum_workflow_factory.py",
-    "src/adapters/cli/plan_swing_workflow_factory.py",
+    "src/adapters/composition/plan_swing_workflow_factory.py",
     "src/adapters/cli/research_accum_backfill_commands.py",
     "src/infrastructure/composition/fetch_market/fetch_market_workflow_factory.py",
 )

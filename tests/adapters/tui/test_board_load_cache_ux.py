@@ -7,10 +7,12 @@ import threading
 from pathlib import Path
 from types import SimpleNamespace
 
+from src.adapters.composition.board_snapshot_store import (
+    write_accum_board_snapshot,
+)
 from src.adapters.tui.board_snapshot import (
     identity_from_live_payload,
     snapshot_from_board_view,
-    write_accum_board_snapshot,
 )
 from src.adapters.tui.controllers.board_controller import BoardController
 from src.adapters.tui.main import CockpitApp
@@ -217,7 +219,7 @@ def test_successful_load_writes_snapshot(tmp_path: Path):
 
 def test_empty_live_recompute_invalidates_snapshot_for_next_open(tmp_path: Path):
     """Criterion 4: successful 0-candidate recompute must not leave SNAP restorable."""
-    from src.adapters.tui.board_snapshot import read_accum_board_snapshot
+    from src.adapters.composition.board_snapshot_store import read_accum_board_snapshot
 
     planted = _result(["SNAP1", "SNAP2"])
     view = AccumPresenter().present(planted)
@@ -280,7 +282,7 @@ def test_empty_live_recompute_invalidates_snapshot_for_next_open(tmp_path: Path)
 
 def test_controller_empty_status_also_invalidates_snapshot(tmp_path: Path):
     """EMPTY status path (empty_when) must clear disk snapshot too."""
-    from src.adapters.tui.board_snapshot import read_accum_board_snapshot
+    from src.adapters.composition.board_snapshot_store import read_accum_board_snapshot
 
     planted = _result(["OLD1"])
     view = AccumPresenter().present(planted)

@@ -7,10 +7,12 @@ import threading
 from pathlib import Path
 from types import SimpleNamespace
 
+from src.adapters.composition.board_snapshot_store import (
+    write_accum_board_snapshot,
+)
 from src.adapters.tui.board_snapshot import (
     AccumBoardSnapshot,
     AccumBoardSnapshotIdentity,
-    write_accum_board_snapshot,
 )
 from src.adapters.tui.chrome_cues import (
     broker_list_loading_body,

@@ -16,7 +16,15 @@ def test_root_help_shows_lifecycle_groups():
     assert "screen" in result.stdout
     assert "research" in result.stdout
     assert "view" in result.stdout
-    assert "learn" not in result.stdout
+    # Retired group name must not appear as a CLI command row (help prose may
+    # still say "learning" when describing research corpus).
+    assert "│ learn" not in result.stdout
+    assert "\n│ learn" not in result.stdout
+    # Typer command table uses "learn" as the command name column when present.
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("learn ") or stripped == "learn":
+            raise AssertionError(f"retired learn command still listed: {line!r}")
     assert "│ data" not in result.stdout
     assert "│ skill" not in result.stdout
 

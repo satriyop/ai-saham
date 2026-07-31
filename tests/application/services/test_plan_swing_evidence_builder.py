@@ -160,6 +160,19 @@ class _RaisingCandidateObservationsRepository:
         raise RuntimeError("history unavailable")
 
 
+class _RaisingSetupPhaseHistoryRepository:
+    """ADR-058 ledger port that fails so setup-phase warning path is covered."""
+
+    def list_rows_before(self, **kwargs):
+        raise RuntimeError("phase ledger unavailable")
+
+    def list_rows_before_many(self, **kwargs):
+        raise RuntimeError("phase ledger unavailable")
+
+    def record_phase(self, **kwargs):
+        raise RuntimeError("phase ledger unavailable")
+
+
 def _builder(
     market_repo,
     broker_repo,
@@ -169,6 +182,7 @@ def _builder(
     company_quality_context_builder_factory=None,
     signal_engine=None,
     candidate_observations_repository=None,
+    setup_phase_history_repository=None,
 ) -> PlanSwingEvidenceBuilder:
     return PlanSwingEvidenceBuilder(
         market_repository=market_repo,
@@ -177,6 +191,7 @@ def _builder(
         rules_loader=RulesYamlLoader(),
         flow_confirmation_builder=_NullFlowConfirmationBuilder(),
         candidate_observations_repository=candidate_observations_repository,
+        setup_phase_history_repository=setup_phase_history_repository,
         signal_engine=signal_engine,
         corporate_action_risk_use_case=None,
         ticker_profile_classifier_factory=ticker_profile_classifier_factory,
@@ -371,6 +386,7 @@ class TestWarningStringsExact:
             company_quality_context_builder_factory=_RaisingFactory("cq down"),
             signal_engine=_FakeSignalEngine(),
             candidate_observations_repository=_RaisingCandidateObservationsRepository(),
+            setup_phase_history_repository=_RaisingSetupPhaseHistoryRepository(),
         )
         setup_eval = SetupEvaluation(
             name="foreign-bounce", match=SetupMatch.MATCH, gates=(), failed_reasons=()

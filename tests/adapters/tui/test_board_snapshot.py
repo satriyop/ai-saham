@@ -5,15 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+from src.adapters.composition.board_snapshot_store import (
+    invalidate_accum_board_snapshot,
+    read_accum_board_snapshot,
+    write_accum_board_snapshot,
+)
 from src.adapters.tui.board_snapshot import (
     AccumBoardSnapshotIdentity,
     board_view_from_snapshot,
     default_accum_snapshot_path,
     identity_from_live_payload,
-    invalidate_accum_board_snapshot,
-    read_accum_board_snapshot,
     snapshot_from_board_view,
-    write_accum_board_snapshot,
 )
 from src.adapters.tui.presenters.accum_presenter import AccumPresenter
 

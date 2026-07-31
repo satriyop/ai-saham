@@ -462,15 +462,22 @@ def test_mount_with_loader_auto_starts_accum():
 
 
 def test_empty_cache_command_switches_stage():
+    from src.adapters.tui.local_cache_health import assess_local_cache_health
+
+    # True-empty cache health so poster title is "No local market data"
+    # (unknown/default health paints "Cache health unclear").
+    health = assess_local_cache_health(universe="lq45", candle_latest=None, broker_latest=None)
+
     async def scenario() -> None:
-        app = CockpitApp()
+        app = CockpitApp(cache_health_loader=lambda: health)
         async with app.run_test(size=(100, 32)) as pilot:
             await pilot.pause()
             app._run_command("empty-demo")
             await pilot.pause()
             assert app._stage == "empty"
-            stage_text = str(app.query_one("#stage-body").render())
-            assert "No local market data" in stage_text
+            # Empty stage paints HealthPosterDesk (stage-body hidden).
+            title = str(app.query_one("#hp-title").content)
+            assert "No local market data" in title
 
     asyncio.run(scenario())
 

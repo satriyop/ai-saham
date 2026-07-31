@@ -83,8 +83,9 @@ def test_cockpit_empty_demo_true_empty_still_says_no_market_data():
             app._run_command("empty-demo")
             await pilot.pause(0.05)
             assert app._stage == "empty"
-            stage_text = str(app.query_one("#stage-body").render())
-            assert "No local market data" in stage_text
+            # Empty stage paints HealthPosterDesk (stage-body is hidden).
+            title = str(app.query_one("#hp-title").content)
+            assert "No local market data" in title
 
     asyncio.run(scenario())
 
@@ -109,9 +110,11 @@ def test_cockpit_zero_candidate_empty_body_honest_with_ready_health():
             )
             await pilot.pause(0.05)
             assert app._stage == "empty"
-            stage_text = str(app.query_one("#stage-body").render())
-            assert "No local market data" not in stage_text
-            assert "candidate" in stage_text.lower() or "0" in stage_text
+            title = str(app.query_one("#hp-title").content)
+            body = str(app.query_one("#hp-body").content)
+            poster = f"{title}\n{body}"
+            assert "No local market data" not in poster
+            assert "candidate" in poster.lower() or "0" in poster
             # Cache rail still ready
             cache_text = str(app.query_one("#side-cache").render())
             assert "2026-07-28" in cache_text
@@ -132,8 +135,10 @@ def test_cockpit_show_empty_with_ready_health_not_no_market_data():
             await pilot.pause(0.05)
             app._show_empty()
             await pilot.pause(0.05)
-            stage_text = str(app.query_one("#stage-body").render())
-            assert "No local market data" not in stage_text
-            assert "local" in stage_text.lower()
+            title = str(app.query_one("#hp-title").content)
+            body = str(app.query_one("#hp-body").content)
+            poster = f"{title}\n{body}"
+            assert "No local market data" not in poster
+            assert "local" in poster.lower()
 
     asyncio.run(scenario())

@@ -9,8 +9,7 @@ Layer: Adapter
 
 from __future__ import annotations
 
-import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -87,7 +86,7 @@ def build_identity_from_board_view(
     captured_at: str | None = None,
 ) -> AccumBoardSnapshotIdentity:
     resolved_as_of = (as_of or _as_of_from_meta(view.meta) or "").strip()
-    captured = captured_at or datetime.now(UTC).replace(microsecond=0).isoformat()
+    captured = captured_at or datetime.now(UTC).isoformat(timespec="seconds")
     return AccumBoardSnapshotIdentity(
         board_kind=BOARD_KIND_ACCUM,
         universe=(universe or "local").strip().lower(),
@@ -159,94 +158,6 @@ def board_view_from_snapshot(snapshot: AccumBoardSnapshot) -> AccumBoardView:
         summary=snapshot.summary,
         columns=columns,
     )
-
-
-def write_accum_board_snapshot(path: Path, snapshot: AccumBoardSnapshot) -> None:
-    if not snapshot.is_restorable():
-        raise ValueError("refusing to write non-restorable snapshot")
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "schema_version": snapshot.schema_version,
-        "identity": asdict(snapshot.identity),
-        "meta": snapshot.meta,
-        "cache_label": snapshot.cache_label,
-        "summary": snapshot.summary,
-        "columns": list(snapshot.columns),
-        "rows": list(snapshot.rows),
-    }
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.replace(path)
-
-
-def invalidate_accum_board_snapshot(path: Path | str | None) -> bool:
-    """Remove last-run snapshot so next open cannot restore stale non-empty board.
-
-    Called after a successful live recompute that yields EMPTY / 0 candidates
-    (criterion 4: replace what the next open restores).
-    Returns True if a file was removed.
-    """
-    if path is None:
-        return False
-    target = Path(path)
-    if not target.is_file():
-        return False
-    try:
-        target.unlink()
-        return True
-    except OSError:
-        return False
-
-
-def read_accum_board_snapshot(path: Path) -> AccumBoardSnapshot | None:
-    """Return a restorable snapshot or None when missing/corrupt/incomplete."""
-    path = Path(path)
-    if not path.is_file():
-        return None
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return None
-    if not isinstance(raw, dict):
-        return None
-    try:
-        ident_raw = raw.get("identity") or {}
-        if not isinstance(ident_raw, dict):
-            return None
-        identity = AccumBoardSnapshotIdentity(
-            board_kind=str(ident_raw.get("board_kind", "")),
-            universe=str(ident_raw.get("universe", "")),
-            window=int(ident_raw.get("window") or 0),
-            sort_by=str(ident_raw.get("sort_by", "")),
-            top=int(ident_raw.get("top") or 0),
-            as_of=str(ident_raw.get("as_of", "") or ""),
-            captured_at=str(ident_raw.get("captured_at", "") or ""),
-        )
-        rows_raw = raw.get("rows") or []
-        if not isinstance(rows_raw, list):
-            return None
-        rows: list[dict[str, str]] = []
-        for item in rows_raw:
-            if not isinstance(item, dict):
-                return None
-            rows.append({str(k): str(v) for k, v in item.items()})
-        columns_raw = raw.get("columns") or list(BOARD_COLUMN_LABELS)
-        columns = tuple(str(c) for c in columns_raw)
-        snap = AccumBoardSnapshot(
-            schema_version=int(raw.get("schema_version") or 0),
-            identity=identity,
-            meta=str(raw.get("meta") or ""),
-            cache_label=str(raw.get("cache_label") or ""),
-            summary=str(raw.get("summary") or ""),
-            columns=columns,
-            rows=tuple(rows),
-        )
-    except (TypeError, ValueError):
-        return None
-    if not snap.is_restorable():
-        return None
-    return snap
 
 
 def identity_from_live_payload(

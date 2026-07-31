@@ -377,6 +377,7 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
         strategy_name=None,
         effective_session=None,
         market_context=None,
+        **kwargs,
     ):
         captured_table_candidates["tickers"] = [c.ticker for c in candidates]
         return original_display_results(
@@ -390,6 +391,7 @@ def test_screen_accum_single_json_matches_table_candidates_under_vwap_only(monke
             strategy_name=strategy_name,
             effective_session=effective_session,
             market_context=market_context,
+            **kwargs,
         )
 
     monkeypatch.setattr(accum_cli, "display_results", spy_display_results)

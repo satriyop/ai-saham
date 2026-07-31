@@ -1,0 +1,119 @@
+"""
+Accumulation candidate construction for the saham plan swing workflow.
+
+Layer: Adapter
+
+Wires the accumulation screen use case for a single ticker/window lookup so
+the top-level workflow factory does not own use-case construction directly.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from typing import TYPE_CHECKING
+
+from src.adapters.composition.accumulation_risk_workflow_factory import (
+    create_accumulation_assess_risk_use_case,
+)
+from src.adapters.composition.stock_analysis_workflow_dependencies import (
+    StockAnalysisWorkflowDependencies,
+)
+from src.application.dto.accumulation_screen import (
+    AccumulationCandidateEvaluationResult,
+    AccumulationScreenRequest,
+)
+from src.application.dto.swing_policy_config import SwingPolicyConfig
+from src.application.services.accumulation_screen_factory import (
+    create_accumulation_screen_use_case,
+)
+from src.infrastructure.config.accumulation_screener_config import (
+    AccumulationScreenerConfig,
+)
+from src.infrastructure.config.plan_swing_config import PlanSwingConfig
+from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
+    SQLiteMacroCalendarRepository,
+)
+
+if TYPE_CHECKING:
+    from src.application.dto.signal_evidence_execution_context import (
+        SignalEvidenceExecutionContext,
+    )
+    from src.application.services.signal_engine import SignalEngine
+
+
+def create_accumulation_candidate_builder(
+    *,
+    deps: StockAnalysisWorkflowDependencies,
+    swing_policy: SwingPolicyConfig,
+    plan_swing_config: PlanSwingConfig,
+    accumulation_config: AccumulationScreenerConfig,
+    signal_engine: "SignalEngine",
+):
+    def _build_accumulation_candidate_evaluation(
+        ticker: str,
+        window: int,
+        as_of_date: date,
+        *,
+        execution_context: SignalEvidenceExecutionContext,
+    ) -> AccumulationCandidateEvaluationResult | None:
+        # ADR-054 S3: plan must load the same screen risk funnel so
+        # candidate.trade_setup matches `saham screen accum TICKER` Action.
+        # Without risk_use_case, trade_setup is None and plan falls back to a
+        # recomposed Action while still labeling it "screen_judgment".
+        risk_use_case = create_accumulation_assess_risk_use_case(
+            market_repository=deps.market_repository,
+        )
+        accum_uc = create_accumulation_screen_use_case(
+            broker_repository=deps.broker_repository,
+            market_repository=deps.market_repository,
+            indicator_registry=deps.indicator_registry_factory(),
+            rules_loader=deps.rules_loader_factory(),
+            stockbit_providers=deps.stockbit_providers,
+            risk_use_case=risk_use_case,
+            signal_engine=signal_engine,
+            accum_score_policy=accumulation_config.accum_score_policy,
+            derived_feature_policy=accumulation_config.derived_features,
+            ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,
+            institutional_accumulation_config_factory=(
+                deps.institutional_accumulation_config_factory
+            ),
+            sector_context_builder_factory=deps.sector_context_builder_factory,
+            sector_macro_context_builder_factory=deps.sector_macro_context_builder_factory,
+            company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
+            macro_calendar_repository=SQLiteMacroCalendarRepository(deps.db_path),
+        )
+        accum_resp = accum_uc.execute(
+            AccumulationScreenRequest(
+                tickers=[ticker],
+                as_of_date=as_of_date,
+                window_days=window,
+                min_net_buy_days=plan_swing_config.candidate_min_net_buy_days,
+                min_accum_score=plan_swing_config.candidate_min_accum_score,
+                min_accum_score_enabled=True,
+                tier1_broker_codes=swing_policy.tier1_broker_codes,
+                bci_cluster_min_count=swing_policy.bci_cluster_min_count,
+                bci_stable_min_count=swing_policy.bci_stable_min_count,
+                resistance_gate_enabled=swing_policy.resistance_gate_enabled,
+                resistance_headroom_min_pct=swing_policy.resistance_headroom_min_pct,
+                ex_date_warning_days=swing_policy.ex_date_warning_days,
+            ),
+            execution_context=execution_context,
+        )
+        # Run the screen exactly once (above) and select the surviving
+        # observation candidate corresponding to accum_resp.candidates[0] —
+        # never re-query or re-run the evaluator (ADR-041
+        # CANONICAL-EVIDENCE-BOUNDARY). A single-ticker request always
+        # produces at most one observation candidate for that ticker.
+        if not accum_resp.candidates:
+            return None
+        selected = accum_resp.candidates[0]
+        for observation in accum_resp.observation_candidates:
+            if observation.candidate is selected:
+                return observation.evaluation_result
+        raise ValueError(
+            f"Accumulation screen selected {selected.ticker!r} but no matching "
+            "observation_candidates entry carries its evaluation_result — this "
+            "is a screen use-case invariant violation, not a missing-data case."
+        )
+
+    return _build_accumulation_candidate_evaluation

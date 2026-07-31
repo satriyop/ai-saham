@@ -396,7 +396,11 @@ def _make_use_case_with_all_providers(
 
 
 class SpyCandidateObservationsRepository:
-    """Records immutable learning observation inserts for assertion."""
+    """Records immutable learning observation inserts for assertion.
+
+    Implements LearningObservationRepository (add/get/list) so production
+    idempotent re-run checks via get_observation work in tests.
+    """
 
     def __init__(self):
         self.saved: list = []
@@ -409,30 +413,32 @@ class SpyCandidateObservationsRepository:
         self.saved.append(observation)
         return True
 
+    def get_observation(self, observation_id: str):
+        for obs in self.saved:
+            if getattr(obs, "observation_id", None) == observation_id:
+                return obs
+        return None
+
     def list_observations(self, purpose, *, compatibility_id=None):
         return []
 
 
 def record_observations(use_case: AccumulationScreenUseCase, request):
-    """Run the screen and persist via the explicit canonical recorder.
+    """Run ADR-056 multi-window screen + session persist via the recorder.
 
-    AccumulationScreenUseCase.execute() is read-only (S1); tests that assert
-    on a SpyCandidateObservationsRepository must go through the recorder
-    instead of calling execute() directly. Returns the full
-    RecordAccumulationObservationsResult (response + recorded_count).
-
-    Production wiring goes through create_accumulation_screen_use_case_bundle()
-    in accumulation_screen_factory.py, which builds an equivalently-configured
-    AccumulationCandidateObservationPersister from the same constructor inputs
-    (AccumulationScreenUseCase never builds or exposes the recorder itself).
-    Here in tests we already hold the constructed use_case, so we reuse its
-    own private collaborators directly to build the persister — a test-only
-    shortcut, not a pattern for production code.
+    Screen execute is read-only; RecordAccumulationObservationsUseCase.execute
+    is also screen-only (no write). Capture must screen windows 7/30/90 then
+    call persist_multi_window — this helper mirrors that production contract so
+    SpyCandidateObservationsRepository tests exercise real persistence.
     """
+    from dataclasses import replace
+
     from src.application.services.accumulation_candidate_observation_persister import (
+        _REQUIRED_WINDOWS,
         AccumulationCandidateObservationPersister,
     )
     from src.application.use_case.record_accumulation_observations_use_case import (
+        RecordAccumulationObservationsResult,
         RecordAccumulationObservationsUseCase,
     )
 
@@ -447,7 +453,23 @@ def record_observations(use_case: AccumulationScreenUseCase, request):
         observation_persister=persister,
     )
     context = make_signal_evidence_execution_context(request.as_of_date or date.today())
-    return recorder.execute(request, execution_context=context)
+    window_results: dict = {}
+    primary = None
+    for window in _REQUIRED_WINDOWS:
+        req = replace(request, window_days=int(window))
+        resp = recorder.screen(req, execution_context=context)
+        window_results[int(window)] = (req, list(resp.observation_candidates or ()))
+        if int(window) == 7:
+            primary = resp
+    assert primary is not None
+    saved = recorder.persist_multi_window(
+        window_results=window_results,
+        snapshot_date=primary.screened_at,
+        execution_context=context,
+        universe_tickers=list(request.tickers or []),
+        canonical_window=7,
+    )
+    return RecordAccumulationObservationsResult(response=primary, recorded_count=saved)
 
 
 def execute_and_record(use_case: AccumulationScreenUseCase, request):

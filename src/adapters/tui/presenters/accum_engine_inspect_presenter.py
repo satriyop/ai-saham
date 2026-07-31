@@ -31,6 +31,13 @@ from src.adapters.shared.decision_display import (
 )
 from src.adapters.shared.score_display_labels import ACCUM, SIGNAL
 from src.adapters.shared.screen_accum_board_fields import extract_screen_accum_board_fields
+from src.adapters.shared.trade_action_labels import (
+    ACTION_BLOCK,
+    ACTION_ENTER,
+    AVOID_LIKE,
+    ENTER_LIKE,
+    WATCH_LIKE,
+)
 from src.adapters.tui.phase_sequence import (
     PhaseSequenceFact,
     format_phase_sequence_section,
@@ -212,11 +219,11 @@ present_accum_judge = present_accum_engine_inspect
 def _action_markup(action: str) -> str:
     """Color Action for Verdict mast (semantic only)."""
     a = (action or "").strip().upper()
-    if a in {"ENTER", "BUY"}:
+    if a in ENTER_LIKE:
         return f"[bold #6fbf8a]{action}[/]"
-    if a in {"AVOID", "BLOCK", "SELL"}:
+    if a in AVOID_LIKE:
         return f"[bold #c97a72]{action}[/]"
-    if a in {"WATCH", "HOLD"}:
+    if a in WATCH_LIKE:
         return f"[bold #d4b06a]{action}[/]"
     return f"[bold #e8e8e8]{action or '—'}[/]"
 
@@ -225,7 +232,7 @@ def _gate_markup(gate: str) -> str:
     g = (gate or "").strip().upper()
     if g in {"OPEN", "PASS", "CLEAR"}:
         return f"[#6fbf8a]Gate {gate}[/]"
-    if g in {"BLOCK", "BLOCKED", "FAIL", "CLOSED"}:
+    if g in {ACTION_BLOCK, "BLOCKED", "FAIL", "CLOSED"}:
         return f"[#c97a72]Gate {gate}[/]"
     return f"[#d4b06a]Gate {gate or '—'}[/]"
 
@@ -280,7 +287,7 @@ def _section_named_setups(source: Any) -> list[str]:
     lines.append(f"  primary {family}")
     g = " · ".join(f"{k} {glyphs.get(k, '-')}" for k in ("FB", "CS", "SM", "PB"))
     lines.append(f"  match {g}")
-    lines.append("  [dim]MATCH ≠ ENTER[/]")
+    lines.append(f"  [dim]MATCH ≠ {ACTION_ENTER}[/]")
     return lines
 
 

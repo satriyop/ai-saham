@@ -80,8 +80,9 @@ def test_plan_swing_table_and_json_contracts(temp_workspace, monkeypatch):
         ["plan", "swing", "BBCA", "--no-refresh", "--db", str(db_path)],
     )
     assert table.exit_code == 0, table.output
-    assert "Swing Analysis - BBCA" in table.stdout
-    assert "Verdict" in table.stdout
+    # ADR-054: plan is structure desk (not a second analysis clone).
+    assert "Swing Structure - BBCA" in table.stdout
+    assert "Structure" in table.stdout
     assert "Candidate Actions" not in table.stdout
 
     js = runner.invoke(

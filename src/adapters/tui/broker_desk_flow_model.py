@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from src.adapters.shared.trade_action_labels import ACTION_SCAN_TOKENS
 from src.adapters.shared.view_number_format import format_value
 from src.domain.entities.broker_flow import BrokerType
 
@@ -41,7 +42,7 @@ class BrokerDeskFlowModel:
 
     def body_contains_action_authority(self) -> bool:
         text = f"{self.scope_note} {self.hub_keys} {self.empty_reason}".upper()
-        for token in (" ENTER ", " WATCH ", " AVOID "):
+        for token in ACTION_SCAN_TOKENS[:3]:
             if token in f" {text} ":
                 return True
         return False

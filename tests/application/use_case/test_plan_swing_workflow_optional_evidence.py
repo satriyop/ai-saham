@@ -11,6 +11,7 @@ from tests.application.use_case.plan_swing_workflow_fixtures import (
     FakeLearningObservationsRepository,
     FakeMarketRepository,
     FakeRegistry,
+    FakeSetupPhaseHistoryRepository,
     _breakout_candles,
     _candle,
     _fake_signal_evidence_context_builder,
@@ -61,6 +62,10 @@ def test_plan_swing_workflow_can_emit_breakout_confirmation_with_local_volume_so
         rules_loader=RulesYamlLoader(),
         signal_evidence_context_builder=_fake_signal_evidence_context_builder(),
         candidate_observations_repository=FakeLearningObservationsRepository(
+            ("ACCUMULATION", "COMPRESSION")
+        ),
+        # ADR-058: sequence validation reads production phase ledger, not corpus.
+        setup_phase_history_repository=FakeSetupPhaseHistoryRepository(
             ("ACCUMULATION", "COMPRESSION")
         ),
     )

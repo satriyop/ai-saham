@@ -19,6 +19,11 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.timer import Timer
 from textual.widgets import DataTable, Input, Static
 
+from src.adapters.composition.board_snapshot_store import (
+    invalidate_accum_board_snapshot,
+    read_accum_board_snapshot,
+    write_accum_board_snapshot,
+)
 from src.adapters.tui.board_load_policy import (
     recomputing_status_note,
     should_blank_board_for_load,
@@ -27,10 +32,7 @@ from src.adapters.tui.board_load_policy import (
 from src.adapters.tui.board_snapshot import (
     board_view_from_snapshot,
     identity_from_live_payload,
-    invalidate_accum_board_snapshot,
-    read_accum_board_snapshot,
     snapshot_from_board_view,
-    write_accum_board_snapshot,
 )
 from src.adapters.tui.screens.help import HelpModal
 from src.adapters.tui.screens.palette import CommandPalette
@@ -3100,12 +3102,20 @@ class CockpitApp(App[None]):
             self._paper_tape.append(result)
             msg = result.message
             self._open_paper_stage(ticker=ticker)
+            # Open stage defaults status to "paper"; restore outcome-specific cue.
             if result.refused:
+                self._status_note = "paper"
+                self._refresh_chrome()
                 self.notify(f"Paper log refused · {msg}", timeout=2.8)
                 return
             if result.written:
+                self._status_note = "paper logged"
+                self._refresh_chrome()
                 self.notify(msg, timeout=3.0)
                 return
+            # Idempotent non-write (duplicate) — structure already done.
+            self._status_note = "plan done"
+            self._refresh_chrome()
             self.notify(msg, timeout=2.8)
             return
         # Duck-typed result
@@ -3124,6 +3134,8 @@ class CockpitApp(App[None]):
         self._paper_outcome = format_paper_outcome_tape(duck)
         self._paper_tape.append(duck)
         self._open_paper_stage(ticker=ticker)
+        self._status_note = "paper logged" if written else "plan done"
+        self._refresh_chrome()
         self.notify(message[:160], timeout=2.8)
 
     def _open_paper_stage(self, *, ticker: str = "") -> None:

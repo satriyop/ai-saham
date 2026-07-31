@@ -12,6 +12,16 @@ from typing import Any
 
 from rich.text import Text
 
+from src.adapters.shared.trade_action_labels import (
+    ACTION_AVOID,
+    ACTION_BLOCK,
+    ACTION_ENTER,
+    ACTION_WATCH,
+    AVOID_LIKE,
+    ENTER_LIKE,
+    WATCH_LIKE,
+)
+
 # OpenCode semantic tokens
 _MINT = "#6fbf8a"
 _MINT_BG = "#121a14"
@@ -89,11 +99,11 @@ def signal_heat_band(signal: str) -> str:
 def format_action_cell(action: str) -> Text:
     a = (action or "—").strip() or "—"
     u = a.upper()
-    if u in {"ENTER", "BUY"}:
+    if u in ENTER_LIKE:
         return Text(f" {u} ", style=f"bold {_MINT} on {_MINT_BG}")
-    if u in {"WATCH", "HOLD"}:
+    if u in WATCH_LIKE:
         return Text(f" {u} ", style=f"bold {_BRASS} on {_BRASS_BG}")
-    if u in {"AVOID", "BLOCK", "SELL"}:
+    if u in AVOID_LIKE:
         return Text(f" {u} ", style=f"bold {_CORAL} on {_CORAL_BG}")
     return Text(f" {a} ", style=_MIST)
 
@@ -103,7 +113,7 @@ def format_gate_cell(gate: str) -> Text:
     u = g.upper()
     if u in {"OPEN", "PASS", "CLEAR"}:
         return Text(u, style=f"bold {_MINT}")
-    if u in {"BLOCK", "BLOCKED", "FAIL", "CLOSED"}:
+    if u in {ACTION_BLOCK, "BLOCKED", "FAIL", "CLOSED"}:
         return Text(u, style=f"bold {_CORAL}")
     return Text(g, style=_MIST)
 
@@ -149,9 +159,9 @@ def format_preopen_risk_cell(risk: str) -> Text:
     u = r.upper()
     if u in {"CLEAR", "OPEN", "PASS"}:
         return Text(r, style=f"bold {_MINT}")
-    if u in {"BLOCK", "BLOCKED", "FAIL"}:
+    if u in {ACTION_BLOCK, "BLOCKED", "FAIL"}:
         return Text(r, style=f"bold {_CORAL}")
-    if u in {"WATCH", "WARN"}:
+    if u in {ACTION_WATCH, "WARN"}:
         return Text(r, style=f"bold {_BRASS}")
     return Text(r, style=_MIST)
 
@@ -225,11 +235,11 @@ def format_triage_markup(summary: str) -> str:
         return ""
     out = summary
     for token, color in (
-        ("ENTER", _MINT),
-        ("WATCH", _BRASS),
-        ("AVOID", _CORAL),
+        (ACTION_ENTER, _MINT),
+        (ACTION_WATCH, _BRASS),
+        (ACTION_AVOID, _CORAL),
         ("OPEN", _MINT),
-        ("BLOCK", _CORAL),
+        (ACTION_BLOCK, _CORAL),
         ("BLOCKED", _CORAL),
     ):
         out = out.replace(token, f"[{color}]{token}[/]")

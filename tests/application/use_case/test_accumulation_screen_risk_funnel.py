@@ -246,9 +246,11 @@ def test_screen_persists_rejected_candidates_with_filter_outcome():
 
     # No survivors — rejected by flow score threshold
     assert len(response.candidates) == 0
-    # Rejected candidate still persisted as a learnable negative sample
+    # Rejected candidate still persisted as a learnable negative sample (ADR-056
+    # session observation with per-window screen_results).
     assert len(spy_repo.saved) == 1
     payload = spy_repo.saved[0].decision_payload
-    assert payload["screen_result"] == "rejected_flow"
     assert payload["ticker"] == "BBCA"
     assert payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+    by_window = payload.get("screen_results_by_window") or {}
+    assert by_window.get("7") == "rejected_flow"

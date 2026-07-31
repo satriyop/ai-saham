@@ -8,6 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.adapters.shared.trade_action_labels import ACTION_SCAN_TOKENS
+
 
 @dataclass(frozen=True)
 class PaperTapeRow:
@@ -28,7 +30,7 @@ class PaperDeskModel:
 
     def body_contains_action_authority(self) -> bool:
         text = f"{self.subtitle} {self.footer} {self.empty_reason}".upper()
-        for token in (" ENTER ", " WATCH ", " AVOID "):
+        for token in ACTION_SCAN_TOKENS[:3]:
             if token in f" {text} ":
                 return True
         return False

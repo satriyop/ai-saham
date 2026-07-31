@@ -1,47 +1,8 @@
-"""
-Shared swing command configuration and setup-catalog helper.
+"""Re-export plan swing command config from shared composition."""
 
-Adapter module for `saham plan swing` config loading and setup catalog.
-
-Layer: Adapter
-"""
-
-from dataclasses import dataclass
-
-from src.application.dto.swing_policy_config import SwingPolicyConfig
-from src.application.services.swing_setup_catalog import build_swing_setup_catalog_config
-from src.application.use_case.evaluate_swing_setup_use_case import SwingSetupCatalogConfig
-from src.infrastructure.config.accumulation_screener_config import (
-    AccumulationScreenerConfig,
-    load_accumulation_screener_config,
+from src.adapters.composition.plan_swing_command_config import (
+    PlanSwingCommandConfig,
+    load_plan_swing_command_config,
 )
-from src.infrastructure.config.plan_swing_config import (
-    PlanSwingConfig,
-    load_plan_swing_config,
-)
-from src.infrastructure.config.swing_backtest_config import (
-    SwingBacktestConfig,
-    load_swing_backtest_config,
-)
-from src.infrastructure.config.swing_policy_config_loader import load_swing_policy_config
 
-
-@dataclass(frozen=True)
-class PlanSwingCommandConfig:
-    swing_policy: SwingPolicyConfig
-    swing_backtest_config: SwingBacktestConfig
-    plan_swing_config: PlanSwingConfig
-    accumulation_screener_config: AccumulationScreenerConfig
-    setup_config: SwingSetupCatalogConfig
-
-
-def load_plan_swing_command_config() -> PlanSwingCommandConfig:
-    """Load all configs needed by plan swing command adapters."""
-    swing_policy = load_swing_policy_config()
-    return PlanSwingCommandConfig(
-        swing_policy=swing_policy,
-        swing_backtest_config=load_swing_backtest_config(),
-        plan_swing_config=load_plan_swing_config(),
-        accumulation_screener_config=load_accumulation_screener_config(),
-        setup_config=build_swing_setup_catalog_config(swing_policy),
-    )
+__all__ = ["PlanSwingCommandConfig", "load_plan_swing_command_config"]

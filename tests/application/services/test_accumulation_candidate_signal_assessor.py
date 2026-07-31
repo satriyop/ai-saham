@@ -558,12 +558,15 @@ def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
     detect_candidate_setup_phase are each called exactly once, both complete
     before SignalEngine.evaluate_accumulation_discovery, and SignalEngine receives the
     exact same family and phase objects — not value-equivalent copies."""
+    from types import SimpleNamespace
+
     from src.application.services.accumulation_candidate_signal_assessor import (
         AccumulationCandidateSignalAssessor,
     )
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResult,
     )
+    from src.domain.value_objects.setup_phase import SetupPhaseState
 
     call_order: list[str] = []
     family_result = PrimarySetupFamilyResult(
@@ -571,9 +574,12 @@ def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
         primary_setup_family="foreign_bounce",
         setup_family_source="detected_screen_evidence",
     )
-    phase_snapshot = object()  # identity sentinel — must reach SignalEngine unchanged
+    # Real phase contract (current_phase required for ADR-058 ledger write).
+    # Identity sentinel still proves the same object reaches SignalEngine.
+    phase_snapshot = SimpleNamespace(current_phase=SetupPhaseState.COMPRESSION)
 
     evidence_builder = MagicMock()
+    evidence_builder.setup_phase_history_repository = None
 
     def _resolve_family(candidate):
         call_order.append("resolve_family")
@@ -609,6 +615,7 @@ def test_family_resolved_once_and_phase_detected_once_before_signal_engine():
         flow_confirmation_builder=flow_builder,
         candidate_evidence_builder=evidence_builder,
         accum_score_uc=accum_score_uc,
+        setup_phase_history_repository=None,
     )
 
     candidate = _candidate(accum_score=80.0)
