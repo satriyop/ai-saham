@@ -90,6 +90,38 @@ def test_flag_chip_is_focusable_control():
     assert "is-on" in chip.classes
 
 
+def test_flag_chip_height_auto_not_collapsed_by_border():
+    """height:1 + solid border → Size(h=0) empty boxes (regression)."""
+    import asyncio
+
+    from textual.app import App, ComposeResult
+
+    class Host(App):
+        def compose(self) -> ComposeResult:
+            yield FlagChip("detail", "detail · d", id="jd-flag-detail")
+            yield FlagChip("stack", "stack", id="jd-flag-stack")
+            yield FlagChip("readiness", "readiness", id="jd-flag-readiness")
+
+    async def scenario() -> None:
+        app = Host()
+        async with app.run_test(size=(100, 20)) as pilot:
+            await pilot.pause(0.05)
+            for cid, label in (
+                ("jd-flag-detail", "detail · d"),
+                ("jd-flag-stack", "stack"),
+                ("jd-flag-readiness", "readiness"),
+            ):
+                chip = app.query_one(f"#{cid}", FlagChip)
+                assert chip.size.height >= 1, f"{cid} height collapsed to {chip.size.height}"
+                assert label in str(chip.content)
+                chip.set_chip_state(available=True, expanded=False)
+                assert label in str(chip.content)
+                chip.set_chip_state(available=False, expanded=False)
+                assert label in str(chip.content)
+
+    asyncio.run(scenario())
+
+
 def test_flag_chip_activate_posts_selected():
     """Click / keyboard path posts Selected with flag_key."""
     chip = FlagChip("detail", "detail · d", id="t-detail")

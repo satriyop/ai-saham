@@ -133,17 +133,21 @@ class JudgeDesk(Vertical):
     JudgeDesk .score-cell {
         width: 1fr;
         height: auto;
+        min-width: 8;
+        max-width: 18;
         padding-right: 1;
     }
 
     JudgeDesk .score-k {
         color: #6b6b6b;
         text-style: bold;
+        height: 1;
     }
 
     JudgeDesk .score-v {
         color: #e8e8e8;
         text-style: bold;
+        height: auto;
     }
 
     JudgeDesk .verdict-why {
@@ -156,9 +160,11 @@ class JudgeDesk(Vertical):
 
     JudgeDesk .flag-row {
         height: auto;
+        width: 100%;
         margin: 0 0 1 0;
         padding: 0 0 1 0;
         border-bottom: solid #1c1c1c;
+        align: left middle;
     }
 
     JudgeDesk .flag-lab {
@@ -172,7 +178,7 @@ class JudgeDesk(Vertical):
     JudgeDesk .phase-block {
         background: #141414;
         border: solid #1c1c1c;
-        border-left: solid #3a4252;
+        border-left: solid #c9a68a;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;

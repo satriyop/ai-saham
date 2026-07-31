@@ -168,7 +168,7 @@ def build_judge_desk_model(
         JudgeScoreCell("Authority", auth),
         JudgeScoreCell("Family", family if family != "—" else "—"),
         JudgeScoreCell("Phase", phase),
-        JudgeScoreCell("Ready", readiness_s[:24] if len(readiness_s) > 24 else readiness_s),
+        JudgeScoreCell("Ready", _score_ready_label(readiness_s)),
     )
 
     phase_lines = format_phase_sequence_section(
@@ -278,6 +278,23 @@ def build_judge_desk_model(
         cards=cards,
         footer=footer,
     )
+
+
+def _score_ready_label(readiness_s: str) -> str:
+    """Compact Ready cell for verdict score strip (no mid-word clip)."""
+    s = (readiness_s or "—").strip() or "—"
+    low = s.lower()
+    if low.startswith("flow-only"):
+        return "flow-only"
+    if "not applicable" in low:
+        return "n/a"
+    if "no candidate" in low:
+        return "no object"
+    if "missing" in low and "defect" in low:
+        return "missing"
+    if len(s) <= 14:
+        return s
+    return s[:13] + "…"
 
 
 def _compact_cards(

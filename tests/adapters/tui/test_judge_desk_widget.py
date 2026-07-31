@@ -89,6 +89,17 @@ def test_build_judge_desk_model_has_verdict_fields():
     assert "ACCUMULATION" in model.phase_arrow and "COMPRESSION" in model.phase_arrow
 
 
+def test_score_ready_label_no_midword_clip():
+    from src.adapters.tui.judge_desk_model import _score_ready_label
+
+    assert _score_ready_label("flow-only (setup readiness not applicable)") == "flow-only"
+    assert _score_ready_label("— (no candidate object)") == "no object"
+    short = _score_ready_label("PARTIAL")
+    assert short == "PARTIAL"
+    long = _score_ready_label("x" * 40)
+    assert long.endswith("…") and len(long) <= 14
+
+
 def test_phase_arrow_marks_current_brass():
     from src.adapters.tui.widgets.judge_desk import _format_phase_arrow
 

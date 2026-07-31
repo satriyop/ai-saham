@@ -17,11 +17,12 @@ class FlagChip(Static):
 
     DEFAULT_CSS = """
     FlagChip {
+        /* height:auto — solid border + height:1 collapses content to 0 (empty boxes) */
         width: auto;
-        min-width: 8;
-        max-width: 18;
-        height: 1;
-        color: #a0a0a0;
+        height: auto;
+        min-width: 7;
+        max-width: 14;
+        color: #c8c8c8;
         background: #141414;
         border: solid #2a2a2a;
         padding: 0 1;
@@ -44,9 +45,10 @@ class FlagChip(Static):
         text-style: bold;
     }
     FlagChip.is-dim {
-        color: #555555;
-        background: #0e0e0e;
-        border: solid #1a1a1a;
+        /* still readable; was #555 on #0e0e0e ≈ invisible empty frames */
+        color: #6b6b6b;
+        background: #121212;
+        border: solid #2a2a2a;
     }
     FlagChip.warn {
         color: #d4b06a;
@@ -80,6 +82,7 @@ class FlagChip(Static):
     ) -> None:
         super().__init__(label, id=id, classes=classes)
         self.flag_key = flag_key
+        self._label = label
         self._available = True
 
     def set_chip_state(
@@ -90,6 +93,8 @@ class FlagChip(Static):
         warn: bool = False,
     ) -> None:
         self._available = available
+        # Re-assert label every paint (never blank chips)
+        self.update(self._label)
         self.remove_class("is-on")
         self.remove_class("is-dim")
         self.remove_class("warn")
