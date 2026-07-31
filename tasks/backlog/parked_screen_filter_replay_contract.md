@@ -4,7 +4,8 @@ Status: `COMPLETED` — audit/extract-contract slice (tournament still blocked)
 
 > Fail-closed reconciliation rework landed after review (2026-07-31):
 > contract_id v2 mandatory, canonical_window=7 required, unique ticker/session
-> only, discovery purpose only, sufficiency no longer invents ≤5% thresholds.
+> only, discovery purpose only, selected-ID H10 reconciliation, strict finite
+> numeric inputs, and requested measurement failures all fail closed.
 
 Activated: 2026-07-31 for the expected near-term `ml-saham` hard-filter
 tournament. The historical `parked_` filename is retained so existing backlog
@@ -433,6 +434,8 @@ a second filtered capture mode, dual-write observations, or manufacture
   - `37d7b51` fail-closed cohort reconciliation
   - `3c31b9949cc8349173c4a3158e88f8eef68105d6` H10 label counts on selected units only;
     wrong-cohort/wrong-purpose aggregates; no string-numeric repair
+  - `d8c961a` centralized cohort aggregate SQL; requested-H10 failure handling;
+    strict integer window and finite-numeric validation
 - Extracted / explicit-missing / unextractable counts by gate:
   - market_cap: numeric 765 / explicit_missing 1125 / unextractable 0
   - piotroski: numeric 765 / explicit_missing 1125 / unextractable 0
@@ -442,6 +445,8 @@ a second filtered capture mode, dual-write observations, or manufacture
   1890 selected / 1485 AVAILABLE / 405 unavailable
   (counts use selected observation_ids only; not tournament metric-evaluable)
 - Storage before/after: zero production SQLite growth (read-only)
+- Final focused verification: 40 passed; challenge contract gate: 39 passed;
+  live DB smoke: 6 passed; observation-access architecture guard: passed
 - Verdict: `SUFFICIENT_FOR_REPLAY`
 - Separate follow-up task, if any: none required for extract sufficiency
 - Tournament checkpoint status: `BLOCKED`
