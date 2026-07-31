@@ -52,6 +52,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "uses_live_refresh: opt out of the autouse CLI auto-refresh network stub; the test exercises the real refresh path",
+    "tui: full-app Textual mount/paint test (~1.5-4.7s each; ~60% of suite wall time). Auto-applied to tests/adapters/tui. Exclude the heavy slice with `-m 'not tui'`.",
 ]
 
 [tool.ruff]
