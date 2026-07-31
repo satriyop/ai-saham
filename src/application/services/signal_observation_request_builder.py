@@ -7,6 +7,10 @@ from datetime import date
 from typing import TYPE_CHECKING, Any
 
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
+from src.application.services.accumulation_screen_hard_filter_policy import (
+    AccumulationScreenHardFilterPolicy,
+    resolve_accumulation_screen_hard_filter_policy,
+)
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
@@ -47,27 +51,39 @@ class BuildSignalObservationScreenRequest:
         min_piotroski: int = 0,
         strategy_name: str | None = None,
         disable_score_filters: bool = False,
+        hard_filter_policy: AccumulationScreenHardFilterPolicy | None = None,
     ) -> "BuildSignalObservationScreenRequest":
+        """Build from typed configs.
+
+        When ``hard_filter_policy`` is supplied it is the authority for the four
+        hard-filter knobs (production snapshot object). Optional CLI overrides
+        and ``disable_score_filters`` apply only when constructing without a
+        pre-resolved policy, or when neutralizing a derived capture request.
+        """
+        if hard_filter_policy is None:
+            hard_filter_policy = resolve_accumulation_screen_hard_filter_policy(
+                swing_policy=swing_policy,
+                accumulation_screener_config=accumulation_screener_config,
+                min_accum_score=min_accum_score,
+                min_signal_score=min_signal_score,
+                min_piotroski=min_piotroski,
+            )
+        elif min_accum_score is not None or min_signal_score is not None or min_piotroski != 0:
+            # Explicit policy is the authority; overrides must not silently diverge.
+            raise ValueError(
+                "hard_filter_policy cannot be combined with score/piotroski overrides; "
+                "resolve a new policy object instead"
+            )
+
+        accum_score = hard_filter_policy.min_accum_score
+        foreign_flow_enabled = hard_filter_policy.min_accum_score_enabled
+        signal_score = hard_filter_policy.min_signal_score
+        signal_score_enabled = hard_filter_policy.min_signal_score_enabled
         if disable_score_filters:
             accum_score = 0.0
             foreign_flow_enabled = False
             signal_score = 0.0
             signal_score_enabled = False
-        else:
-            foreign_filter = accumulation_screener_config.min_accum_score
-            signal_filter = accumulation_screener_config.min_signal_score
-            foreign_flow_enabled = bool(foreign_filter.enabled)
-            signal_score_enabled = bool(signal_filter.enabled)
-            if min_accum_score is None:
-                accum_score = float(foreign_filter.value)
-            else:
-                accum_score = float(min_accum_score)
-                foreign_flow_enabled = True
-            if min_signal_score is None:
-                signal_score = float(signal_filter.value)
-            else:
-                signal_score = float(min_signal_score)
-                signal_score_enabled = True
 
         return cls(
             min_net_buy_days=max(1, int(min_net_buy_days)),
@@ -75,11 +91,11 @@ class BuildSignalObservationScreenRequest:
             min_accum_score_enabled=foreign_flow_enabled,
             min_signal_score=signal_score,
             min_signal_score_enabled=signal_score_enabled,
-            min_piotroski=int(min_piotroski),
+            min_piotroski=int(hard_filter_policy.min_piotroski),
             tier1_broker_codes=frozenset(swing_policy.tier1_broker_codes),
             bci_cluster_min_count=int(swing_policy.bci_cluster_min_count),
             bci_stable_min_count=int(swing_policy.bci_stable_min_count),
-            min_market_cap_idr=int(swing_policy.min_market_cap_idr),
+            min_market_cap_idr=int(hard_filter_policy.min_market_cap_idr),
             resistance_gate_enabled=bool(swing_policy.resistance_gate_enabled),
             resistance_headroom_min_pct=float(swing_policy.resistance_headroom_min_pct),
             ex_date_warning_days=int(swing_policy.ex_date_warning_days),

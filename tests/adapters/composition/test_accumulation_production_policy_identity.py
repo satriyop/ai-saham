@@ -11,6 +11,9 @@ from src.adapters.composition.screen_accum_workflow_factory import (
 from src.application.services.accumulation_production_policy_bundle import (
     AccumulationProductionPolicyBundle,
 )
+from src.application.services.accumulation_screen_hard_filter_policy import (
+    AccumulationScreenHardFilterPolicy,
+)
 from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.rules.bandar_gate import BandarGate
@@ -20,16 +23,29 @@ from src.infrastructure.config.accumulation_screener_config import (
 )
 
 
+def _hard_filters() -> AccumulationScreenHardFilterPolicy:
+    return AccumulationScreenHardFilterPolicy(
+        min_market_cap_idr=0,
+        min_piotroski=0,
+        min_accum_score=0.0,
+        min_accum_score_enabled=True,
+        min_signal_score=45.0,
+        min_signal_score_enabled=False,
+    )
+
+
 def test_workflow_bundle_injects_exact_policy_object_identity(tmp_path: Path) -> None:
     accum = AccumScorePolicy()
     signal_cfg = SignalEngineConfig()
     structural = (FundamentalGate(),)
     execution = (BandarGate(),)
+    hard = _hard_filters()
     bundle = AccumulationProductionPolicyBundle(
         accum_score_policy=accum,
         signal_engine_config=signal_cfg,
         structural_gates=structural,
         execution_gates=execution,
+        hard_filter_policy=hard,
     )
     screener = AccumulationScreenerConfig(accum_score_policy=accum)
 
@@ -96,6 +112,7 @@ def test_mismatched_accum_score_policy_objects_fail_closed(tmp_path: Path) -> No
         signal_engine_config=SignalEngineConfig(),
         structural_gates=(FundamentalGate(),),
         execution_gates=(BandarGate(),),
+        hard_filter_policy=_hard_filters(),
     )
     screener = AccumulationScreenerConfig(accum_score_policy=accum_b)
     with pytest.raises(ValueError, match="same object"):

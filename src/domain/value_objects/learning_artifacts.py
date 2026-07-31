@@ -68,18 +68,21 @@ class LearningContractId(str, Enum):
     SWING_VALIDATION = "paired_oos_swing_policy_validation.v1"
     YAML_APPLICATION = "yaml_policy_application.v1"
     # ADR-059: cohort-bound production policy identity for ML challenges.
-    PRODUCTION_POLICY_SNAPSHOT = "production_policy_snapshot.v1"
+    PRODUCTION_POLICY_SNAPSHOT_V1 = "production_policy_snapshot.v1"
+    PRODUCTION_POLICY_SNAPSHOT_V2 = "production_policy_snapshot.v2"
 
 
-# Closed v1 accumulation export set (ADR-059). A seventh ID needs a new task.
+# Closed accumulation export sets (ADR-059). Artifact contract and policy versions
+# are separate: v2 gains a seventh policy_id while unchanged policies stay v1.
 PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS = "screener.accum.score_weights"
 PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS = "signal.accum.evidence_group_weights"
 PRODUCTION_POLICY_ID_SIGNAL_FLAGS = "signal.accum.flags"
 PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION = "signal.accum.classification"
 PRODUCTION_POLICY_ID_RISK_HARD_GATES = "risk.accum.hard_gates"
 PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE = "signal.accum.raw_score"
+PRODUCTION_POLICY_ID_HARD_FILTERS = "screener.accum.hard_filters"
 
-ACCUMULATION_PRODUCTION_POLICY_IDS: tuple[str, ...] = (
+ACCUMULATION_PRODUCTION_POLICY_IDS_V1: tuple[str, ...] = (
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
     PRODUCTION_POLICY_ID_SIGNAL_FLAGS,
@@ -88,7 +91,22 @@ ACCUMULATION_PRODUCTION_POLICY_IDS: tuple[str, ...] = (
     PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE,
 )
 
+ACCUMULATION_PRODUCTION_POLICY_IDS_V2: tuple[str, ...] = (
+    *ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
+    PRODUCTION_POLICY_ID_HARD_FILTERS,
+)
+
+# Active producer closed set (v2 cutover).
+ACCUMULATION_PRODUCTION_POLICY_IDS: tuple[str, ...] = ACCUMULATION_PRODUCTION_POLICY_IDS_V2
+
 PRODUCTION_POLICY_VERSION_V1 = "v1"
+
+_ALLOWED_PRODUCTION_POLICY_SNAPSHOT_CONTRACTS: frozenset[LearningContractId] = frozenset(
+    {
+        LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
+        LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
+    }
+)
 
 
 _OBSERVATION_CONTRACT_BY_PURPOSE = MappingProxyType(
@@ -752,6 +770,7 @@ class ProductionPolicySnapshot:
     def create(
         cls,
         *,
+        contract_id: LearningContractId,
         purpose: AssessmentPurpose,
         learning_observation_contract_id: str,
         producer_observation_contract: str,
@@ -765,6 +784,15 @@ class ProductionPolicySnapshot:
         source_revision: str,
         created_at: datetime,
     ) -> ProductionPolicySnapshot:
+        if not isinstance(contract_id, LearningContractId):
+            raise LearningContractError(
+                f"contract_id must be a LearningContractId, got {type(contract_id).__name__}"
+            )
+        if contract_id not in _ALLOWED_PRODUCTION_POLICY_SNAPSHOT_CONTRACTS:
+            raise LearningContractError(
+                "contract_id must be production_policy_snapshot.v1 or "
+                f"production_policy_snapshot.v2, got {contract_id!r}"
+            )
         for name, value in (
             ("learning_observation_contract_id", learning_observation_contract_id),
             ("producer_observation_contract", producer_observation_contract),
@@ -798,12 +826,12 @@ class ProductionPolicySnapshot:
             "compatibility_id": compatibility_id,
             "policy_id": policy_id,
         }
-        snapshot_id = stable_learning_id(LearningContractId.PRODUCTION_POLICY_SNAPSHOT, identity)
+        snapshot_id = stable_learning_id(contract_id, identity)
         digest = policy_snapshot_payload_digest(payload)
         return cls(
             snapshot_id=snapshot_id,
             schema_version=LEARNING_SCHEMA_VERSION,
-            contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT,
+            contract_id=contract_id,
             purpose=purpose,
             learning_observation_contract_id=learning_observation_contract_id,
             producer_observation_contract=producer_observation_contract,
@@ -859,12 +887,12 @@ def _assert_payload_column_metadata_match(
 def validate_policy_snapshot_integrity(snapshot: ProductionPolicySnapshot) -> None:
     """Reject a snapshot whose id, digest, or column/payload metadata disagree."""
 
-    if snapshot.contract_id is not LearningContractId.PRODUCTION_POLICY_SNAPSHOT:
+    if snapshot.contract_id not in _ALLOWED_PRODUCTION_POLICY_SNAPSHOT_CONTRACTS:
         raise LearningContractError("policy snapshot contract_id mismatch")
     if not snapshot.source_revision.strip():
         raise LearningContractError("source_revision must be non-empty provenance")
     expected_id = stable_learning_id(
-        LearningContractId.PRODUCTION_POLICY_SNAPSHOT,
+        snapshot.contract_id,
         {
             "purpose": snapshot.purpose,
             "learning_observation_contract_id": snapshot.learning_observation_contract_id,

@@ -1,19 +1,23 @@
 """Focused tests for the lean observation identity resolver and value object.
 
-DQ-003 Slice A: a whole-config-content hash produces a stable
-`semantic_compatibility_id` cohort tag; any config change forks it.
+DQ-003 Slice A + ADR-059 v2: lean_accumulation_compatibility.v2 canonical-JSON
+framing produces a stable semantic_compatibility_id; binding/config forks it.
 """
 
 from __future__ import annotations
 
+import hashlib
 import re
 
 import pytest
 
 from src.application.services.lean_observation_identity import (
+    LEAN_ACCUMULATION_COMPATIBILITY_CONTRACT_ID,
+    POLICY_SNAPSHOT_BINDING_CONTRACT_V2,
     LeanObservationIdentity,
     resolve_lean_semantic_compatibility_id,
 )
+from src.domain.value_objects.learning_artifacts import canonical_json
 from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityId,
 )
@@ -27,6 +31,10 @@ from src.domain.value_objects.signal_semantic_contract import (
 )
 
 _SHA256_PREFIXED = re.compile(r"^sha256:[0-9a-f]{64}\Z")
+
+# Locked golden vector (activation task §5.4).
+_GOLDEN_CONFIG = "x: 1\n"
+_GOLDEN_COMPATIBILITY_ID = "sha256:5b2849a0e60d2cfe880fc8e65d6f1ab10f9668ed2676a1379fc7d2e8255837f2"
 
 
 def test_resolver_returns_valid_prefixed_sha256() -> None:
@@ -51,13 +59,41 @@ def test_changed_config_value_forks_the_id() -> None:
     )
 
 
-def test_id_folds_in_contract_versions() -> None:
-    """The hash must incorporate the schema/engine/evidence versions, so a
-    version bump forks the cohort even with identical config content."""
-    import hashlib
+def test_lean_v2_golden_vector() -> None:
+    """Exact frozen bytes and digest from the activation-task lock."""
+    expected_material = (
+        '{"candidate_observation_schema_version":9,'
+        '"contract_id":"lean_accumulation_compatibility.v2",'
+        '"evidence_contract_version":"1.5",'
+        '"policy_snapshot_binding_contract":"production_policy_snapshot.v2",'
+        '"resolved_config_canonical":"x: 1\\n",'
+        '"semantic_engine_version":"1.5"}'
+    )
+    material = canonical_json(
+        {
+            "contract_id": LEAN_ACCUMULATION_COMPATIBILITY_CONTRACT_ID,
+            "resolved_config_canonical": _GOLDEN_CONFIG,
+            "candidate_observation_schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+            "semantic_engine_version": SEMANTIC_ENGINE_VERSION,
+            "evidence_contract_version": EVIDENCE_CONTRACT_VERSION,
+            "policy_snapshot_binding_contract": POLICY_SNAPSHOT_BINDING_CONTRACT_V2,
+        }
+    )
+    assert material == expected_material
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 9
+    assert SEMANTIC_ENGINE_VERSION == "1.5"
+    assert EVIDENCE_CONTRACT_VERSION == "1.5"
+    assert resolve_lean_semantic_compatibility_id(_GOLDEN_CONFIG).value == _GOLDEN_COMPATIBILITY_ID
+    assert (
+        "sha256:" + hashlib.sha256(expected_material.encode("utf-8")).hexdigest()
+        == _GOLDEN_COMPATIBILITY_ID
+    )
 
-    config = "x: 1\n"
-    expected = (
+
+def test_delimiter_free_v1_algorithm_is_not_an_alias() -> None:
+    """Old concat hash must not equal lean.v2 (no dual-path acceptance)."""
+    config = _GOLDEN_CONFIG
+    legacy = (
         "sha256:"
         + hashlib.sha256(
             (
@@ -68,7 +104,9 @@ def test_id_folds_in_contract_versions() -> None:
             ).encode("utf-8")
         ).hexdigest()
     )
-    assert resolve_lean_semantic_compatibility_id(config).value == expected
+    current = resolve_lean_semantic_compatibility_id(config).value
+    assert current != legacy
+    assert current == _GOLDEN_COMPATIBILITY_ID
 
 
 def test_resolver_rejects_non_string() -> None:
@@ -117,3 +155,14 @@ def test_semantic_engine_version_participates_in_fork(monkeypatch: pytest.Monkey
 
     assert patched != unpatched
     assert patched.value != unpatched.value
+
+
+def test_binding_contract_participates_in_fork(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = _GOLDEN_CONFIG
+    base = resolve_lean_semantic_compatibility_id(config)
+    monkeypatch.setattr(
+        "src.application.services.lean_observation_identity.POLICY_SNAPSHOT_BINDING_CONTRACT_V2",
+        "production_policy_snapshot.v1",
+    )
+    forked = resolve_lean_semantic_compatibility_id(config)
+    assert forked != base

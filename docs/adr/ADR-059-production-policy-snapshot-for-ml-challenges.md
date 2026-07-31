@@ -4,6 +4,9 @@
 
 Accepted — 2026-07-31
 
+Amended — 2026-07-31 (`production_policy_snapshot.v2`, hard filters, lean
+compatibility.v2 binding)
+
 ## Context
 
 `ml-saham` ADR-002 requires a frozen description of production policy for
@@ -15,102 +18,215 @@ ML-only panel/alias/protocol concerns.
 Without a producer-owned, cohort-bound artifact, WIN/LOSE challenge outcomes
 cannot safely inform human production-policy decisions.
 
+v1 shipped six score/signal/risk rows. It did not record the four application
+screen hard filters (market-cap floor, Piotroski floor, accumulation-score
+floor, signal-score floor). The lean compatibility hash also omitted the
+snapshot-binding contract, so later snapshot rows could attach to pre-snapshot
+cohorts and appear retrospectively verified. That is forbidden.
+
 ## Decision
 
-1. **`ai-saham` is the sole writer** of `production_policy_snapshot.v1` rows in
-   the shared SQLite learning DB. `ml-saham` reads and digest-checks only.
+### Writer and projection rules
+
+1. **`ai-saham` is the sole writer** of production policy snapshot rows in the
+   shared SQLite learning DB. `ml-saham` reads and digest-checks only.
 2. Snapshots are **content-addressed projections** of the same resolved typed
-   engine policies used by live accumulation engines — not a second YAML parse
-   in an adapter, not packaged ML mirrors.
-3. v1 export set is **closed and exact** (six rows per accumulation cohort):
+   engine / screen policies used by live accumulation paths — not a second YAML
+   parse in an adapter, not packaged ML mirrors.
+3. After the v2 cutover, the active producer writes **only**
+   `production_policy_snapshot.v2` rows. No dual-write of v1 under a new
+   compatibility ID.
 
-   | `policy_id` | `decision_type` |
-   |-------------|-----------------|
-   | `screener.accum.score_weights` | `score` |
-   | `signal.accum.evidence_group_weights` | `score` |
-   | `signal.accum.flags` | `score` |
-   | `signal.accum.classification` | `score` |
-   | `risk.accum.hard_gates` | `gate` |
-   | `signal.accum.raw_score` | `score` (identity-only) |
+### Immutable v1 closed set (historical)
 
-4. Binding constants for this slice:
+v1 export set is **closed and exact** (six rows). Do not mutate its meaning or
+accept a seventh row under `production_policy_snapshot.v1`:
 
-   - `purpose = ACCUMULATION_DISCOVERY`
-   - `learning_observation_contract_id =
-     learning_observation.accumulation_discovery.v2`
-   - `producer_observation_contract = accumulation-discovery.v2`
-   - `policy_version = v1`
+| `policy_id` | `decision_type` |
+|-------------|-----------------|
+| `screener.accum.score_weights` | `score` |
+| `signal.accum.evidence_group_weights` | `score` |
+| `signal.accum.flags` | `score` |
+| `signal.accum.classification` | `score` |
+| `risk.accum.hard_gates` | `gate` |
+| `signal.accum.raw_score` | `score` (identity-only) |
 
-5. **Identity algorithms** (immutable):
+Historical v1 rows remain readable and immutable. They are **ineligible** for
+active verified hard-filter / current production challenges that require v2.
 
-   - `snapshot_id = stable_learning_id(PRODUCTION_POLICY_SNAPSHOT, {
-       purpose, learning_observation_contract_id,
-       producer_observation_contract, compatibility_id, policy_id })`
-   - `material_config_hash = "sha256:" +
-     sha256(resolved_config_canonical UTF-8).hexdigest()`
-   - `payload_digest = sha256(canonical_payload_json UTF-8).hexdigest()`
-     (lowercase hex, no prefix)
-   - Canonical JSON reuses `learning_artifacts.canonical_json`
-   - `created_at` and `source_revision` are provenance only
+### Active v2 closed set
 
-6. **Cohort consistency** (non-circular):
+`production_policy_snapshot.v2` is **closed and exact** (seven rows per active
+accumulation cohort). Artifact contract version and each policy version are
+separate: unchanged policies keep policy version `v1`.
 
-   - Snapshot digests are **not** folded into `compatibility_id`.
-   - `compatibility_id` remains the lean whole-config hash
-     (`resolve_lean_semantic_compatibility_id`).
-   - Producer recomputes the lean ID from the same
-     `resolved_config_canonical` bytes and requires equality before any
-     snapshot or observation write.
-   - Same `(purpose, compatibility_id, policy_id)` + same digest is idempotent;
-     same key + different digest fails closed before observation writes.
+| `policy_id` | `decision_type` | Policy version |
+|-------------|-----------------|----------------|
+| `screener.accum.score_weights` | `score` | existing `v1` |
+| `signal.accum.evidence_group_weights` | `score` | existing `v1` |
+| `signal.accum.flags` | `score` | existing `v1` |
+| `signal.accum.classification` | `score` | existing `v1` |
+| `risk.accum.hard_gates` | `gate` | existing `v1` |
+| `signal.accum.raw_score` | `score` | existing `v1` |
+| `screener.accum.hard_filters` | `gate` | `v1` |
 
-7. **Producer trigger:** shared
-   `run_signal_observation_corpus_write` path
-   (`research accum capture` and `research accum backfill`) ensures all six
-   snapshots before any observation write. No separate export command.
+Hard-filter semantic contract:
 
-8. **Sector breadth** is out of scope for v1 (applied after signal assessment in
-   production). Not encoded in `screener.accum.score_weights`. ML adapters must
-   not retain the hand-mirror `+10 when present` production claim; sector-breadth
-   counterfactuals are `BLOCKED_POLICY`.
+- `semantic_engine_contract_id = screen.accum.hard_filters.v1`
+- `formula_id = accumulation_screen.first_match_hard_filters.v1`
 
-9. **Historical cohorts** without snapshots remain raw corpus but are ineligible
-   for verified production-policy challenges. No backfill of fabricated
-   snapshots onto old rows.
+Hard-filter payload records floors, enabled states, first-match order
+(market_cap → piotroski → accum_score → signal_score), missing actions,
+provider-unavailable actions, provider-exception action, and
+`explicitly_excluded = [min_net_buy_days]`.
 
-10. **ML consumer** (sibling task): verified snapshot + separate
-    `ChallengePolicyAdapter`; `BLOCKED_POLICY` on mismatch; no static-production
-    fallback after cutover; golden conformance before counterfactual ablation.
+Enabled rules:
+
+- market_cap / piotroski: `enabled = floor > 0`
+- accum_score / signal_score: configured enabled flags
+
+Missing/action vocabulary (closed):
+
+`pass_without_evaluation`, `rejected_flow`, `rejected_signal`,
+`raise_contract_error`, `propagate_provider_error`.
+
+### Binding constants
+
+- `purpose = ACCUMULATION_DISCOVERY`
+- `learning_observation_contract_id =
+  learning_observation.accumulation_discovery.v2`
+- `producer_observation_contract = accumulation-discovery.v2`
+- Observation payload remains ADR-056 v2 (no observation schema bump solely
+  for snapshot binding)
+
+### Identity algorithms
+
+Enum members:
+
+- `PRODUCTION_POLICY_SNAPSHOT_V1 = production_policy_snapshot.v1`
+- `PRODUCTION_POLICY_SNAPSHOT_V2 = production_policy_snapshot.v2`
+
+`ProductionPolicySnapshot.create` requires an **explicit** `contract_id`
+(no default). Snapshot identity:
+
+```text
+snapshot_id = stable_learning_id(contract_id, {
+  purpose, learning_observation_contract_id,
+  producer_observation_contract, compatibility_id, policy_id })
+material_config_hash = "sha256:" + sha256(resolved_config_canonical UTF-8)
+payload_digest = sha256(canonical_payload_json UTF-8)  # lowercase hex, no prefix
+```
+
+Canonical JSON reuses `learning_artifacts.canonical_json`. `created_at` and
+`source_revision` are provenance only. Integrity validation recomputes using
+`snapshot.contract_id`. Historical v1 IDs remain unchanged.
+
+`LEARNING_SCHEMA_VERSION` remains `1` (row shape unchanged).
+
+### Lean compatibility framing (non-circular clean break)
+
+Snapshot digests are **not** folded into `compatibility_id`.
+
+Active lean identity uses contract `lean_accumulation_compatibility.v2`:
+
+```text
+material = canonical_json({
+  contract_id: lean_accumulation_compatibility.v2,
+  resolved_config_canonical,
+  candidate_observation_schema_version,
+  semantic_engine_version,
+  evidence_contract_version,
+  policy_snapshot_binding_contract: production_policy_snapshot.v2
+})
+compatibility_id = "sha256:" + sha256(UTF-8 material)
+```
+
+The prior delimiter-free concatenation algorithm is **not** retained as an
+alias. Changing only the binding contract forks the compatibility ID. Producer
+recomputes the lean ID and requires equality before snapshot or observation
+writes.
+
+`UNIQUE (purpose, compatibility_id, policy_id)` is unchanged. v1 and v2 rows
+coexist only under different compatibility IDs.
+
+### Schema migration v3
+
+Existing databases that created the table with a v1-only CHECK must rebuild
+`learning_policy_snapshots` under learning migration version **3**:
+
+- keep `schema_version CHECK (schema_version = 1)`
+- widen `contract_id` CHECK to
+  `production_policy_snapshot.v1 | production_policy_snapshot.v2`
+- preserve columns and UNIQUE key
+- copy with explicit column names; verify counts/contents
+- rebuild cohort index; run `foreign_key_check`
+
+Changing only `CREATE TABLE IF NOT EXISTS` is insufficient for existing DBs.
+
+### Producer trigger and bundle identity
+
+Shared `run_signal_observation_corpus_write` (`research accum capture` and
+`research accum backfill`) ensures all **seven** v2 snapshots before any
+observation write. No separate export command. No dual-write v1. A partial
+six-of-seven set fails closed before observation writes.
+
+Corpus write resolves one `AccumulationProductionPolicyBundle` that includes
+`hard_filter_policy` and injects the same typed objects into engines (where
+applicable) and snapshot ensure. Capture may neutralize score filters for
+corpus inclusion; the snapshot always uses the **pre-neutralization** hard-filter
+policy object.
+
+Market-cap authority remains the live path:
+
+```text
+accumulation_screener.screener.min_market_cap_idr
+  → SwingPolicyConfig.min_market_cap_idr
+  → hard-filter policy / request
+```
+
+Do not add a second independently parsed market-cap field for this slice.
+
+### Sector breadth and historical cohorts
+
+Sector breadth remains out of the closed score_weights snapshot. Historical
+cohorts without the required active snapshot set remain raw corpus and
+ineligible for verified production-policy challenges. No fabricated snapshot
+backfill onto old rows.
+
+### ML consumer
+
+Active production challenges accept snapshot **v2 / seven rows only**. No v1
+fallback for current production eligibility. Historical v1 may be parsed only
+as non-eligible. Hard-filter tournament adapter work is downstream.
 
 ## Consequences
 
-- Fresh accumulation capture/backfill always materializes verified policy rows
-  for the active lean compatibility cohort.
-- `ml-saham` can stop treating packaged policy JSON as production authority once
-  a fresh cohort exists and the consumer task lands.
+- Fresh accumulation capture/backfill materializes seven verified v2 policy rows
+  under a new lean compatibility cohort.
+- The hard-filter production baseline is explicit (currently largely
+  non-selective defaults) for policy-design tournaments.
 - Live Signal/Risk/TradeSetup Actions are unchanged (`NON_SEMANTIC` for engine
   behavior).
-- Adding a seventh production policy or another purpose requires a new task and
-  contract amendment.
+- Further closed-set changes require a new task and contract amendment.
 
-## Hardening (2026-07-31 review)
+## Hardening (2026-07-31 review + v2 amendment)
 
-1. **Exact object identity:** corpus write resolves one
-   `AccumulationProductionPolicyBundle` and injects those same typed objects into
-   SignalEngine, AssessRisk gates, AccumScore policy, and snapshot ensure.
-   A second independent config resolve for snapshots is forbidden on this path.
-2. **Atomic closed set:** the six rows are validated then written with
+1. **Exact object identity:** one `AccumulationProductionPolicyBundle` including
+   `hard_filter_policy`; no second independent resolve for snapshots.
+2. **Atomic closed set:** seven v2 rows validated then written with
    `add_policy_snapshots_atomic` under one `BEGIN IMMEDIATE` transaction.
-3. **Provenance:** `source_revision` is required non-empty
-   (`ai-saham@<version>[+git:<sha>]`); empty strings fail closed.
-4. **Integrity:** payload metadata keys `policy_id`, `policy_version`,
-   `decision_type`, and `semantic_engine_contract_id` must match row columns.
+3. **Provenance:** `source_revision` required non-empty
+   (`ai-saham@<version>[+git:<sha>]`).
+4. **Integrity:** payload metadata keys must match row columns; integrity uses
+   `snapshot.contract_id`.
 
 ## Related
 
 - ADR-042 deterministic champion and optional model challengers
 - ADR-049 database-owned learning pipeline clean break
-- ADR-056 accum corpus session observation
+- ADR-056 accum corpus session observation (payload remains v2; binding forks
+  compatibility)
 - ADR-057 evidence / diagnostic / corpus vocabulary
 - `BOUNDARY.md` policy-snapshot ownership
+- Task `activate_screen_hard_filter_tournament_cohort.md`
 - Sibling `ml-saham` ADR-002 ideal challenge system

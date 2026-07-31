@@ -1,13 +1,14 @@
 # Activate A Snapshot-Bound Cohort For The Screen Hard-Filter Tournament
 
-Status: `READY`
+Status: `IN_PROGRESS`
 
 Priority: **High** — required before `ml-saham` can run a verified
 `baseline=production` screen hard-filter tournament.
 
 Source: code-first follow-up to the completed
 [`parked_screen_filter_replay_contract.md`](parked_screen_filter_replay_contract.md),
-ADR-056, and ADR-059 on 2026-07-31.
+ADR-056, and ADR-059 on 2026-07-31. Locked clarifications incorporated 2026-07-31
+after pre-implementation vet.
 
 Primary owner: **`ai-saham`** — production hard-filter policy identity,
 compatibility-cohort authority, observation capture, and policy-snapshot writer.
@@ -28,8 +29,9 @@ counterfactual replay, folds/metrics, and tournament verdicts.
 - New snapshot artifact contract: `production_policy_snapshot.v2`.
 - New policy ID: `screener.accum.hard_filters`.
 - Compatibility decision: fold the exact snapshot-binding contract ID into the
-  lean accumulation compatibility hash. Do not bump the observation payload to
-  v3 merely to force a cohort fork.
+  lean accumulation compatibility hash via a versioned canonical-JSON framing.
+  Do not bump the observation payload to v3 merely to force a cohort fork.
+- Completion model: **two checkpoints** (producer merge vs operational DONE).
 
 ## 2. Problem Statement
 
@@ -68,21 +70,23 @@ bug. Adding capture-time rejected rows is not the remedy.
 - Snapshot v2 contains exactly seven rows: the six existing policies plus
   `screener.accum.hard_filters`.
 - The seventh row is assembled from the same resolved typed default screen
-  policy used to construct the canonical live `screen accum` request. It is not
-  reconstructed from raw YAML in an adapter.
+  hard-filter policy used to construct the canonical live `screen accum`
+  request. It is not reconstructed from raw YAML in an adapter.
 - The hard-filter payload records the exact four filter values, enabled states,
-  first-match order, and missing-data behavior.
-- The snapshot-binding contract ID is an explicit input to the accumulation
-  compatibility hash, yielding a new cohort even when resolved YAML and engine
-  semantic versions are otherwise unchanged.
+  first-match order, missing-data behavior, and provider-unavailable branches.
+- The lean compatibility identity uses a versioned canonical-JSON framing that
+  includes the snapshot-binding contract, yielding a new cohort even when
+  resolved YAML and engine semantic versions are otherwise unchanged.
 - New observation IDs include the new compatibility ID through the existing
   `LearningObservation` identity formula. Old observation rows remain unchanged.
 - Capture/backfill atomically ensures all seven v2 snapshots before writing the
-  first observation in the new cohort.
-- A fresh accumulation backfill creates a genuinely new, snapshot-bound cohort
-  with reconciled observations and 3/10/20-session labels.
-- `ml-saham` receives sufficient immutable identities to implement its existing
-  snapshot-consumer clean break and later hard-filter tournament.
+  first observation in the new cohort. Producer writes **v2 only** after cutover
+  (no dual-write v1).
+- Producer code/ADR is mergeable after temporary-DB tests, full suite, Ruff,
+  data audits, and migration tests. The backlog task stays `IN_PROGRESS` until
+  live operational activation completes (section 11.2).
+- `ml-saham` consumer task is amended now to v2/seven (implementation separate);
+  active production challenges accept snapshot v2 only.
 - No live floor is retuned and no tournament WIN/LOSE result is produced here.
 
 ## 4. Non-Goals
@@ -104,6 +108,9 @@ bug. Adding capture-time rejected rows is not the remedy.
 - No inclusion of risk gates, setup gates, display-only thresholds, sorting,
   ranking, sector breadth, `min_streak`, `vwap_only`, or `squeeze_only` in the
   new hard-filter policy row.
+- No relocation of market-cap ownership off the live path in this task (see
+  §5.3).
+- No dual-write of v1 snapshots under the new compatibility ID.
 - No sibling Python imports in either direction.
 - No AI, model, provider, or network dependency.
 
@@ -158,10 +165,14 @@ first_match_order =
 filters.market_cap.enabled
 filters.market_cap.floor_idr
 filters.market_cap.missing_action
+filters.market_cap.provider_unavailable_action
+filters.market_cap.provider_exception_action
 
 filters.piotroski.enabled
 filters.piotroski.floor
 filters.piotroski.missing_action
+filters.piotroski.provider_unavailable_action
+filters.piotroski.provider_exception_action
 
 filters.accum_score.enabled
 filters.accum_score.floor
@@ -174,23 +185,88 @@ filters.signal_score.missing_action
 explicitly_excluded = [min_net_buy_days]
 ```
 
-The implementation must verify the exact missing actions against:
+#### Enabled rules (locked)
+
+```text
+market_cap.enabled = floor_idr > 0
+piotroski.enabled  = floor > 0
+accum_score.enabled = configured enabled flag
+signal_score.enabled = configured enabled flag
+```
+
+Default production values (current live defaults; largely non-selective):
+
+```text
+market_cap    floor_idr=0     enabled=false
+piotroski     floor=0         enabled=false
+accum_score   floor=0.0       enabled=true
+signal_score  floor=45.0      enabled=false
+```
+
+Piotroski `0` comes from the canonical CLI/TUI default request contract
+(`DEFAULT_MIN_PIOTROSKI`). CLI overrides (`--min-piotroski`,
+`--min-foreign-flow-score`, `--min-signal-score`) are invocation-specific and
+must not mutate the frozen default snapshot. This task does not add
+per-invocation snapshot rows.
+
+#### Closed missing/action vocabulary (locked)
+
+```text
+pass_without_evaluation
+rejected_flow
+rejected_signal
+raise_contract_error
+propagate_provider_error
+```
+
+| Filter | Disabled | Missing value | Provider unavailable |
+|---|---|---|---|
+| Market cap | `pass_without_evaluation` | `rejected_flow` | `pass_without_evaluation` |
+| Piotroski | `pass_without_evaluation` | `rejected_flow` | `pass_without_evaluation` |
+| Accum score | `pass_without_evaluation` | `raise_contract_error` | N/A |
+| Signal score | `pass_without_evaluation` | `rejected_signal` | N/A |
+
+Also record:
+
+- fundamentals-provider **exception** → `propagate_provider_error` (not ordinary
+  missingness);
+- structural filters are **skipped entirely** when the fundamentals provider
+  object is absent (`AccumulationCandidateStructuralFilter`); missing
+  fundamentals reject only when the provider exists and returns no usable value;
+- `accum_score` is a required typed float in production. Offline payload
+  missingness for tournament extract remains `unextractable_contract`, not a
+  production rejection classification.
+
+Implementation must verify these behaviors against:
 
 - `AccumulationCandidateStructuralFilter` for market cap and Piotroski;
 - `AccumulationCandidateSignalAssessor` for accumulation and signal scores.
 
-Do not copy the above shape while guessing the values. Derive values and
-enabled states from one typed default hard-filter policy object shared with the
-canonical default screen request construction.
+Do not copy the payload shape while guessing values. Derive floors and enabled
+states from one typed default hard-filter policy object shared with canonical
+default screen request construction.
 
-CLI overrides such as `--min-piotroski`, `--min-foreign-flow-score`, and
-`--min-signal-score` are not the frozen default production baseline. A run with
-an override must not be mislabeled as the snapshot's default policy. This task
-does not add per-invocation snapshot rows.
+### 5.3 One typed authority path (market-cap ownership preserved)
 
-### 5.3 One typed authority path
+There is **one configured authority** for market cap, not two:
 
-Introduce or extract one immutable application-owned type equivalent to:
+```text
+YAML: accumulation_screener.screener.min_market_cap_idr
+  → load_swing_policy_config() → SwingPolicyConfig.min_market_cap_idr
+  → BuildSignalObservationScreenRequest / AccumulationScreenHardFilterPolicy
+```
+
+Therefore:
+
+- snapshot market-cap floor from `swing_policy.min_market_cap_idr` (live path);
+- identify material source as `accumulation_screener.screener.min_market_cap_idr`;
+- do **not** add a second independently parsed value on
+  `AccumulationScreenerConfig`;
+- construct the typed hard-filter policy once from existing typed inputs.
+
+Moving ownership off this path is a later clean refactor and is **out of scope**.
+
+Introduce or extract one immutable application-owned type:
 
 ```text
 AccumulationScreenHardFilterPolicy
@@ -202,42 +278,96 @@ AccumulationScreenHardFilterPolicy
   min_signal_score_enabled
 ```
 
-The exact type name may change during ADR review, but the ownership path may
-not:
+Include it **inside** `AccumulationProductionPolicyBundle`:
+
+```text
+hard_filter_policy: AccumulationScreenHardFilterPolicy
+```
+
+Ownership path (may not fork):
 
 ```text
 resolved typed configs + canonical default request policy
   -> one AccumulationScreenHardFilterPolicy
-      -> BuildSignalObservationScreenRequest/default live screen construction
-      -> production-policy snapshot payload assembly
+      -> AccumulationProductionPolicyBundle.hard_filter_policy
+          -> snapshot payload assembly (pre-neutralization)
+          -> BuildSignalObservationScreenRequest / default live screen
+              -> capture may derive neutralized copy for corpus inclusion
 ```
 
-The capture path may still neutralize score filters for corpus inclusion, but
-that neutralized request is not the production policy snapshot. Snapshot
-assembly must receive the pre-neutralization canonical default policy object.
+Corpus invocation:
+
+```text
+production bundle
+  ├─ hard_filter_policy → snapshot payload
+  └─ hard_filter_policy → request builder
+                              └─ capture derives neutralized copy
+```
+
+The snapshot always consumes the pre-neutralization object. Do not inject an
+independently built hard-filter policy in parallel.
 
 Adapters may wire the object. They must not interpret YAML, calculate enabled
 states, choose missing actions, or assemble snapshot payloads.
 
-### 5.4 Non-circular clean cohort fork
+### 5.4 Non-circular clean cohort fork (canonical JSON framing)
 
-Add the exact snapshot-binding contract ID to the lean accumulation
-compatibility identity input:
+Replace delimiter-free string concatenation for lean accumulation compatibility
+with this exact algorithm (contract
+`lean_accumulation_compatibility.v2`):
+
+```python
+material = canonical_json(
+    {
+        "contract_id": "lean_accumulation_compatibility.v2",
+        "resolved_config_canonical": resolved_config_canonical,
+        "candidate_observation_schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        "semantic_engine_version": SEMANTIC_ENGINE_VERSION,
+        "evidence_contract_version": EVIDENCE_CONTRACT_VERSION,
+        "policy_snapshot_binding_contract": "production_policy_snapshot.v2",
+    }
+)
+compatibility_id = "sha256:" + sha256(material.encode("utf-8")).hexdigest()
+```
+
+`canonical_json` means the existing learning-artifacts helper:
 
 ```text
-resolved_config_canonical
-CANDIDATE_OBSERVATION_SCHEMA_VERSION
-SEMANTIC_ENGINE_VERSION
-EVIDENCE_CONTRACT_VERSION
-policy_snapshot_binding_contract = production_policy_snapshot.v2
+ensure_ascii=true
+allow_nan=false
+sort_keys=true
+separators=(",", ":")
+UTF-8 bytes
+```
+
+Frozen golden vector (current engine versions as of task lock):
+
+```text
+resolved_config_canonical = "x: 1\n"
+candidate_observation_schema_version = 9
+semantic_engine_version = "1.5"
+evidence_contract_version = "1.5"
+policy_snapshot_binding_contract = "production_policy_snapshot.v2"
+```
+
+Exact canonical bytes:
+
+```json
+{"candidate_observation_schema_version":9,"contract_id":"lean_accumulation_compatibility.v2","evidence_contract_version":"1.5","policy_snapshot_binding_contract":"production_policy_snapshot.v2","resolved_config_canonical":"x: 1\n","semantic_engine_version":"1.5"}
+```
+
+Expected result:
+
+```text
+sha256:5b2849a0e60d2cfe880fc8e65d6f1ab10f9668ed2676a1379fc7d2e8255837f2
 ```
 
 Requirements:
 
-- use unambiguous canonical framing rather than raw delimiter-free string
-  concatenation when changing the identity formula;
+- do **not** preserve the delimiter-free v1 hash algorithm as an alias,
+  fallback, or dual-path reader;
 - the same inputs remain deterministic;
-- changing only the binding contract from v1 to v2 forks the compatibility ID;
+- changing only the binding contract from v1→v2 forks the compatibility ID;
 - snapshot payload digests remain projections and are **not** folded into the
   compatibility ID;
 - the observation payload and learning observation contract remain
@@ -245,48 +375,127 @@ Requirements:
   `accumulation-discovery.v2`;
 - every snapshot row and observation written in the new path uses the exact
   same newly resolved compatibility ID;
-- existing v1 compatibility IDs and observations remain byte-for-byte
-  unchanged and cannot be selected as verified snapshot-v2 cohorts.
+- existing compatibility IDs and observations remain byte-for-byte unchanged
+  and cannot be selected as verified snapshot-v2 cohorts.
 
 This is a deliberate compatibility clean break. Do not add a reader alias,
 fallback, translation, auto-upgrade, or `latest/largest cohort` selection.
 
-### 5.5 Atomic write order
+### 5.5 Snapshot contract identity (enum + create)
 
-For capture and backfill:
+Add explicit enum members:
+
+```text
+PRODUCTION_POLICY_SNAPSHOT_V1 = production_policy_snapshot.v1
+PRODUCTION_POLICY_SNAPSHOT_V2 = production_policy_snapshot.v2
+```
+
+(Replace the current single `PRODUCTION_POLICY_SNAPSHOT` name with the v1
+member; keep the string value identical so historical IDs recompute.)
+
+Make `ProductionPolicySnapshot.create()` receive the contract **explicitly** —
+no hardcoded/default v1.
+
+For v2 rows:
+
+```python
+stable_learning_id(
+    LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
+    identity,
+)
+```
+
+Integrity validation must recompute using `snapshot.contract_id`. Historical v1
+rows and IDs remain unchanged. `LEARNING_SCHEMA_VERSION` remains `1`; the row
+shape has not changed.
+
+### 5.6 Schema migration v3 (explicitly required)
+
+Existing DBs have:
+
+```sql
+contract_id TEXT NOT NULL CHECK (contract_id = 'production_policy_snapshot.v1')
+```
+
+Changing only `CREATE TABLE IF NOT EXISTS` is insufficient.
+
+Implement migration version **3** under the learning migration namespace as one
+transaction:
+
+1. rebuild `learning_policy_snapshots`;
+2. keep `schema_version CHECK (schema_version = 1)`;
+3. widen only `contract_id` to:
+
+```sql
+CHECK (
+  contract_id IN (
+    'production_policy_snapshot.v1',
+    'production_policy_snapshot.v2'
+  )
+)
+```
+
+4. preserve existing columns and
+   `UNIQUE (purpose, compatibility_id, policy_id)`;
+5. copy rows using explicit column names;
+6. verify before/after row counts and contents;
+7. drop/rename/recreate the cohort index atomically;
+8. run `foreign_key_check`.
+
+Coexistence of v1 and v2 rows relies on the compatibility-ID fork (same
+`(purpose, compatibility_id, policy_id)` cannot hold two contracts). Do not
+change the unique key to include `contract_id`.
+
+### 5.7 Producer cutover and atomic write order
+
+After cutover, capture/backfill writes **exactly seven**
+`production_policy_snapshot.v2` rows under the new compatibility ID.
+
+- No dual-write v1.
+- No v1 rows under the new compatibility ID.
+- V1 remains readable only as immutable historical data.
+- A partial six-of-seven v2 set fails before observation writes.
+
+Write order:
 
 1. Resolve canonical config, engine semantic versions, and the snapshot-v2
    binding contract.
-2. Resolve the new compatibility ID once.
-3. Resolve one typed production policy bundle including the default screen hard
-   filters.
-4. Build and validate all seven snapshot rows.
+2. Resolve the new compatibility ID once (canonical-JSON framing).
+3. Resolve one typed production policy bundle including
+   `hard_filter_policy`.
+4. Build and validate all seven snapshot rows under
+   `production_policy_snapshot.v2`.
 5. Atomically insert/reuse all seven rows for that compatibility ID.
 6. Only after success, write observations carrying that same compatibility ID.
 
 Missing, malformed, incomplete, mismatched, or conflicting snapshot rows must
-fail before any observation write. A partial six-of-seven set is an invariant
-failure, not a warning.
+fail before any observation write.
 
 ## 6. Architecture Impact Assessment
 
 - New external dependency: No.
 - Affects deterministic live decisions: No; current predicates and defaults
   remain unchanged.
-- Persistence change: Yes; a new versioned snapshot artifact set and a new
-  compatibility cohort are written to existing learning tables. A migration is
-  required only if current schema constraints cannot store both artifact
-  contract versions; do not add a table without proving that need.
+- Persistence change: Yes; migration v3 widens snapshot `contract_id` CHECK;
+  new versioned snapshot artifact set and new compatibility cohort are written
+  to existing learning tables. Do not add a table.
 - Warm-up data: No new provider warm-up. A fresh historical corpus backfill and
-  label generation are required operationally.
+  label generation are required operationally for task DONE (not for producer
+  code merge).
 - Orchestration or policy in adapter: No.
 
 ```md
 Layer plan:
-- Domain: versioned learning/snapshot contract constants and immutable hard-filter policy value; no I/O.
-- Application: construct one typed default hard-filter policy, include the binding contract in compatibility resolution, assemble/validate seven snapshots, and enforce snapshot-before-observation workflow.
-- Infrastructure: persist/read both immutable snapshot artifact versions in SQLite; preserve atomic closed-set semantics and old rows.
-- Adapter: thin composition only; inject the shared typed policy and render existing failures without interpreting policy.
+- Domain: versioned learning/snapshot contract constants (V1/V2 enums),
+  ProductionPolicySnapshot.create(contract explicit), immutable hard-filter
+  policy value object if placed in domain; no I/O.
+- Application: AccumulationScreenHardFilterPolicy + bundle field; one pure
+  resolver; lean compatibility.v2 framing; assemble/validate seven v2
+  snapshots; snapshot-before-observation workflow.
+- Infrastructure: migration v3; persist/read both immutable snapshot artifact
+  versions; preserve atomic closed-set semantics and old rows.
+- Adapter: thin composition only; inject the shared typed policy and render
+  existing failures without interpreting policy.
 ```
 
 Sibling `ml-saham` boundary:
@@ -296,6 +505,8 @@ Sibling `ml-saham` boundary:
 - Challenge: bind the verified hard-filter snapshot to a separate replay adapter.
 - Protocol/tournament: own thresholds, folds, labels/outcomes, metrics, and artifacts.
 - SQLite: read-only; no repair, migration, or inferred snapshots.
+- Active production eligibility: snapshot v2 / seven rows only; no v1 fallback.
+- Historical v1 parse/display: only if explicitly non-eligible for production baseline.
 ```
 
 ## 7. AI Usage Declaration
@@ -366,26 +577,33 @@ Point-in-time behavior:
 ## 10. Cross-Repository Sequencing
 
 1. Accept an ADR-059 amendment defining snapshot v2, the exact seven-row set,
-   and the non-circular compatibility fork.
-2. Implement ai-saham producer/domain/application/infrastructure changes.
-3. Run focused/full verification and data-audit gates on temporary databases.
-4. Run one live operational backfill under the new compatibility ID.
-5. Generate/reconcile 3/10/20-session labels for the new observation IDs.
-6. Amend and implement
+   the non-circular compatibility fork, and migration/enum identity rules.
+2. **Amend** (do not implement yet)
    `~/dev/ml-saham/tasks/backlog/consume_verified_ai_saham_policy_snapshots.md`
-   for snapshot v2 and the exact seven-row set.
-7. Re-run the existing screen-filter extract audit against the new explicit
-   cohort; it must remain `SUFFICIENT_FOR_REPLAY`.
-8. Only then approve the separate tournament decision checkpoint: exact
+   to require snapshot v2 / seven rows; forbid committing a v1-only consumer.
+3. Implement ai-saham producer/domain/application/infrastructure changes
+   including migration v3.
+4. Run focused/full verification and data-audit gates on temporary databases
+   → **producer merge checkpoint** (section 11.1).
+5. Run one live operational backfill under the new compatibility ID.
+6. Generate/reconcile 3/10/20-session labels for the new observation IDs.
+7. Record DB size/page/freelist + observation/label/snapshot deltas; extract
+   audit must return `SUFFICIENT_FOR_REPLAY` for the new explicit cohort
+   → **operational DONE checkpoint** (section 11.2).
+8. Only then implement the amended ml-saham consumer (active challenges accept
+   v2/seven only; no v1 fallback for production eligibility).
+9. Only then approve the separate tournament decision checkpoint: exact
    filters/combinations, threshold grid, primary H=10 excess-vs-IHSG outcome,
    denominator, missingness, folds, embargo, minimum N, and INCONCLUSIVE rules.
-9. Implement/run the tournament in ml-saham only.
+10. Implement/run the tournament in ml-saham only.
 
-Do not combine steps 1-7 with threshold selection or outcome inspection. Grid
+Do not combine steps 1–7 with threshold selection or outcome inspection. Grid
 design must not be opportunistically chosen after looking at full-panel H=10
 results.
 
 ## 11. Acceptance Criteria
+
+### 11.1 Producer merge checkpoint (code/ADR)
 
 - [ ] ADR-059 explicitly defines `production_policy_snapshot.v2` before runtime
       implementation begins.
@@ -395,24 +613,46 @@ results.
 - [ ] The new hard-filter row uses `decision_type=gate`, policy version `v1`,
       and semantic contract `screen.accum.hard_filters.v1`.
 - [ ] Its payload records all four filters, enabled states, floors, first-match
-      order, and verified missing actions.
+      order, missing actions, provider-unavailable, and exception actions.
+- [ ] Default production floors/enabled match the locked defaults in §5.2.
 - [ ] `min_net_buy_days` and all non-goal filters are explicitly absent from the
       executable policy components.
-- [ ] One typed default hard-filter policy object feeds both production default
-      screen construction and snapshot assembly.
-- [ ] Capture neutralization cannot alter the policy snapshot.
-- [ ] Snapshot-v2 binding deterministically forks the compatibility ID without
-      folding snapshot digests into it.
-- [ ] Observation payload remains canonical ADR-056 v2; no unnecessary v3 or
-      dual reader/writer is introduced.
-- [ ] Existing observations/snapshots remain unchanged and ineligible for the
-      new verified-policy cohort.
+- [ ] `AccumulationProductionPolicyBundle` includes `hard_filter_policy`.
+- [ ] One typed default hard-filter policy feeds both production default screen
+      construction and snapshot assembly; capture neutralization cannot alter
+      the policy snapshot.
+- [ ] Market-cap continues to flow from
+      `accumulation_screener.screener.min_market_cap_idr` →
+      `SwingPolicyConfig.min_market_cap_idr` (no second parse).
+- [ ] Lean compatibility uses `lean_accumulation_compatibility.v2` framing;
+      frozen golden vector matches §5.4.
+- [ ] Delimiter-free v1 hash algorithm is not retained as an alias.
+- [ ] `LearningContractId` has explicit V1/V2 members;
+      `ProductionPolicySnapshot.create(contract=...)` is explicit;
+      integrity uses `snapshot.contract_id`.
+- [ ] Migration v3 rebuilds the table, widens `contract_id` CHECK only, preserves
+      unique key and `schema_version = 1`, verifies counts/contents, rebuilds
+      index, runs `foreign_key_check`.
+- [ ] After cutover, producer writes **only** seven v2 rows for the new
+      compatibility ID (no dual-write v1).
 - [ ] All seven snapshots are atomically ensured before the first observation
       write on both capture and backfill paths.
 - [ ] Same binding/content is idempotent; partial sets, conflicting content,
       wrong contracts, or wrong compatibility IDs fail closed.
+- [ ] Observation payload remains canonical ADR-056 v2.
+- [ ] Existing observations/snapshots remain unchanged in temporary-DB
+      migration/identity tests.
+- [ ] Temporary-DB tests, full suite, Ruff, and data audits pass.
+- [ ] `git diff --check` passes.
+- [ ] ml-saham consumer **task** amended to v2/seven (implementation not
+      required for this checkpoint).
+- [ ] Completion note: **producer implemented; operational activation pending**.
+
+### 11.2 Operational DONE checkpoint (live)
+
 - [ ] A fresh explicit compatibility cohort is captured/backfilled and is not
-      the historical 1,890-row compatibility ID.
+      the historical 1,890-row compatibility ID
+      (`sha256:005363021f7f792071e43d12506aeefe474abf4fbd7d0a45f823b417e95e84c1`).
 - [ ] New observation and 3/10/20 label counts reconcile with no duplicate
       ticker/session units inside the cohort.
 - [ ] The hard-filter extractor returns `SUFFICIENT_FOR_REPLAY` for the new
@@ -423,50 +663,59 @@ results.
       ai-saham SQLite.
 - [ ] No live screen, SignalEngine, RiskEngine, TradeSetup, or Action behavior
       changes.
-- [ ] Whole-repo tests and Ruff gates pass in every repository whose Python is
-      changed.
-- [ ] `git diff --check` passes and completion records contain both repository
-      commits plus the new compatibility ID.
+- [ ] Completion record filled with new compatibility ID and measurements.
+
+Until 11.2 is complete, task status remains `IN_PROGRESS` (not `DONE`) even if
+producer code is merged.
 
 ## 12. Testing Expectations
 
 ### ai-saham contract tests
 
+- frozen golden vector for lean compatibility.v2 (§5.4 exact digest);
 - frozen canonical JSON/digest/ID vector for snapshot v2;
 - exact seven-row set and decision-type map;
 - v1 remains exact six and cannot accept the seventh row;
 - hard-filter payload equals the shared typed live-default policy object;
+- enabled rules: `floor > 0` for market_cap/piotroski; config flags for scores;
+- default floors/enabled match locked production defaults;
+- missing/provider/exception action vocabulary matches §5.2 table;
 - market-cap/Piotroski/accum/signal first-match behavior matches application
   services for pass, reject, threshold equality, and missing values;
+- structural skip when fundamentals provider is absent;
 - `min_net_buy_days` absent from executable hard-filter components;
 - capture-neutralized request still produces the non-neutralized default policy
-  snapshot;
+  snapshot from bundle.hard_filter_policy;
 - CLI override does not mutate/relabel the frozen default snapshot;
-- compatibility hash differs when only snapshot binding changes v1 -> v2;
-- deterministic hash for identical inputs and an unambiguous framing collision
-  counterexample;
+- compatibility hash differs when only snapshot binding changes;
+- delimiter-free old algorithm is not accepted as alias;
 - new compatibility ID yields different observation IDs for the same
   ticker/session while old rows remain unchanged;
 - snapshot ensure happens once and before any observation repository write;
 - partial batch, bad metadata, wrong binding, digest conflict, and repository
   failure produce zero observation writes;
 - capture and backfill production composition roots both carry the same typed
-  policy object and compatibility ID.
+  policy object and compatibility ID;
+- `ProductionPolicySnapshot.create` rejects implicit/default contract;
+- v1 historical snapshot_id recomputes unchanged after enum rename.
 
 ### Integration/data tests
 
-- temporary SQLite supports immutable v1 and v2 snapshot cohorts side by side;
+- temporary SQLite supports immutable v1 and v2 snapshot cohorts side by side
+  (different compatibility IDs);
+- migration v3 on a pre-v3 fixture DB: row count/content preserve, CHECK accepts
+  v2, foreign_key_check clean;
 - read APIs require explicit artifact contract + compatibility ID and never
   auto-select largest/latest;
-- fresh-cohort observation/label generation and reconciliation;
+- fresh-cohort observation/label generation and reconciliation (temp DB);
 - architecture tests prove adapters do not assemble policy payloads or parse
   hard-filter semantics;
 - source/data audits report no new FAIL findings.
 
-### Required close commands
+### Required close commands (producer merge)
 
 ```text
-pytest <focused snapshot/identity/capture/repository suites>
+pytest <focused snapshot/identity/capture/repository/migration suites>
 pytest
 ruff check src/ tests/
 ruff format --check src/ tests/
@@ -479,7 +728,8 @@ not weaken tests or lint configuration.
 
 ## 13. Documentation Impact
 
-- ADR-059 amendment: Required.
+- ADR-059 amendment: Required (v2 set, enum, framing, migration, cutover,
+  hard-filter payload contract).
 - ADR-056 amendment: Required only to state that the v2 observation payload is
   retained while snapshot binding forks compatibility; do not redefine the
   ticker/session payload.
@@ -487,9 +737,11 @@ not weaken tests or lint configuration.
   with immutable v1 history plus current v2 seven-row ownership.
 - Source-field/data-contract catalog: update if it validates closed contract
   enums or snapshot fields.
-- Operator docs: record the explicit new cohort ID and backfill/label commands.
-- `ml-saham` ADR-002, boundary, data contract, and consumer task: downstream
-  update required before consumer implementation.
+- Operator docs: record the explicit new cohort ID and backfill/label commands
+  after operational activation.
+- `ml-saham` consumer task amend: **required now** (before consumer
+  implementation); ADR-002/boundary/data contract update with that consumer
+  work.
 
 ## 14. Agent Execution Instructions
 
@@ -500,7 +752,9 @@ Before implementation, the agent must:
    implementation files named below.
 2. Inspect and protect both dirty worktrees; stage only task-owned files.
 3. Reverify the exact live-default request path, capture-neutralized path,
-   structural/signal first-match predicates, and current compatibility formula.
+   structural/signal first-match predicates, market-cap load path
+   (`swing_policy_config_loader` ← `accumulation_screener.screener.min_market_cap_idr`),
+   and current compatibility formula.
 4. State the hard invariants, forbidden interpretations, exact file boundary,
    exact output contracts, negative tests, and layer plan before editing.
 5. List every production composition root for `screen accum`, TUI default
@@ -510,11 +764,13 @@ Before implementation, the agent must:
    negative contract tests must pass before persistence/workflow integration.
 7. Stop if implementation would require rewriting existing observations,
    preserving a fallback/alias, importing sibling Python, putting policy in an
-   adapter, or adding tournament evaluation to ai-saham.
+   adapter, relocating market-cap ownership, dual-writing v1, or adding
+   tournament evaluation to ai-saham.
 
 Current implementation entry points to reverify:
 
 - `src/adapters/composition/screen_accum_request.py`
+- `src/infrastructure/config/swing_policy_config_loader.py`
 - `src/application/services/signal_observation_request_builder.py`
 - `src/application/services/accumulation_candidate_structural_filter.py`
 - `src/application/services/accumulation_candidate_signal_assessor.py`
@@ -525,10 +781,38 @@ Current implementation entry points to reverify:
 - `src/adapters/cli/research_accum_backfill_commands.py`
 - `src/domain/value_objects/learning_artifacts.py`
 - `src/infrastructure/persistence/sqlite_learning_artifact_repository.py`
+- `src/infrastructure/persistence/sqlite_migration_runner.py`
 
 ## 15. Tournament Decision Checkpoint — Still Separate
 
 This task makes a verified tournament possible. It does not authorize one.
+
+**Baseline intent (locked):** `baseline=production` means the exact current,
+largely non-selective default:
+
+```text
+market cap: off
+Piotroski: off
+accum score: enabled at 0
+signal score: off
+```
+
+The tournament question is:
+
+> Does adding a named hard-filter policy improve the predeclared H=10
+> outcome/utility metrics versus today’s effectively unfiltered production
+> default?
+
+It is a **policy-design/retuning experiment**, not validation of an already
+selective production screen.
+
+A future `WIN` means only “candidate for human retuning.” It does **not**
+establish:
+
+- full-universe recall;
+- value against broker-unobservable names;
+- production readiness during fundamentals-provider outages;
+- permission to change configuration automatically.
 
 Before changing the ml-saham roadmap from SKIPPED or implementing WIN/LOSE
 metrics, a human-approved task must name:
@@ -541,11 +825,8 @@ metrics, a human-approved task must name:
 6. folds, embargo, minimum N, multiplicity control, and
    provisional/INCONCLUSIVE rules;
 7. baseline/challenger/adapter/protocol artifact identities;
-8. explicit decision that these production knobs are candidates for retuning.
-
-Current defaults being off or zero does not make replay useless, but it means
-the tournament is a policy-design experiment rather than validation of an
-already selective production baseline. Report that distinction explicitly.
+8. explicit decision that these production knobs are candidates for retuning;
+9. provider-unavailable deployment policy for any candidate production retune.
 
 ## 16. Do Not Interpret This As
 
@@ -561,20 +842,40 @@ already selective production baseline. Report that distinction explicitly.
 - Do not store threshold grids or replay outputs in shared SQLite.
 - Do not let ml-saham infer, repair, or write policy snapshots.
 - Do not auto-promote a tournament result into production configuration.
+- Do not dual-write v1 under the new compatibility ID.
+- Do not keep delimiter-free lean hash as an alias.
+- Do not relocate market-cap ownership off `SwingPolicyConfig` in this task.
+- Do not merge a v1-only ml-saham consumer and immediately supersede it.
+- Do not mark this backlog task `DONE` after producer merge alone.
 
 ## 17. Completion Record
 
-- ADR amendment commit:
-- ai-saham implementation commit:
-- Fresh snapshot-v2 compatibility ID:
+### 17.1 Producer merge
+
+- ADR amendment commit: (pending user commit)
+- ai-saham implementation commit: (pending user commit)
+- Migration v3 verified (temp + note if live pending): yes — temp-DB rebuild
+  preserves v1 rows and accepts v2; live DB not yet activated
+- Lean compatibility golden vector:
+  `sha256:5b2849a0e60d2cfe880fc8e65d6f1ab10f9668ed2676a1379fc7d2e8255837f2`
 - Historical compatibility ID retained:
   `sha256:005363021f7f792071e43d12506aeefe474abf4fbd7d0a45f823b417e95e84c1`
+- Focused/full tests: focused contract suites green; domain/application/
+  infrastructure.persistence/composition **3712 passed**; full-repo suite run
+  via `.venv` (see session notes)
+- Ruff check/format: green (`ruff check src/ tests/`, `ruff format --check`)
+- ml-saham consumer task amended (path/commit or date):
+  `~/dev/ml-saham/tasks/backlog/consume_verified_ai_saham_policy_snapshots.md`
+  retargeted to v2/seven on 2026-07-31
+- Status note: `producer implemented; operational activation pending`
+
+### 17.2 Operational activation
+
+- Fresh snapshot-v2 compatibility ID:
 - Snapshot v2 row count/digests:
 - Fresh observation count:
 - H3/H10/H20 label available/unavailable counts:
 - Extract-audit verdict:
 - SQLite before/after measurements:
-- ml-saham consumer commit:
-- Focused/full tests:
-- Ruff check/format:
+- ml-saham consumer implementation commit (if any):
 - Tournament checkpoint status: `BLOCKED` until section 15 is approved

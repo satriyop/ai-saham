@@ -11,9 +11,13 @@ from typing import Sequence
 
 from src.application.services.accumulation_policy_snapshot_payloads import (
     ACCUM_SCORE_SEMANTIC_CONTRACT_ID,
+    HARD_FILTERS_SEMANTIC_CONTRACT_ID,
     RISK_HARD_GATES_SEMANTIC_CONTRACT_ID,
     SIGNAL_SEMANTIC_CONTRACT_ID,
     build_all_accumulation_policy_payloads,
+)
+from src.application.services.accumulation_screen_hard_filter_policy import (
+    AccumulationScreenHardFilterPolicy,
 )
 from src.application.services.lean_observation_identity import (
     LeanObservationIdentity,
@@ -28,6 +32,7 @@ from src.domain.rules.risk_gate import RiskGate
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
+    PRODUCTION_POLICY_ID_HARD_FILTERS,
     PRODUCTION_POLICY_ID_RISK_HARD_GATES,
     PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION,
     PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
@@ -51,6 +56,7 @@ _DECISION_TYPE_BY_POLICY: dict[str, str] = {
     PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION: "score",
     PRODUCTION_POLICY_ID_RISK_HARD_GATES: "gate",
     PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE: "score",
+    PRODUCTION_POLICY_ID_HARD_FILTERS: "gate",
 }
 
 _SEMANTIC_CONTRACT_BY_POLICY: dict[str, str] = {
@@ -60,6 +66,7 @@ _SEMANTIC_CONTRACT_BY_POLICY: dict[str, str] = {
     PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION: SIGNAL_SEMANTIC_CONTRACT_ID,
     PRODUCTION_POLICY_ID_RISK_HARD_GATES: RISK_HARD_GATES_SEMANTIC_CONTRACT_ID,
     PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE: SIGNAL_SEMANTIC_CONTRACT_ID,
+    PRODUCTION_POLICY_ID_HARD_FILTERS: HARD_FILTERS_SEMANTIC_CONTRACT_ID,
 }
 
 
@@ -72,6 +79,7 @@ class EnsureAccumulationPolicySnapshotsRequest:
     signal_engine_config: SignalEngineConfig
     structural_gates: Sequence[RiskGate]
     execution_gates: Sequence[RiskGate]
+    hard_filter_policy: AccumulationScreenHardFilterPolicy
     created_at: datetime
     source_revision: str
 
@@ -86,11 +94,12 @@ class EnsureAccumulationPolicySnapshotsResponse:
 
 
 class EnsureAccumulationPolicySnapshotsUseCase:
-    """Materialize the closed v1 set of production policy snapshots for a cohort.
+    """Materialize the closed v2 set of production policy snapshots for a cohort.
 
     Must run before any accumulation observation write. Recomputes lean
     compatibility from the supplied config bytes and fails closed on mismatch
-    or under-forked same-key digest conflict.
+    or under-forked same-key digest conflict. Writes only
+    ``production_policy_snapshot.v2`` (seven rows). No dual-write of v1.
     """
 
     def __init__(self, repository: LearningPolicySnapshotRepository) -> None:
@@ -129,10 +138,11 @@ class EnsureAccumulationPolicySnapshotsUseCase:
             signal_engine_config=request.signal_engine_config,
             structural_gates=request.structural_gates,
             execution_gates=request.execution_gates,
+            hard_filter_policy=request.hard_filter_policy,
         )
         if set(payloads) != set(ACCUMULATION_PRODUCTION_POLICY_IDS):
             raise LearningContractError(
-                "payload builder must emit exactly the closed v1 policy set"
+                "payload builder must emit exactly the closed v2 policy set"
             )
 
         if not request.source_revision.strip():
@@ -143,6 +153,7 @@ class EnsureAccumulationPolicySnapshotsUseCase:
         for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS:
             snapshots.append(
                 ProductionPolicySnapshot.create(
+                    contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
                     purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
                     learning_observation_contract_id=learning_observation_contract_id,
                     producer_observation_contract=ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,

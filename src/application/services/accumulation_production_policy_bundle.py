@@ -4,13 +4,17 @@ Layer: Application (pure value object). No I/O.
 
 Callers that write accumulation observations and production policy snapshots
 must resolve this bundle once and inject the same objects into SignalEngine,
-AssessRiskUseCase, ScoreAccumUseCase policy, and snapshot ensure.
+AssessRiskUseCase, ScoreAccumUseCase policy, hard-filter snapshot payload, and
+snapshot ensure.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.application.services.accumulation_screen_hard_filter_policy import (
+    AccumulationScreenHardFilterPolicy,
+)
 from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.rules.risk_gate import RiskGate
@@ -24,6 +28,7 @@ class AccumulationProductionPolicyBundle:
     signal_engine_config: SignalEngineConfig
     structural_gates: tuple[RiskGate, ...]
     execution_gates: tuple[RiskGate, ...]
+    hard_filter_policy: AccumulationScreenHardFilterPolicy
 
     def __post_init__(self) -> None:
         if not isinstance(self.accum_score_policy, AccumScorePolicy):
@@ -40,3 +45,8 @@ class AccumulationProductionPolicyBundle:
             raise TypeError("structural_gates must be a tuple")
         if not isinstance(self.execution_gates, tuple):
             raise TypeError("execution_gates must be a tuple")
+        if not isinstance(self.hard_filter_policy, AccumulationScreenHardFilterPolicy):
+            raise TypeError(
+                "hard_filter_policy must be AccumulationScreenHardFilterPolicy, got "
+                f"{type(self.hard_filter_policy).__name__}"
+            )

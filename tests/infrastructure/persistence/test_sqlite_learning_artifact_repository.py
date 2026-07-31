@@ -265,8 +265,10 @@ def _policy_snapshot(
     policy_id: str = PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     weight: float = 33.3,
     compatibility_id: str = "sha256:" + ("ab" * 32),
+    contract_id: LearningContractId = LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
 ) -> ProductionPolicySnapshot:
     return ProductionPolicySnapshot.create(
+        contract_id=contract_id,
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
         learning_observation_contract_id=LearningContractId.ACCUMULATION_OBSERVATION.value,
         producer_observation_contract="accumulation-discovery.v2",
@@ -361,9 +363,9 @@ def test_policy_snapshot_atomic_batch_all_or_nothing(tmp_path: Path) -> None:
         == ()
     )
 
-    # Happy path: closed six-row set in one transaction.
+    # Happy path: closed seven-row v2 set in one transaction.
     inserted, reused = repo.add_policy_snapshots_atomic([first, *rest])
-    assert inserted == 6
+    assert inserted == 7
     assert reused == 0
     assert (
         len(
@@ -372,13 +374,13 @@ def test_policy_snapshot_atomic_batch_all_or_nothing(tmp_path: Path) -> None:
                 compatibility_id=compat,
             )
         )
-        == 6
+        == 7
     )
 
-    # Idempotent atomic re-run reuses all six.
+    # Idempotent atomic re-run reuses all seven.
     inserted2, reused2 = repo.add_policy_snapshots_atomic([first, *rest])
     assert inserted2 == 0
-    assert reused2 == 6
+    assert reused2 == 7
 
     # Mid-batch conflict against existing rows rolls back: no extra rows, no
     # mutation. Seed a second cohort then fail a mixed batch that collides.
@@ -406,5 +408,176 @@ def test_policy_snapshot_atomic_batch_all_or_nothing(tmp_path: Path) -> None:
                 compatibility_id=compat,
             )
         )
-        == 6
+        == 7
     )
+
+
+def test_policy_snapshot_v3_migration_preserves_v1_and_accepts_v2(tmp_path: Path) -> None:
+    """Existing v1-only CHECK tables must rebuild under migration version 3."""
+    import sqlite3
+
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        LEARNING_MIGRATION_NAMESPACE,
+        ensure_learning_schema,
+    )
+
+    db_path = tmp_path / "legacy_v1_check.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute(
+        """
+        CREATE TABLE _schema_migrations (
+            namespace TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            applied_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (namespace, version)
+        )
+        """
+    )
+    # Pre-v3 table: v1-only contract CHECK (the defect migration 3 fixes).
+    conn.execute(
+        """
+        CREATE TABLE learning_policy_snapshots (
+            snapshot_id TEXT PRIMARY KEY,
+            schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+            contract_id TEXT NOT NULL CHECK (contract_id = 'production_policy_snapshot.v1'),
+            purpose TEXT NOT NULL,
+            learning_observation_contract_id TEXT NOT NULL,
+            producer_observation_contract TEXT NOT NULL,
+            compatibility_id TEXT NOT NULL,
+            policy_id TEXT NOT NULL,
+            policy_version TEXT NOT NULL,
+            decision_type TEXT NOT NULL,
+            semantic_engine_contract_id TEXT NOT NULL,
+            material_config_hash TEXT NOT NULL,
+            canonical_payload_json TEXT NOT NULL,
+            payload_digest TEXT NOT NULL,
+            source_revision TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            artifact_json TEXT NOT NULL,
+            UNIQUE (purpose, compatibility_id, policy_id)
+        )
+        """
+    )
+    from dataclasses import asdict
+
+    from src.domain.value_objects.learning_artifacts import canonical_json
+
+    legacy = _policy_snapshot(
+        contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
+        compatibility_id="sha256:" + ("aa" * 32),
+        weight=10.0,
+    )
+    conn.execute(
+        """
+        INSERT INTO learning_policy_snapshots (
+            snapshot_id, schema_version, contract_id, purpose,
+            learning_observation_contract_id, producer_observation_contract,
+            compatibility_id, policy_id, policy_version, decision_type,
+            semantic_engine_contract_id, material_config_hash,
+            canonical_payload_json, payload_digest, source_revision,
+            created_at, artifact_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            legacy.snapshot_id,
+            legacy.schema_version,
+            legacy.contract_id.value,
+            legacy.purpose.value,
+            legacy.learning_observation_contract_id,
+            legacy.producer_observation_contract,
+            legacy.compatibility_id,
+            legacy.policy_id,
+            legacy.policy_version,
+            legacy.decision_type,
+            legacy.semantic_engine_contract_id,
+            legacy.material_config_hash,
+            canonical_json(legacy.canonical_payload),
+            legacy.payload_digest,
+            legacy.source_revision,
+            legacy.created_at.isoformat(),
+            canonical_json(asdict(legacy)),
+        ),
+    )
+    conn.execute(
+        "INSERT INTO _schema_migrations(namespace, version) VALUES (?, 1)",
+        (LEARNING_MIGRATION_NAMESPACE,),
+    )
+    conn.execute(
+        "INSERT INTO _schema_migrations(namespace, version) VALUES (?, 2)",
+        (LEARNING_MIGRATION_NAMESPACE,),
+    )
+    conn.commit()
+    # Prove pre-migration CHECK rejects v2.
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            """
+            INSERT INTO learning_policy_snapshots (
+                snapshot_id, schema_version, contract_id, purpose,
+                learning_observation_contract_id, producer_observation_contract,
+                compatibility_id, policy_id, policy_version, decision_type,
+                semantic_engine_contract_id, material_config_hash,
+                canonical_payload_json, payload_digest, source_revision,
+                created_at, artifact_json
+            ) VALUES (?, 1, 'production_policy_snapshot.v2', 'ACCUMULATION_DISCOVERY',
+                      'c', 'p', 'compat', 'pid', 'v1', 'score', 's', 'h', '{}',
+                      ?, 'rev', '2026-01-01T00:00:00+00:00', '{}')
+            """,
+            ("x", "0" * 64),
+        )
+    conn.close()
+
+    ensure_learning_schema(db_path)
+    with connect_learning_database(db_path) as connection:
+        versions = {
+            int(r[0])
+            for r in connection.execute(
+                "SELECT version FROM _schema_migrations WHERE namespace = ?",
+                (LEARNING_MIGRATION_NAMESPACE,),
+            ).fetchall()
+        }
+        assert 3 in versions
+        count = connection.execute("SELECT COUNT(*) FROM learning_policy_snapshots").fetchone()[0]
+        assert count == 1
+        row = connection.execute(
+            "SELECT contract_id, payload_digest FROM learning_policy_snapshots"
+        ).fetchone()
+        assert row["contract_id"] == "production_policy_snapshot.v1"
+        assert row["payload_digest"] == legacy.payload_digest
+
+    repo = SQLiteLearningArtifactRepository(db_path)
+    v2 = _policy_snapshot(
+        contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
+        compatibility_id="sha256:" + ("bb" * 32),
+        weight=11.0,
+    )
+    assert repo.add_policy_snapshot(v2) is True
+    loaded = repo.get_policy_snapshot(v2.snapshot_id)
+    assert loaded is not None
+    assert loaded.contract_id is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2
+    # Historical v1 row still present under its compatibility id.
+    listed_v1 = repo.list_policy_snapshots(
+        purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+        compatibility_id=legacy.compatibility_id,
+    )
+    assert len(listed_v1) == 1
+    assert listed_v1[0].snapshot_id == legacy.snapshot_id
+
+
+def test_v1_and_v2_snapshots_coexist_under_different_compatibility_ids(
+    tmp_path: Path,
+) -> None:
+    repo = SQLiteLearningArtifactRepository(tmp_path / "coexist.db")
+    v1 = _policy_snapshot(
+        contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
+        compatibility_id="sha256:" + ("11" * 32),
+    )
+    v2 = _policy_snapshot(
+        contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
+        compatibility_id="sha256:" + ("22" * 32),
+    )
+    assert repo.add_policy_snapshot(v1) is True
+    assert repo.add_policy_snapshot(v2) is True
+    assert repo.get_policy_snapshot(v1.snapshot_id) == v1
+    assert repo.get_policy_snapshot(v2.snapshot_id) == v2

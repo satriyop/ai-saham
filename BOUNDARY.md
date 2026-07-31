@@ -67,7 +67,7 @@ Full mirror of this contract: [`ml-saham/BOUNDARY.md`](../ml-saham/BOUNDARY.md) 
 | Live screen / signal / risk / plan / TUI | **owns** | — |
 | `learning_observations` capture / backfill | **write** | **read** (features) |
 | `learning_outcome_labels` (`price_path.accum_*`, …) | **SSOT write** | optional join only; not default challenge y |
-| `learning_policy_snapshots` (`production_policy_snapshot.v1`) | **SSOT write** (typed production policy) | **read-only** digest/contract verify; no invent/repair/backfill |
+| `learning_policy_snapshots` (active: `production_policy_snapshot.v2`) | **SSOT write** (typed production policy) | **read-only** digest/contract verify; no invent/repair/backfill |
 | Accum **cohort evaluate** / ACCUM `learning_evaluations` | **dropped (legacy)** | **do not depend on** |
 | Policy tournament WIN / LOSE / rank IC / folds | — | **owns** |
 | Factor KEEP / DEMOTE / DROP_CANDIDATE | — | **owns** |
@@ -93,18 +93,31 @@ Full mirror of this contract: [`ml-saham/BOUNDARY.md`](../ml-saham/BOUNDARY.md) 
 |----------|--------|--------|
 | 1 obs / ticker-session, features 7/30/90 | ai-saham write | `learning_observation.accumulation_discovery.v2` |
 | Labels 3d / **10d primary** / 20d | ai-saham write | SUCCESS / FAILURE / NEUTRAL; entry = `shared.current_price`; 10d = next 10 sessions **per signal date** |
-| Policy snapshots (ADR-059) | ai-saham write | Six closed `production_policy_snapshot.v1` rows per lean `compatibility_id` before observation writes; `ml-saham` verifies digests |
+| Policy snapshots (ADR-059) | ai-saham write | Active: seven closed `production_policy_snapshot.v2` rows per lean `compatibility_id` before observation writes (includes `screener.accum.hard_filters`). Historical v1 six-row sets remain immutable and ineligible for active production baseline. `ml-saham` verifies digests; no v1 fallback for current eligibility |
 | Cohort evaluate | **dropped** | Scoring → ml-saham challenge |
 | Challenge panel | ml-saham | Features from observations; protocol y from candles (excess vs IHSG) by default |
 
 ### ADR-059 production policy snapshots
 
-- **Writer:** `ai-saham` only, from the same resolved typed policies used by live engines.
-- **Reader:** `ml-saham` opens SQLite read-only; recomputes `payload_digest` with the shared
-  canonical JSON rules; returns `BLOCKED_POLICY` on missing/mismatch.
-- **Not production authority:** packaged `ml-saham` policy JSON after cutover (fixtures/challengers only).
-- **Not in snapshot:** ML `panel_kind`, extraction aliases, folds, metrics, diagnostic bags.
-- Historical cohorts without rows are ineligible for verified `baseline=production`.
+- **Writer:** `ai-saham` only, from the same resolved typed policies used by live
+  engines / default screen hard-filter policy (`AccumulationProductionPolicyBundle`
+  including `hard_filter_policy`).
+- **Active contract:** `production_policy_snapshot.v2` — exactly seven rows per
+  cohort (six score/signal/risk + `screener.accum.hard_filters`).
+- **Historical:** `production_policy_snapshot.v1` six-row sets remain readable and
+  immutable; not eligible for active hard-filter / current production challenges.
+- **Lean binding:** active compatibility uses `lean_accumulation_compatibility.v2`
+  with `policy_snapshot_binding_contract = production_policy_snapshot.v2` (digests
+  not folded into the ID).
+- **Reader:** `ml-saham` opens SQLite read-only; recomputes `payload_digest` with the
+  shared canonical JSON rules; returns `BLOCKED_POLICY` on missing/mismatch; active
+  eligibility requires v2/seven with no v1 fallback.
+- **Not production authority:** packaged `ml-saham` policy JSON after cutover
+  (fixtures/challengers only).
+- **Not in snapshot:** ML `panel_kind`, extraction aliases, folds, metrics,
+  diagnostic bags.
+- Historical cohorts without the active snapshot set are ineligible for verified
+  `baseline=production`.
 
 Horizons **3 / 10 / 20** (primary **10**) align by number.  
 **Label math is not the same product** as challenge excess (see vocabulary).

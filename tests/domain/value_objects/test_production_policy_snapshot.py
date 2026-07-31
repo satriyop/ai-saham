@@ -1,4 +1,4 @@
-"""Contract tests for production_policy_snapshot.v1 (ADR-059)."""
+"""Contract tests for production_policy_snapshot v1/v2 (ADR-059)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,10 @@ import pytest
 
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
+    PRODUCTION_POLICY_ID_HARD_FILTERS,
     AssessmentPurpose,
     LearningContractError,
     LearningContractId,
@@ -35,6 +38,7 @@ def _default_payload(policy_id: str) -> dict:
 
 def _snapshot(
     *,
+    contract_id: LearningContractId = LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
     policy_id: str = PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     payload: dict | None = None,
     created_at: datetime = NOW,
@@ -42,6 +46,7 @@ def _snapshot(
     material: str = "sha256:" + ("ab" * 32),
 ) -> ProductionPolicySnapshot:
     return ProductionPolicySnapshot.create(
+        contract_id=contract_id,
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
         learning_observation_contract_id=LearningContractId.ACCUMULATION_OBSERVATION.value,
         producer_observation_contract="accumulation-discovery.v2",
@@ -65,10 +70,10 @@ def test_snapshot_id_is_deterministic_and_excludes_provenance() -> None:
     assert a.payload_digest == b.payload_digest
 
 
-def test_snapshot_id_matches_stable_learning_id_formula() -> None:
-    snap = _snapshot()
+def test_snapshot_id_matches_stable_learning_id_formula_for_v1() -> None:
+    snap = _snapshot(contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1)
     expected = stable_learning_id(
-        LearningContractId.PRODUCTION_POLICY_SNAPSHOT,
+        LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
         {
             "purpose": AssessmentPurpose.ACCUMULATION_DISCOVERY,
             "learning_observation_contract_id": LearningContractId.ACCUMULATION_OBSERVATION.value,
@@ -78,6 +83,14 @@ def test_snapshot_id_matches_stable_learning_id_formula() -> None:
         },
     )
     assert snap.snapshot_id == expected
+
+
+def test_v1_and_v2_snapshot_ids_differ_for_same_policy_identity() -> None:
+    v1 = _snapshot(contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1)
+    v2 = _snapshot(contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2)
+    assert v1.snapshot_id != v2.snapshot_id
+    assert v1.contract_id is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1
+    assert v2.contract_id is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2
 
 
 def test_payload_digest_is_sha256_of_canonical_json_bytes() -> None:
@@ -125,6 +138,7 @@ def test_integrity_rejects_tampered_digest() -> None:
 def test_create_rejects_empty_source_revision() -> None:
     with pytest.raises(LearningContractError, match="source_revision"):
         ProductionPolicySnapshot.create(
+            contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
             purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
             learning_observation_contract_id=LearningContractId.ACCUMULATION_OBSERVATION.value,
             producer_observation_contract="accumulation-discovery.v2",
@@ -140,9 +154,28 @@ def test_create_rejects_empty_source_revision() -> None:
         )
 
 
+def test_create_requires_explicit_contract_id() -> None:
+    with pytest.raises(TypeError):
+        ProductionPolicySnapshot.create(  # type: ignore[call-arg]
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            learning_observation_contract_id=LearningContractId.ACCUMULATION_OBSERVATION.value,
+            producer_observation_contract="accumulation-discovery.v2",
+            compatibility_id="sha256:" + ("cd" * 32),
+            policy_id=PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
+            policy_version="v1",
+            decision_type="score",
+            semantic_engine_contract_id="accum_score_policy.v1",
+            material_config_hash="sha256:" + ("ab" * 32),
+            canonical_payload=_default_payload(PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS),
+            source_revision="ai-saham@test",
+            created_at=NOW,
+        )
+
+
 def test_create_rejects_payload_column_metadata_mismatch() -> None:
     with pytest.raises(LearningContractError, match="does not match column"):
         ProductionPolicySnapshot.create(
+            contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
             purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
             learning_observation_contract_id=LearningContractId.ACCUMULATION_OBSERVATION.value,
             producer_observation_contract="accumulation-discovery.v2",
@@ -179,9 +212,18 @@ def test_integrity_rejects_payload_column_metadata_mismatch() -> None:
 
 
 def test_closed_v1_policy_id_set_has_exactly_six() -> None:
-    assert len(ACCUMULATION_PRODUCTION_POLICY_IDS) == 6
-    assert len(set(ACCUMULATION_PRODUCTION_POLICY_IDS)) == 6
+    assert len(ACCUMULATION_PRODUCTION_POLICY_IDS_V1) == 6
+    assert len(set(ACCUMULATION_PRODUCTION_POLICY_IDS_V1)) == 6
+    assert PRODUCTION_POLICY_ID_HARD_FILTERS not in ACCUMULATION_PRODUCTION_POLICY_IDS_V1
 
 
-def test_contract_id_enum_value() -> None:
-    assert LearningContractId.PRODUCTION_POLICY_SNAPSHOT.value == "production_policy_snapshot.v1"
+def test_closed_v2_policy_id_set_has_exactly_seven() -> None:
+    assert len(ACCUMULATION_PRODUCTION_POLICY_IDS_V2) == 7
+    assert len(set(ACCUMULATION_PRODUCTION_POLICY_IDS_V2)) == 7
+    assert PRODUCTION_POLICY_ID_HARD_FILTERS in ACCUMULATION_PRODUCTION_POLICY_IDS_V2
+    assert ACCUMULATION_PRODUCTION_POLICY_IDS is ACCUMULATION_PRODUCTION_POLICY_IDS_V2
+
+
+def test_contract_id_enum_values() -> None:
+    assert LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1.value == "production_policy_snapshot.v1"
+    assert LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2.value == "production_policy_snapshot.v2"

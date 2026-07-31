@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from src.application.services.accumulation_screen_hard_filter_policy import (
+    AccumulationScreenHardFilterPolicy,
+)
 from src.application.services.signal_engine_config import (
     EvidenceGroupsConfig,
     SignalClassificationConfig,
@@ -22,6 +25,7 @@ from src.domain.rules.liquidity_gate import LiquidityGate
 from src.domain.rules.risk_gate import RiskGate
 from src.domain.value_objects.learning_artifacts import (
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
+    PRODUCTION_POLICY_ID_HARD_FILTERS,
     PRODUCTION_POLICY_ID_RISK_HARD_GATES,
     PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION,
     PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
@@ -35,6 +39,15 @@ from src.domain.value_objects.signal_semantic_contract import SEMANTIC_ENGINE_VE
 ACCUM_SCORE_SEMANTIC_CONTRACT_ID = "accum_score_policy.v1"
 SIGNAL_SEMANTIC_CONTRACT_ID = f"signal.semantic_engine.v{SEMANTIC_ENGINE_VERSION}"
 RISK_HARD_GATES_SEMANTIC_CONTRACT_ID = "risk.hard_gates.accum.v1"
+HARD_FILTERS_SEMANTIC_CONTRACT_ID = "screen.accum.hard_filters.v1"
+HARD_FILTERS_FORMULA_ID = "accumulation_screen.first_match_hard_filters.v1"
+
+# Closed missing/action vocabulary (ADR-059 v2 / activation task).
+MISSING_ACTION_PASS_WITHOUT_EVALUATION = "pass_without_evaluation"
+MISSING_ACTION_REJECTED_FLOW = "rejected_flow"
+MISSING_ACTION_REJECTED_SIGNAL = "rejected_signal"
+MISSING_ACTION_RAISE_CONTRACT_ERROR = "raise_contract_error"
+MISSING_ACTION_PROPAGATE_PROVIDER_ERROR = "propagate_provider_error"
 
 # Canonical observation window used by accumulation session capture.
 ACCUM_CANONICAL_WINDOW = 7
@@ -366,14 +379,74 @@ def build_raw_score_identity_payload() -> dict[str, Any]:
     }
 
 
+def build_hard_filters_payload(
+    policy: AccumulationScreenHardFilterPolicy,
+) -> dict[str, Any]:
+    """Canonical payload for screener.accum.hard_filters (pre-neutralization)."""
+
+    return {
+        "policy_id": PRODUCTION_POLICY_ID_HARD_FILTERS,
+        "policy_version": PRODUCTION_POLICY_VERSION_V1,
+        "decision_type": "gate",
+        "semantic_engine_contract_id": HARD_FILTERS_SEMANTIC_CONTRACT_ID,
+        "formula_id": HARD_FILTERS_FORMULA_ID,
+        "scope": "canonical_default_screen_accum",
+        "first_match_order": [
+            "market_cap",
+            "piotroski",
+            "accum_score",
+            "signal_score",
+        ],
+        "filters": {
+            "market_cap": {
+                "enabled": policy.market_cap_enabled,
+                "floor_idr": policy.min_market_cap_idr,
+                "missing_action": MISSING_ACTION_REJECTED_FLOW,
+                "provider_unavailable_action": MISSING_ACTION_PASS_WITHOUT_EVALUATION,
+                "provider_exception_action": MISSING_ACTION_PROPAGATE_PROVIDER_ERROR,
+                "disabled_action": MISSING_ACTION_PASS_WITHOUT_EVALUATION,
+            },
+            "piotroski": {
+                "enabled": policy.piotroski_enabled,
+                "floor": policy.min_piotroski,
+                "missing_action": MISSING_ACTION_REJECTED_FLOW,
+                "provider_unavailable_action": MISSING_ACTION_PASS_WITHOUT_EVALUATION,
+                "provider_exception_action": MISSING_ACTION_PROPAGATE_PROVIDER_ERROR,
+                "disabled_action": MISSING_ACTION_PASS_WITHOUT_EVALUATION,
+            },
+            "accum_score": {
+                "enabled": policy.min_accum_score_enabled,
+                "floor": policy.min_accum_score,
+                "missing_action": MISSING_ACTION_RAISE_CONTRACT_ERROR,
+                "disabled_action": MISSING_ACTION_PASS_WITHOUT_EVALUATION,
+            },
+            "signal_score": {
+                "enabled": policy.min_signal_score_enabled,
+                "floor": policy.min_signal_score,
+                "missing_action": MISSING_ACTION_REJECTED_SIGNAL,
+                "disabled_action": MISSING_ACTION_PASS_WITHOUT_EVALUATION,
+            },
+        },
+        "explicitly_excluded": ["min_net_buy_days"],
+        "material_source": {
+            "market_cap": "accumulation_screener.screener.min_market_cap_idr",
+            "market_cap_typed_path": "SwingPolicyConfig.min_market_cap_idr",
+            "piotroski": "canonical_default_screen_accum.min_piotroski",
+            "accum_score": "accumulation_screener.filters.min_accum_score",
+            "signal_score": "accumulation_screener.filters.min_signal_score",
+        },
+    }
+
+
 def build_all_accumulation_policy_payloads(
     *,
     accum_score_policy: AccumScorePolicy,
     signal_engine_config: SignalEngineConfig,
     structural_gates: Sequence[RiskGate],
     execution_gates: Sequence[RiskGate],
+    hard_filter_policy: AccumulationScreenHardFilterPolicy,
 ) -> Mapping[str, Mapping[str, Any]]:
-    """Return mapping policy_id -> canonical payload for the closed v1 set."""
+    """Return mapping policy_id -> canonical payload for the closed v2 set."""
 
     return {
         PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS: build_accum_score_weights_payload(
@@ -390,4 +463,5 @@ def build_all_accumulation_policy_payloads(
             structural_gates, execution_gates
         ),
         PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE: build_raw_score_identity_payload(),
+        PRODUCTION_POLICY_ID_HARD_FILTERS: build_hard_filters_payload(hard_filter_policy),
     }

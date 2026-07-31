@@ -180,6 +180,8 @@ def run_signal_observation_corpus_write(
     # so observations and learning_policy_snapshots share object identity.
     production_policy_bundle = resolve_accumulation_production_policy_bundle(
         accum_score_policy=accumulation_config.accum_score_policy,
+        swing_policy=swing_policy,
+        accumulation_screener_config=accumulation_config,
     )
     screen_bundle = create_accumulation_screen_workflow_bundle(
         db_path=resolved_db,
@@ -187,10 +189,13 @@ def run_signal_observation_corpus_write(
         swing_policy=swing_policy,
         production_policy_bundle=production_policy_bundle,
     )
+    # Capture neutralizes score filters on a derived request only. Snapshot
+    # ensure uses production_policy_bundle.hard_filter_policy (pre-neutralization).
     screen_request_builder = BuildSignalObservationScreenRequest.from_configs(
         swing_policy=swing_policy,
         accumulation_screener_config=accumulation_config,
         min_net_buy_days=1,
+        hard_filter_policy=production_policy_bundle.hard_filter_policy,
         disable_score_filters=True,
     )
 
@@ -224,6 +229,7 @@ def run_signal_observation_corpus_write(
                 signal_engine_config=production_policy_bundle.signal_engine_config,
                 structural_gates=production_policy_bundle.structural_gates,
                 execution_gates=production_policy_bundle.execution_gates,
+                hard_filter_policy=production_policy_bundle.hard_filter_policy,
                 created_at=datetime.now(timezone.utc),
                 source_revision=resolve_producer_source_revision(),
             )

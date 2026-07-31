@@ -7,9 +7,13 @@ bundle and engines/use cases consume the resulting objects by identity.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from src.application.services.accumulation_production_policy_bundle import (
     AccumulationProductionPolicyBundle,
+)
+from src.application.services.accumulation_screen_hard_filter_policy import (
+    resolve_accumulation_screen_hard_filter_policy,
 )
 from src.application.services.engine_bootstrap.risk_config_resolvers import (
     resolve_risk_gates,
@@ -28,6 +32,8 @@ from src.infrastructure.config.signal_engine_config_loader import (
 def resolve_accumulation_production_policy_bundle(
     *,
     accum_score_policy: AccumScorePolicy,
+    swing_policy: Any,
+    accumulation_screener_config: Any,
     risk_config_path: Path | None = None,
 ) -> AccumulationProductionPolicyBundle:
     """Load Signal/Risk config once and freeze the typed production policy set.
@@ -35,14 +41,23 @@ def resolve_accumulation_production_policy_bundle(
     ``accum_score_policy`` must be the same instance later injected into the
     accumulation screen / ScoreAccum path (typically
     ``load_accumulation_screener_config().accum_score_policy``).
+
+    ``hard_filter_policy`` is the pre-neutralization canonical default (no CLI
+    overrides; piotroski default 0). Capture may neutralize score filters on a
+    derived request only.
     """
     cfg = load_app_config()
     signal_engine_config = resolve_signal_engine_config(load_signal_engine_config_raw())
     path = risk_config_path or Path(cfg.config_paths.risk_engine)
     structural, execution = resolve_risk_gates(load_engine_config(path))
+    hard_filter_policy = resolve_accumulation_screen_hard_filter_policy(
+        swing_policy=swing_policy,
+        accumulation_screener_config=accumulation_screener_config,
+    )
     return AccumulationProductionPolicyBundle(
         accum_score_policy=accum_score_policy,
         signal_engine_config=signal_engine_config,
         structural_gates=tuple(structural),
         execution_gates=tuple(execution),
+        hard_filter_policy=hard_filter_policy,
     )

@@ -1,4 +1,4 @@
-"""Tests for EnsureAccumulationPolicySnapshotsUseCase (ADR-059)."""
+"""Tests for EnsureAccumulationPolicySnapshotsUseCase (ADR-059 v2)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,9 @@ from typing import Sequence
 
 import pytest
 
+from src.application.services.accumulation_screen_hard_filter_policy import (
+    AccumulationScreenHardFilterPolicy,
+)
 from src.application.services.lean_observation_identity import (
     LeanObservationIdentity,
     resolve_lean_semantic_compatibility_id,
@@ -23,8 +26,10 @@ from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.rules.liquidity_gate import LiquidityGate
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
+    PRODUCTION_POLICY_ID_HARD_FILTERS,
     AssessmentPurpose,
     LearningContractError,
+    LearningContractId,
     ProductionPolicySnapshot,
 )
 from src.domain.value_objects.signal_artifact_identity import SemanticCompatibilityId
@@ -106,11 +111,23 @@ def _identity(canonical: str) -> LeanObservationIdentity:
     )
 
 
+def _default_hard_filters() -> AccumulationScreenHardFilterPolicy:
+    return AccumulationScreenHardFilterPolicy(
+        min_market_cap_idr=0,
+        min_piotroski=0,
+        min_accum_score=0.0,
+        min_accum_score_enabled=True,
+        min_signal_score=45.0,
+        min_signal_score_enabled=False,
+    )
+
+
 def _request(
     *,
     canonical: str = "resolved-config-v1",
     accum: AccumScorePolicy | None = None,
     signal: SignalEngineConfig | None = None,
+    hard_filter: AccumulationScreenHardFilterPolicy | None = None,
     created_at: datetime = NOW,
     source_revision: str = SOURCE_REVISION,
 ) -> EnsureAccumulationPolicySnapshotsRequest:
@@ -122,25 +139,48 @@ def _request(
         signal_engine_config=signal or SignalEngineConfig(),
         structural_gates=[FundamentalGate(), LiquidityGate()],
         execution_gates=[BandarGate()],
+        hard_filter_policy=hard_filter or _default_hard_filters(),
         created_at=created_at,
         source_revision=source_revision,
     )
 
 
-def test_ensure_writes_exactly_six_closed_policy_ids() -> None:
+def test_ensure_writes_exactly_seven_closed_v2_policy_ids() -> None:
     repo = _MemoryPolicySnapshotRepo()
     response = EnsureAccumulationPolicySnapshotsUseCase(repo).execute(_request())
 
-    assert response.inserted_count == 6
+    assert response.inserted_count == 7
     assert response.reused_count == 0
     assert response.required_policy_ids == ACCUMULATION_PRODUCTION_POLICY_IDS
-    assert len(repo.rows) == 6
+    assert len(repo.rows) == 7
     assert len(repo.batch_calls) == 1
-    assert len(repo.batch_calls[0]) == 6
+    assert len(repo.batch_calls[0]) == 7
     written_ids = {r.policy_id for r in repo.rows.values()}
     assert written_ids == set(ACCUMULATION_PRODUCTION_POLICY_IDS)
+    assert PRODUCTION_POLICY_ID_HARD_FILTERS in written_ids
     for snap in repo.rows.values():
         assert snap.source_revision == SOURCE_REVISION
+        assert snap.contract_id is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2
+
+
+def test_ensure_hard_filter_payload_is_pre_neutralization_policy() -> None:
+    """Capture neutralization must not change the snapshot hard-filter row."""
+    production = AccumulationScreenHardFilterPolicy(
+        min_market_cap_idr=0,
+        min_piotroski=0,
+        min_accum_score=0.0,
+        min_accum_score_enabled=True,
+        min_signal_score=45.0,
+        min_signal_score_enabled=False,
+    )
+    # Neutralized request would have enabled=False and floors 0 — not used here.
+    repo = _MemoryPolicySnapshotRepo()
+    EnsureAccumulationPolicySnapshotsUseCase(repo).execute(_request(hard_filter=production))
+    hard = next(r for r in repo.rows.values() if r.policy_id == PRODUCTION_POLICY_ID_HARD_FILTERS)
+    assert hard.canonical_payload["filters"]["accum_score"]["enabled"] is True
+    assert hard.canonical_payload["filters"]["accum_score"]["floor"] == 0.0
+    assert hard.canonical_payload["filters"]["signal_score"]["enabled"] is False
+    assert hard.canonical_payload["filters"]["signal_score"]["floor"] == 45.0
 
 
 def test_ensure_is_idempotent_for_same_cohort_content() -> None:
@@ -149,10 +189,10 @@ def test_ensure_is_idempotent_for_same_cohort_content() -> None:
     first = use_case.execute(_request())
     second = use_case.execute(_request())
 
-    assert first.inserted_count == 6
+    assert first.inserted_count == 7
     assert second.inserted_count == 0
-    assert second.reused_count == 6
-    assert len(repo.rows) == 6
+    assert second.reused_count == 7
+    assert len(repo.rows) == 7
     assert len(repo.batch_calls) == 2
 
 
@@ -170,6 +210,7 @@ def test_ensure_rejects_compatibility_mismatch() -> None:
         signal_engine_config=request.signal_engine_config,
         structural_gates=request.structural_gates,
         execution_gates=request.execution_gates,
+        hard_filter_policy=request.hard_filter_policy,
         created_at=NOW,
         source_revision=SOURCE_REVISION,
     )
@@ -204,7 +245,7 @@ def test_typed_material_change_same_cohort_fails_closed() -> None:
     with pytest.raises(LearningContractError, match="immutable artifact conflict"):
         use_case.execute(_request(canonical="cfg-1", accum=accum_mutated))
     # Atomic failure must not leave partial conflict-side rows; original set remains.
-    assert len(repo.rows) == 6
+    assert len(repo.rows) == 7
 
 
 def test_resolved_config_change_forks_compatibility_id() -> None:
@@ -213,7 +254,7 @@ def test_resolved_config_change_forks_compatibility_id() -> None:
     a = use_case.execute(_request(canonical="cfg-1"))
     b = use_case.execute(_request(canonical="cfg-2"))
     assert a.compatibility_id != b.compatibility_id
-    assert len(repo.rows) == 12
+    assert len(repo.rows) == 14
 
 
 def test_created_at_change_does_not_affect_digest() -> None:
@@ -227,4 +268,4 @@ def test_created_at_change_does_not_affect_digest() -> None:
         )
     )
     assert response.inserted_count == 0
-    assert response.reused_count == 6
+    assert response.reused_count == 7
