@@ -536,6 +536,253 @@ def test_regime_observations_partial_schema_returns_schema_insufficient(tmp_path
     assert "regime" in raw.missing_columns
 
 
+# ── learning_observations_risk_pit ───────────────────────────────────────
+
+
+def _create_learning_observations(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE learning_observations (
+            observation_id TEXT PRIMARY KEY,
+            purpose TEXT NOT NULL,
+            decision_payload_json TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _payload(
+    *,
+    ticker: str = "BBCA",
+    session: str = "2026-06-02",
+    risk_snap: str | None = "2026-06-02",
+    gate_snap: str | None = "2026-06-02",
+    canonical_window: int | None = 7,
+    include_risk: bool = True,
+    features_window_key: str | None = None,
+) -> str:
+    import json
+
+    window_key = features_window_key
+    if window_key is None:
+        window_key = str(canonical_window) if canonical_window is not None else "7"
+    pack: dict = {}
+    if include_risk:
+        risk: dict = {}
+        if risk_snap is not None:
+            risk["snapshot_date"] = risk_snap
+        if gate_snap is not None:
+            risk["gate_context"] = {"snapshot_date": gate_snap}
+        pack["risk"] = risk
+    body: dict = {
+        "ticker": ticker,
+        "session_date": session,
+        "features_by_window": {window_key: pack},
+    }
+    if canonical_window is not None:
+        body["canonical_window"] = canonical_window
+    return json.dumps(body)
+
+
+def test_learning_risk_pit_clean_rows(tmp_path: Path):
+    db = tmp_path / "clean.db"
+    conn = sqlite3.connect(db)
+    _create_learning_observations(conn)
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?, ?, ?)",
+        ("o1", "ACCUMULATION_DISCOVERY", _payload()),
+    )
+    conn.commit()
+    conn.close()
+
+    raw = SQLiteSignalArtifactReconciliationReader(db).observe_learning_observations_risk_pit()
+    assert raw.exists is True
+    assert raw.row_count == 1
+    assert raw.risk_snapshot_after_session_count == 0
+    assert raw.gate_context_session_mismatch_count == 0
+    assert raw.risk_snapshot_unreadable_count == 0
+
+
+def test_learning_risk_pit_contaminated_shape(tmp_path: Path):
+    db = tmp_path / "bad.db"
+    conn = sqlite3.connect(db)
+    _create_learning_observations(conn)
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?, ?, ?)",
+        (
+            "o1",
+            "ACCUMULATION_DISCOVERY",
+            _payload(
+                ticker="GOTO",
+                session="2026-06-02",
+                risk_snap="2026-07-28",
+                gate_snap="2026-06-02",
+            ),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    raw = SQLiteSignalArtifactReconciliationReader(db).observe_learning_observations_risk_pit()
+    assert raw.risk_snapshot_after_session_count == 1
+    assert raw.risk_snapshot_after_session_samples[0]["ticker"] == "GOTO"
+    assert raw.risk_snapshot_after_session_samples[0]["session_date"] == "2026-06-02"
+    assert raw.risk_snapshot_after_session_samples[0]["risk_snapshot_date"] == "2026-07-28"
+    assert raw.gate_context_session_mismatch_count == 0
+
+
+def test_learning_risk_pit_sample_capped_at_10(tmp_path: Path):
+    db = tmp_path / "many.db"
+    conn = sqlite3.connect(db)
+    _create_learning_observations(conn)
+    for i in range(15):
+        conn.execute(
+            "INSERT INTO learning_observations VALUES (?, ?, ?)",
+            (
+                f"o{i}",
+                "ACCUMULATION_DISCOVERY",
+                _payload(
+                    ticker=f"T{i}",
+                    session="2026-06-02",
+                    risk_snap="2026-07-28",
+                ),
+            ),
+        )
+    conn.commit()
+    conn.close()
+
+    raw = SQLiteSignalArtifactReconciliationReader(db).observe_learning_observations_risk_pit()
+    assert raw.risk_snapshot_after_session_count == 15
+    assert len(raw.risk_snapshot_after_session_samples) == 10
+
+
+def test_learning_risk_pit_no_risk_block_not_defect(tmp_path: Path):
+    db = tmp_path / "norisk.db"
+    conn = sqlite3.connect(db)
+    _create_learning_observations(conn)
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?, ?, ?)",
+        ("o1", "ACCUMULATION_DISCOVERY", _payload(include_risk=False)),
+    )
+    conn.commit()
+    conn.close()
+
+    raw = SQLiteSignalArtifactReconciliationReader(db).observe_learning_observations_risk_pit()
+    assert raw.row_count == 1
+    assert raw.risk_snapshot_after_session_count == 0
+    assert raw.risk_snapshot_unreadable_count == 0
+
+
+def test_learning_risk_pit_invalid_json_unreadable(tmp_path: Path):
+    db = tmp_path / "badjson.db"
+    conn = sqlite3.connect(db)
+    _create_learning_observations(conn)
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?, ?, ?)",
+        ("o1", "ACCUMULATION_DISCOVERY", "{not-json"),
+    )
+    conn.commit()
+    conn.close()
+
+    raw = SQLiteSignalArtifactReconciliationReader(db).observe_learning_observations_risk_pit()
+    assert raw.risk_snapshot_unreadable_count == 1
+    assert raw.risk_snapshot_after_session_count == 0
+
+
+def test_learning_risk_pit_missing_canonical_window_falls_back_to_7(tmp_path: Path):
+    db = tmp_path / "fallback.db"
+    conn = sqlite3.connect(db)
+    _create_learning_observations(conn)
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?, ?, ?)",
+        (
+            "o1",
+            "ACCUMULATION_DISCOVERY",
+            _payload(
+                canonical_window=None,
+                features_window_key="7",
+                session="2026-06-02",
+                risk_snap="2026-07-28",
+            ),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    raw = SQLiteSignalArtifactReconciliationReader(db).observe_learning_observations_risk_pit()
+    assert raw.risk_snapshot_after_session_count == 1
+
+
+def test_learning_risk_pit_earlier_risk_not_flagged(tmp_path: Path):
+    db = tmp_path / "earlier.db"
+    conn = sqlite3.connect(db)
+    _create_learning_observations(conn)
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?, ?, ?)",
+        (
+            "o1",
+            "ACCUMULATION_DISCOVERY",
+            _payload(session="2026-06-10", risk_snap="2026-06-09", gate_snap="2026-06-10"),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    raw = SQLiteSignalArtifactReconciliationReader(db).observe_learning_observations_risk_pit()
+    assert raw.risk_snapshot_after_session_count == 0
+
+
+def test_learning_risk_pit_ignores_non_accum_purpose(tmp_path: Path):
+    db = tmp_path / "preopen.db"
+    conn = sqlite3.connect(db)
+    _create_learning_observations(conn)
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?, ?, ?)",
+        (
+            "o1",
+            "PRE_OPEN_AUCTION_DIRECTION",
+            _payload(session="2026-06-02", risk_snap="2026-07-28"),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    raw = SQLiteSignalArtifactReconciliationReader(db).observe_learning_observations_risk_pit()
+    assert raw.row_count == 0
+    assert raw.risk_snapshot_after_session_count == 0
+
+
+def test_learning_risk_pit_gate_mismatch(tmp_path: Path):
+    db = tmp_path / "gate.db"
+    conn = sqlite3.connect(db)
+    _create_learning_observations(conn)
+    conn.execute(
+        "INSERT INTO learning_observations VALUES (?, ?, ?)",
+        (
+            "o1",
+            "ACCUMULATION_DISCOVERY",
+            _payload(
+                session="2026-06-02",
+                risk_snap="2026-06-02",
+                gate_snap="2026-06-05",
+            ),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    raw = SQLiteSignalArtifactReconciliationReader(db).observe_learning_observations_risk_pit()
+    assert raw.gate_context_session_mismatch_count == 1
+    assert raw.risk_snapshot_after_session_count == 0
+
+
+def test_learning_risk_pit_missing_table(tmp_path: Path):
+    db = tmp_path / "empty.db"
+    sqlite3.connect(db).close()
+    raw = SQLiteSignalArtifactReconciliationReader(db).observe_learning_observations_risk_pit()
+    assert raw.exists is False
+
+
 # ── read-only / no-mutation guarantees ───────────────────────────────────
 
 
@@ -548,6 +795,7 @@ def test_reader_does_not_mutate_database(full_schema_db: Path):
     reader.observe_signal_forward_labels_linkage()
     reader.observe_market_context_snapshot_identity()
     reader.observe_regime_observations_identity()
+    reader.observe_learning_observations_risk_pit()
 
     assert _row_count(full_schema_db, "candidate_observations") == row_count_before
     assert full_schema_db.stat().st_mtime_ns == mtime_before

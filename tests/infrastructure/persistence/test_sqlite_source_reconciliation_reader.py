@@ -11,6 +11,7 @@ from src.application.dto.source_reconciliation_dto import (
     RawCandidateObservationIdentityObservation,
     RawCorporateActionLinkageObservation,
     RawInsiderCacheObservation,
+    RawLearningObservationsRiskPitObservation,
     RawMarketContextSnapshotObservation,
     RawPitCacheObservation,
     RawRegimeObservationsObservation,
@@ -48,6 +49,11 @@ class _EmptyArtifactReader:
 
     def observe_regime_observations_identity(self) -> RawRegimeObservationsObservation:
         return RawRegimeObservationsObservation(exists=True, row_count=0)
+
+    def observe_learning_observations_risk_pit(
+        self,
+    ) -> RawLearningObservationsRiskPitObservation:
+        return RawLearningObservationsRiskPitObservation(exists=True, row_count=0)
 
 
 class _EmptyEnrichmentReader:

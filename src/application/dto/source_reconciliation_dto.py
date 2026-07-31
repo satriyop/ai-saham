@@ -326,3 +326,23 @@ class RawRegimeObservationsObservation:
     null_confidence_or_stability_count: int = 0
     invalid_detection_inputs_json_count: int = 0
     invalid_detection_inputs_json_samples: tuple[dict, ...] = ()
+
+
+@dataclass(frozen=True)
+class RawLearningObservationsRiskPitObservation:
+    """ACCUMULATION_DISCOVERY risk snapshot vs session (PIT) facts.
+
+    Counts cover only purpose=ACCUMULATION_DISCOVERY. Samples are capped at 10
+    by the reader. See evaluate_learning_observations_risk_pit.
+    """
+
+    exists: bool
+    row_count: int = 0
+    schema_sufficient: bool = True
+    missing_columns: tuple[str, ...] = ()
+    risk_snapshot_after_session_count: int = 0
+    risk_snapshot_after_session_samples: tuple[dict, ...] = ()
+    gate_context_session_mismatch_count: int = 0
+    gate_context_session_mismatch_samples: tuple[dict, ...] = ()
+    risk_snapshot_unreadable_count: int = 0
+    risk_snapshot_unreadable_samples: tuple[dict, ...] = ()

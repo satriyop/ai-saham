@@ -33,6 +33,7 @@ from src.application.dto.source_reconciliation_dto import (
     RawCorporateActionLinkageObservation,
     RawForeignFlowReconciliationObservation,
     RawInsiderCacheObservation,
+    RawLearningObservationsRiskPitObservation,
     RawMarketContextSnapshotObservation,
     RawPitCacheObservation,
     RawRegimeObservationsObservation,
@@ -60,6 +61,7 @@ __all__ = [
     "RawCorporateActionLinkageObservation",
     "RawForeignFlowReconciliationObservation",
     "RawInsiderCacheObservation",
+    "RawLearningObservationsRiskPitObservation",
     "RawMarketContextSnapshotObservation",
     "RawPitCacheObservation",
     "RawRegimeObservationsObservation",
@@ -123,6 +125,10 @@ class ArtifactReconciliationReader(Protocol):
     ) -> RawMarketContextSnapshotObservation: ...
 
     def observe_regime_observations_identity(self) -> RawRegimeObservationsObservation: ...
+
+    def observe_learning_observations_risk_pit(
+        self,
+    ) -> RawLearningObservationsRiskPitObservation: ...
 
 
 class AuditSourceReconciliationUseCase:
@@ -200,6 +206,9 @@ class AuditSourceReconciliationUseCase:
             ),
             artifact_eval.evaluate_regime_observations_identity(
                 self._artifact_reader.observe_regime_observations_identity()
+            ),
+            artifact_eval.evaluate_learning_observations_risk_pit(
+                self._artifact_reader.observe_learning_observations_risk_pit()
             ),
         ):
             checks.append(check)

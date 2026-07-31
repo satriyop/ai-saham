@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from src.application.dto.source_reconciliation_dto import (
     RawCandidateObservationIdentityObservation,
+    RawLearningObservationsRiskPitObservation,
     RawMarketContextSnapshotObservation,
     RawRegimeObservationsObservation,
     RawSignalForwardLabelsLinkageObservation,
@@ -519,5 +520,113 @@ def evaluate_regime_observations_identity(
         checked_row_count=raw.row_count,
         mismatch_count=raw.invalid_regime_count + raw.duplicate_identity_count,
         summary={},
+    )
+    return check, tuple(findings)
+
+
+def evaluate_learning_observations_risk_pit(
+    raw: RawLearningObservationsRiskPitObservation,
+) -> tuple[SourceReconciliationCheckResult, tuple[SourceReconciliationFinding, ...]]:
+    """PIT check: ACCUMULATION_DISCOVERY risk.snapshot_date vs session_date.
+
+    FAIL when risk snapshot is strictly later than the observation session
+    (look-ahead contamination). WARN for gate_context mismatch and unreadable
+    risk date fields. Missing table is WARN so non-learning DBs stay usable.
+    """
+    table = "learning_observations"
+    name = "learning_observations_risk_pit"
+    if not raw.exists:
+        return _missing_table_result(name, table, "WARN")
+
+    if not raw.schema_sufficient:
+        return _schema_insufficient_result(
+            name,
+            table,
+            "LEARNING_OBSERVATIONS_SCHEMA_INSUFFICIENT",
+            raw.row_count,
+            raw.missing_columns,
+        )
+
+    findings: list[SourceReconciliationFinding] = []
+
+    if raw.risk_snapshot_after_session_count:
+        findings.append(
+            SourceReconciliationFinding(
+                severity="FAIL",
+                code="LEARNING_OBSERVATIONS_RISK_SNAPSHOT_AFTER_SESSION",
+                table=table,
+                field="decision_payload_json.risk.snapshot_date",
+                message=(
+                    f"{raw.risk_snapshot_after_session_count} ACCUMULATION_DISCOVERY "
+                    "observation(s) have risk.snapshot_date later than session_date "
+                    "(point-in-time look-ahead on the risk path)."
+                ),
+                impact=(
+                    "Historical risk verdicts used future candles; corpus is not "
+                    "point-in-time safe for risk/replay/tuning claims."
+                ),
+                sample_rows=raw.risk_snapshot_after_session_samples,
+                row_count=raw.row_count,
+                mismatch_count=raw.risk_snapshot_after_session_count,
+            )
+        )
+
+    if raw.gate_context_session_mismatch_count:
+        findings.append(
+            SourceReconciliationFinding(
+                severity="WARN",
+                code="LEARNING_OBSERVATIONS_GATE_CONTEXT_SESSION_MISMATCH",
+                table=table,
+                field="decision_payload_json.risk.gate_context.snapshot_date",
+                message=(
+                    f"{raw.gate_context_session_mismatch_count} ACCUMULATION_DISCOVERY "
+                    "observation(s) have risk.gate_context.snapshot_date disagreeing "
+                    "with session_date."
+                ),
+                impact=(
+                    "Gate-context session stamp is inconsistent with the observation "
+                    "session; inspect capture wiring."
+                ),
+                sample_rows=raw.gate_context_session_mismatch_samples,
+                row_count=raw.row_count,
+                mismatch_count=raw.gate_context_session_mismatch_count,
+            )
+        )
+
+    if raw.risk_snapshot_unreadable_count:
+        findings.append(
+            SourceReconciliationFinding(
+                severity="WARN",
+                code="LEARNING_OBSERVATIONS_RISK_SNAPSHOT_UNREADABLE",
+                table=table,
+                field="decision_payload_json",
+                message=(
+                    f"{raw.risk_snapshot_unreadable_count} ACCUMULATION_DISCOVERY "
+                    "observation(s) have an unreadable risk snapshot date "
+                    "(invalid JSON, missing session_date, or risk present without "
+                    "parseable snapshot_date)."
+                ),
+                impact=(
+                    "PIT coherence cannot be proven for affected rows; treat as "
+                    "unverified rather than clean."
+                ),
+                sample_rows=raw.risk_snapshot_unreadable_samples,
+                row_count=raw.row_count,
+                mismatch_count=raw.risk_snapshot_unreadable_count,
+            )
+        )
+
+    status = aggregate_status(f.severity for f in findings)
+    check = SourceReconciliationCheckResult(
+        name=name,
+        status=status,
+        tables=(table,),
+        checked_row_count=raw.row_count,
+        mismatch_count=raw.risk_snapshot_after_session_count,
+        summary={
+            "risk_snapshot_after_session_count": raw.risk_snapshot_after_session_count,
+            "gate_context_session_mismatch_count": raw.gate_context_session_mismatch_count,
+            "risk_snapshot_unreadable_count": raw.risk_snapshot_unreadable_count,
+        },
     )
     return check, tuple(findings)

@@ -20,12 +20,15 @@ Layer: Infrastructure
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import closing
+from datetime import date
 from pathlib import Path
 
 from src.application.dto.source_reconciliation_dto import (
     RawCandidateObservationIdentityObservation,
+    RawLearningObservationsRiskPitObservation,
     RawMarketContextSnapshotObservation,
     RawRegimeObservationsObservation,
     RawSignalForwardLabelsLinkageObservation,
@@ -81,6 +84,11 @@ _REGIME_OBSERVATIONS_REQUIRED_COLUMNS = (
     "regime_stability",
     "detection_inputs_json",
 )
+_LEARNING_OBSERVATIONS_REQUIRED_COLUMNS = (
+    "purpose",
+    "decision_payload_json",
+)
+_ACCUMULATION_DISCOVERY_PURPOSE = "ACCUMULATION_DISCOVERY"
 
 
 class SQLiteSignalArtifactReconciliationReader:
@@ -446,6 +454,45 @@ class SQLiteSignalArtifactReconciliationReader:
             invalid_detection_inputs_json_samples=invalid_detection_inputs_json_samples,
         )
 
+    def observe_learning_observations_risk_pit(
+        self,
+    ) -> RawLearningObservationsRiskPitObservation:
+        """ACCUMULATION_DISCOVERY risk.snapshot_date vs session_date (PIT).
+
+        Uses purpose-filtered row load + Python classification rather than pure
+        SQL aggregates: risk lives under a dynamic features_by_window key
+        (canonical_window), and edge cases (missing risk, unreadable JSON)
+        are clearer and less brittle in Python for this small table.
+        """
+        table = "learning_observations"
+        if not self._db_path.exists():
+            return RawLearningObservationsRiskPitObservation(exists=False)
+
+        with closing(self._connect()) as conn:
+            if not self._table_exists(conn, table):
+                return RawLearningObservationsRiskPitObservation(exists=False)
+
+            columns = self._columns(conn, table)
+            missing = self._missing_columns(columns, _LEARNING_OBSERVATIONS_REQUIRED_COLUMNS)
+            if missing:
+                total = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                return RawLearningObservationsRiskPitObservation(
+                    exists=True,
+                    row_count=total,
+                    schema_sufficient=False,
+                    missing_columns=missing,
+                )
+
+            rows = conn.execute(
+                f"SELECT decision_payload_json FROM {table} WHERE purpose = ?",
+                (_ACCUMULATION_DISCOVERY_PURPOSE,),
+            ).fetchall()
+
+        return _classify_learning_observations_risk_pit(
+            payloads=[row[0] for row in rows],
+            sample_cap=_MAX_SAMPLE_ROWS,
+        )
+
     def _missing_columns(self, columns: set[str], required: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(c for c in required if c not in columns)
 
@@ -466,3 +513,183 @@ class SQLiteSignalArtifactReconciliationReader:
     def _connect(self) -> sqlite3.Connection:
         uri = f"file:{self._db_path}?mode=ro"
         return sqlite3.connect(uri, uri=True)
+
+
+def _parse_iso_date(value: object) -> date | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        if len(text) >= 10 and text[4] == "-" and text[7] == "-":
+            return date.fromisoformat(text[:10])
+        return date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _classify_learning_observations_risk_pit(
+    *,
+    payloads: list[object],
+    sample_cap: int,
+) -> RawLearningObservationsRiskPitObservation:
+    """Classify ACCUMULATION_DISCOVERY payloads for risk PIT coherence."""
+    after_count = 0
+    after_samples: list[dict] = []
+    mismatch_count = 0
+    mismatch_samples: list[dict] = []
+    unreadable_count = 0
+    unreadable_samples: list[dict] = []
+
+    def _push(samples: list[dict], row: dict) -> None:
+        if len(samples) < sample_cap:
+            samples.append(row)
+
+    for raw_payload in payloads:
+        ticker = ""
+        session_raw: str | None = None
+
+        if not isinstance(raw_payload, str):
+            unreadable_count += 1
+            _push(
+                unreadable_samples,
+                {"ticker": ticker, "session_date": None, "risk_snapshot_date": None},
+            )
+            continue
+
+        try:
+            payload = json.loads(raw_payload)
+        except (TypeError, json.JSONDecodeError):
+            unreadable_count += 1
+            _push(
+                unreadable_samples,
+                {"ticker": ticker, "session_date": None, "risk_snapshot_date": None},
+            )
+            continue
+
+        if not isinstance(payload, dict):
+            unreadable_count += 1
+            _push(
+                unreadable_samples,
+                {"ticker": ticker, "session_date": None, "risk_snapshot_date": None},
+            )
+            continue
+
+        ticker = str(payload.get("ticker") or "")
+        session_raw = payload.get("session_date")
+        if session_raw is not None and not isinstance(session_raw, str):
+            session_raw = str(session_raw)
+        session_date = _parse_iso_date(session_raw)
+        if session_date is None:
+            unreadable_count += 1
+            _push(
+                unreadable_samples,
+                {
+                    "ticker": ticker,
+                    "session_date": session_raw if isinstance(session_raw, str) else None,
+                    "risk_snapshot_date": None,
+                },
+            )
+            continue
+
+        if "canonical_window" in payload and payload["canonical_window"] is not None:
+            window_key = str(payload["canonical_window"])
+        else:
+            window_key = "7"
+
+        features = payload.get("features_by_window")
+        if not isinstance(features, dict):
+            features = {}
+        window_pack = features.get(window_key)
+        if not isinstance(window_pack, dict):
+            continue
+
+        if "risk" not in window_pack:
+            continue
+        risk = window_pack.get("risk")
+        if risk is None:
+            continue
+        if not isinstance(risk, dict):
+            unreadable_count += 1
+            _push(
+                unreadable_samples,
+                {
+                    "ticker": ticker,
+                    "session_date": session_date.isoformat(),
+                    "risk_snapshot_date": None,
+                },
+            )
+            continue
+
+        row_unreadable = False
+        risk_snap_raw = risk.get("snapshot_date")
+        if risk_snap_raw is not None and not isinstance(risk_snap_raw, str):
+            risk_snap_raw = str(risk_snap_raw)
+        risk_snap = _parse_iso_date(risk_snap_raw)
+        if risk_snap is None:
+            row_unreadable = True
+            unreadable_count += 1
+            _push(
+                unreadable_samples,
+                {
+                    "ticker": ticker,
+                    "session_date": session_date.isoformat(),
+                    "risk_snapshot_date": risk_snap_raw if isinstance(risk_snap_raw, str) else None,
+                },
+            )
+        elif risk_snap > session_date:
+            after_count += 1
+            _push(
+                after_samples,
+                {
+                    "ticker": ticker,
+                    "session_date": session_date.isoformat(),
+                    "risk_snapshot_date": risk_snap.isoformat(),
+                },
+            )
+
+        gate_ctx = risk.get("gate_context")
+        if isinstance(gate_ctx, dict):
+            gate_raw = gate_ctx.get("snapshot_date")
+            if gate_raw is not None and not isinstance(gate_raw, str):
+                gate_raw = str(gate_raw)
+            gate_snap = _parse_iso_date(gate_raw)
+            if gate_snap is None:
+                if not row_unreadable:
+                    unreadable_count += 1
+                    _push(
+                        unreadable_samples,
+                        {
+                            "ticker": ticker,
+                            "session_date": session_date.isoformat(),
+                            "risk_snapshot_date": risk_snap.isoformat() if risk_snap else None,
+                            "gate_context_snapshot_date": gate_raw
+                            if isinstance(gate_raw, str)
+                            else None,
+                        },
+                    )
+            elif gate_snap != session_date:
+                mismatch_count += 1
+                _push(
+                    mismatch_samples,
+                    {
+                        "ticker": ticker,
+                        "session_date": session_date.isoformat(),
+                        "risk_snapshot_date": risk_snap.isoformat() if risk_snap else None,
+                        "gate_context_snapshot_date": gate_snap.isoformat(),
+                    },
+                )
+
+    return RawLearningObservationsRiskPitObservation(
+        exists=True,
+        row_count=len(payloads),
+        risk_snapshot_after_session_count=after_count,
+        risk_snapshot_after_session_samples=tuple(after_samples),
+        gate_context_session_mismatch_count=mismatch_count,
+        gate_context_session_mismatch_samples=tuple(mismatch_samples),
+        risk_snapshot_unreadable_count=unreadable_count,
+        risk_snapshot_unreadable_samples=tuple(unreadable_samples),
+    )

@@ -7,6 +7,7 @@ from src.application.dto.source_reconciliation_dto import (
     RawCandidateObservationIdentityObservation,
     RawCorporateActionLinkageObservation,
     RawInsiderCacheObservation,
+    RawLearningObservationsRiskPitObservation,
     RawMarketContextSnapshotObservation,
     RawPitCacheObservation,
     RawRegimeObservationsObservation,
@@ -49,6 +50,11 @@ class _EmptyArtifactReader:
 
     def observe_regime_observations_identity(self) -> RawRegimeObservationsObservation:
         return RawRegimeObservationsObservation(exists=True, row_count=0)
+
+    def observe_learning_observations_risk_pit(
+        self,
+    ) -> RawLearningObservationsRiskPitObservation:
+        return RawLearningObservationsRiskPitObservation(exists=True, row_count=0)
 
 
 class _EmptyEnrichmentReader:
@@ -146,7 +152,7 @@ def test_happy_path_aggregates_to_pass_with_expected_info_findings():
     assert response.schema_version == 1
     assert response.generated_at == "2026-07-16T00:00:00+00:00"
     assert response.status == "PASS"
-    assert len(response.checks) == 16  # 4 DQ-001B core + 8 DQ-001D enrichment + 4 DQ-001E artifact
+    assert len(response.checks) == 17  # 4 core + 8 enrichment + 5 artifact (incl. learning PIT)
     info_codes = {f.code for f in response.findings if f.severity == "INFO"}
     assert "TRACKED_BROKER_SUBSET_NOT_FULL_MARKET" in info_codes
     fail_or_warn = [f for f in response.findings if f.severity in ("FAIL", "WARN")]
@@ -563,6 +569,7 @@ class _FakeArtifactReader:
         signal_forward_labels: RawSignalForwardLabelsLinkageObservation | None = None,
         market_context_snapshot: RawMarketContextSnapshotObservation | None = None,
         regime_observations: RawRegimeObservationsObservation | None = None,
+        learning_observations_risk_pit: RawLearningObservationsRiskPitObservation | None = None,
     ):
         self._candidate_observations = candidate_observations or (
             RawCandidateObservationIdentityObservation(exists=True, row_count=0)
@@ -577,6 +584,9 @@ class _FakeArtifactReader:
         )
         self._regime_observations = regime_observations or (
             RawRegimeObservationsObservation(exists=True, row_count=0)
+        )
+        self._learning_observations_risk_pit = learning_observations_risk_pit or (
+            RawLearningObservationsRiskPitObservation(exists=True, row_count=0)
         )
 
     def observe_candidate_observations_identity(
@@ -596,6 +606,11 @@ class _FakeArtifactReader:
 
     def observe_regime_observations_identity(self) -> RawRegimeObservationsObservation:
         return self._regime_observations
+
+    def observe_learning_observations_risk_pit(
+        self,
+    ) -> RawLearningObservationsRiskPitObservation:
+        return self._learning_observations_risk_pit
 
 
 def test_artifact_findings_are_included_in_response():
@@ -689,6 +704,7 @@ def test_existing_core_and_enrichment_checks_still_included_with_artifact_reader
         "signal_forward_labels_identity_linkage",
         "market_context_snapshot_identity",
         "regime_observations_identity",
+        "learning_observations_risk_pit",
     ):
         assert expected in check_names
 

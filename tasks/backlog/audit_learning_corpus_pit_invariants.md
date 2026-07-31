@@ -1,6 +1,6 @@
 # Audit — Learning Corpus PIT Invariants In `reconcile-sources`
 
-Status: `READY`
+Status: `COMPLETED`
 
 Source: look-ahead audit 2026-07-31. Companion to
 `tasks/backlog/fix_risk_pit_cutoff_lookahead.md` — that task fixes the engine;
@@ -220,10 +220,21 @@ All tests run offline against a temp SQLite file.
 
 ## Completion Record
 
-- Completed date:
-- Implementation commit:
+- Completed date: 2026-07-31
+- Implementation commit: (this commit)
 - Files changed:
+  - `src/application/dto/source_reconciliation_dto.py` — `RawLearningObservationsRiskPitObservation`
+  - `src/application/use_case/audit_source_reconciliation_use_case.py` — port + 17th check
+  - `src/application/services/source_reconciliation_artifact_evaluator.py` — evaluator
+  - `src/infrastructure/persistence/sqlite_signal_artifact_reconciliation_reader.py` — observe + classify
+  - tests (evaluator, reader, use-case fakes 16→17, CLI check name)
 - Commands run:
+  - focused pytest (115 related)
+  - `saham audit data reconcile-sources --format json --db data/db/data.db`
+  - `ruff check src/ tests/` + `ruff format --check src/ tests/`
 - Findings on the clean corpus:
-- Test result:
-- Lint result:
+  - `learning_observations_risk_pit`: **PASS**, checked 1890, all counts 0
+  - no `LEARNING_OBSERVATIONS_*` findings
+  - overall reconcile status may still FAIL from unrelated tables
+- Test result: pass
+- Lint result: pass

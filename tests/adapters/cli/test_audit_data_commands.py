@@ -301,6 +301,7 @@ def test_reconcile_sources_json_output_includes_dq_001e_artifact_checks(tmp_path
         "signal_forward_labels_identity_linkage",
         "market_context_snapshot_identity",
         "regime_observations_identity",
+        "learning_observations_risk_pit",
     ):
         assert expected in check_names
 
