@@ -54,7 +54,7 @@ Ship Textual against **`.app` inside this mock**. Design-tools strip is for revi
 | 3 | Paper | Notebook | Notebook tape · write via plan `l` confirm |
 | 4 | Pre-open | Auction | IEP board → Enter **inspect** (flags: why / auction+ / warn) |
 | 5 | Ticker | Browse | Price hero · presence · **depth** flag for full panels |
-| 6 | Broker | Browse | Radar → Enter net hero · flags partial_net / from_ticker · deep.t\|f\|h |
+| 6 | Broker | Browse | Radar → Enter net hero · flags partial_net / from_ticker · deep.t\|f\|h\|m |
 | 7 | Health | Honesty | Empty / zero / lag / ready posters |
 | 8 | Palette | Nav | Ctrl+P · peach selection |
 
@@ -94,7 +94,7 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 | Pre-open inspect | `why` · `auction+` · `warn` | `preopen_engine_inspect_presenter` |
 | Ticker | **`d` / `detail`** = full CLI panels (inverse of `view ticker --brief`) | Primary = dashboard hierarchy; detail = remaining FULL_PANEL_ORDER |
 | Broker list | `partial_net` · `from_ticker` | `has_partial_netx` · `ticker-desks` stage |
-| Broker home | `deep.t` · `deep.f` · `deep.h` | ViewBrokerDesk top/flow/history loaders |
+| Broker home | `deep.t` · `deep.f` · `deep.c` · `deep.h` · `deep.m` | ViewBrokerDesk top/flow/calendar/history/top-matrix loaders |
 
 **Rules**
 
@@ -110,7 +110,7 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 | Path | Keys | Must not |
 |------|------|----------|
 | **Action** | Board `Enter` → Judge · `p` Plan · `l` Paper | Ticker/broker invent Action |
-| **Browse** | `v t` · `v b` · broker Enter home · `t`/`f`/`h` | ENTER/WATCH/AVOID authority |
+| **Browse** | `v t` · `v b` · broker Enter home · `t`/`f`/`h`/`m` | ENTER/WATCH/AVOID authority |
 | **Paper** | Confirm after geometry | Auto-write · corpus · orders |
 | **Pre-open** | Enter → auction inspect | Same stage as accum Judge |
 
@@ -141,7 +141,7 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 - **`d` (detail):** expand full panel inventory (analyst · ownership · sector · corp · insider · seasonality · iev · sentiment · profile · candles)  
   — same idea as CLI **without** `--brief`, or accum/judge **`--detail` / `d`**  
 - Header meta: `local cache` or `full · local cache` — no design jargon  
-- Footer: `b` desks · `p` plan · `esc` · `d` detail
+- Footer: `d` detail · `b` desks · `p` plan · `esc`
 
 ### Broker (`v b` · desk-centric)
 - Radar + Enter home: **day net for that desk code** (tracked `broker_daily_flow`)  
@@ -150,7 +150,10 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
   - **`f` flow** — this desk’s day-net series (`ViewBrokerDeskFlow`)
   - **`c` calendar** — ~1 month: top stock collected + desk net + B/S per session day
   - **`h` history** — per-ticker daily for this desk
-  - **`m` top 5** — **matrix** of top **5 net buy** names across windows **1s · 3s · 5s · 10s · 20s** (default emphasis **1s**); metric = desk net buy sum; click cell → view ticker  
+  - **`m` top 5** — **matrix** of top **5 net buy** names across windows **1s · 3s · 5s · 10s · 20s** (default emphasis **1s**); each cell: **ticker · streak · net · avg buy**  
+    - **streak** = consecutive sessions this **desk** net-bought **that ticker** (ending at as_of) — not desk-wide Net streak, not market foreign streak  
+    - **avg buy** = desk `avg_buy_price` for that desk×ticker×window (multi-session = volume-weighted)  
+    - click cell → view ticker
   - **`v`** — open view ticker for desk’s current top (1s #1), not a hub tab  
 - Never market foreign total  
 - **Session vs multi-window:** `t` = latest dual · `m` = multi-session top-5 net buy

@@ -23,26 +23,26 @@ def format_harga_mast(
     price: str,
     as_of: str = "—",
     change_line: str = "",
-    authority: str = "cache dashboard · not Action",
+    authority: str = "local cache · browse",
 ) -> str:
     """Hero block as text (tests / scrapers)."""
     t = (ticker or "—").strip().upper() or "—"
     p = (price or "—").strip() or "—"
     lines = [
         f"[bold #e8e8e8]View · ticker · {t}[/]",
-        "[bold #e8b86d]HARGA MAST[/]",
-        f"[bold #faf6ee]{p}[/]",
+        "[bold #c9a68a]LAST · LOCAL CLOSE[/]",
+        f"[bold #e8e8e8]{p}[/]",
     ]
     if change_line:
-        lines.append(f"[#8b92a0]{change_line}[/]")
-    lines.append(f"[#5c6575]as_of {as_of or '—'} · {authority}[/]")
-    lines.append("[dim]not Action authority · local cache only · v b desks[/]")
+        lines.append(f"[#7a7a7a]{change_line}[/]")
+    lines.append(f"[#555555]as_of {as_of or '—'} · {authority}[/]")
+    lines.append("[dim]local cache · b desks[/]")
     lines.append("")
     return "\n".join(lines)
 
 
 def format_ticker_desk_from_dashboard(dashboard: Any, *, body: str = "") -> str:
-    """Text form of Harga mast + body (legacy loaders)."""
+    """Text form of price mast + body (legacy loaders)."""
     model = build_ticker_desk_model_from_dashboard(dashboard, body=body)
     return model.as_text()
 

@@ -9,6 +9,7 @@ Layer: Adapter (shared pure presentation)
 from __future__ import annotations
 
 from src.adapters.shared.view_number_format import format_value
+from src.adapters.shared.view_ticker_top_brokers_rows import format_netx_display
 from src.domain.entities.broker_flow import BrokerType
 
 
@@ -140,4 +141,90 @@ def format_desk_history_text(result, *, max_rows: int = 40) -> str:
         lines.append(f"  … truncated {len(flows) - max_rows} more rows")
     lines.append("")
     lines.append(f"CLI: saham view broker history {result.broker_code}")
+    return "\n".join(lines)
+
+
+def format_desk_calendar_text(result) -> str:
+    """Plain-text desk session calendar (CLI + TUI scraper)."""
+    lines = [
+        f"Desk Calendar · {result.broker_code} ({result.broker_name})",
+        (
+            f"type {_type_label(result.broker_type)} · as of {result.as_of} · "
+            f"sessions {result.sessions_cached}"
+        ),
+        str(result.scope_note),
+        "",
+        f"{'Date':12}  {'Top':6}  {'Net':>10}  {'Buy':>10}  {'Sell':>10}  #",
+        "-" * 58,
+    ]
+    for day in result.days or ():
+        top = day.top_ticker or "—"
+        lines.append(
+            f"{day.date.isoformat():12}  {top:6}  "
+            f"{format_value(day.net_value):>10}  "
+            f"{format_value(day.buy_value):>10}  "
+            f"{format_value(day.sell_value):>10}  {day.ticker_count}"
+        )
+    if not result.days:
+        lines.append("  —")
+    lines.append("")
+    lines.append(f"CLI: saham view broker calendar {result.broker_code}")
+    return "\n".join(lines)
+
+
+def _fmt_avg_buy(avg) -> str:
+    if avg is None:
+        return "—"
+    # Prices are typically whole IDR; show compact integer when whole
+    if avg == avg.to_integral_value():
+        return f"@ {int(avg):,}"
+    return f"@ {avg:,.2f}"
+
+
+def format_desk_top_matrix_text(result) -> str:
+    """Plain-text multi-window top-5 net-buy matrix (CLI + TUI).
+
+    Cell: ticker · streak · net (partial mark) · avg buy.
+    """
+    wins = tuple(result.windows)
+    lines = [
+        f"Desk Top Matrix · {result.broker_code} ({result.broker_name})",
+        (
+            f"type {_type_label(result.broker_type)} · as of {result.as_of} · "
+            f"sessions cached {result.sessions_cached}"
+        ),
+        str(result.scope_note),
+        "cell: ticker · streak · net · avg buy · *partial = sessions < window",
+        "",
+    ]
+    # Column headers
+    header = f"{'#':>2}"
+    for w in wins:
+        header += f"  |  {w}s".ljust(28)
+    lines.append(header.rstrip())
+    lines.append("-" * min(120, 4 + 28 * len(wins)))
+
+    max_rows = max((len(result.columns.get(w) or ()) for w in wins), default=0)
+    if max_rows == 0:
+        lines.append("  — no net-buy names in windows")
+    for rank in range(max_rows):
+        row = f"{rank + 1:>2}"
+        for w in wins:
+            col = result.columns.get(w) or ()
+            if rank >= len(col):
+                row += f"  |  {'—':26}"
+                continue
+            cell = col[rank]
+            net_s = format_netx_display(
+                cell.net_value,
+                sessions_used=cell.sessions_used,
+                window=cell.window,
+            )
+            # compact cell block on one line
+            chunk = f"{cell.ticker} {cell.buy_streak}s {net_s} {_fmt_avg_buy(cell.avg_buy_price)}"
+            row += f"  |  {chunk[:26]:26}"
+        lines.append(row)
+
+    lines.append("")
+    lines.append(f"CLI: saham view broker top-matrix {result.broker_code}")
     return "\n".join(lines)

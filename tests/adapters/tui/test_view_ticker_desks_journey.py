@@ -119,8 +119,12 @@ def test_stock_to_desks_enter_show_esc_trail():
                 if app._stage == "detail" and app._status_note == "view ticker":
                     break
             assert app._stage == "detail"
-            assert "TICKER_DASH_BBCA" in app._detail_text
-            assert "b top desks" in app._detail_text
+            assert app._status_note == "view ticker"
+            assert app._ticker_desk_model is not None
+            assert app._ticker_desk_model.ticker == "BBCA"
+            # String loader body retained; primary paint is structured desk text
+            assert "TICKER_DASH_BBCA" in (app._ticker_desk_model.body or "")
+            assert "b desks" in app._ticker_desk_model.footer or "b top desks" in app._meta
             assert app._detail_return_stage == "accum"
 
             # b is no-op on inspect; only on view ticker

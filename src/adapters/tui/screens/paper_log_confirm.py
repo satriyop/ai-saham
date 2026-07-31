@@ -31,19 +31,19 @@ class PaperLogConfirmModal(ModalScreen[bool | None]):
         width: 72;
         max-width: 90%;
         height: auto;
-        background: #0d121c;
+        background: #141414;
         border: solid #3a3220;
-        border-left: solid #e8b86d;
+        border-left: solid #c9a68a;
         padding: 1 2;
     }
 
     PaperLogConfirmModal #confirm-title {
         text-style: bold;
-        color: #e8b86d;
+        color: #c9a68a;
     }
 
     PaperLogConfirmModal #confirm-esc {
-        color: #5c6575;
+        color: #555555;
         text-align: right;
         width: 1fr;
     }
@@ -51,11 +51,11 @@ class PaperLogConfirmModal(ModalScreen[bool | None]):
     PaperLogConfirmModal #confirm-body {
         height: auto;
         margin: 1 0;
-        color: #c9c3b8;
+        color: #d8d8d8;
     }
 
     PaperLogConfirmModal #confirm-foot {
-        color: #5c6575;
+        color: #555555;
         height: auto;
     }
     """

@@ -26,7 +26,7 @@ class PlanDesk(Vertical):
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #080b12;
+        background: #0b0b0b;
     }
 
     PlanDesk .plan-title {
@@ -35,13 +35,13 @@ class PlanDesk(Vertical):
     }
 
     PlanDesk .plan-sub {
-        color: #5c6575;
+        color: #555555;
         margin-bottom: 1;
     }
 
     PlanDesk .inherit-strip {
-        background: #0d121c;
-        border: solid #1c2430;
+        background: #141414;
+        border: solid #1c1c1c;
         padding: 0 1;
         margin-bottom: 1;
         height: auto;
@@ -54,18 +54,18 @@ class PlanDesk(Vertical):
         color: #d4b06a;
     }
 
-    PlanDesk .inherit-action.action-enter { color: #7ecfb8; }
+    PlanDesk .inherit-action.action-enter { color: #6fbf8a; }
     PlanDesk .inherit-action.action-watch { color: #d4b06a; }
-    PlanDesk .inherit-action.action-avoid { color: #e87a6e; }
+    PlanDesk .inherit-action.action-avoid { color: #c97a72; }
     PlanDesk .inherit-action.action-other { color: #e8e8e8; }
 
     PlanDesk .inherit-note {
-        color: #5c6575;
+        color: #555555;
         height: auto;
     }
 
     PlanDesk .geo-mast {
-        background: #121a28;
+        background: #141414;
         border: solid #1c4038;
         padding: 1 2;
         margin-bottom: 1;
@@ -73,7 +73,7 @@ class PlanDesk(Vertical):
     }
 
     PlanDesk .geo-lab {
-        color: #7ecfb8;
+        color: #6fbf8a;
         text-style: bold;
     }
 
@@ -89,18 +89,18 @@ class PlanDesk(Vertical):
     }
 
     PlanDesk .geo-k {
-        color: #5c6575;
+        color: #555555;
         text-style: bold;
     }
 
     PlanDesk .geo-v {
-        color: #faf6ee;
+        color: #e8e8e8;
         text-style: bold;
     }
 
-    PlanDesk .geo-v.entry { color: #e8b86d; }
-    PlanDesk .geo-v.stop { color: #e87a6e; }
-    PlanDesk .geo-v.target { color: #7ecfb8; }
+    PlanDesk .geo-v.entry { color: #c9a68a; }
+    PlanDesk .geo-v.stop { color: #c97a72; }
+    PlanDesk .geo-v.target { color: #6fbf8a; }
 
     PlanDesk .geo-arr {
         width: auto;
@@ -121,26 +121,26 @@ class PlanDesk(Vertical):
     }
 
     PlanDesk .lots-k {
-        color: #5c6575;
+        color: #555555;
         text-style: bold;
     }
 
     PlanDesk .lots-v {
-        color: #f0ebe3;
+        color: #e8e8e8;
         text-style: bold;
     }
 
     PlanDesk .no-order {
         margin-top: 1;
-        background: #1a160e;
-        color: #e8b86d;
+        background: #1a1810;
+        color: #c9a68a;
         border: solid #3a3220;
         padding: 0 1;
         height: auto;
     }
 
     PlanDesk .running-banner {
-        background: #1a160e;
+        background: #1a1810;
         color: #d4b06a;
         border: solid #3a3220;
         padding: 0 1;
@@ -161,36 +161,36 @@ class PlanDesk(Vertical):
 
     PlanDesk .plan-card {
         width: 1fr;
-        background: #0d121c;
-        border: solid #1c2430;
+        background: #141414;
+        border: solid #1c1c1c;
         border-left: solid #3a4252;
         padding: 1 1;
         margin-right: 1;
         height: auto;
-        color: #8b92a0;
+        color: #7a7a7a;
     }
 
     PlanDesk .plan-card.card-solo {
         margin-right: 0;
     }
 
-    PlanDesk .plan-card.tone-open { border-left: solid #7ecfb8; }
-    PlanDesk .plan-card.tone-block { border-left: solid #e87a6e; }
+    PlanDesk .plan-card.tone-open { border-left: solid #6fbf8a; }
+    PlanDesk .plan-card.tone-block { border-left: solid #c97a72; }
     PlanDesk .plan-card.tone-watch { border-left: solid #d4b06a; }
     PlanDesk .plan-card.tone-neutral { border-left: solid #a89cc9; }
 
     PlanDesk .paper-tape {
-        background: #1a160e;
+        background: #1a1810;
         border: solid #3a3220;
-        border-left: solid #e8b86d;
+        border-left: solid #c9a68a;
         padding: 1 1;
         margin-bottom: 1;
         height: auto;
-        color: #c9c3b8;
+        color: #d8d8d8;
     }
 
     PlanDesk .plan-footer {
-        color: #5c6575;
+        color: #555555;
         margin-top: 0;
         height: auto;
     }
@@ -208,7 +208,7 @@ class PlanDesk(Vertical):
             yield Static("—", classes="inherit-action action-other", id="pd-action")
             yield Static("", classes="inherit-note", id="pd-inherit-note")
         with Vertical(classes="geo-mast", id="pd-geo"):
-            yield Static("STRUCTURE · SWING_TRADE_PLAN", classes="geo-lab", id="pd-geo-lab")
+            yield Static("Structure · plan geometry", classes="geo-lab", id="pd-geo-lab")
             with Horizontal(classes="geo-tri", id="pd-tri"):
                 with Vertical(classes="geo-pt", id="pd-pt-entry"):
                     yield Static("ENTRY", classes="geo-k")
@@ -287,7 +287,7 @@ class PlanDesk(Vertical):
                 extra = f" · {model.incomplete_reason}"
             no_order.update(
                 "No broker order. Geometry freezes for paper journal · "
-                "CLI: trade accum log --from-plan" + extra
+                "use plan · l to paper log" + extra
             )
         else:
             no_order.display = False
@@ -323,16 +323,16 @@ def _paint_card(el: Static, card: PlanCard | None) -> None:
 
 
 def _format_card(card: PlanCard) -> str:
-    lines = [f"[bold #5c6575]{card.title.upper()}[/]"]
+    lines = [f"[bold #555555]{card.title.upper()}[/]"]
     if card.headline:
         head_color = {
-            "open": "#7ecfb8",
-            "block": "#e87a6e",
+            "open": "#6fbf8a",
+            "block": "#c97a72",
             "watch": "#d4b06a",
-            "neutral": "#f0ebe3",
-        }.get(card.tone, "#f0ebe3")
+            "neutral": "#e8e8e8",
+        }.get(card.tone, "#e8e8e8")
         lines.append(f"[bold {head_color}]{card.headline}[/]")
     for ln in card.lines:
         if ln:
-            lines.append(f"[#8b92a0]{ln}[/]")
+            lines.append(f"[#7a7a7a]{ln}[/]")
     return "\n".join(lines)

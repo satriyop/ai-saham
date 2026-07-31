@@ -44,11 +44,33 @@ def snapshot_mode_label() -> str:
     return "● snapshot · limited judge"
 
 
+def accum_source_badge_text(*, board_source: str, recomputing: bool = False) -> str:
+    """Operator badge above accum board (mock ``src-badge``). Empty = hide."""
+    src = (board_source or "none").strip().lower()
+    if recomputing and src == "snapshot":
+        return "snapshot · refreshing live…"
+    if src == "snapshot":
+        return "snapshot · limited judge until j/r"
+    if src == "live":
+        return "live · full present-only judge"
+    return ""
+
+
+def accum_source_badge_kind(*, board_source: str) -> str:
+    """CSS kind: snap | live | hide."""
+    src = (board_source or "none").strip().lower()
+    if src == "snapshot":
+        return "snap"
+    if src == "live":
+        return "live"
+    return "hide"
+
+
 def broker_list_loading_body() -> str:
     """Main stage body while view-broker list worker is in flight."""
     return (
         "[#d4b06a]Loading broker desk list…[/]\n\n"
-        "View · broker list (CLI: saham view broker list)\n\n"
+        "View · broker list\n\n"
         "Reading tracked desks from [bold]local cache[/] — not hung.\n"
         "Local cache only (recent sessions · no network).\n\n"
         "[dim]When ready: ↑↓ · Enter desk home · esc back[/]"
@@ -56,7 +78,7 @@ def broker_list_loading_body() -> str:
 
 
 def broker_list_loading_footer() -> str:
-    return "loading broker list… · local cache · same job as CLI view broker list · wait"
+    return "loading broker list… · local cache · wait"
 
 
 def broker_list_loading_meta() -> str:
@@ -85,8 +107,4 @@ def loading_stage_body(
     if is_broker_list_loading(stage=stage, board_title=board_title, status_note=status_note):
         return broker_list_loading_body()
     title = (board_title or "Local board").strip() or "Local board"
-    return (
-        f"[#d4b06a]Loading local board…[/]\n\n"
-        f"{title}\n"
-        "[dim]Reading SQLite cache · same use cases as CLI[/]"
-    )
+    return f"[#d4b06a]Loading local board…[/]\n\n{title}\n[dim]Reading local cache · not hung[/]"

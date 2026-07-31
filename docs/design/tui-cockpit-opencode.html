@@ -1517,9 +1517,9 @@
       background: var(--bg-elevated);
     }
     .top5-matrix th.num, .top5-matrix td.num { text-align: right; }
-    .top5-matrix th.win { text-align: center; min-width: 4.5em; }
+    .top5-matrix th.win { text-align: center; min-width: 5.5em; }
     .top5-matrix td {
-      padding: 6px 8px;
+      padding: 6px 6px;
       border-bottom: 1px solid var(--border-soft);
       color: var(--text);
     }
@@ -1529,19 +1529,41 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 1px;
+      gap: 0;
       cursor: pointer;
       padding: 2px 0;
       border-radius: 3px;
+      line-height: 1.25;
     }
     .top5-matrix .cell:hover { background: var(--bg-row-hover); }
+    .top5-matrix .cell .tk-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 5px;
+    }
     .top5-matrix .cell .tk {
       font-weight: 600;
       color: #ececec;
       letter-spacing: 0.02em;
     }
+    .top5-matrix .cell .stk {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--sel-dim);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+    }
+    .top5-matrix .cell .stk.is-zero { color: var(--text-mute); font-weight: 500; }
     .top5-matrix .cell .nv { font-size: 10.5px; color: var(--green); }
     .top5-matrix .cell .nv.neg { color: var(--red); }
+    .top5-matrix .cell .ap {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.01em;
+    }
     .top5-matrix .cell.is-def .tk { color: var(--sel-dim); }
 
     .broker-jump-list {
@@ -2133,7 +2155,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 31a</span>
+      <span class="rev" id="buildStamp">mock · 31e</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -2986,7 +3008,7 @@
                 <div class="top5-matrix" id="brokerTop5Matrix" aria-label="Top 5 net buy by window">
                   <div class="mx-head">
                     <div><strong>Top 5 net buy</strong> · desk <span id="brokerMxCode">YP</span> · windows 1s · 3s · 5s · 10s · 20s</div>
-                    <div>default col <strong>1s</strong> · click cell → view ticker</div>
+                    <div>net · <strong>avg buy</strong> · <strong>streak</strong> · default <strong>1s</strong> · click → ticker</div>
                   </div>
                   <table>
                     <thead>
@@ -3651,37 +3673,70 @@
       if ($("brokerTopSell")) $("brokerTopSell").innerHTML = sellHtml || `<div class="dim">—</div>`;
 
 
-      // m · top 5 net buy matrix · windows 1s 3s 5s 10s 20s (desk only)
+      // m · top 5 net buy matrix · windows 1s 3s 5s 10s 20s
+      // cell: ticker · desk×ticker buy streak · net · avg buy
+      // streak = consecutive sessions this desk net-bought that ticker (ending as_of)
       if ($("brokerMxBody")) {
         if ($("brokerMxCode")) $("brokerMxCode").textContent = r.code;
-        // sample ranks by window: [ticker, netLabel] × 5 rows
-        const s1 = (r.buys || []).slice(0, 5).map(([c, , n]) => [c, n]);
-        while (s1.length < 5) s1.push(["—", "—"]);
+        // sample: [ticker, netLabel, avgBuy, streakSessions]
+        // real: avg = buy_summary.avg_price; streak from desk×ticker daily net > 0 tail
+        const mockAvg = {
+          AMMN: "9,850", BUMI: "148", ANTM: "3,210", BBRI: "4,680",
+          DEWA: "610", BMRI: "5,725", TLKM: "2,890", BBCA: "9,125",
+          ASII: "4,950", UNTR: "24,800",
+        };
+        const mockStk = {
+          AMMN: 6, BUMI: 4, ANTM: 3, BBRI: 5, DEWA: 2,
+          BMRI: 3, TLKM: 1, BBCA: 4, ASII: 0, UNTR: 2,
+        };
+        const s1 = (r.buys || []).slice(0, 5).map(([c, , n]) => [
+          c, n, mockAvg[c] || "—", mockStk[c] != null ? mockStk[c] : 0,
+        ]);
+        while (s1.length < 5) s1.push(["—", "—", "—", 0]);
         const windows = {
           "1s": s1,
-          "3s": [["AMMN", "+18.2B"], ["BUMI", "+14.1B"], ["ANTM", "+9.4B"], ["BBRI", "+7.2B"], ["DEWA", "+6.0B"]],
-          "5s": [["BUMI", "+31.0B"], ["AMMN", "+28.4B"], ["ANTM", "+16.2B"], ["DEWA", "+12.1B"], ["BBRI", "+11.0B"]],
-          "10s": [["AMMN", "+52.0B"], ["BUMI", "+48.5B"], ["BBRI", "+29.0B"], ["ANTM", "+24.2B"], ["BMRI", "+18.8B"]],
-          "20s": [["AMMN", "+95.0B"], ["BUMI", "+88.0B"], ["BBRI", "+55.0B"], ["ANTM", "+41.0B"], ["TLKM", "+33.0B"]],
+          "3s": [
+            ["AMMN", "+18.2B", "9,720", 6], ["BUMI", "+14.1B", "151", 4],
+            ["ANTM", "+9.4B", "3,180", 3], ["BBRI", "+7.2B", "4,650", 5], ["DEWA", "+6.0B", "598", 2],
+          ],
+          "5s": [
+            ["BUMI", "+31.0B", "155", 4], ["AMMN", "+28.4B", "9,640", 6],
+            ["ANTM", "+16.2B", "3,150", 3], ["DEWA", "+12.1B", "590", 2], ["BBRI", "+11.0B", "4,620", 5],
+          ],
+          "10s": [
+            ["AMMN", "+52.0B", "9,510", 6], ["BUMI", "+48.5B", "160", 4],
+            ["BBRI", "+29.0B", "4,580", 5], ["ANTM", "+24.2B", "3,090", 3], ["BMRI", "+18.8B", "5,680", 3],
+          ],
+          "20s": [
+            ["AMMN", "+95.0B", "9,380", 6], ["BUMI", "+88.0B", "168", 4],
+            ["BBRI", "+55.0B", "4,520", 5], ["ANTM", "+41.0B", "3,020", 3], ["TLKM", "+33.0B", "2,840", 1],
+          ],
         };
         // desk-specific small variation for non-YP
         if (r.code !== "YP" && r.buys && r.buys.length) {
           windows["1s"] = s1;
-          const rot = r.buys.map(([c, , n]) => [c, n]);
+          const rot = r.buys.map(([c, , n]) => [
+            c, n, mockAvg[c] || "—", mockStk[c] != null ? mockStk[c] : 0,
+          ]);
           windows["3s"] = rot.slice(0, 5);
-          while (windows["3s"].length < 5) windows["3s"].push(["—", "—"]);
+          while (windows["3s"].length < 5) windows["3s"].push(["—", "—", "—", 0]);
         }
         const cols = ["1s", "3s", "5s", "10s", "20s"];
         let html = "";
         for (let rank = 0; rank < 5; rank++) {
           html += `<tr><td class="rank">${rank + 1}</td>`;
           cols.forEach((w) => {
-            const [tk, nv] = windows[w][rank] || ["—", "—"];
+            const [tk, nv, ap, stk] = windows[w][rank] || ["—", "—", "—", 0];
             const neg = String(nv).includes("−") || String(nv).startsWith("-");
             const def = w === "1s" ? " is-def" : "";
+            const apLabel = ap && ap !== "—" ? `@ ${ap}` : "—";
+            const stkN = Number(stk) || 0;
+            const stkLabel = tk === "—" ? "" : `${stkN}s`;
+            const stkCls = stkN > 0 ? "stk" : "stk is-zero";
             html += `<td class="num"><div class="cell${def}" data-ticker="${tk}" data-win="${w}" role="button" tabindex="0">
-              <span class="tk">${tk}</span>
+              <span class="tk-row"><span class="tk">${tk}</span>${tk !== "—" ? `<span class="${stkCls}">${stkLabel}</span>` : ""}</span>
               <span class="nv${neg ? " neg" : ""}">${nv}</span>
+              <span class="ap">${apLabel}</span>
             </div></td>`;
           });
           html += `</tr>`;
@@ -4418,25 +4473,25 @@
  return;
  }
  } else {
- // desk home · hub keys (design: t / f / h / v)
+ // desk home · hub keys (design: t / f / c / h / m · v = view ticker)
  const k = e.key.toLowerCase();
             if (k === "t") { e.preventDefault(); setBrokerDeep("top"); return; }
             if (k === "f") { e.preventDefault(); setBrokerDeep("flow"); return; }
             if (k === "c") { e.preventDefault(); setBrokerDeep("cal"); return; }
             if (k === "h") { e.preventDefault(); setBrokerDeep("hist"); return; }
-           if (k === "m") { e.preventDefault(); setBrokerDeep("matrix"); return; }
-          if (k === "v") {
-            // open view ticker for desk top (1s #1) — not matrix hub
-            e.preventDefault();
-            const top = (BROKER[state.brokerIndex] || {}).top;
-            if (top) {
-              const idx = ACCUM.findIndex((r) => r.t === top);
-              if (idx >= 0) state.rowIndex = idx;
+            if (k === "m") { e.preventDefault(); setBrokerDeep("matrix"); return; }
+            if (k === "v") {
+              // open view ticker for desk top (1s #1) — not a hub tab
+              e.preventDefault();
+              const top = (BROKER[state.brokerIndex] || {}).top;
+              if (top) {
+                const idx = ACCUM.findIndex((r) => r.t === top);
+                if (idx >= 0) state.rowIndex = idx;
+              }
+              showFrame("detail");
+              toast(`View ticker · ${top || "—"}`);
+              return;
             }
-            showFrame("detail");
-            toast(`View ticker · ${top || "—"}`);
-            return;
-          }
  }
  }
 

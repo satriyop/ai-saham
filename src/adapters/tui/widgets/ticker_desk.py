@@ -12,22 +12,37 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
-from src.adapters.tui.ticker_desk_model import TickerDeskModel, bar_glyphs
+from src.adapters.tui.ticker_desk_model import (
+    FRESH_GRID_SLOTS,
+    TickerDeskModel,
+    TickerFreshPill,
+    bar_glyphs,
+)
+from src.adapters.tui.widgets.flag_chip import FlagChip
+
+_TICKER_PANEL_FLAGS = (
+    "analyst",
+    "ownership",
+    "sector",
+    "insider",
+    "iev",
+    "sentiment",
+)
 
 
 class TickerDesk(Vertical):
-    """Visual ticker instrument — night-ink Harga Mast."""
+    """Visual ticker instrument — OpenCode price mast."""
 
     DEFAULT_CSS = """
     TickerDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #080b12;
+        background: #0b0b0b;
     }
 
     TickerDesk .td-crumb {
-        color: #5c6575;
+        color: #555555;
         margin-bottom: 1;
         height: auto;
     }
@@ -37,12 +52,12 @@ class TickerDesk(Vertical):
         height: auto;
         margin-bottom: 1;
         padding: 0 0 1 0;
-        border-bottom: solid #1c2430;
+        border-bottom: solid #1c1c1c;
     }
 
     TickerDesk .td-mark {
         text-style: bold;
-        color: #f2eee6;
+        color: #e8e8e8;
         width: auto;
         padding-right: 2;
     }
@@ -50,20 +65,75 @@ class TickerDesk(Vertical):
     TickerDesk .td-id-sub {
         width: 1fr;
         height: auto;
-        color: #c9c3b8;
+        color: #d8d8d8;
     }
 
     TickerDesk .td-fresh-col {
         width: auto;
         height: auto;
-        color: #5c6575;
+        color: #555555;
         text-align: right;
+    }
+
+    /* Mock fresh-grid pills */
+    TickerDesk .td-fresh-sec {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    TickerDesk .td-fresh-head {
+        color: #555555;
+        text-style: bold;
+        height: 1;
+        margin-bottom: 0;
+    }
+
+    TickerDesk .td-fresh-grid {
+        height: auto;
+        width: 100%;
+    }
+
+    TickerDesk .td-fresh-row {
+        height: auto;
+        width: 100%;
+        margin-bottom: 0;
+    }
+
+    TickerDesk .td-fp {
+        width: 1fr;
+        height: auto;
+        padding: 0 1;
+        margin-right: 1;
+        margin-bottom: 0;
+        background: #141414;
+        border: solid #1c1c1c;
+        color: #6b6b6b;
+    }
+
+    TickerDesk .td-fp.ok {
+        border: solid #1e3a28;
+        color: #6fbf8a;
+    }
+
+    TickerDesk .td-fp.stale {
+        border: solid #3a3220;
+        color: #d4b06a;
+    }
+
+    TickerDesk .td-fp.miss {
+        border: solid #1c1c1c;
+        color: #3a3a3a;
+    }
+
+    TickerDesk .td-fp.unknown {
+        border: solid #1c1c1c;
+        color: #6b6b6b;
     }
 
     /* Mast */
     TickerDesk .td-mast {
-        background: #121a28;
-        border: solid #1c2430;
+        background: #141414;
+        border: solid #1c1c1c;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
@@ -76,7 +146,7 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-mast-lab {
-        color: #e8b86d;
+        color: #c9a68a;
         text-style: bold;
     }
 
@@ -87,33 +157,33 @@ class TickerDesk(Vertical):
 
     TickerDesk .td-currency {
         width: auto;
-        color: #5c6575;
+        color: #555555;
         padding-right: 1;
     }
 
     TickerDesk .td-price {
         width: auto;
         text-style: bold;
-        color: #faf6ee;
+        color: #e8e8e8;
         padding-right: 2;
     }
 
     TickerDesk .td-chg {
         width: auto;
         text-style: bold;
-        color: #8b92a0;
-        background: #182233;
+        color: #7a7a7a;
+        background: #141414;
         padding: 0 1;
     }
 
     TickerDesk .td-chg.pos {
-        color: #7ecfb8;
-        background: #14241c;
+        color: #6fbf8a;
+        background: #121a14;
     }
 
     TickerDesk .td-chg.neg {
-        color: #e87a6e;
-        background: #241414;
+        color: #c97a72;
+        background: #1a1212;
     }
 
     TickerDesk .td-tape {
@@ -129,7 +199,7 @@ class TickerDesk(Vertical):
 
     TickerDesk .td-hz-line {
         height: auto;
-        color: #8b92a0;
+        color: #7a7a7a;
     }
 
     /* Ribbon */
@@ -140,20 +210,20 @@ class TickerDesk(Vertical):
 
     TickerDesk .td-metric {
         width: 1fr;
-        background: #0d121c;
-        border: solid #1c2430;
+        background: #141414;
+        border: solid #1c1c1c;
         padding: 0 1;
         margin-right: 1;
         height: auto;
     }
 
     TickerDesk .td-metric-k {
-        color: #5c6575;
+        color: #555555;
         text-style: bold;
     }
 
     TickerDesk .td-metric-v {
-        color: #f0ebe3;
+        color: #e8e8e8;
         text-style: bold;
     }
 
@@ -169,80 +239,95 @@ class TickerDesk(Vertical):
 
     TickerDesk .td-pulse {
         width: 1fr;
-        background: #0d121c;
-        border: solid #1c2430;
+        background: #141414;
+        border: solid #1c1c1c;
         border-left: solid #8eb4d8;
         padding: 1 1;
         margin-right: 1;
         height: auto;
-        color: #8b92a0;
+        color: #7a7a7a;
     }
 
-    TickerDesk .td-pulse.tone-pos { border-left: solid #7ecfb8; }
-    TickerDesk .td-pulse.tone-neg { border-left: solid #e87a6e; }
+    TickerDesk .td-pulse.tone-pos { border-left: solid #6fbf8a; }
+    TickerDesk .td-pulse.tone-neg { border-left: solid #c97a72; }
     TickerDesk .td-pulse.tone-neutral { border-left: solid #a89cc9; }
 
     TickerDesk .td-pulse-title {
-        color: #5c6575;
+        color: #555555;
         text-style: bold;
     }
 
     TickerDesk .td-pulse-head {
-        color: #f0ebe3;
+        color: #e8e8e8;
         text-style: bold;
         height: auto;
     }
 
-    TickerDesk .td-pulse-head.pos { color: #7ecfb8; }
-    TickerDesk .td-pulse-head.neg { color: #e87a6e; }
+    TickerDesk .td-pulse-head.pos { color: #6fbf8a; }
+    TickerDesk .td-pulse-head.neg { color: #c97a72; }
 
     TickerDesk .td-pulse-sub {
-        color: #5c6575;
+        color: #555555;
         height: auto;
     }
 
     TickerDesk .td-pulse-body {
-        color: #8b92a0;
+        color: #7a7a7a;
         height: auto;
         margin-top: 0;
     }
 
     /* Earnings */
     TickerDesk .td-section {
-        background: #0d121c;
-        border: solid #1c2430;
+        background: #141414;
+        border: solid #1c1c1c;
         padding: 1 1;
         margin-bottom: 1;
         height: auto;
     }
 
     TickerDesk .td-sec-head {
-        color: #5c6575;
+        color: #555555;
         text-style: bold;
         height: auto;
     }
 
     TickerDesk .td-earn {
-        color: #8b92a0;
+        color: #7a7a7a;
         height: auto;
     }
 
     TickerDesk .td-sec-body {
-        color: #8b92a0;
+        color: #7a7a7a;
         height: auto;
     }
 
     TickerDesk .td-footer {
-        color: #5c6575;
+        color: #555555;
         height: auto;
-        border-top: solid #1c2430;
+        border-top: solid #1c1c1c;
         padding-top: 1;
     }
+
+    TickerDesk .td-flags {
+        height: auto;
+        margin: 0 0 1 0;
+    }
+
+    TickerDesk .td-flag-lab {
+        width: auto;
+        color: #6b6b6b;
+        text-style: bold;
+        padding-right: 1;
+    }
+
     """
 
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)
         self._model: TickerDeskModel | None = None
+        self._open_flags: set[str] = set()
+        self._detail_all: bool = False
 
     def compose(self) -> ComposeResult:
         yield Static("", classes="td-crumb", id="td-crumb")
@@ -255,6 +340,21 @@ class TickerDesk(Vertical):
             with Vertical(classes="td-fresh-col", id="td-fresh-col"):
                 yield Static("", id="td-asof")
                 yield Static("", id="td-fresh")
+
+        # Mock fresh-grid (Price · Flow · Bandar · …)
+        with Vertical(classes="td-fresh-sec", id="td-fresh-sec"):
+            yield Static("FRESHNESS", classes="td-fresh-head", id="td-fresh-head")
+            with Vertical(classes="td-fresh-grid", id="td-fresh-grid"):
+                # 2 rows × 5 pills = 10 mock slots
+                for row in range(2):
+                    with Horizontal(classes="td-fresh-row", id=f"td-fresh-row-{row}"):
+                        for col in range(5):
+                            idx = row * 5 + col
+                            yield Static(
+                                "",
+                                id=f"td-fp-{idx}",
+                                classes="td-fp miss",
+                            )
 
         with Horizontal(classes="td-mast", id="td-mast"):
             with Vertical(classes="td-mast-left", id="td-mast-left"):
@@ -291,9 +391,15 @@ class TickerDesk(Vertical):
             )
             yield Static("", classes="td-earn", id="td-earn-body")
 
+        with Horizontal(classes="td-flags", id="td-flags"):
+            yield Static("More", classes="td-flag-lab", id="td-flag-lab")
+            yield FlagChip("detail", "detail · d", id="td-flag-detail")
+            for key in _TICKER_PANEL_FLAGS:
+                yield FlagChip(key, key, id=f"td-flag-{key}", classes="is-dim")
+
         with Vertical(classes="td-section", id="td-more-sec"):
             yield Static(
-                "OWNERSHIP · ANALYST · MORE     collapsed · local",
+                "MORE · local panels",
                 classes="td-sec-head",
                 id="td-more-head",
             )
@@ -301,15 +407,87 @@ class TickerDesk(Vertical):
 
         yield Static("", classes="td-footer", id="td-footer")
 
-    def paint(self, model: TickerDeskModel) -> None:
+    def on_flag_chip_selected(self, event: FlagChip.Selected) -> None:
+        event.stop()
+        if self._model is None:
+            return
+        key = event.flag_key
+        if key == "detail":
+            self._detail_all = not self._detail_all
+            if self._detail_all:
+                self._open_flags = set(self._available_panels(self._model))
+            else:
+                self._open_flags.clear()
+        elif key in _TICKER_PANEL_FLAGS:
+            avail = self._available_panels(self._model)
+            if key not in avail:
+                return
+            if key in self._open_flags:
+                self._open_flags.discard(key)
+            else:
+                self._open_flags.add(key)
+            self._detail_all = self._open_flags >= avail and bool(avail)
+        self.paint(self._model, detail_open=self._detail_all, sync_from_detail=False)
+        try:
+            app = self.app
+            if hasattr(app, "_ticker_detail_open"):
+                app._ticker_detail_open = self._detail_all  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+    def _available_panels(self, model: TickerDeskModel) -> set[str]:
+        return {
+            p.key
+            for p in model.detail_panels
+            if p.key in _TICKER_PANEL_FLAGS and p.status == "present"
+        }
+
+    def _paint_fresh_grid(self, pills: tuple[TickerFreshPill, ...]) -> None:
+        """Paint mock fresh-grid pills (ok / stale / miss)."""
+        for idx in range(FRESH_GRID_SLOTS):
+            el = self.query_one(f"#td-fp-{idx}", Static)
+            for kind in ("ok", "stale", "miss", "unknown"):
+                el.remove_class(kind)
+            if idx < len(pills):
+                pill = pills[idx]
+                kind = pill.css_kind
+                el.add_class(kind)
+                val_col = {
+                    "ok": "#6fbf8a",
+                    "stale": "#d4b06a",
+                    "miss": "#3a3a3a",
+                    "unknown": "#6b6b6b",
+                }.get(kind, "#6b6b6b")
+                el.update(f"[#555555]{pill.label}[/]  [{val_col}]{pill.value}[/]")
+            else:
+                el.add_class("miss")
+                el.update("")
+
+    def paint(
+        self,
+        model: TickerDeskModel,
+        *,
+        detail_open: bool = False,
+        sync_from_detail: bool = True,
+    ) -> None:
         self._model = model
+        if sync_from_detail:
+            self._detail_all = detail_open
+            if detail_open:
+                self._open_flags = set(self._available_panels(model))
+            else:
+                self._open_flags.clear()
+        open_flags = set(self._open_flags)
+        if self._detail_all:
+            open_flags |= self._available_panels(model)
+        detail_open = self._detail_all or bool(open_flags)
+        mode = "full · local cache" if self._detail_all else "local cache"
         self.query_one("#td-crumb", Static).update(
-            f"View · ticker desk · [bold #f0ebe3]{model.ticker}[/]"
-            f"   [#5c6575]local cache · not judgment[/]"
+            f"View · ticker desk · [bold #e8e8e8]{model.ticker}[/]   [#555555]{mode} · browse[/]"
         )
         self.query_one("#td-mark", Static).update(model.ticker)
         self.query_one("#td-name", Static).update(
-            f"[bold #c9c3b8]{model.name}[/]" if model.name != "—" else ""
+            f"[bold #d8d8d8]{model.name}[/]" if model.name != "—" else ""
         )
         chips: list[str] = []
         if model.board and model.board != "—":
@@ -317,13 +495,17 @@ class TickerDesk(Vertical):
         if model.sector and model.sector != "—":
             chips.append(model.sector)
         if model.tradeable and model.tradeable != "—":
-            chips.append(f"[#7ecfb8]{model.tradeable}[/]")
+            chips.append(f"[#6fbf8a]{model.tradeable}[/]")
         self.query_one("#td-chips", Static).update(
-            "  ".join(f"[#5c6575]{c}[/]" if "[#" not in c else c for c in chips) or "—"
+            "  ".join(f"[#555555]{c}[/]" if "[#" not in c else c for c in chips) or "—"
         )
         self.query_one("#td-asof", Static).update(f"as of {model.as_of}")
-        fresh = " ".join(model.freshness[:8]) if model.freshness else "freshness —"
-        self.query_one("#td-fresh", Static).update(fresh)
+        # Compact summary still on identity column
+        ok_n = sum(1 for p in model.freshness if p.status == "ok")
+        self.query_one("#td-fresh", Static).update(
+            f"{ok_n}/{len(model.freshness)} ok" if model.freshness else "freshness —"
+        )
+        self._paint_fresh_grid(model.freshness)
 
         # Mast
         self.query_one("#td-price", Static).update(model.price or "—")
@@ -345,11 +527,11 @@ class TickerDesk(Vertical):
                 hz = model.horizons[i]
                 bar = bar_glyphs(hz.bar_pct, width=8)
                 color = {
-                    "pos": "#7ecfb8",
-                    "neg": "#e87a6e",
-                    "neutral": "#8b92a0",
-                }.get(hz.tone, "#8b92a0")
-                el.update(f"[#5c6575]{hz.label:3}[/] {bar} [{color}]{hz.value}[/]")
+                    "pos": "#6fbf8a",
+                    "neg": "#c97a72",
+                    "neutral": "#7a7a7a",
+                }.get(hz.tone, "#7a7a7a")
+                el.update(f"[#555555]{hz.label:3}[/] {bar} [{color}]{hz.value}[/]")
             else:
                 el.update("")
 
@@ -389,7 +571,7 @@ class TickerDesk(Vertical):
                 head.add_class(card.tone)
             head.update(card.headline)
             self.query_one(f"#td-pulse-s-{key}", Static).update(card.sub)
-            body_lines = [f"[#5c6575]{k:8}[/] {v}" for k, v in card.rows[:4]]
+            body_lines = [f"[#555555]{k:8}[/] {v}" for k, v in card.rows[:4]]
             self.query_one(f"#td-pulse-b-{key}", Static).update("\n".join(body_lines))
 
         # Earnings
@@ -397,21 +579,67 @@ class TickerDesk(Vertical):
             earn_lines = []
             for e in model.earnings[:4]:
                 bar = bar_glyphs(e.bar_pct, width=10)
-                yc = {"pos": "#7ecfb8", "neg": "#e87a6e"}.get(e.yoy_tone, "#8b92a0")
+                yc = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(e.yoy_tone, "#7a7a7a")
                 earn_lines.append(
-                    f"[#c9c3b8]{e.period:10}[/] {bar}  [#f0ebe3]{e.eps:>7}[/]  [{yc}]{e.yoy}[/]"
+                    f"[#d8d8d8]{e.period:10}[/] {bar}  [#e8e8e8]{e.eps:>7}[/]  [{yc}]{e.yoy}[/]"
                 )
             self.query_one("#td-earn-body", Static).update("\n".join(earn_lines))
             self.query_one("#td-earn-sec", Vertical).display = True
         else:
             self.query_one("#td-earn-body", Static).update(
-                "[#5c6575]no earnings rows in local cache[/]"
+                "[#555555]no earnings rows in local cache[/]"
             )
 
-        # Secondary
-        more_lines = [f"[#5c6575]{k:16}[/] [#c9c3b8]{v}[/]" for k, v in model.secondary[:6]]
-        self.query_one("#td-more-body", Static).update("\n".join(more_lines) if more_lines else "—")
+        # Secondary / detail inventory (all or selected panel chips)
+        head = self.query_one("#td-more-head", Static)
+        by_panel = {p.key: p for p in model.detail_panels}
+        if self._detail_all:
+            head.update("DETAIL · full inventory · d collapse · local cache")
+            blocks: list[str] = []
+            for p in model.detail_panels:
+                st_col = "#6fbf8a" if p.status == "present" else "#555555"
+                blocks.append(f"[bold #d8d8d8]{p.title}[/]  [{st_col}]{p.status}[/]")
+                for line in p.lines[:4]:
+                    blocks.append(f"  [#7a7a7a]{line}[/]")
+            if not blocks:
+                blocks = [f"[#555555]{k:16}[/] [#d8d8d8]{v}[/]" for k, v in model.secondary[:6]]
+            self.query_one("#td-more-body", Static).update("\n".join(blocks) if blocks else "—")
+        elif open_flags:
+            head.update("DETAIL · selected panels · local cache")
+            blocks = []
+            for key in _TICKER_PANEL_FLAGS:
+                if key not in open_flags:
+                    continue
+                p = by_panel.get(key)
+                if p is None:
+                    continue
+                st_col = "#6fbf8a" if p.status == "present" else "#555555"
+                blocks.append(f"[bold #d8d8d8]{p.title}[/]  [{st_col}]{p.status}[/]")
+                for line in p.lines[:6]:
+                    blocks.append(f"  [#7a7a7a]{line}[/]")
+            self.query_one("#td-more-body", Static).update("\n".join(blocks) if blocks else "—")
+        else:
+            head.update("MORE · collapsed · d detail · local panels")
+            more_lines = [f"[#555555]{k:16}[/] [#d8d8d8]{v}[/]" for k, v in model.secondary[:6]]
+            self.query_one("#td-more-body", Static).update(
+                "\n".join(more_lines) if more_lines else "—"
+            )
 
+        # Detail flag chips (mock tickerDetailFlags)
+        self.query_one("#td-flag-detail", FlagChip).set_chip_state(
+            available=True, expanded=self._detail_all
+        )
+        for key in _TICKER_PANEL_FLAGS:
+            panel = by_panel.get(key)
+            present = panel is not None and panel.status == "present"
+            self.query_one(f"#td-flag-{key}", FlagChip).set_chip_state(
+                available=present,
+                expanded=key in open_flags,
+            )
+
+        foot = model.footer
+        if self._detail_all and "d collapse" not in foot:
+            foot = foot.replace("d detail", "d collapse", 1)
         self.query_one("#td-footer", Static).update(
-            f"[#5c6575]{model.footer}[/]\n[#d4b06a]{model.authority}[/] · Judge stays board Enter"
+            f"[#555555]{foot}[/]\n[#d4b06a]{model.authority}[/]"
         )

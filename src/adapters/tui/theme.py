@@ -1,10 +1,47 @@
-"""OpenCode-faithful Textual CSS for the daily cockpit.
+"""OpenCode visual bible tokens for the daily cockpit.
 
-Tokens match docs/design/tui-cockpit-opencode.md (near-black, peach selection,
-purple section labels, hairline borders).
+Authority: docs/design/tui-cockpit-opencode.md + mock `.app` tokens.
+Near-black surfaces, peach selection, hairline borders.
+No journey night-ink skin, no design-tools strip.
 
 Layer: Adapter
 """
+
+# Canonical OpenCode token map (mock :root)
+OPENCODE_TOKENS: dict[str, str] = {
+    "bg": "#0b0b0b",
+    "bg_elevated": "#141414",
+    "bg_panel": "#101010",
+    "bg_sidebar": "#0e0e0e",
+    "bg_row_hover": "#161616",
+    "border": "#1c1c1c",
+    "border_soft": "#181818",
+    "text": "#d8d8d8",
+    "text_bright": "#e8e8e8",
+    "text_dim": "#7a7a7a",
+    "text_mute": "#555555",
+    "text_faint": "#3d3d3d",
+    "sel_bg": "#c9a68a",
+    "sel_text": "#1a120c",
+    "sel_dim": "#a8896f",
+    "green": "#6fbf8a",
+    "amber": "#d4b06a",
+    "red": "#c97a72",
+    "blue": "#7aa2c4",
+    "purple": "#9b8fb8",
+}
+
+# Forbidden journey / night-ink product chrome markers (tests assert absence)
+FORBIDDEN_PRODUCT_MARKERS: tuple[str, ...] = (
+    "Fraunces",
+    "desk-v2",
+    "font-display",
+    "design-tools",
+    "#080b12",
+    "#0d121c",
+    "#121a28",
+    "#1c2430",
+)
 
 COCKPIT_CSS = """
 Screen {
@@ -22,13 +59,15 @@ Screen {
     height: 100%;
     border-right: solid #1c1c1c;
     padding: 0 1;
+    background: #0b0b0b;
 }
 
-/* Fixed header height — height:auto steals 1fr from #stage and zeros the board. */
+/* Layout B: header · stage · footer · prompt · (status outside main) */
 #main-header {
     height: 3;
     padding: 1 1 0 1;
     border-bottom: solid #181818;
+    background: #0b0b0b;
 }
 
 #view-title {
@@ -38,12 +77,12 @@ Screen {
 }
 
 #view-meta {
-    color: #5c6575;
+    color: #555555;
     height: 1;
 }
 
 #mode-pill {
-    color: #d4b06a;
+    color: #c9a68a;
     text-align: right;
     height: 1;
 }
@@ -51,48 +90,135 @@ Screen {
 #stage {
     height: 1fr;
     padding: 1 1;
+    background: #0b0b0b;
 }
 
-/* Scrollable text stages (inspect, view ticker, plan, empty, loading). */
 #stage-scroll {
     height: 1fr;
     scrollbar-color: #3a3a3a #121212;
     scrollbar-size-vertical: 1;
+    background: #0b0b0b;
 }
 
 #stage-body {
     height: auto;
     width: 100%;
     color: #7a7a7a;
+    background: #0b0b0b;
+}
+
+/* Boards: OpenCode radar, peach selection wash */
+#board-source-badge {
+    height: 1;
+    width: auto;
+    margin: 0 0 1 0;
+    padding: 0 1;
+    color: #6b6b6b;
+    background: #141414;
+    border: solid #1c1c1c;
+}
+
+#board-flag-row {
+    height: auto;
+    width: 100%;
+    margin: 0 0 1 0;
+    padding: 0 1;
+    color: #6b6b6b;
+    background: #0b0b0b;
+}
+#board-flag-lab {
+    width: auto;
+    color: #6b6b6b;
+    text-style: bold;
+    padding-right: 1;
+}
+
+#board-source-badge.snap {
+    color: #d4b06a;
+    background: #1a1810;
+    border: solid #3a3220;
+}
+
+#board-source-badge.live {
+    color: #6fbf8a;
+    background: #121a14;
+    border: solid #1e3a28;
 }
 
 #board-table {
     height: 1fr;
-    background: #080b12;
-    color: #c9c3b8;
+    background: #0b0b0b;
+    color: #d8d8d8;
 }
 
-/* Signal radar focus: brass wash (design tui-accum-board.html is-on) */
 #board-table > .datatable--cursor {
-    background: #1a160e;
-    color: #f0ebe3;
+    background: #c9a68a;
+    color: #1a120c;
     text-style: bold;
 }
 
 #board-table > .datatable--hover {
-    background: #0d121c;
+    background: #161616;
 }
 
 #board-table > .datatable--header {
-    color: #5c6575;
+    color: #555555;
     text-style: bold;
-    background: #080b12;
+    background: #101010;
 }
 
 #board-footer {
     height: auto;
-    color: #5c6575;
+    color: #555555;
     padding-top: 1;
+    background: #0b0b0b;
+}
+
+/* Prompt rail · OpenCode chrome (non-Action) */
+#prompt-rail {
+    height: 3;
+    border-top: solid #181818;
+    padding: 0 1;
+    background: #0e0e0e;
+    align: left middle;
+}
+
+#prompt-rail.is-focus {
+    border-top: solid #c9a68a;
+}
+
+#prompt-affordance {
+    width: 2;
+    color: #c9a68a;
+    text-style: bold;
+}
+
+#prompt-input {
+    width: 1fr;
+    background: #0e0e0e;
+    border: none;
+    color: #d8d8d8;
+    padding: 0 1;
+}
+
+#prompt-input:focus {
+    background: #141414;
+}
+
+#prompt-mode {
+    width: auto;
+    min-width: 8;
+    color: #9b8fb8;
+    text-align: right;
+    padding: 0 1;
+}
+
+#prompt-mode.is-agent {
+    color: #c9a68a;
+}
+
+#prompt-mode.is-cli {
+    color: #6fbf8a;
 }
 
 #evidence-strip {
@@ -101,6 +227,7 @@ Screen {
     border-top: solid #181818;
     padding-top: 1;
     color: #7a7a7a;
+    background: #0b0b0b;
 }
 
 #sidebar {
@@ -108,6 +235,7 @@ Screen {
     height: 100%;
     background: #0e0e0e;
     padding: 1 1;
+    border-left: solid #181818;
 }
 
 #sidebar.hidden {
@@ -154,8 +282,8 @@ CommandPalette, PlanConfirmModal, HelpModal, FetchConfirmModal, PaperLogConfirmM
     max-width: 92%;
     height: auto;
     max-height: 85%;
-    background: #1a1a1a;
-    border: solid #2a2a2a;
+    background: #141414;
+    border: solid #1c1c1c;
     padding: 1 1;
 }
 
@@ -182,8 +310,8 @@ CommandPalette, PlanConfirmModal, HelpModal, FetchConfirmModal, PaperLogConfirmM
 
 #palette-input {
     margin-bottom: 1;
-    background: #121212;
-    border: solid #252525;
+    background: #101010;
+    border: solid #1c1c1c;
     color: #d8d8d8;
 }
 
@@ -196,7 +324,7 @@ CommandPalette, PlanConfirmModal, HelpModal, FetchConfirmModal, PaperLogConfirmM
 
 #palette-foot, #confirm-foot, #help-foot {
     height: auto;
-    border-top: solid #252525;
+    border-top: solid #1c1c1c;
     padding-top: 1;
     color: #555555;
 }

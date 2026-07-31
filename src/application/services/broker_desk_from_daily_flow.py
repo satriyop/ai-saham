@@ -40,6 +40,19 @@ class DeskDayNet:
     ticker_count: int
 
 
+@dataclass(frozen=True)
+class DeskCalendarDay:
+    """One session day on the desk calendar (tracked activity only)."""
+
+    date: date
+    net_value: Decimal
+    buy_value: Decimal
+    sell_value: Decimal
+    top_ticker: str | None  # max net buy that day for this desk
+    top_net: Decimal
+    ticker_count: int
+
+
 def classify_desk_type(
     broker_code: str,
     foreign_broker_codes: frozenset[str] | None,
@@ -112,6 +125,52 @@ def aggregate_desk_by_date(flows: list[BrokerDailyFlow]) -> tuple[DeskDayNet, ..
                 ticker_count=len({r.ticker.upper() for r in rows}),
             )
         )
+    return tuple(days)
+
+
+def build_desk_calendar_days(
+    flows: list[BrokerDailyFlow],
+    *,
+    max_sessions: int = 22,
+) -> tuple[DeskCalendarDay, ...]:
+    """Session days for desk calendar: top stock · net · B/S.
+
+    Sessions = dates with desk activity (not blank calendar days).
+    Newest last (chronological). Truncated to last ``max_sessions``.
+    Top stock = ticker with highest net_value among net buyers that day;
+    if none, highest buy_value ticker.
+    """
+    if max_sessions < 1:
+        raise ValueError("max_sessions must be >= 1")
+    by_date: dict[date, list[BrokerDailyFlow]] = {}
+    for flow in flows:
+        by_date.setdefault(flow.date, []).append(flow)
+
+    days: list[DeskCalendarDay] = []
+    for d in sorted(by_date):
+        rows = by_date[d]
+        net = sum((r.net_value for r in rows), Decimal("0"))
+        buy = sum((r.buy_value for r in rows), Decimal("0"))
+        sell = sum((r.sell_value for r in rows), Decimal("0"))
+        # Prefer strongest net buyer; else top buy_value name
+        buyers = [r for r in rows if r.net_value > Decimal("0")]
+        if buyers:
+            top = max(buyers, key=lambda r: r.net_value)
+        else:
+            top = max(rows, key=lambda r: r.buy_value)
+        days.append(
+            DeskCalendarDay(
+                date=d,
+                net_value=net,
+                buy_value=buy,
+                sell_value=sell,
+                top_ticker=str(top.ticker).upper() if top is not None else None,
+                top_net=top.net_value if top is not None else Decimal("0"),
+                ticker_count=len({r.ticker.upper() for r in rows}),
+            )
+        )
+    if len(days) > max_sessions:
+        days = days[-max_sessions:]
     return tuple(days)
 
 
@@ -211,3 +270,131 @@ def desk_session_pulse(
         delta1=delta1,
         window_nets=exposed,
     )
+
+
+# ── Desk top-5 net-buy matrix (multi-window) ─────────────────
+
+# Default windows for desk top matrix (sessions-with-data, not blank calendar).
+DESK_TOP_MATRIX_WINDOWS: tuple[int, ...] = (1, 3, 5, 10, 20)
+DESK_TOP_MATRIX_LIMIT: int = 5
+
+
+@dataclass(frozen=True)
+class DeskTickerWindowCell:
+    """One matrix cell: desk×ticker ranked net buy for a session window."""
+
+    ticker: str
+    net_value: Decimal
+    window: int
+    sessions_used: int  # desk sessions available in this column (≤ window)
+    avg_buy_price: Decimal | None  # lot-weighted; None if no buy_lot in window
+    buy_streak: int  # desk×ticker consecutive net-buy sessions ending as_of
+    is_partial: bool  # sessions_used < window
+
+
+def desk_session_dates(flows: list[BrokerDailyFlow]) -> tuple[date, ...]:
+    """Distinct session dates for the desk, ascending (dates with any flow)."""
+    return tuple(sorted({f.date for f in flows}))
+
+
+def lot_weighted_avg_buy_price(rows: list[BrokerDailyFlow]) -> Decimal | None:
+    """Lot-weighted avg_buy_price over rows with buy_lot > 0; else None."""
+    total_lot = 0
+    weighted = Decimal("0")
+    for r in rows:
+        if r.buy_lot > 0:
+            total_lot += r.buy_lot
+            weighted += r.avg_buy_price * Decimal(r.buy_lot)
+    if total_lot <= 0:
+        return None
+    return weighted / Decimal(total_lot)
+
+
+def desk_ticker_buy_streak(
+    flows: list[BrokerDailyFlow],
+    ticker: str,
+    *,
+    session_dates: tuple[date, ...] | None = None,
+) -> int:
+    """Consecutive sessions this desk net-bought ``ticker`` ending at latest.
+
+    Sessions = desk-wide dates with any activity (not blank calendar days).
+    A missing desk×ticker row or net_value ≤ 0 breaks the streak (returns 0
+    when the latest session is not a buy) — same rule as desk-wide pulse.
+    """
+    ticker_u = ticker.upper()
+    dates = session_dates if session_dates is not None else desk_session_dates(flows)
+    if not dates:
+        return 0
+    by_date: dict[date, BrokerDailyFlow] = {}
+    for f in flows:
+        if f.ticker.upper() != ticker_u:
+            continue
+        by_date[f.date] = f
+    streak = 0
+    for d in reversed(dates):
+        row = by_date.get(d)
+        if row is None or row.net_value <= Decimal("0"):
+            break
+        streak += 1
+    return streak
+
+
+def rank_desk_top_buy_matrix(
+    flows: list[BrokerDailyFlow],
+    *,
+    windows: tuple[int, ...] = DESK_TOP_MATRIX_WINDOWS,
+    limit: int = DESK_TOP_MATRIX_LIMIT,
+) -> dict[int, tuple[DeskTickerWindowCell, ...]]:
+    """Top ``limit`` net-buy tickers per window for one desk.
+
+    Window = last min(W, n) desk sessions-with-data. Partial when n < W.
+    Rank metric: sum of net_value over the window (buyers only, net > 0).
+    Avg buy: lot-weighted avg_buy_price on days with buy_lot > 0.
+    Streak: desk×ticker buy streak ending at latest desk session (as_of).
+    """
+    if limit < 1:
+        raise ValueError("limit must be >= 1")
+    wins = tuple(sorted({int(w) for w in windows}))
+    if not wins or any(w < 1 for w in wins):
+        raise ValueError("windows must be >= 1")
+
+    if not flows:
+        return {w: () for w in wins}
+
+    dates = desk_session_dates(flows)
+    by_ticker_date: dict[str, dict[date, BrokerDailyFlow]] = {}
+    for f in flows:
+        t = f.ticker.upper()
+        by_ticker_date.setdefault(t, {})[f.date] = f
+
+    streaks = {t: desk_ticker_buy_streak(flows, t, session_dates=dates) for t in by_ticker_date}
+
+    out: dict[int, tuple[DeskTickerWindowCell, ...]] = {}
+    for w in wins:
+        chunk_dates = dates[-w:]
+        sessions_used = len(chunk_dates)
+        is_partial = sessions_used < w
+
+        cells: list[DeskTickerWindowCell] = []
+        for ticker, day_map in by_ticker_date.items():
+            rows = [day_map[d] for d in chunk_dates if d in day_map]
+            if not rows:
+                continue
+            net = sum((r.net_value for r in rows), Decimal("0"))
+            if net <= Decimal("0"):
+                continue
+            cells.append(
+                DeskTickerWindowCell(
+                    ticker=ticker,
+                    net_value=net,
+                    window=w,
+                    sessions_used=sessions_used,
+                    avg_buy_price=lot_weighted_avg_buy_price(rows),
+                    buy_streak=streaks.get(ticker, 0),
+                    is_partial=is_partial,
+                )
+            )
+        cells.sort(key=lambda c: c.net_value, reverse=True)
+        out[w] = tuple(cells[:limit])
+    return out

@@ -14,9 +14,11 @@ from __future__ import annotations
 import typer
 
 from src.adapters.cli.view_broker_desk_commands import (
+    broker_desk_calendar,
     broker_desk_flow,
     broker_desk_history,
     broker_desk_show,
+    broker_desk_top_matrix,
     broker_desk_top_stocks,
 )
 from src.adapters.cli.view_broker_list_commands import broker_list
@@ -28,7 +30,7 @@ broker_view_app = typer.Typer(
     name="broker",
     help=(
         "Desk-centric views and broker meta utilities.\n\n"
-        "Desk: `show|top-stocks|flow|history <CODE>` (tracked only).\n"
+        "Desk: `show|top-stocks|top-matrix|flow|calendar|history <CODE>` (tracked only).\n"
         "Universe: `top-foreign`. Meta: `status`, `mappings`, `list`.\n"
         "Stock broker deep-dives: `saham view ticker top-brokers|flow|…`."
     ),
@@ -38,7 +40,9 @@ broker_view_app = typer.Typer(
 
 broker_view_app.command("show")(broker_desk_show)
 broker_view_app.command("top-stocks")(broker_desk_top_stocks)
+broker_view_app.command("top-matrix")(broker_desk_top_matrix)
 broker_view_app.command("flow")(broker_desk_flow)
+broker_view_app.command("calendar")(broker_desk_calendar)
 broker_view_app.command("history")(broker_desk_history)
 broker_view_app.command("status")(broker_status)
 broker_view_app.command("top-foreign")(broker_top_foreign_view)

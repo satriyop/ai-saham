@@ -1,6 +1,7 @@
-"""Present-only Rich cell markup for TUI boards (design: tui-accum-board.html).
+"""Present-only Rich cell markup for TUI boards (OpenCode visual bible).
 
-No scoring, no IO. Maps plain board strings → night-ink chips / heat.
+No scoring, no IO. Maps plain board strings → OpenCode chips / heat.
+Tokens: docs/design/tui-cockpit-opencode.md (mock .app palette).
 
 Layer: Adapter
 """
@@ -11,22 +12,23 @@ from typing import Any
 
 from rich.text import Text
 
-# Night-ink tokens (match docs/design/tui-accum-board.html)
-_MINT = "#7ecfb8"
-_MINT_BG = "#14241c"
+# OpenCode semantic tokens
+_MINT = "#6fbf8a"
+_MINT_BG = "#121a14"
 _BRASS = "#d4b06a"
-_BRASS_BG = "#1a160e"
-_CORAL = "#e87a6e"
-_CORAL_BG = "#241414"
-_FOG = "#f0ebe3"
-_MIST = "#8b92a0"
-_ASH = "#5c6575"
-_TICKER = "#f4f0e8"
-_LIFT = "#182233"
+_BRASS_BG = "#1a1810"
+_CORAL = "#c97a72"
+_CORAL_BG = "#1a1212"
+_FOG = "#e8e8e8"
+_MIST = "#7a7a7a"
+_ASH = "#555555"
+_TICKER = "#e8e8e8"
+_LIFT = "#141414"
+_PEACH = "#c9a68a"
 
 
 def format_accum_board_cells(row: Any) -> tuple[Text | str, ...]:
-    """Cells for option-B desk columns (1:1 BOARD_COLUMN_LABELS order)."""
+    """Cells for accum board columns (1:1 BOARD_COLUMN_LABELS order)."""
     ticker = str(getattr(row, "ticker", "?") or "?")
     signal = str(getattr(row, "signal", "—") or "—")
     accum = str(getattr(row, "accum", "—") or "—")
@@ -74,7 +76,6 @@ def format_signal_cell(signal: str) -> Text:
 def signal_heat_band(signal: str) -> str:
     """Return hi|mid|lo|na from display string (not a re-score)."""
     try:
-        # allow "84" or "84.0"
         v = float(str(signal).replace(",", "").strip())
     except (TypeError, ValueError):
         return "na"
@@ -109,7 +110,6 @@ def format_gate_cell(gate: str) -> Text:
 
 def format_phase_cell(phase: str) -> Text:
     p = (phase or "—").strip() or "—"
-    # Short phase labels already from board fields; pill-like lift bg
     return Text(f" {p} ", style=f"{_MIST} on {_LIFT}")
 
 
@@ -138,7 +138,7 @@ def format_preopen_grade_cell(grade: str) -> Text:
     if u == "A":
         return Text(u, style=f"bold {_MINT}")
     if u == "B":
-        return Text(u, style="bold #8eb4d8")
+        return Text(u, style="bold #7aa2c4")
     if u == "C":
         return Text(u, style=f"bold {_BRASS}")
     return Text(g, style=_MIST)
@@ -184,7 +184,6 @@ def format_signed_flow_cell(value: str) -> Text:
         return Text(s, style=_MINT)
     if s.startswith("-") or s.startswith("−"):
         return Text(s, style=_CORAL)
-    # bare number with optional suffix
     cleaned = (
         s.replace(",", "")
         .replace("B", "")

@@ -35,7 +35,9 @@ REQUIRED_DUAL_SURFACE_JOB_IDS: frozenset[str] = frozenset(
         "view-broker-list",
         "view-broker-show",
         "view-broker-top-stocks",
+        "view-broker-top-matrix",
         "view-broker-flow",
+        "view-broker-calendar",
         "view-broker-history",
         "plan-swing-structure",
     }
@@ -125,7 +127,7 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         ),
         intentional_deltas=(
             "TUI may append stock-scoped pulse line on show body (presentation)",
-            "TUI t/f/h/v hub keys",
+            "TUI t/f/h/m/v hub keys",
         ),
     ),
     DualSurfaceJob(
@@ -136,7 +138,21 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         shared_application_path=(
             "ViewBrokerDeskTopStocksUseCase; format via format_desk_top_stocks_text"
         ),
-        intentional_deltas=("TUI plain text in detail stage vs CLI Rich table",),
+        intentional_deltas=("TUI BrokerTopDesk dual-heat widget vs CLI Rich table",),
+    ),
+    DualSurfaceJob(
+        job_id="view-broker-top-matrix",
+        product_name="View broker top-matrix",
+        cli_surface="saham view broker top-matrix",
+        tui_surface="m on desk hub",
+        shared_application_path=(
+            "ViewBrokerDeskTopMatrixUseCase; format via format_desk_top_matrix_text; "
+            "rank_desk_top_buy_matrix (net · lot-weighted avg buy · desk×ticker streak)"
+        ),
+        intentional_deltas=(
+            "TUI BrokerMatrixDesk widget vs CLI Rich multi-column table",
+            "Calendar (c) deferred — not this job",
+        ),
     ),
     DualSurfaceJob(
         job_id="view-broker-flow",
@@ -144,7 +160,18 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         cli_surface="saham view broker flow",
         tui_surface="f on desk hub",
         shared_application_path=("ViewBrokerDeskFlowUseCase; format via format_desk_flow_text"),
-        intentional_deltas=("TUI plain text in detail stage vs CLI Rich table",),
+        intentional_deltas=("TUI BrokerFlowDesk day-net table vs CLI Rich table",),
+    ),
+    DualSurfaceJob(
+        job_id="view-broker-calendar",
+        product_name="View broker calendar",
+        cli_surface="saham view broker calendar",
+        tui_surface="c on desk hub",
+        shared_application_path=(
+            "ViewBrokerDeskCalendarUseCase; format via format_desk_calendar_text; "
+            "build_desk_calendar_days (top stock · net · B/S)"
+        ),
+        intentional_deltas=("TUI BrokerCalendarDesk widget vs CLI Rich table",),
     ),
     DualSurfaceJob(
         job_id="view-broker-history",
@@ -154,7 +181,9 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         shared_application_path=(
             "ViewBrokerDeskHistoryUseCase; format via format_desk_history_text"
         ),
-        intentional_deltas=("TUI plain text row-capped; CLI may show fuller Rich table",),
+        intentional_deltas=(
+            "TUI BrokerHistoryDesk row-capped widget; CLI may show fuller Rich table",
+        ),
     ),
     DualSurfaceJob(
         job_id="plan-swing-structure",

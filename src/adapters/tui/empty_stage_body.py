@@ -88,13 +88,13 @@ def _is_zero_candidate_screen(title: str, meta: str, kind: str) -> bool:
 
 def _true_empty_cache(*, fetch_cue: str) -> str:
     return (
-        "[bold #e87a6e]POSTER · EMPTY CACHE[/]\n"
-        "[bold #f0ebe3]No local market data[/]\n\n"
+        "[bold #c97a72]SESSION HEALTH · EMPTY[/]\n"
+        "[bold #e8e8e8]No local market data[/]\n\n"
         "Nothing on disk for this session. Screens refuse to invent candidates.\n"
         "Cockpit refuses to invent rows when cache is empty.\n"
         "Online only if you ask.\n\n"
         f"[#d4b06a]Next[/]  [bold]{fetch_cue}[/]\n\n"
-        "[#5c6575]What this protects[/]\n"
+        "[#555555]What this protects[/]\n"
         "· No silent network on open\n"
         "· Fetch is explicit · same as CLI\n"
         "· Empty cache refuses invented rows"
@@ -104,7 +104,7 @@ def _true_empty_cache(*, fetch_cue: str) -> str:
 def _lag_poster(*, fetch_cue: str) -> str:
     return (
         "[bold #d4b06a]POSTER · LAG[/]\n"
-        "[bold #f0ebe3]Local cache lagging[/]\n\n"
+        "[bold #e8e8e8]Local cache lagging[/]\n\n"
         "Candle and broker dates disagree or trail the session.\n"
         "Board may still show rows later — do not pretend ready.\n\n"
         f"[#d4b06a]Next[/]  Explicit fetch only if deliberate · {fetch_cue}\n"
@@ -115,8 +115,8 @@ def _lag_poster(*, fetch_cue: str) -> str:
 
 def _ready_poster(*, fetch_cue: str) -> str:
     return (
-        "[bold #7ecfb8]POSTER · READY[/]\n"
-        "[bold #f0ebe3]Local cache ready[/]\n\n"
+        "[bold #6fbf8a]POSTER · READY[/]\n"
+        "[bold #e8e8e8]Local cache ready[/]\n\n"
         "Dates present and aligned on the Session rail.\n"
         "This empty stage means no board row set is open right now —\n"
         "not that SQLite is empty.\n\n"
@@ -151,7 +151,7 @@ def _zero_candidate_body(*, status: str | None, fetch_cue: str, kind: str) -> st
 
     return (
         f"[bold #8eb4d8]POSTER · ZERO CANDIDATES[/]\n"
-        f"[bold #f0ebe3]No {kind} candidates[/]\n\n"
+        f"[bold #e8e8e8]No {kind} candidates[/]\n\n"
         f"{lag_line}"
         "The screen ran against local data and returned [bold]0 names[/].\n"
         "That is a real result — not missing market data and not invented rows.\n\n"
@@ -166,15 +166,15 @@ def _zero_candidate_body(*, status: str | None, fetch_cue: str, kind: str) -> st
 def _preopen_empty(*, status: str | None, fetch_cue: str) -> str:
     if status == "empty":
         return (
-            "[bold #e87a6e]POSTER · NO IEV SNAPSHOT[/]\n"
-            "[bold #f0ebe3]No pre-open snapshot[/]\n\n"
+            "[bold #c97a72]POSTER · NO IEV SNAPSHOT[/]\n"
+            "[bold #e8e8e8]No pre-open snapshot[/]\n\n"
             "Local IEV / NCP data is missing. Pre-open cannot invent IEP rows.\n\n"
             f"[#d4b06a]Next[/]  explicit fetch iev (CLI/palette) · {fetch_cue}\n\n"
             "[dim]Never silent network on open.[/]"
         )
     return (
         "[bold #8eb4d8]POSTER · NO IEP CANDIDATES[/]\n"
-        "[bold #f0ebe3]No IEP candidates[/]\n\n"
+        "[bold #e8e8e8]No IEP candidates[/]\n\n"
         "Pre-open read local IEV snapshot and found nothing to grade,\n"
         "or the snapshot has no names for this session.\n\n"
         "[#d4b06a]Try[/]\n"
@@ -188,7 +188,7 @@ def _preopen_empty(*, status: str | None, fetch_cue: str) -> str:
 def _broker_empty() -> str:
     return (
         "[bold #a89cc9]POSTER · NO DESKS[/]\n"
-        "[bold #f0ebe3]No broker desks to list[/]\n\n"
+        "[bold #e8e8e8]No broker desks to list[/]\n\n"
         "View broker has no tracked desks in config, or none matched filters.\n"
         "This is not the same as empty market candles.\n\n"
         "[#d4b06a]Try[/]\n"
@@ -200,8 +200,8 @@ def _broker_empty() -> str:
 
 def _unknown_health(*, fetch_cue: str) -> str:
     return (
-        "[bold #5c6575]POSTER · HEALTH UNKNOWN[/]\n"
-        "[bold #f0ebe3]Empty board · cache health unknown[/]\n\n"
+        "[bold #555555]POSTER · HEALTH UNKNOWN[/]\n"
+        "[bold #e8e8e8]Empty board · cache health unknown[/]\n\n"
         "Could not read local candle/broker dates. Refusing to invent rows.\n\n"
         f"[#d4b06a]Next[/]  {fetch_cue} · or check DB path / lock\n\n"
         "[dim]Local-first · no silent network.[/]"

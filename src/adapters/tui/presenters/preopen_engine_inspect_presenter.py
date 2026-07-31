@@ -1,9 +1,7 @@
 """Present-only Enter inspect for pre-open board rows.
 
-Renders Snapshot / Levels / Auction / Data from the board row — no engine
-re-run, no network, no invented Signal/Accum/setup family.
-
-Grade and Risk are taken from the row (board-identical), never recomputed.
+Text scrapers use this module; visual paint uses PreopenInspectDesk.
+Grade and Risk are taken from the board row — never recomputed.
 
 Layer: Adapter (pure display)
 """
@@ -12,15 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.adapters.tui.presenters.preopen_presenter import (
-    PreOpenRowView,
-    format_preopen_why,
-)
+from src.adapters.tui.presenters.preopen_presenter import PreOpenRowView
 
 
 @dataclass(frozen=True)
 class PreOpenEngineInspectView:
-    """Plain multi-section inspect text for the detail stage."""
+    """Plain multi-section inspect text for scrapers / detail_text."""
 
     text: str
     ticker: str
@@ -35,83 +30,48 @@ def present_preopen_engine_inspect(
     board_meta: str = "",
     warnings: tuple[str, ...] = (),
 ) -> PreOpenEngineInspectView:
-    """Build structured inspect view from board row (present-only)."""
-    ticker = str(getattr(row, "ticker", "?") or "?")
-    grade = str(getattr(row, "grade", "—") or "—")
-    risk = str(getattr(row, "risk", "—") or "—")
-    why = format_preopen_why(row) or "—"
+    """Build structured inspect text from board row (present-only)."""
+    from src.adapters.tui.preopen_inspect_model import build_preopen_inspect_model
 
+    model = build_preopen_inspect_model(
+        row,
+        rank=rank,
+        total=total,
+        snapshot_date=snapshot_date,
+        board_meta=board_meta,
+        warnings=warnings,
+    )
+    ticker = model.ticker
     lines: list[str] = [
         f"[bold #e8e8e8]Screen · pre-open · {ticker}[/]",
-        f"#{rank}/{total}",
+        f"#{model.rank}/{model.total}",
     ]
-    if board_meta:
-        lines.append(f"[dim]Board[/]  {board_meta}")
+    if model.board_meta:
+        lines.append(f"[dim]Board[/]  {model.board_meta}")
     lines.append("")
     lines.append("[#d4b06a]Snapshot[/]")
-    lines.append(f"  grade {grade} · risk {risk}")
-    lines.append(f"  ← Why: {why}")
+    lines.append(f"  grade {model.grade} · risk {model.risk}")
+    lines.append(f"  ← Why: {model.why}")
     lines.append("")
-    lines.extend(_section_levels(row))
+    lines.append("[#9b8fb8]Levels[/]")
+    lines.append(f"  IEP {model.iep} · Δ% {model.delta_pct} · IEV {model.iev}")
+    lines.append(f"  NCP {model.ncp} · ΔIEV {model.delta_iev}")
     lines.append("")
-    lines.extend(_section_auction(row))
+    lines.append("[#9b8fb8]Auction / broker[/]")
+    for ln in model.auction_lines:
+        lines.append(f"  {ln}")
     lines.append("")
-    lines.extend(_section_data(snapshot_date=snapshot_date, warnings=warnings))
+    lines.append("[#9b8fb8]Data[/]")
+    for ln in model.data_lines:
+        lines.append(f"  {ln}")
+    if model.warn_lines:
+        lines.append("")
+        lines.append("[#9b8fb8]Warn[/]")
+        for ln in model.warn_lines:
+            lines.append(f"  {ln}")
     lines.append("")
-    lines.extend(_section_notes())
+    lines.append("[#9b8fb8]Flags[/]  why · auction+ · warn · d detail")
     lines.append("")
-    lines.append("[dim]esc back · p plan · Ctrl+P · present-only (same object as board)[/]")
+    lines.append("[dim]esc back · p plan · Ctrl+P · d detail[/]")
 
     return PreOpenEngineInspectView(text="\n".join(lines), ticker=ticker)
-
-
-def _section_levels(row: PreOpenRowView) -> list[str]:
-    return [
-        "[#9b8fb8]Levels[/]",
-        (
-            f"  IEP {getattr(row, 'iep', '—')} · Δ% {getattr(row, 'delta_pct', '—')} · "
-            f"IEV {getattr(row, 'iev', '—')}"
-        ),
-        f"  NCP {getattr(row, 'ncp', '—')} · ΔIEV {getattr(row, 'delta_iev', '—')}",
-    ]
-
-
-def _section_auction(row: PreOpenRowView) -> list[str]:
-    lines = ["[#9b8fb8]Auction / broker[/]"]
-    source = getattr(row, "source", None)
-    if source is None:
-        lines.append("  not on this row")
-        return lines
-    trend = getattr(source, "trend_signal", None) or "—"
-    tag = getattr(source, "opening_broker_backing_tag", None) or "—"
-    score = getattr(source, "opening_broker_backing_score", None)
-    streak = getattr(source, "opening_broker_buy_streak", None)
-    lines.append(f"  trend {trend} · broker {tag}")
-    extra: list[str] = []
-    if score is not None:
-        extra.append(f"backing_score {score}")
-    if streak is not None:
-        extra.append(f"buy_streak {streak}")
-    if extra:
-        lines.append(f"  {' · '.join(extra)}")
-    return lines
-
-
-def _section_data(*, snapshot_date: str, warnings: tuple[str, ...]) -> list[str]:
-    lines = ["[#9b8fb8]Data[/]"]
-    snap = snapshot_date.strip() if snapshot_date else ""
-    lines.append(f"  snapshot {snap if snap else '—'}")
-    lines.append("  path local IEV NCP snapshot (TUI pre-open board)")
-    if warnings:
-        for w in warnings[:4]:
-            lines.append(f"  warning: {w}")
-    return lines
-
-
-def _section_notes() -> list[str]:
-    return [
-        "[#9b8fb8]Notes[/]",
-        "  present-only · no engine re-run on Enter",
-        "  full pre-open workflow risk/MCE may be absent on this snapshot path",
-        "  never invents Signal / Accum / setup family",
-    ]

@@ -48,7 +48,9 @@ def test_criterion1_named_jobs_present():
         "view-broker-list",
         "view-broker-show",
         "view-broker-top-stocks",
+        "view-broker-top-matrix",
         "view-broker-flow",
+        "view-broker-calendar",
         "view-broker-history",
         "plan-swing-structure",
     ):

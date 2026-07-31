@@ -63,6 +63,10 @@ def test_broker_hub_deep_and_esc_trail():
             pages.append(("history", code))
             return f"HIST_BODY_{code}"
 
+        def matrix_loader(code: str) -> str:
+            pages.append(("matrix", code))
+            return f"MATRIX_BODY_{code}"
+
         viewed: list[str] = []
 
         def ticker_loader(ticker: str) -> str:
@@ -78,6 +82,7 @@ def test_broker_hub_deep_and_esc_trail():
             broker_top_loader=top_loader,
             broker_flow_loader=flow_loader,
             broker_history_loader=hist_loader,
+            broker_matrix_loader=matrix_loader,
             ticker_detail_loader=ticker_loader,
         )
         async with app.run_test(size=(120, 40)) as pilot:
@@ -132,13 +137,28 @@ def test_broker_hub_deep_and_esc_trail():
                     break
             assert "HIST_BODY_AK" in app._detail_text
 
+            app.action_broker_matrix()
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._broker_page == "matrix":
+                    break
+            assert "MATRIX_BODY_AK" in app._detail_text
+
+            await pilot.press("escape")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._broker_page == "show":
+                    break
+            assert app._broker_page == "show"
+
             app.action_broker_jump_ticker()
             for _ in range(40):
                 await pilot.pause(0.05)
                 if viewed:
                     break
             assert viewed == ["BBRI"]
-            assert "View · ticker show · BBRI" in app._board_title
+            assert "BBRI" in app._board_title
+            assert "ticker" in app._board_title.lower()
             assert app._view_from_desk is True
 
             await pilot.press("escape")

@@ -138,7 +138,24 @@ def test_cockpit_judge_shows_judge_desk_widget_not_only_stage_body():
             assert "action-watch" in action or "WATCH" in action
             classes = set(app.query_one("#jd-action").classes)
             assert "action-watch" in classes or "verdict-action" in classes
+            # Compact: phase timeline is primary; decision stack waits for d
+            assert app._judge_detail_open is False
+            assert app.query_one("#jd-phase").display is True
+            assert app.query_one("#jd-decision").display is False
+            # Flag chip row (mock judgeFlags)
+            flags = app.query_one("#jd-flags")
+            assert flags.display is not False
+            detail_chip = app.query_one("#jd-flag-detail")
+            assert "detail · d" in str(detail_chip.content)
+            assert "is-on" not in detail_chip.classes
+            assert "is-dim" not in detail_chip.classes  # available, collapsed
             phase_arrow = str(app.query_one("#jd-phase-arrow").render())
-            assert "ACCUMULATION" in phase_arrow or "→" in phase_arrow
+            assert "ACCUMULATION" in phase_arrow or "→" in phase_arrow or phase_arrow.strip()
+            app.action_toggle_detail()
+            await pilot.pause(0.1)
+            assert app._judge_detail_open is True
+            assert app.query_one("#jd-decision").display is True
+            assert "is-on" in app.query_one("#jd-flag-detail").classes
+            assert "is-on" in app.query_one("#jd-flag-phase_plus").classes
 
     asyncio.run(scenario())

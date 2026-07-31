@@ -65,9 +65,7 @@ def present_plan_stage(
     lines.extend(structure_lines(struct, running=running))
 
     lines.append("")
-    lines.append(
-        "[dim]esc board · p re-run · l paper log · CLI: plan swing · trade accum log --from-plan[/]"
-    )
+    lines.append("[dim]esc board · p re-run · l paper log · no broker order · structure only[/]")
     return PlanStageView(text="\n".join(lines), ticker=ticker)
 
 

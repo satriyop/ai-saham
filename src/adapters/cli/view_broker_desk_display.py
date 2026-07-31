@@ -16,12 +16,15 @@ from rich.text import Text
 
 from src.adapters.shared.view_broker_desk_text import (
     format_broker_list_text,
+    format_desk_calendar_text,
     format_desk_flow_text,
     format_desk_history_text,
     format_desk_show_text,
+    format_desk_top_matrix_text,
     format_desk_top_stocks_text,
 )
 from src.adapters.shared.view_number_format import format_value
+from src.adapters.shared.view_ticker_top_brokers_rows import format_netx_display
 from src.domain.entities.broker_flow import BrokerType
 
 __all__ = [
@@ -29,12 +32,16 @@ __all__ = [
     "format_desk_show_text",
     "format_broker_list_text",
     "format_desk_top_stocks_text",
+    "format_desk_top_matrix_text",
     "format_desk_flow_text",
     "format_desk_history_text",
+    "format_desk_calendar_text",
     "display_desk_show",
     "display_desk_top_stocks",
+    "display_desk_top_matrix",
     "display_desk_flow",
     "display_desk_history",
+    "display_desk_calendar",
 ]
 
 
@@ -88,6 +95,62 @@ def display_desk_top_stocks(result) -> None:
     _print_stock_side(c, "Net sell (desk)", result.top_sell_stocks, "red")
 
 
+def display_desk_top_matrix(result) -> None:
+    """Rich multi-window top-5 net-buy matrix (CLI)."""
+    c = Console()
+    c.print("")
+    header = Text()
+    header.append(f"{result.broker_code} ", style="bold cyan")
+    header.append(f"({result.broker_name}) · {_type_label(result.broker_type)}")
+    header.append(f" · as of {result.as_of}")
+    header.append(f" · sessions {result.sessions_cached}")
+    header.append("\n")
+    header.append(result.scope_note, style="yellow")
+    header.append("\n")
+    header.append("ticker · streak · net · avg buy  (* partial window)", style="dim")
+    c.print(
+        Panel(
+            header,
+            title="[bold]Desk Top Matrix[/bold]",
+            border_style="cyan",
+            expand=False,
+        )
+    )
+    wins = tuple(result.windows)
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("#", justify="right", style="dim")
+    for w in wins:
+        table.add_column(f"{w}s", justify="left")
+    max_rows = max((len(result.columns.get(w) or ()) for w in wins), default=0)
+    if max_rows == 0:
+        c.print("[dim]— no net-buy names in windows[/]")
+        return
+    for rank in range(max_rows):
+        cells: list[str] = [str(rank + 1)]
+        for w in wins:
+            col = result.columns.get(w) or ()
+            if rank >= len(col):
+                cells.append("—")
+                continue
+            cell = col[rank]
+            net_s = format_netx_display(
+                cell.net_value,
+                sessions_used=cell.sessions_used,
+                window=cell.window,
+            )
+            if cell.avg_buy_price is None:
+                avg_s = "—"
+            elif cell.avg_buy_price == cell.avg_buy_price.to_integral_value():
+                avg_s = f"@ {int(cell.avg_buy_price):,}"
+            else:
+                avg_s = f"@ {cell.avg_buy_price:,.2f}"
+            cells.append(
+                f"[cyan]{cell.ticker}[/] [bold]{cell.buy_streak}s[/]\n[green]{net_s}[/] {avg_s}"
+            )
+        table.add_row(*cells)
+    c.print(table)
+
+
 def _print_stock_side(c: Console, title: str, rows, color: str) -> None:
     c.print(f"\n[bold {color}]{title}[/bold {color}]")
     table = Table(show_header=True, header_style="bold magenta")
@@ -124,6 +187,44 @@ def display_desk_flow(result) -> None:
             day.date.isoformat(),
             f"[{style}]{format_value(day.net_value)}[/{style}]",
             f"{day.net_lot:,}",
+            str(day.ticker_count),
+        )
+    c.print(table)
+
+
+def display_desk_calendar(result) -> None:
+    """Rich desk session calendar (CLI)."""
+    c = Console()
+    c.print("")
+    header = Text()
+    header.append(f"{result.broker_code} ", style="bold cyan")
+    header.append(f"({result.broker_name}) · {_type_label(result.broker_type)}")
+    header.append(f" · as of {result.as_of} · sessions {result.sessions_cached}")
+    header.append("\n")
+    header.append(result.scope_note, style="yellow")
+    c.print(
+        Panel(
+            header,
+            title="[bold]Desk Calendar[/bold]",
+            border_style="cyan",
+            expand=False,
+        )
+    )
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Date", style="cyan")
+    table.add_column("Top")
+    table.add_column("Net", justify="right")
+    table.add_column("Buy", justify="right")
+    table.add_column("Sell", justify="right")
+    table.add_column("#", justify="right")
+    for day in result.days:
+        style = "green" if day.net_value > 0 else "red"
+        table.add_row(
+            day.date.isoformat(),
+            day.top_ticker or "—",
+            f"[{style}]{format_value(day.net_value)}[/{style}]",
+            format_value(day.buy_value),
+            format_value(day.sell_value),
             str(day.ticker_count),
         )
     c.print(table)

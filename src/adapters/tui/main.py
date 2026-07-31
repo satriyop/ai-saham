@@ -17,7 +17,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.timer import Timer
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable, Input, Static
 
 from src.adapters.tui.board_load_policy import (
     recomputing_status_note,
@@ -75,9 +75,15 @@ class CockpitApp(App[None]):
         Binding("t", "broker_top", "Desk top", show=False),
         Binding("f", "broker_flow", "Desk flow", show=False),
         Binding("h", "broker_history", "Desk history", show=False),
+        Binding("m", "broker_matrix", "Desk matrix", show=False),
+        Binding("c", "broker_calendar", "Desk calendar", show=False),
         # `v` is chord prefix off desk hub (v t / v b); on desk hub = jump ticker
         # (handled in on_key so prefix chords do not fight single-key v).
         Binding("b", "ticker_desks", "Ticker→desks", show=False),
+        Binding("d", "toggle_detail", "Detail", show=False),
+        # Prompt rail focus (OpenCode chrome · non-Action)
+        Binding("colon", "focus_prompt", "Prompt", show=False),
+        Binding("slash", "focus_prompt", "Prompt", show=False),
         # Note: plain ``j`` is cursor_down on the board (vim). Re-judge is
         # handled in on_key only when stage=detail + judge (see action_rejudge).
         Binding("q", "quit", "Quit", show=True),
@@ -111,6 +117,8 @@ class CockpitApp(App[None]):
         broker_top_loader: Callable[[str], Any] | None = None,
         broker_flow_loader: Callable[[str], Any] | None = None,
         broker_history_loader: Callable[[str], Any] | None = None,
+        broker_matrix_loader: Callable[[str], Any] | None = None,
+        broker_calendar_loader: Callable[[str], Any] | None = None,
         ticker_desks_loader: Callable[[str], Any] | None = None,
         accum_controller: Any | None = None,
         preopen_controller: Any | None = None,
@@ -135,6 +143,8 @@ class CockpitApp(App[None]):
         self._broker_top_loader = broker_top_loader
         self._broker_flow_loader = broker_flow_loader
         self._broker_history_loader = broker_history_loader
+        self._broker_matrix_loader = broker_matrix_loader
+        self._broker_calendar_loader = broker_calendar_loader
         self._ticker_desks_loader = ticker_desks_loader
         self._ticker_judge_loader = ticker_judge_loader
         self._cache_health_loader = cache_health_loader
@@ -156,8 +166,18 @@ class CockpitApp(App[None]):
         self._detail_return_stage: DetailReturnStage = "shell"
         self._broker_list_return: DetailReturnStage = "shell"
         self._broker_desk_code: str | None = None
-        self._broker_page: str | None = None  # list|show|top|flow|history|None
+        self._broker_page: str | None = None  # list|show|top|flow|history|matrix|cal|None
         self._broker_jump_ticker: str | None = None
+        self._broker_desk_home_model: Any | None = None
+        self._broker_desk_matrix_model: Any | None = None
+        self._broker_desk_top_model: Any | None = None
+        self._broker_desk_flow_model: Any | None = None
+        self._broker_desk_history_model: Any | None = None
+        self._broker_desk_calendar_model: Any | None = None
+        self._ticker_detail_open: bool = False
+        self._judge_detail_open: bool = False
+        self._preopen_detail_open: bool = False
+        self._prompt_mode: str = "idle"  # idle | agent | cli (display only)
         self._view_from_desk: bool = False
         self._desk_entry: str | None = None  # broker-list | ticker-desks
         self._ticker_desks_stock: str | None = None  # stock for ticker→desks page
@@ -183,6 +203,7 @@ class CockpitApp(App[None]):
         self._plan_structure: Any | None = None
         self._plan_running: bool = False
         self._paper_outcome: str = ""
+        self._paper_tape: list[Any] = []
         self._ticker_desk_model: Any | None = None
         self._chord_prefix: str | None = None
         self._chord_timer: Timer | None = None
@@ -209,6 +230,17 @@ class CockpitApp(App[None]):
                 with Vertical(id="stage"):
                     with VerticalScroll(id="stage-scroll"):
                         yield Static(self._shell_body(), id="stage-body")
+                        from src.adapters.tui.widgets.broker_desk import BrokerDesk
+                        from src.adapters.tui.widgets.broker_flow_desk import (
+                            BrokerFlowDesk,
+                        )
+                        from src.adapters.tui.widgets.broker_history_desk import (
+                            BrokerHistoryDesk,
+                        )
+                        from src.adapters.tui.widgets.broker_matrix_desk import (
+                            BrokerMatrixDesk,
+                        )
+                        from src.adapters.tui.widgets.broker_top_desk import BrokerTopDesk
                         from src.adapters.tui.widgets.judge_desk import JudgeDesk
                         from src.adapters.tui.widgets.plan_desk import PlanDesk
                         from src.adapters.tui.widgets.ticker_desk import TickerDesk
@@ -216,9 +248,56 @@ class CockpitApp(App[None]):
                         yield JudgeDesk(id="judge-desk")
                         yield PlanDesk(id="plan-desk")
                         yield TickerDesk(id="ticker-desk")
+                        yield BrokerDesk(id="broker-desk")
+                        yield BrokerMatrixDesk(id="broker-matrix-desk")
+                        yield BrokerTopDesk(id="broker-top-desk")
+                        from src.adapters.tui.widgets.broker_calendar_desk import (
+                            BrokerCalendarDesk,
+                        )
+
+                        yield BrokerFlowDesk(id="broker-flow-desk")
+                        yield BrokerHistoryDesk(id="broker-history-desk")
+                        yield BrokerCalendarDesk(id="broker-calendar-desk")
+                        from src.adapters.tui.widgets.preopen_inspect_desk import (
+                            PreopenInspectDesk,
+                        )
+
+                        yield PreopenInspectDesk(id="preopen-inspect-desk")
+                        from src.adapters.tui.widgets.flag_chip import FlagChip
+                        from src.adapters.tui.widgets.health_poster_desk import (
+                            HealthPosterDesk,
+                        )
+                        from src.adapters.tui.widgets.paper_desk import PaperDesk
+
+                        yield PaperDesk(id="paper-desk")
+                        yield HealthPosterDesk(id="health-poster-desk")
+                    # Mock src-badge (snapshot|live) above dense board table
+                    yield Static("", id="board-source-badge", classes="hide")
+                    # Broker list flag chips (real chips, not one Static line)
+                    with Horizontal(id="board-flag-row", classes="board-flag-row"):
+                        yield Static("List", id="board-flag-lab")
+                        yield FlagChip(
+                            "partial_net",
+                            "partial_net",
+                            id="board-flag-partial_net",
+                            classes="is-dim",
+                        )
+                        yield FlagChip(
+                            "from_ticker",
+                            "from_ticker",
+                            id="board-flag-from_ticker",
+                            classes="is-dim",
+                        )
                     yield DataTable(id="board-table")
                     yield Static("", id="evidence-strip")
                     yield Static(self._footer_hint(), id="board-footer")
+                    with Horizontal(id="prompt-rail"):
+                        yield Static("›", id="prompt-affordance")
+                        yield Input(
+                            placeholder="prompt · idle · not Action · : or / to focus",
+                            id="prompt-input",
+                        )
+                        yield Static("idle", id="prompt-mode")
             with Vertical(id="sidebar"):
                 yield Static("Session", classes="side-title first")
                 yield Static("Market   IDX", classes="side-line")
@@ -284,6 +363,55 @@ class CockpitApp(App[None]):
             return snapshot_mode_label()
         return f"● {self._mode}"
 
+    def _paint_board_source_badge(self) -> None:
+        """Mock ``src-badge`` above the accum board (snapshot|live). Hidden elsewhere."""
+        from src.adapters.tui.chrome_cues import (
+            accum_source_badge_kind,
+            accum_source_badge_text,
+        )
+
+        badge = self.query_one("#board-source-badge", Static)
+        badge.remove_class("snap")
+        badge.remove_class("live")
+        if self._stage != "accum":
+            badge.update("")
+            badge.display = False
+            return
+        text = accum_source_badge_text(
+            board_source=self._board_source,
+            recomputing=self._recomputing,
+        )
+        kind = accum_source_badge_kind(board_source=self._board_source)
+        if not text or kind == "hide":
+            badge.update("")
+            badge.display = False
+            return
+        badge.update(text)
+        badge.display = True
+        badge.add_class(kind)
+
+    def _paint_board_flag_row(self) -> None:
+        """Broker list flag chips (bible: partial_net · from_ticker)."""
+        from src.adapters.tui.widgets.flag_chip import FlagChip
+
+        try:
+            row = self.query_one("#board-flag-row", Horizontal)
+            partial_chip = self.query_one("#board-flag-partial_net", FlagChip)
+            from_chip = self.query_one("#board-flag-from_ticker", FlagChip)
+        except Exception:
+            return
+        if self._stage in {"broker-list", "ticker-desks"}:
+            partial = any(
+                bool(getattr(r, "has_partial_netx", False) or getattr(r, "partial_net", False))
+                for r in (self._broker_rows or [])
+            )
+            from_ticker = bool(self._ticker_desks_stock) or self._stage == "ticker-desks"
+            partial_chip.set_chip_state(available=True, expanded=partial, warn=partial)
+            from_chip.set_chip_state(available=True, expanded=from_ticker)
+            row.display = True
+            return
+        row.display = False
+
     def _status_text(self) -> str:
         mode = "recomputing" if self._recomputing else self._mode
         if self._board_source == "snapshot" and not self._recomputing and self._stage == "accum":
@@ -348,17 +476,19 @@ class CockpitApp(App[None]):
             "top",
             "flow",
             "history",
+            "matrix",
         }:
             return (
-                "↑↓ scroll · t top · f flow · h history · v view ticker · esc desk trail · Ctrl+P"
+                "↑↓ scroll · t top · f flow · c cal · h history · m matrix · "
+                "v view ticker · esc desk trail · Ctrl+P"
             )
         if self._stage == "detail" and self._status_note == "view ticker":
-            return "↑↓/PgUp/PgDn scroll · b top desks · esc back · p plan · Ctrl+P"
+            return "↑↓/PgUp/PgDn scroll · d detail · b top desks · esc back · p plan · Ctrl+P"
         if self._stage == "detail" and self._status_note in {"judge", "re-judging"}:
             if self._judge_limited:
                 return (
-                    "↑↓ scroll · j re-judge local · r live board · p plan · esc · Ctrl+P  ·  "
-                    "limited judge (snapshot / no candidate) · j or r for full desk"
+                    "↑↓ scroll · d detail · j re-judge local · r live board · p plan · "
+                    "esc · Ctrl+P  ·  limited judge · j or r for full desk"
                 )
             return (
                 "↑↓ scroll · j re-judge local · p plan · esc board · Ctrl+P  ·  "
@@ -416,20 +546,127 @@ class CockpitApp(App[None]):
         except Exception:
             pass
 
+    def _hide_broker_desk(self) -> None:
+        try:
+            desk = self.query_one("#broker-desk")
+            desk.display = False
+        except Exception:
+            pass
+
+    def _hide_broker_matrix_desk(self) -> None:
+        try:
+            desk = self.query_one("#broker-matrix-desk")
+            desk.display = False
+        except Exception:
+            pass
+
+    def _hide_broker_top_desk(self) -> None:
+        try:
+            desk = self.query_one("#broker-top-desk")
+            desk.display = False
+        except Exception:
+            pass
+
+    def _hide_broker_flow_desk(self) -> None:
+        try:
+            desk = self.query_one("#broker-flow-desk")
+            desk.display = False
+        except Exception:
+            pass
+
+    def _hide_broker_history_desk(self) -> None:
+        try:
+            desk = self.query_one("#broker-history-desk")
+            desk.display = False
+        except Exception:
+            pass
+
+    def _hide_broker_calendar_desk(self) -> None:
+        try:
+            desk = self.query_one("#broker-calendar-desk")
+            desk.display = False
+        except Exception:
+            pass
+
+    def _hide_preopen_inspect_desk(self) -> None:
+        try:
+            desk = self.query_one("#preopen-inspect-desk")
+            desk.display = False
+        except Exception:
+            pass
+
+    def _hide_paper_desk(self) -> None:
+        try:
+            self.query_one("#paper-desk").display = False
+        except Exception:
+            pass
+
+    def _hide_health_poster_desk(self) -> None:
+        try:
+            self.query_one("#health-poster-desk").display = False
+        except Exception:
+            pass
+
     def _hide_instrument_desks(self) -> None:
         self._hide_judge_desk()
         self._hide_plan_desk()
         self._hide_ticker_desk()
+        self._hide_broker_desk()
+        self._hide_broker_matrix_desk()
+        self._hide_broker_top_desk()
+        self._hide_broker_flow_desk()
+        self._hide_broker_history_desk()
+        self._hide_broker_calendar_desk()
+        self._hide_preopen_inspect_desk()
+        self._hide_paper_desk()
+        self._hide_health_poster_desk()
 
     def _paint_detail_stage(self, *, body: Static, scroll: VerticalScroll) -> None:
-        """Detail stage: Judge / ticker visual desks; text body otherwise."""
+        """Detail stage: Judge / ticker / broker visual desks; text body otherwise."""
+        from src.adapters.tui.widgets.broker_calendar_desk import BrokerCalendarDesk
+        from src.adapters.tui.widgets.broker_desk import BrokerDesk
+        from src.adapters.tui.widgets.broker_flow_desk import BrokerFlowDesk
+        from src.adapters.tui.widgets.broker_history_desk import BrokerHistoryDesk
+        from src.adapters.tui.widgets.broker_matrix_desk import BrokerMatrixDesk
+        from src.adapters.tui.widgets.broker_top_desk import BrokerTopDesk
         from src.adapters.tui.widgets.judge_desk import JudgeDesk
+        from src.adapters.tui.widgets.preopen_inspect_desk import PreopenInspectDesk
         from src.adapters.tui.widgets.ticker_desk import TickerDesk
 
         is_judge = self._status_note in {"judge", "re-judging"} and (
             self._board_kind == "accum" or self._detail_return_stage == "accum"
         )
+        is_preopen_inspect = self._status_note == "inspect" and (
+            self._board_kind == "preopen" or self._detail_return_stage == "preopen"
+        )
         is_view_ticker = self._status_note == "view ticker"
+        desk_code = self._broker_desk_code is not None
+        is_broker_home = self._broker_page == "show" and desk_code
+        is_broker_matrix = self._broker_page == "matrix" and desk_code
+        is_broker_top = self._broker_page == "top" and desk_code
+        is_broker_flow = self._broker_page == "flow" and desk_code
+        is_broker_history = self._broker_page == "history" and desk_code
+        is_broker_cal = self._broker_page == "cal" and desk_code
+
+        def _hide_except(*keep: str) -> None:
+            self._hide_judge_desk()
+            self._hide_plan_desk()
+            if "ticker" not in keep:
+                self._hide_ticker_desk()
+            if "broker" not in keep:
+                self._hide_broker_desk()
+            if "matrix" not in keep:
+                self._hide_broker_matrix_desk()
+            if "top" not in keep:
+                self._hide_broker_top_desk()
+            if "flow" not in keep:
+                self._hide_broker_flow_desk()
+            if "history" not in keep:
+                self._hide_broker_history_desk()
+            if "cal" not in keep:
+                self._hide_broker_calendar_desk()
+            if "preopen" not in keep:
+                self._hide_preopen_inspect_desk()
 
         try:
             judge = self.query_one("#judge-desk", JudgeDesk)
@@ -439,22 +676,80 @@ class CockpitApp(App[None]):
             ticker_desk = self.query_one("#ticker-desk", TickerDesk)
         except Exception:
             ticker_desk = None
+        try:
+            broker_desk = self.query_one("#broker-desk", BrokerDesk)
+        except Exception:
+            broker_desk = None
+        try:
+            matrix_desk = self.query_one("#broker-matrix-desk", BrokerMatrixDesk)
+        except Exception:
+            matrix_desk = None
+        try:
+            top_desk = self.query_one("#broker-top-desk", BrokerTopDesk)
+        except Exception:
+            top_desk = None
+        try:
+            flow_desk = self.query_one("#broker-flow-desk", BrokerFlowDesk)
+        except Exception:
+            flow_desk = None
+        try:
+            history_desk = self.query_one("#broker-history-desk", BrokerHistoryDesk)
+        except Exception:
+            history_desk = None
+        try:
+            calendar_desk = self.query_one("#broker-calendar-desk", BrokerCalendarDesk)
+        except Exception:
+            calendar_desk = None
 
         if is_judge and judge is not None:
             row = self._rows[self._row_index] if self._rows else None
             if row is not None and self._is_accum_row(row):
                 model = self._build_judge_model(row)
                 body.display = False
-                self._hide_plan_desk()
-                self._hide_ticker_desk()
+                _hide_except()
                 judge.display = True
-                judge.paint(model)
-                # Keep text for tests / scrapers that read _detail_text
+                judge.paint(
+                    model,
+                    detail_open=bool(getattr(self, "_judge_detail_open", False)),
+                )
                 self._detail_text = self._format_row_detail(
                     str(getattr(row, "ticker", self._focus_ticker)),
                     row,
                 )
                 return
+
+        if is_preopen_inspect:
+            row = self._rows[self._row_index] if self._rows else None
+            if row is not None and self._is_preopen_row(row):
+                from src.adapters.tui.preopen_inspect_model import (
+                    build_preopen_inspect_model,
+                )
+
+                try:
+                    poi = self.query_one("#preopen-inspect-desk", PreopenInspectDesk)
+                except Exception:
+                    poi = None
+                if poi is not None:
+                    model = build_preopen_inspect_model(
+                        row,
+                        rank=self._row_index + 1,
+                        total=max(len(self._rows), 1),
+                        snapshot_date=self._preopen_snapshot_date,
+                        board_meta=str(getattr(self, "_meta", "") or ""),
+                        warnings=tuple(self._preopen_warnings or ()),
+                    )
+                    body.display = False
+                    _hide_except("preopen")
+                    poi.display = True
+                    poi.paint(
+                        model,
+                        detail_open=bool(getattr(self, "_preopen_detail_open", False)),
+                    )
+                    self._detail_text = self._format_row_detail(
+                        str(getattr(row, "ticker", self._focus_ticker)),
+                        row,
+                    )
+                    return
 
         if is_view_ticker and ticker_desk is not None:
             model = getattr(self, "_ticker_desk_model", None)
@@ -468,10 +763,120 @@ class CockpitApp(App[None]):
                     body=self._detail_text or "",
                 )
             body.display = False
-            self._hide_judge_desk()
-            self._hide_plan_desk()
+            _hide_except("ticker")
             ticker_desk.display = True
-            ticker_desk.paint(model)
+            ticker_desk.paint(
+                model,
+                detail_open=bool(getattr(self, "_ticker_detail_open", False)),
+            )
+            return
+
+        if is_broker_home and broker_desk is not None:
+            home_model = getattr(self, "_broker_desk_home_model", None)
+            if home_model is None:
+                from src.adapters.tui.broker_desk_home_model import (
+                    build_broker_desk_home_model,
+                )
+
+                home_model = build_broker_desk_home_model(
+                    None,
+                    code=str(self._broker_desk_code or ""),
+                    empty_reason="desk home model not loaded",
+                )
+            body.display = False
+            _hide_except("broker")
+            broker_desk.display = True
+            broker_desk.paint(home_model)
+            return
+
+        if is_broker_matrix and matrix_desk is not None:
+            mx_model = getattr(self, "_broker_desk_matrix_model", None)
+            if mx_model is None:
+                from src.adapters.tui.broker_desk_matrix_model import (
+                    build_broker_desk_matrix_model,
+                )
+
+                mx_model = build_broker_desk_matrix_model(
+                    None,
+                    code=str(self._broker_desk_code or ""),
+                    empty_reason="matrix model not loaded",
+                )
+            body.display = False
+            _hide_except("matrix")
+            matrix_desk.display = True
+            matrix_desk.paint(mx_model)
+            return
+
+        if is_broker_top and top_desk is not None:
+            top_model = getattr(self, "_broker_desk_top_model", None)
+            if top_model is None:
+                from src.adapters.tui.broker_desk_top_model import (
+                    build_broker_desk_top_model,
+                )
+
+                top_model = build_broker_desk_top_model(
+                    None,
+                    code=str(self._broker_desk_code or ""),
+                    empty_reason="top model not loaded",
+                )
+            body.display = False
+            _hide_except("top")
+            top_desk.display = True
+            top_desk.paint(top_model)
+            return
+
+        if is_broker_flow and flow_desk is not None:
+            flow_model = getattr(self, "_broker_desk_flow_model", None)
+            if flow_model is None:
+                from src.adapters.tui.broker_desk_flow_model import (
+                    build_broker_desk_flow_model,
+                )
+
+                flow_model = build_broker_desk_flow_model(
+                    None,
+                    code=str(self._broker_desk_code or ""),
+                    empty_reason="flow model not loaded",
+                )
+            body.display = False
+            _hide_except("flow")
+            flow_desk.display = True
+            flow_desk.paint(flow_model)
+            return
+
+        if is_broker_history and history_desk is not None:
+            hist_model = getattr(self, "_broker_desk_history_model", None)
+            if hist_model is None:
+                from src.adapters.tui.broker_desk_history_model import (
+                    build_broker_desk_history_model,
+                )
+
+                hist_model = build_broker_desk_history_model(
+                    None,
+                    code=str(self._broker_desk_code or ""),
+                    empty_reason="history model not loaded",
+                )
+            body.display = False
+            _hide_except("history")
+            history_desk.display = True
+            history_desk.paint(hist_model)
+            return
+
+        if is_broker_cal and calendar_desk is not None:
+            cal_model = getattr(self, "_broker_desk_calendar_model", None)
+            if cal_model is None:
+                from src.adapters.tui.broker_desk_calendar_model import (
+                    build_broker_desk_calendar_model,
+                )
+
+                cal_model = build_broker_desk_calendar_model(
+                    None,
+                    code=str(self._broker_desk_code or ""),
+                    empty_reason="calendar model not loaded",
+                )
+            body.display = False
+            _hide_except("cal")
+            calendar_desk.display = True
+            calendar_desk.paint(cal_model)
             return
 
         body.display = True
@@ -558,6 +963,8 @@ class CockpitApp(App[None]):
             if self._focus_ticker == "—"
             else f"{self._focus_ticker} · Enter judge · j re-judge · p plan"
         )
+        self._paint_board_source_badge()
+        self._paint_board_flag_row()
 
         body = self.query_one("#stage-body", Static)
         scroll = self.query_one("#stage-scroll", VerticalScroll)
@@ -576,11 +983,48 @@ class CockpitApp(App[None]):
             # Do not hardcode "Cache empty" — board can be 0-candidate while local
             # candle/broker health is still ready/lag.
             scroll.display = True
-            body.display = True
-            self._hide_instrument_desks()
-            body.update(self._empty_body())
             table.display = False
             evidence.display = False
+            self._hide_instrument_desks()
+            try:
+                from src.adapters.tui.health_poster_model import build_health_poster_model
+                from src.adapters.tui.widgets.health_poster_desk import HealthPosterDesk
+
+                hp = self.query_one("#health-poster-desk", HealthPosterDesk)
+                status = getattr(self._cache_health, "status", None)
+                model = build_health_poster_model(
+                    cache_status=str(status) if status else None,
+                    board_title=self._board_title,
+                    meta=self._meta,
+                    board_kind=self._board_kind,
+                    next_step=self._cache_next_step or "",
+                )
+                body.display = False
+                hp.display = True
+                hp.paint(model)
+            except Exception:
+                body.display = True
+                body.update(self._empty_body())
+        elif self._stage == "paper":
+            scroll.display = True
+            table.display = False
+            evidence.display = False
+            self._hide_instrument_desks()
+            try:
+                from src.adapters.tui.paper_desk_model import build_paper_desk_model
+                from src.adapters.tui.widgets.paper_desk import PaperDesk
+
+                desk = self.query_one("#paper-desk", PaperDesk)
+                model = build_paper_desk_model(
+                    self._paper_tape,
+                    focus_ticker=self._focus_ticker,
+                )
+                body.display = False
+                desk.display = True
+                desk.paint(model)
+            except Exception:
+                body.display = True
+                body.update(self._paper_outcome or "Paper · notebook")
         elif self._stage == "loading":
             from src.adapters.tui.chrome_cues import is_broker_list_loading, loading_stage_body
 
@@ -817,7 +1261,13 @@ class CockpitApp(App[None]):
             return
         if self._stage in {"detail", "plan"}:
             # Desk trail: deep → show → list or ticker-desks.
-            if self._stage == "detail" and self._broker_page in {"top", "flow", "history"}:
+            if self._stage == "detail" and self._broker_page in {
+                "top",
+                "flow",
+                "history",
+                "matrix",
+                "cal",
+            }:
                 if self._broker_desk_code:
                     self._open_broker_desk_show(
                         code=self._broker_desk_code,
@@ -888,7 +1338,7 @@ class CockpitApp(App[None]):
         return (
             self._broker_desk_code is not None
             and self._stage == "detail"
-            and self._broker_page in {"show", "top", "flow", "history"}
+            and self._broker_page in {"show", "top", "flow", "history", "matrix", "cal"}
         )
 
     def action_broker_top(self) -> None:
@@ -906,6 +1356,16 @@ class CockpitApp(App[None]):
             return
         self._open_broker_deep("history")
 
+    def action_broker_matrix(self) -> None:
+        if self._modal_blocks_board_keys() or not self._desk_hub_active():
+            return
+        self._open_broker_deep("matrix")
+
+    def action_broker_calendar(self) -> None:
+        if self._modal_blocks_board_keys() or not self._desk_hub_active():
+            return
+        self._open_broker_deep("cal")
+
     def action_broker_jump_ticker(self) -> None:
         if self._modal_blocks_board_keys() or not self._desk_hub_active():
             return
@@ -916,6 +1376,111 @@ class CockpitApp(App[None]):
         self._focus_ticker = stock
         self._view_from_desk = True
         self._open_view_ticker_dashboard(from_desk=True)
+
+    def action_toggle_detail(self) -> None:
+        """Shared ``d``: ticker / judge / pre-open inspect panel expand by stage."""
+        if self._modal_blocks_board_keys():
+            return
+        if self._stage != "detail":
+            return
+        if self._status_note == "view ticker":
+            self._ticker_detail_open = not bool(getattr(self, "_ticker_detail_open", False))
+            # Design bible: header meta is local cache / full · local cache only
+            if self._ticker_detail_open:
+                self._meta = "full · local cache" + (" · from desk" if self._view_from_desk else "")
+            else:
+                self._meta = "local cache" + (" · from desk" if self._view_from_desk else "")
+            self._refresh_chrome()
+            self.notify(
+                f"Ticker detail · {'full' if self._ticker_detail_open else 'brief'}", timeout=1.2
+            )
+            return
+        if self._status_note in {"judge", "re-judging"}:
+            self._judge_detail_open = not bool(getattr(self, "_judge_detail_open", False))
+            mode = "full" if self._judge_detail_open else "compact"
+            self._meta = f"{mode} · present-only · d toggle · j re-judge · not re-score"
+            self._refresh_chrome()
+            self.notify(f"Judge detail · {mode}", timeout=1.2)
+            return
+        if self._status_note == "inspect" and (
+            self._board_kind == "preopen" or self._detail_return_stage == "preopen"
+        ):
+            self._preopen_detail_open = not bool(getattr(self, "_preopen_detail_open", False))
+            mode = "full" if self._preopen_detail_open else "compact"
+            self._meta = f"{mode} · inspect · d toggle"
+            self._refresh_chrome()
+            self.notify(f"Pre-open detail · {mode}", timeout=1.2)
+            return
+
+    def action_focus_prompt(self) -> None:
+        """Focus OpenCode prompt rail (: or /). Non-Action chrome only."""
+        if self._modal_blocks_board_keys():
+            return
+        try:
+            rail = self.query_one("#prompt-rail", Horizontal)
+            rail.add_class("is-focus")
+            inp = self.query_one("#prompt-input", Input)
+            inp.focus()
+        except Exception:
+            return
+
+    def _set_prompt_mode_chip(self, mode: str) -> None:
+        mode = (mode or "idle").lower()
+        if mode not in {"idle", "agent", "cli"}:
+            mode = "idle"
+        self._prompt_mode = mode
+        try:
+            chip = self.query_one("#prompt-mode", Static)
+            chip.update(mode)
+            chip.remove_class("is-agent", "is-cli")
+            if mode == "agent":
+                chip.add_class("is-agent")
+            elif mode == "cli":
+                chip.add_class("is-cli")
+        except Exception:
+            pass
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Prompt submit is design-only: toast, never Action / agent / orders."""
+        if event.input.id != "prompt-input":
+            return
+        text = (event.value or "").strip()
+        event.input.value = ""
+        # Mode switchers for chrome demo only
+        low = text.lower()
+        if low in {"mode idle", "idle"}:
+            self._set_prompt_mode_chip("idle")
+            self.notify("prompt · mode idle · not Action", timeout=1.2)
+            return
+        if low in {"mode agent", "agent"}:
+            self._set_prompt_mode_chip("agent")
+            self.notify("prompt · mode agent · design only · not wired", timeout=1.5)
+            return
+        if low in {"mode cli", "cli"}:
+            self._set_prompt_mode_chip("cli")
+            self.notify("prompt · mode cli · design only · not wired", timeout=1.5)
+            return
+        if text:
+            self.notify(
+                "prompt · design only · not Action · no agent · no order",
+                timeout=1.8,
+            )
+        try:
+            rail = self.query_one("#prompt-rail", Horizontal)
+            rail.remove_class("is-focus")
+            table = self.query_one("#board-table", DataTable)
+            if table.display:
+                table.focus()
+        except Exception:
+            pass
+
+    def on_input_blurred(self, event: Input.Blurred) -> None:
+        if getattr(event.input, "id", None) != "prompt-input":
+            return
+        try:
+            self.query_one("#prompt-rail", Horizontal).remove_class("is-focus")
+        except Exception:
+            pass
 
     def action_ticker_desks(self) -> None:
         """From view ticker: open top desks for this stock (CLI top-brokers)."""
@@ -1113,6 +1678,9 @@ class CockpitApp(App[None]):
             return
         if command_id == "paper-log":
             self.action_paper_log()
+            return
+        if command_id in {"paper", "paper-notebook", "view-paper"}:
+            self._open_paper_stage(ticker=self._focus_ticker)
             return
         if command_id == "fetch":
             self._open_fetch_confirm()
@@ -1643,10 +2211,12 @@ class CockpitApp(App[None]):
             else:
                 self._meta = "present-only · same object as board · j re-judge"
             self._status_note = "judge"
+            self._judge_detail_open = False
         elif self._is_preopen_row(row):
             self._judge_limited = False
+            self._preopen_detail_open = False
             self._board_title = f"Screen · pre-open · {ticker}"
-            self._meta = "inspect · present-only · same object as board"
+            self._meta = "inspect · board row · d detail"
             self._status_note = "inspect"
         else:
             self._judge_limited = False
@@ -1665,7 +2235,7 @@ class CockpitApp(App[None]):
             self.notify("Re-judge is for accumulation judge only", timeout=1.5)
             return
         if self._ticker_judge_loader is None:
-            self.notify("Re-judge not wired — use CLI: saham screen accum TICKER", timeout=2.5)
+            self.notify("Re-judge not wired · local screen path missing", timeout=2.5)
             return
         ticker = str(self._focus_ticker or self._judge_ticker or "").upper()
         if not ticker or ticker == "—":
@@ -1794,7 +2364,7 @@ class CockpitApp(App[None]):
             self._broker_page = None
         self._stage = "loading"
         self._board_title = f"View · ticker show · {ticker}"
-        self._meta = "CLI parity · cache-only dashboard"
+        self._meta = "local cache · dashboard"
         self._status_note = "view ticker"
         self._refresh_chrome()
         self._execute_view_ticker(ticker)
@@ -1832,7 +2402,7 @@ class CockpitApp(App[None]):
         self._desk_entry = None
         self._stage = "loading"
         self._board_title = f"View · ticker desks · {stock}"
-        self._meta = "CLI parity · saham view ticker top-brokers"
+        self._meta = "top desks for stock · local cache"
         self._status_note = "view ticker desks"
         self._refresh_chrome()
         self._execute_ticker_desks(stock)
@@ -1982,7 +2552,7 @@ class CockpitApp(App[None]):
         esc_hint = "esc desks" if self._desk_entry == "ticker-desks" else "esc list"
         self._stage = "loading"
         self._board_title = f"View · broker show · {code}"
-        self._meta = f"desk home · t/f/h deep · v stock · {esc_hint}"
+        self._meta = f"desk home · t/f/h/m deep · v stock · {esc_hint}"
         self._status_note = "view broker show"
         self._refresh_chrome()
         self._execute_broker_show(code)
@@ -1997,10 +2567,19 @@ class CockpitApp(App[None]):
             "top": f"View · broker top-stocks · {code}",
             "flow": f"View · broker flow · {code}",
             "history": f"View · broker history · {code}",
+            "matrix": f"View · broker top-matrix · {code}",
+            "cal": f"View · broker calendar · {code}",
         }
         self._stage = "loading"
         self._board_title = titles.get(page, f"View · broker · {code}")
-        self._meta = f"desk deep · esc home · CLI view broker {page}"
+        cli_verb = {
+            "top": "top-stocks",
+            "flow": "flow",
+            "history": "history",
+            "matrix": "top-matrix",
+            "cal": "calendar",
+        }.get(page, page)
+        self._meta = f"desk deep · esc home · CLI view broker {cli_verb}"
         self._status_note = f"view broker {page}"
         self._refresh_chrome()
         self._execute_broker_deep(code, page)
@@ -2011,6 +2590,7 @@ class CockpitApp(App[None]):
             payload = (
                 self._broker_show_loader(code) if self._broker_show_loader is not None else None
             )
+            home_model = None
             if payload is None:
                 text = f"[bold]{code}[/]\n\n[dim]broker show loader not wired[/]"
                 jump = None
@@ -2021,29 +2601,46 @@ class CockpitApp(App[None]):
                 text = str(getattr(payload, "text", "") or "")
                 jump = getattr(payload, "jump_ticker", None)
                 jump = str(jump).upper() if jump else None
+                home_model = getattr(payload, "model", None)
             if not text.strip():
                 text = (
                     f"[bold]{code}[/]\n\n"
                     "[dim]no broker_daily_flow for this desk · fetch broker data[/]"
                 )
+            # When loader only returns text (tests), still try a minimal structured model
+            # so the desk widget can paint hub + empty/day facts from scraper text path.
+            if home_model is None:
+                from src.adapters.tui.broker_desk_home_model import (
+                    build_broker_desk_home_model,
+                    format_broker_desk_home_scraper_text,
+                )
+
+                # Text-only loaders (journey tests): synthesize a non-empty home
+                # shell so hub keys + code still surface; keep original text body.
+                home_model = build_broker_desk_home_model(None, code=code)
+                if not text or "no broker_daily_flow" in text.lower():
+                    text = format_broker_desk_home_scraper_text(home_model)
             esc_line = "  esc desks" if self._desk_entry == "ticker-desks" else "  esc list"
-            actions = (
-                "\n\n[#9b8fb8]Actions (TUI)[/]\n"
-                "  t top-stocks · f flow · h history\n"
-                "  v view ticker (top buy stock)\n"
-                f"{esc_line}\n"
-            )
+            if "Actions (TUI)" not in text:
+                actions = (
+                    "\n\n[#9b8fb8]Actions (TUI)[/]\n"
+                    "  t top-stocks · f flow · c calendar · h history · m top-matrix\n"
+                    "  v view ticker (top buy stock)\n"
+                    f"{esc_line}\n"
+                )
+                text = text.rstrip() + actions
             header = (
                 f"[bold #e8e8e8]View · broker show · {code}[/]\n"
-                f"[dim]same job as: saham view broker show {code} · local cache[/]\n\n"
+                f"[dim]local cache · tracked desk[/]\n\n"
             )
             dispatch_if_active(
                 self,
                 self._on_broker_page_ready,
                 code,
                 "show",
-                header + text + actions,
+                header + text,
                 jump,
+                home_model,
             )
         except Exception as exc:
             dispatch_if_active(
@@ -2052,6 +2649,7 @@ class CockpitApp(App[None]):
                 code,
                 "show",
                 f"[bold]View · broker show · {code}[/]\n\n[dim]error: {exc}[/]",
+                None,
                 None,
             )
 
@@ -2062,22 +2660,68 @@ class CockpitApp(App[None]):
                 "top": self._broker_top_loader,
                 "flow": self._broker_flow_loader,
                 "history": self._broker_history_loader,
+                "matrix": self._broker_matrix_loader,
+                "cal": self._broker_calendar_loader,
             }.get(page)
-            text = str(loader(code) if loader is not None else "") if loader else ""
+            raw = loader(code) if loader is not None else None
+            deep_model = None
+            jump = self._broker_jump_ticker
+            if raw is None:
+                text = ""
+            elif isinstance(raw, str):
+                text = raw
+            else:
+                text = str(getattr(raw, "text", "") or "")
+                deep_model = getattr(raw, "model", None)
+                jt = getattr(raw, "jump_ticker", None)
+                if jt:
+                    jump = str(jt).upper()
             if not text.strip():
                 text = f"[bold]{code}[/]\n\n[dim]no data · loader missing or empty[/]"
+            # Text-only deep loaders (tests): empty structured shell for paint path
+            if page == "matrix" and deep_model is None:
+                from src.adapters.tui.broker_desk_matrix_model import (
+                    build_broker_desk_matrix_model,
+                )
+
+                deep_model = build_broker_desk_matrix_model(None, code=code)
+            if page == "top" and deep_model is None:
+                from src.adapters.tui.broker_desk_top_model import (
+                    build_broker_desk_top_model,
+                )
+
+                deep_model = build_broker_desk_top_model(None, code=code)
+            if page == "flow" and deep_model is None:
+                from src.adapters.tui.broker_desk_flow_model import (
+                    build_broker_desk_flow_model,
+                )
+
+                deep_model = build_broker_desk_flow_model(None, code=code)
+            if page == "history" and deep_model is None:
+                from src.adapters.tui.broker_desk_history_model import (
+                    build_broker_desk_history_model,
+                )
+
+                deep_model = build_broker_desk_history_model(None, code=code)
+            if page == "cal" and deep_model is None:
+                from src.adapters.tui.broker_desk_calendar_model import (
+                    build_broker_desk_calendar_model,
+                )
+
+                deep_model = build_broker_desk_calendar_model(None, code=code)
             titles = {
                 "top": "top-stocks",
                 "flow": "flow",
                 "history": "history",
+                "matrix": "top-matrix",
             }
             label = titles.get(page, page)
             header = (
                 f"[bold #e8e8e8]View · broker {label} · {code}[/]\n"
-                f"[dim]same job as: saham view broker {label} {code} · local cache[/]\n\n"
+                f"[dim]local cache · tracked desk[/]\n\n"
             )
             footer = (
-                "\n\n[#9b8fb8]Actions[/]\n  t/f/h switch deep · v view ticker · esc desk home\n"
+                "\n\n[#9b8fb8]Actions[/]\n  t/f/c/h/m switch deep · v view ticker · esc desk home\n"
             )
             dispatch_if_active(
                 self,
@@ -2085,7 +2729,13 @@ class CockpitApp(App[None]):
                 code,
                 page,
                 header + text + footer,
-                self._broker_jump_ticker,
+                jump,
+                None,
+                deep_model if page == "matrix" else None,
+                deep_model if page == "top" else None,
+                deep_model if page == "flow" else None,
+                deep_model if page == "history" else None,
+                deep_model if page == "cal" else None,
             )
         except Exception as exc:
             dispatch_if_active(
@@ -2095,6 +2745,12 @@ class CockpitApp(App[None]):
                 page,
                 f"[bold]View · broker {page} · {code}[/]\n\n[dim]error: {exc}[/]",
                 None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             )
 
     def _on_broker_page_ready(
@@ -2103,6 +2759,12 @@ class CockpitApp(App[None]):
         page: str,
         text: str,
         jump_ticker: str | None,
+        home_model: Any | None = None,
+        matrix_model: Any | None = None,
+        top_model: Any | None = None,
+        flow_model: Any | None = None,
+        history_model: Any | None = None,
+        calendar_model: Any | None = None,
     ) -> None:
         # Drop stale worker results when user already moved on.
         if self._broker_desk_code != code or self._broker_page != page:
@@ -2110,16 +2772,25 @@ class CockpitApp(App[None]):
         if jump_ticker is not None:
             self._broker_jump_ticker = jump_ticker
         self._detail_text = text
+        self._broker_desk_home_model = home_model if page == "show" else None
+        self._broker_desk_matrix_model = matrix_model if page == "matrix" else None
+        self._broker_desk_top_model = top_model if page == "top" else None
+        self._broker_desk_flow_model = flow_model if page == "flow" else None
+        self._broker_desk_history_model = history_model if page == "history" else None
+        self._broker_desk_calendar_model = calendar_model if page == "cal" else None
         self._stage = "detail"
         titles = {
             "show": f"View · broker show · {code}",
             "top": f"View · broker top-stocks · {code}",
             "flow": f"View · broker flow · {code}",
             "history": f"View · broker history · {code}",
+            "matrix": f"View · broker top-matrix · {code}",
+            "cal": f"View · broker calendar · {code}",
         }
         self._board_title = titles.get(page, f"View · broker · {code}")
-        self._meta = "CLI parity · cache-only · esc trail"
-        self._status_note = f"view broker {page}"
+        self._meta = "local cache · esc trail"
+        status_page = {"matrix": "top-matrix", "cal": "calendar"}.get(page, page)
+        self._status_note = f"view broker {status_page}"
         self._refresh_chrome()
 
     @work(thread=True, exclusive=True, group="detail")
@@ -2173,14 +2844,16 @@ class CockpitApp(App[None]):
 
         model = replace(model, body=body.strip())
         self._ticker_desk_model = model
+        self._ticker_detail_open = False  # open brief; d expands inventory
         self._detail_text = model.as_text()
         self._stage = "detail"
         self._board_title = f"View · ticker desk · {ticker}"
+        # Design bible ticker header meta: local cache | full · local cache
         if self._view_from_desk:
-            self._meta = "from desk · b desks · esc → desk home · cache-only · not Action"
+            self._meta = "local cache · from desk"
             self._broker_page = None  # not a desk page; trail via _view_from_desk
         else:
-            self._meta = "Harga mast · b top desks · cache-only · not Action · esc back"
+            self._meta = "local cache"
         self._status_note = "view ticker"
         self._focus_ticker = ticker
         self._refresh_chrome()
@@ -2384,7 +3057,7 @@ class CockpitApp(App[None]):
                 return
             if self._paper_log_runner is None:
                 self.notify(
-                    "Paper log not wired — use CLI: saham trade accum log --from-plan",
+                    "Paper log not wired · plan · l unavailable",
                     timeout=2.5,
                 )
                 return
@@ -2411,53 +3084,57 @@ class CockpitApp(App[None]):
         from src.adapters.tui.paper_log_result import PaperLogResult
 
         if error is not None:
-            self._status_note = "plan done"
+            self._status_note = "paper"
             self._paper_outcome = (
-                f"[bold #e87a6e]PAPER TAPE · FAILED[/]\n"
+                f"[bold #c97a72]PAPER TAPE · FAILED[/]\n"
                 f"{ticker} · {error[:120]}\n"
                 "[dim]no broker order[/]"
             )
-            self._refresh_chrome()
+            self._paper_tape.append(self._paper_outcome)
+            self._open_paper_stage()
             self.notify(f"Paper log failed · {error[:100]}", timeout=2.5)
             return
 
         if isinstance(result, PaperLogResult):
             self._paper_outcome = format_paper_outcome_tape(result)
+            self._paper_tape.append(result)
             msg = result.message
+            self._open_paper_stage(ticker=ticker)
             if result.refused:
-                self._status_note = "plan done"
-                self._refresh_chrome()
                 self.notify(f"Paper log refused · {msg}", timeout=2.8)
                 return
             if result.written:
-                self._status_note = "paper logged"
-                self._meta = f"paper notebook · {ticker} · logged · no order"
-                self._refresh_chrome()
                 self.notify(msg, timeout=3.0)
                 return
-            # Duplicate / 0-write
-            self._status_note = "plan done"
-            self._refresh_chrome()
             self.notify(msg, timeout=2.8)
             return
         # Duck-typed result
         written = bool(getattr(result, "written", False))
         message = str(getattr(result, "message", result) or result)
-        self._paper_outcome = format_paper_outcome_tape(
-            type(
-                "R",
-                (),
-                {
-                    "ticker": ticker,
-                    "written": written,
-                    "message": message,
-                    "refused": False,
-                },
-            )()
-        )
-        self._status_note = "paper logged" if written else "plan done"
-        self._refresh_chrome()
+        duck = type(
+            "R",
+            (),
+            {
+                "ticker": ticker,
+                "written": written,
+                "message": message,
+                "refused": False,
+            },
+        )()
+        self._paper_outcome = format_paper_outcome_tape(duck)
+        self._paper_tape.append(duck)
+        self._open_paper_stage(ticker=ticker)
         self.notify(message[:160], timeout=2.8)
+
+    def _open_paper_stage(self, *, ticker: str = "") -> None:
+        """Show paper notebook stage (tape hierarchy)."""
+        if ticker:
+            self._focus_ticker = str(ticker).upper()
+        self._stage = "paper"
+        self._board_title = "Paper · notebook"
+        self._meta = "session tape · paper only"
+        self._status_note = "paper"
+        self._refresh_chrome()
 
     def _repaint_plan_if_open(self) -> None:
         """Refresh Geometry mast + paper tape when still on plan stage."""
@@ -2576,7 +3253,7 @@ class CockpitApp(App[None]):
             if not confirmed:
                 return
             if self._fetch_runner is None:
-                self.notify("Fetch not wired — use CLI: saham fetch market", timeout=2.5)
+                self.notify("Fetch not wired · use explicit data fetch later", timeout=2.5)
                 return
             self._mode = "online · explicit"
             self._stage = "loading"

@@ -23,6 +23,26 @@ class TickerMetric:
 
 
 @dataclass(frozen=True)
+class TickerFreshPill:
+    """One mock ``fresh-grid`` pill (Price / Flow / …)."""
+
+    key: str
+    label: str
+    status: str  # ok | miss | stale | unknown
+    value: str  # ok | — | stale | short status
+
+    @property
+    def css_kind(self) -> str:
+        if self.status == "ok":
+            return "ok"
+        if self.status == "stale":
+            return "stale"
+        if self.status in {"miss", "missing", "empty", "error"}:
+            return "miss"
+        return "unknown"
+
+
+@dataclass(frozen=True)
 class TickerHorizon:
     label: str
     value: str
@@ -52,6 +72,16 @@ class EarnRow:
 
 
 @dataclass(frozen=True)
+class TickerDetailPanel:
+    """One expandable full-inventory panel summary (browse · not Action)."""
+
+    key: str
+    title: str
+    status: str  # present | missing | stale
+    lines: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class TickerDeskModel:
     ticker: str
     name: str
@@ -64,10 +94,11 @@ class TickerDeskModel:
     as_of: str
     horizons: tuple[TickerHorizon, ...]
     metrics: tuple[TickerMetric, ...]
-    freshness: tuple[str, ...]
+    freshness: tuple[TickerFreshPill, ...]
     pulses: tuple[PulseCard, ...]
     earnings: tuple[EarnRow, ...]
     secondary: tuple[tuple[str, str], ...]
+    detail_panels: tuple[TickerDetailPanel, ...]
     authority: str
     footer: str
     # Optional raw body for scrapers only — not painted as primary stage.
@@ -77,14 +108,22 @@ class TickerDeskModel:
         lines = [
             f"View · ticker desk · {self.ticker}",
             f"{self.name} · {self.board} · {self.sector}",
-            "HARGA MAST",
+            "LAST · LOCAL CLOSE",
             f"Rp {self.price}  {self.change_1d}".strip(),
             f"as_of {self.as_of} · {self.authority}",
         ]
+        if self.freshness:
+            lines.append(
+                "Freshness  " + "  ".join(f"{p.label}:{p.value}" for p in self.freshness[:10])
+            )
         for p in self.pulses:
             lines.append(f"{p.title}: {p.headline} · {p.sub}")
         for e in self.earnings[:4]:
             lines.append(f"{e.period}  eps {e.eps}  yoy {e.yoy}")
+        if self.detail_panels:
+            lines.append("DETAIL PANELS")
+            for d in self.detail_panels:
+                lines.append(f"  {d.title}: {d.status}")
         return "\n".join(lines)
 
 
@@ -120,6 +159,7 @@ def build_ticker_desk_model_from_dashboard(
     )
     earnings = _earnings_rows(getattr(dashboard, "earnings", None) or ())
     secondary = _secondary_kv(dashboard)
+    detail_panels = _detail_panels(dashboard)
 
     return TickerDeskModel(
         ticker=ticker,
@@ -137,8 +177,9 @@ def build_ticker_desk_model_from_dashboard(
         pulses=pulses,
         earnings=tuple(earnings),
         secondary=tuple(secondary),
-        authority="cache dashboard · not Action",
-        footer="b desks · p plan · esc board · CLI deep-dives stay CLI · no order · no re-score",
+        detail_panels=tuple(detail_panels),
+        authority="local cache · browse",
+        footer="d detail · b desks · p plan · esc",
         body=(body or "").strip(),
     )
 
@@ -176,8 +217,16 @@ def build_ticker_desk_model_from_text(*, ticker: str, body: str) -> TickerDeskMo
         ),
         earnings=(),
         secondary=(("Depth", "text-only stub · full panels need live dashboard"),),
-        authority="cache dashboard · not Action",
-        footer="b desks · p plan · esc board · no order · no re-score",
+        detail_panels=(
+            TickerDetailPanel(
+                "stub",
+                "Full inventory",
+                "missing",
+                ("text-only stub · press d after live dashboard load",),
+            ),
+        ),
+        authority="local cache · browse",
+        footer="d detail · b desks · p plan · esc · no order · no re-score",
         body=(body or "").strip(),
     )
 
@@ -272,21 +321,94 @@ def _empty_metrics() -> tuple[TickerMetric, ...]:
     )
 
 
-def _freshness_pills(items: Any) -> list[str]:
-    out: list[str] = []
-    for item in list(items)[:10]:
-        label = str(getattr(item, "label", None) or getattr(item, "key", "?") or "?")
-        st = getattr(item, "status", None)
-        st_s = str(getattr(st, "value", st) or "").lower()
-        if st_s == "ok":
-            out.append(f"✓{label}")
-        elif st_s in {"missing", "empty", "error"}:
-            out.append(f"✗{label}")
-        elif st_s == "stale":
-            out.append(f"~{label}")
+# Mock fresh-grid order (docs/design/tui-cockpit-opencode.html detailView)
+FRESH_GRID_LABELS: tuple[str, ...] = (
+    "Price",
+    "Flow",
+    "Bandar",
+    "Earn",
+    "Fund",
+    "Analyst",
+    "Own",
+    "IEV",
+    "Insider",
+    "Sent",
+)
+FRESH_GRID_SLOTS: int = len(FRESH_GRID_LABELS)
+
+
+def _normalize_fresh_status(raw: Any) -> tuple[str, str]:
+    """Return (status, value) for a pill."""
+    st_s = str(getattr(raw, "value", raw) if raw is not None else "").lower().strip()
+    if st_s in {"ok", "ready", "fresh", "present"}:
+        return "ok", "ok"
+    if st_s in {"stale", "lag", "lagging"}:
+        return "stale", "stale"
+    if st_s in {"missing", "empty", "error", "miss", "absent", "—", "-", "none"}:
+        return "miss", "—"
+    if not st_s:
+        return "miss", "—"
+    return "unknown", st_s[:8] or "—"
+
+
+def _freshness_pills(items: Any) -> list[TickerFreshPill]:
+    """Build ordered mock fresh-grid pills from dashboard freshness rows."""
+    by_label: dict[str, TickerFreshPill] = {}
+    for item in list(items or ()):
+        label = str(getattr(item, "label", None) or getattr(item, "key", None) or "?").strip()
+        if not label:
+            continue
+        # Shorten long labels toward mock set
+        short = label
+        for known in FRESH_GRID_LABELS:
+            if known.lower() in label.lower() or label.lower() in known.lower():
+                short = known
+                break
+        # Common aliases
+        low = label.lower()
+        if low in {"price", "close", "candle"}:
+            short = "Price"
+        elif low in {"flow", "foreign", "foreign_flow"}:
+            short = "Flow"
+        elif low in {"bandar", "broker"}:
+            short = "Bandar"
+        elif low in {"earn", "earnings"}:
+            short = "Earn"
+        elif low in {"fund", "fundamentals", "fundamental"}:
+            short = "Fund"
+        elif low in {"analyst", "analysts"}:
+            short = "Analyst"
+        elif low in {"own", "ownership"}:
+            short = "Own"
+        elif low in {"iev", "preopen"}:
+            short = "IEV"
+        elif low in {"insider", "insiders"}:
+            short = "Insider"
+        elif low in {"sent", "sentiment"}:
+            short = "Sent"
+        status, value = _normalize_fresh_status(getattr(item, "status", None))
+        key = short.lower().replace(" ", "_")
+        by_label[short] = TickerFreshPill(key=key, label=short, status=status, value=value)
+
+    out: list[TickerFreshPill] = []
+    for lab in FRESH_GRID_LABELS:
+        if lab in by_label:
+            out.append(by_label[lab])
         else:
-            out.append(label)
-    return out
+            out.append(
+                TickerFreshPill(
+                    key=lab.lower(),
+                    label=lab,
+                    status="miss",
+                    value="—",
+                )
+            )
+    # Append any unknown extras beyond the 10 mock slots (capped)
+    known = set(FRESH_GRID_LABELS)
+    extras = [p for p in by_label.values() if p.label not in known]
+    for p in extras[:2]:
+        out.append(p)
+    return out[: FRESH_GRID_SLOTS + 2]
 
 
 def _pulse_flow(dashboard: Any) -> PulseCard:
@@ -483,8 +605,107 @@ def _secondary_kv(dashboard: Any) -> list[tuple[str, str]]:
     out.append(("IEV / NCP", "present" if iev else "—"))
     season = getattr(dashboard, "seasonality", None)
     out.append(("Seasonality", "present" if season is not None else "—"))
-    out.append(("Depth", "expand stays local panels · not Action"))
+    out.append(("Depth", "d expand · local panels"))
     return out
+
+
+def _detail_panels(dashboard: Any) -> list[TickerDetailPanel]:
+    """Full inventory summaries for ``d`` expand (extra browse panels).
+
+    Short presence + fact lines only — never invent Action or re-score.
+    """
+    panels: list[TickerDetailPanel] = []
+
+    def add(
+        key: str,
+        title: str,
+        present: bool,
+        lines: tuple[str, ...] = (),
+        *,
+        missing_hint: str = "not in local cache",
+    ) -> None:
+        if present:
+            panels.append(TickerDetailPanel(key, title, "present", lines))
+        else:
+            panels.append(TickerDetailPanel(key, title, "missing", (missing_hint,)))
+
+    analyst = getattr(dashboard, "analyst", None)
+    a_lines: tuple[str, ...] = ()
+    if analyst is not None:
+        bits = []
+        for attr, lab in (
+            ("consensus", "consensus"),
+            ("target_price", "target"),
+            ("rating", "rating"),
+            ("recommendation", "rec"),
+        ):
+            v = getattr(analyst, attr, None)
+            if v is not None:
+                bits.append(f"{lab} {v}")
+        a_lines = tuple(bits[:4]) if bits else ("analyst block present",)
+    add("analyst", "Analyst", analyst is not None, a_lines)
+
+    own = getattr(dashboard, "ownership", None)
+    o_lines: tuple[str, ...] = ()
+    if own is not None:
+        bits = []
+        for attr, lab in (
+            ("foreign_pct", "foreign%"),
+            ("public_pct", "public%"),
+            ("institusi_pct", "inst%"),
+        ):
+            v = getattr(own, attr, None)
+            if v is not None:
+                try:
+                    bits.append(f"{lab} {float(v):.1f}")
+                except (TypeError, ValueError):
+                    bits.append(f"{lab} {v}")
+        o_lines = tuple(bits[:4]) if bits else ("ownership present",)
+    add("ownership", "Ownership", own is not None, o_lines)
+
+    sector = getattr(dashboard, "sector_macro", None) or getattr(dashboard, "sector_context", None)
+    add(
+        "sector_macro",
+        "Sector / macro",
+        sector is not None,
+        ("diagnostic only · never Action",) if sector is not None else (),
+        missing_hint="diagnostic omitted or missing",
+    )
+
+    corp = getattr(dashboard, "corp_actions", None) or getattr(dashboard, "corporate_actions", None)
+    corp_n = len(corp) if isinstance(corp, (list, tuple)) else (1 if corp else 0)
+    add(
+        "corp_actions",
+        "Corp actions",
+        corp_n > 0,
+        (f"{corp_n} events",) if corp_n else (),
+    )
+
+    insider = getattr(dashboard, "insider_txns", None) or ()
+    add(
+        "insider",
+        "Insider",
+        bool(insider),
+        (f"{len(insider)} txns",) if insider else (),
+    )
+
+    season = getattr(dashboard, "seasonality", None)
+    add("seasonality", "Seasonality", season is not None, ("present",) if season else ())
+
+    iev = getattr(dashboard, "iev_rows", None) or ()
+    add("iev", "IEV / NCP", bool(iev), (f"{len(iev)} rows",) if iev else ())
+
+    sent = getattr(dashboard, "sentiment", None)
+    add("sentiment", "Sentiment", sent is not None, ("present",) if sent else ())
+
+    profile = getattr(dashboard, "profile", None)
+    add("profile", "Profile", profile is not None, ("notation / profile",) if profile else ())
+
+    candles = getattr(dashboard, "candles", None) or getattr(dashboard, "ohlcv", None)
+    c_n = len(candles) if isinstance(candles, (list, tuple)) else (1 if candles else 0)
+    add("candles", "Candles", c_n > 0, (f"{c_n} bars",) if c_n else ())
+
+    return panels
 
 
 def _window_net(points: list[Any], days: int) -> tuple[str, str]:

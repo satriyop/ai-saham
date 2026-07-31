@@ -106,6 +106,13 @@ def test_model_design_hierarchy_not_cli_primary():
     assert "6,275" in model.price
     assert model.change_tone == "pos"
     assert any(m.label == "PE TTM" and "13" in m.value for m in model.metrics)
+    # Mock fresh-grid pills (ok / miss / stale hierarchy)
+    assert len(model.freshness) >= 10
+    by_lab = {p.label: p for p in model.freshness}
+    assert by_lab["Price"].status == "ok" and by_lab["Price"].value == "ok"
+    assert by_lab["Flow"].status == "ok"
+    assert by_lab["Analyst"].status == "miss"  # unfilled mock slot
+    assert "Freshness" in model.as_text() or "Price:ok" in model.as_text()
     keys = {p.key for p in model.pulses}
     assert keys == {"flow", "struct", "bandar"}
     flow = next(p for p in model.pulses if p.key == "flow")
@@ -116,11 +123,20 @@ def test_model_design_hierarchy_not_cli_primary():
     assert "Acc" in bandar.headline
     assert len(model.earnings) >= 1
     assert model.secondary
+    # Detail inventory panels for d expand (not Action)
+    assert model.detail_panels
+    keys = {p.key for p in model.detail_panels}
+    assert "analyst" in keys
+    assert "ownership" in keys
+    assert "insider" in keys
+    assert any(p.status == "present" for p in model.detail_panels)
+    assert "d detail" in model.footer
     # Primary as_text is hierarchical, not a Rich box dump
     text = model.as_text()
-    assert "HARGA MAST" in text
+    assert "LAST · LOCAL CLOSE" in text
     assert "Foreign flow" in text
     assert "Bandar" in text
+    assert "DETAIL PANELS" in text
 
 
 def test_cockpit_view_ticker_paints_design_sections():
@@ -156,6 +172,11 @@ def test_cockpit_view_ticker_paints_design_sections():
             # Mast
             assert "6,275" in str(app.query_one("#td-price").render())
             assert "LAST" in str(app.query_one("#td-mast-lab").render()).upper()
+            # Fresh-grid pills (mock hierarchy)
+            fp0 = str(app.query_one("#td-fp-0").render())
+            assert "Price" in fp0
+            assert "ok" in fp0.lower()
+            assert "ok" in app.query_one("#td-fp-0").classes
             # Pulse trio present (not CLI dump body id)
             flow_h = str(app.query_one("#td-pulse-h-flow").render())
             assert flow_h.strip()
@@ -169,6 +190,21 @@ def test_cockpit_view_ticker_paints_design_sections():
             assert app.query_one("#judge-desk").display is False
             # Metric ribbon
             assert "13" in str(app.query_one("#td-metric-v-0").render())
+            # Default collapsed more section
+            assert app._ticker_detail_open is False
+            more = str(app.query_one("#td-more-head").render()).upper()
+            assert "COLLAPSE" in more or "MORE" in more or "D DETAIL" in more
+
+            # d toggles full inventory
+            app.action_toggle_detail()
+            assert app._ticker_detail_open is True
+            head = str(app.query_one("#td-more-head").render()).upper()
+            assert "DETAIL" in head or "FULL" in head
+            body_more = str(app.query_one("#td-more-body").render()).upper()
+            assert "ANALYST" in body_more or "OWNERSHIP" in body_more or "PRESENT" in body_more
+
+            app.action_toggle_detail()
+            assert app._ticker_detail_open is False
 
     asyncio.run(scenario())
 
@@ -178,4 +214,4 @@ def test_text_fallback_still_has_mast_and_pulses():
     assert m.ticker == "TLKM"
     assert "3,180" in m.price
     assert len(m.pulses) == 3
-    assert "HARGA" in m.as_text()
+    assert "LAST · LOCAL CLOSE" in m.as_text()

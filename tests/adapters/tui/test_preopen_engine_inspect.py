@@ -66,14 +66,17 @@ def test_inspect_board_parity_and_sections():
     assert "BACKED" in text
     assert "BULLISH" in text
     assert "2026-07-25" in text
-    assert "present-only" in text
-    assert "Signal" not in text or "never invents Signal" in text
-    assert "setup family" in text.lower() or "setup family" in text
+    # Operator inspect: levels + flags; no implementer authority slogans
+    assert "never invents Signal" not in text
+    assert "no engine re-run" not in text
+    assert "TUI pre-open board" not in text
+    assert "present-only inspect" not in text
     # Why matches shared helper / evidence
     why = format_preopen_why(row)
     assert why
     assert "Why:" in text
     assert "trend" in text.lower() or "broker" in text.lower()
+    assert "why" in text.lower() and "auction+" in text
 
 
 def test_inspect_sparse_source_no_crash():
@@ -129,7 +132,8 @@ def test_enter_opens_preopen_inspect_and_esc_returns():
             assert "Screen · pre-open ·" in app._board_title
             assert "Snapshot" in app._detail_text
             assert "grade" in app._detail_text
-            assert "present-only" in app._meta
+            assert "inspect" in app._meta
+            assert "present-only inspect" not in app._meta
             await pilot.press("escape")
             await pilot.pause()
             assert app._stage == "preopen"

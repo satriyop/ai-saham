@@ -87,6 +87,8 @@ def create_tui_app(
         broker_top_loader=_BrokerDeepLoader(db_path, "top"),
         broker_flow_loader=_BrokerDeepLoader(db_path, "flow"),
         broker_history_loader=_BrokerDeepLoader(db_path, "history"),
+        broker_matrix_loader=_BrokerDeepLoader(db_path, "matrix"),
+        broker_calendar_loader=_BrokerDeepLoader(db_path, "cal"),
         ticker_desks_loader=_TickerTopBrokersLoader(db_path),
         ticker_judge_loader=ticker_judge_loader,
         cache_health_loader=cache_health_loader,
@@ -548,7 +550,8 @@ class _BrokerListLoader:
 class _BrokerShowLoader:
     """Desk show from cache — same use case as ``saham view broker show``.
 
-    Returns SimpleNamespace(text=..., jump_ticker=...) for TUI hub + ``v`` jump.
+    Returns SimpleNamespace(text=..., jump_ticker=..., model=BrokerDeskHomeModel)
+    for structured desk home + scraper text + ``v`` jump.
     """
 
     def __init__(self, db_path: Path) -> None:
@@ -559,79 +562,60 @@ class _BrokerShowLoader:
         with self._lock:
             from types import SimpleNamespace
 
-            from src.adapters.shared.view_broker_desk_text import format_desk_show_text
+            from src.adapters.tui.broker_desk_home_model import (
+                build_broker_desk_home_model,
+                format_broker_desk_home_scraper_text,
+            )
             from src.application.use_case.view_broker_desk_show_use_case import (
                 ViewBrokerDeskShowRequest,
                 ViewBrokerDeskShowUseCase,
             )
 
+            code_u = str(code).upper()
             repo, foreign = _broker_repo_and_foreign(self._db_path)
             result = ViewBrokerDeskShowUseCase(repo, foreign_broker_codes=foreign).execute(
-                ViewBrokerDeskShowRequest(broker_code=str(code).upper())
+                ViewBrokerDeskShowRequest(broker_code=code_u)
             )
-            if result is None:
-                return SimpleNamespace(
-                    text=(
-                        f"{code.upper()}\n\n"
-                        "no broker_daily_flow for this desk · run broker fetch first"
-                    ),
-                    jump_ticker=None,
-                )
-            jump = None
-            if result.top_buy_stocks:
-                jump = str(result.top_buy_stocks[0].ticker).upper()
-            elif result.top_sell_stocks:
-                jump = str(result.top_sell_stocks[0].ticker).upper()
-            body = format_desk_show_text(result)
             # Multi-session pulse (same pure helper as list Net5 / streak)
             from datetime import date, timedelta
 
-            from src.adapters.shared.view_number_format import format_value
             from src.application.services.broker_desk_from_daily_flow import (
                 desk_session_pulse,
             )
 
-            # Pulse only needs recent sessions (same bound as list radar).
             start = date.today() - timedelta(days=_BROKER_LIST_FLOW_LOOKBACK_DAYS)
-            flows = repo.get_broker_daily_flows_by_code(str(code).upper(), start_date=start)
+            flows = repo.get_broker_daily_flows_by_code(code_u, start_date=start)
             pulse = desk_session_pulse(flows) if flows else None
-            if pulse is not None:
-                d1 = "—"
-                if pulse.delta1 is not None:
-                    sign = "+" if pulse.delta1 > 0 else ""
-                    d1 = f"{sign}{format_value(pulse.delta1)}"
-                pulse_line = (
-                    f"\npulse: DayNet {format_value(pulse.day_net)} · "
-                    f"Net5 {format_value(pulse.net5)} "
-                    f"({pulse.sessions_in_net5}s) · buy-streak {pulse.buy_streak} · Δ1 {d1}\n"
-                )
-                # Insert after header block (after scope_note line in format_desk_show_text)
-                parts = body.split("\n", 4)
-                if len(parts) >= 4:
-                    body = (
-                        "\n".join(parts[:4])
-                        + pulse_line
-                        + ("\n".join(parts[4:]) if len(parts) > 4 else "")
-                    )
-                else:
-                    body = body + pulse_line
-            return SimpleNamespace(text=body, jump_ticker=jump)
+
+            model = build_broker_desk_home_model(result, pulse=pulse, code=code_u)
+            body = format_broker_desk_home_scraper_text(model)
+            return SimpleNamespace(
+                text=body,
+                jump_ticker=model.jump_ticker,
+                model=model,
+            )
 
 
 class _BrokerDeepLoader:
-    """top-stocks / flow / history text loaders (CLI use cases)."""
+    """top-stocks / top-matrix / flow / history text loaders (CLI use cases)."""
 
     def __init__(self, db_path: Path, page: str) -> None:
         self._db_path = db_path
-        self._page = page  # top | flow | history
+        self._page = page  # top | matrix | flow | history | cal
         self._lock = Lock()
 
     def __call__(self, code: str) -> str:
         with self._lock:
             from src.adapters.shared.view_broker_desk_text import (
+                format_desk_calendar_text,
                 format_desk_flow_text,
                 format_desk_history_text,
+                format_desk_top_matrix_text,
                 format_desk_top_stocks_text,
+            )
+            from src.application.use_case.view_broker_desk_calendar_use_case import (
+                ViewBrokerDeskCalendarRequest,
+                ViewBrokerDeskCalendarUseCase,
             )
             from src.application.use_case.view_broker_desk_flow_use_case import (
                 ViewBrokerDeskFlowRequest,
@@ -640,6 +624,10 @@ class _BrokerDeepLoader:
             from src.application.use_case.view_broker_desk_history_use_case import (
                 ViewBrokerDeskHistoryRequest,
                 ViewBrokerDeskHistoryUseCase,
+            )
+            from src.application.use_case.view_broker_desk_top_matrix_use_case import (
+                ViewBrokerDeskTopMatrixRequest,
+                ViewBrokerDeskTopMatrixUseCase,
             )
             from src.application.use_case.view_broker_desk_top_stocks_use_case import (
                 ViewBrokerDeskTopStocksRequest,
@@ -650,20 +638,111 @@ class _BrokerDeepLoader:
             repo, foreign = _broker_repo_and_foreign(self._db_path)
             empty = f"{code_u}\n\nno broker_daily_flow for this desk · run broker fetch first"
             if self._page == "top":
+                from types import SimpleNamespace
+
+                from src.adapters.tui.broker_desk_top_model import (
+                    build_broker_desk_top_model,
+                    format_broker_desk_top_scraper_text,
+                )
+
                 result = ViewBrokerDeskTopStocksUseCase(repo, foreign_broker_codes=foreign).execute(
                     ViewBrokerDeskTopStocksRequest(broker_code=code_u, limit=20)
                 )
-                return format_desk_top_stocks_text(result) if result else empty
+                model = build_broker_desk_top_model(result, code=code_u)
+                text = (
+                    format_desk_top_stocks_text(result)
+                    if result is not None
+                    else format_broker_desk_top_scraper_text(model)
+                )
+                return SimpleNamespace(
+                    text=text,
+                    model=model,
+                    jump_ticker=model.jump_ticker,
+                )
+            if self._page == "matrix":
+                from types import SimpleNamespace
+
+                from src.adapters.tui.broker_desk_matrix_model import (
+                    build_broker_desk_matrix_model,
+                    format_broker_desk_matrix_scraper_text,
+                )
+
+                result = ViewBrokerDeskTopMatrixUseCase(repo, foreign_broker_codes=foreign).execute(
+                    ViewBrokerDeskTopMatrixRequest(broker_code=code_u)
+                )
+                model = build_broker_desk_matrix_model(result, code=code_u)
+                text = (
+                    format_desk_top_matrix_text(result)
+                    if result is not None
+                    else format_broker_desk_matrix_scraper_text(model)
+                )
+                return SimpleNamespace(
+                    text=text,
+                    model=model,
+                    jump_ticker=model.jump_ticker,
+                )
             if self._page == "flow":
+                from types import SimpleNamespace
+
+                from src.adapters.tui.broker_desk_flow_model import (
+                    build_broker_desk_flow_model,
+                    format_broker_desk_flow_scraper_text,
+                )
+
                 result = ViewBrokerDeskFlowUseCase(repo, foreign_broker_codes=foreign).execute(
                     ViewBrokerDeskFlowRequest(broker_code=code_u, days=10)
                 )
-                return format_desk_flow_text(result) if result else empty
+                model = build_broker_desk_flow_model(result, code=code_u)
+                text = (
+                    format_desk_flow_text(result)
+                    if result is not None
+                    else format_broker_desk_flow_scraper_text(model)
+                )
+                return SimpleNamespace(text=text, model=model, jump_ticker=None)
             if self._page == "history":
+                from types import SimpleNamespace
+
+                from src.adapters.tui.broker_desk_history_model import (
+                    build_broker_desk_history_model,
+                    format_broker_desk_history_scraper_text,
+                )
+
                 result = ViewBrokerDeskHistoryUseCase(repo, foreign_broker_codes=foreign).execute(
                     ViewBrokerDeskHistoryRequest(broker_code=code_u, days=30)
                 )
-                return format_desk_history_text(result) if result else empty
+                model = build_broker_desk_history_model(result, code=code_u)
+                text = (
+                    format_desk_history_text(result)
+                    if result is not None
+                    else format_broker_desk_history_scraper_text(model)
+                )
+                return SimpleNamespace(
+                    text=text,
+                    model=model,
+                    jump_ticker=model.jump_ticker,
+                )
+            if self._page == "cal":
+                from types import SimpleNamespace
+
+                from src.adapters.tui.broker_desk_calendar_model import (
+                    build_broker_desk_calendar_model,
+                    format_broker_desk_calendar_scraper_text,
+                )
+
+                result = ViewBrokerDeskCalendarUseCase(repo, foreign_broker_codes=foreign).execute(
+                    ViewBrokerDeskCalendarRequest(broker_code=code_u)
+                )
+                model = build_broker_desk_calendar_model(result, code=code_u)
+                text = (
+                    format_desk_calendar_text(result)
+                    if result is not None
+                    else format_broker_desk_calendar_scraper_text(model)
+                )
+                return SimpleNamespace(
+                    text=text,
+                    model=model,
+                    jump_ticker=model.jump_ticker,
+                )
             return empty
 
 

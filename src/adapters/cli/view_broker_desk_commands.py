@@ -1,5 +1,5 @@
 """
-CLI: desk-centric view broker show | top-stocks | flow | history.
+CLI: desk-centric view broker show | top-stocks | top-matrix | flow | history.
 
 Supports --format table|json on every verb.
 
@@ -21,12 +21,18 @@ from src.adapters.cli.view_broker_contract_cli import (
     resolve_output_format,
 )
 from src.adapters.cli.view_broker_desk_display import (
+    display_desk_calendar,
     display_desk_flow,
     display_desk_history,
     display_desk_show,
+    display_desk_top_matrix,
     display_desk_top_stocks,
 )
 from src.application.dto.view_ticker_contract import ViewWindow
+from src.application.use_case.view_broker_desk_calendar_use_case import (
+    ViewBrokerDeskCalendarRequest,
+    ViewBrokerDeskCalendarUseCase,
+)
 from src.application.use_case.view_broker_desk_flow_use_case import (
     ViewBrokerDeskFlowRequest,
     ViewBrokerDeskFlowUseCase,
@@ -38,6 +44,10 @@ from src.application.use_case.view_broker_desk_history_use_case import (
 from src.application.use_case.view_broker_desk_show_use_case import (
     ViewBrokerDeskShowRequest,
     ViewBrokerDeskShowUseCase,
+)
+from src.application.use_case.view_broker_desk_top_matrix_use_case import (
+    ViewBrokerDeskTopMatrixRequest,
+    ViewBrokerDeskTopMatrixUseCase,
 )
 from src.application.use_case.view_broker_desk_top_stocks_use_case import (
     ViewBrokerDeskTopStocksRequest,
@@ -197,6 +207,66 @@ def broker_desk_top_stocks(
     display_desk_top_stocks(result)
 
 
+def broker_desk_top_matrix(
+    code: Annotated[str, typer.Argument(help="Broker desk code (e.g. YP)")],
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Top N per window", min=1, max=20),
+    ] = 5,
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+    fmt: _FORMAT_OPT = None,
+) -> None:
+    """Top net-buy names by session window (1/3/5/10/20) with avg buy + streak."""
+    output_format = resolve_output_format(fmt or "table")
+    repo, foreign = _repo_and_codes(db_path)
+    result = ViewBrokerDeskTopMatrixUseCase(repo, foreign_broker_codes=foreign).execute(
+        ViewBrokerDeskTopMatrixRequest(broker_code=code, limit=limit)
+    )
+    if result is None:
+        exit_missing_desk_data(code)
+
+    if output_format == "json":
+
+        def _cell(c) -> dict:
+            return {
+                "ticker": c.ticker,
+                "net_value": str(c.net_value),
+                "window": c.window,
+                "sessions_used": c.sessions_used,
+                "avg_buy_price": str(c.avg_buy_price) if c.avg_buy_price is not None else None,
+                "buy_streak": c.buy_streak,
+                "is_partial": c.is_partial,
+            }
+
+        echo_json(
+            desk_envelope(
+                code=result.broker_code,
+                verb="top-matrix",
+                as_of=result.as_of,
+                scope_note=result.scope_note,
+                data={
+                    "broker_code": result.broker_code,
+                    "broker_name": result.broker_name,
+                    "broker_type": result.broker_type.value,
+                    "as_of": result.as_of.isoformat(),
+                    "windows": list(result.windows),
+                    "sessions_cached": result.sessions_cached,
+                    "columns": {
+                        str(w): [_cell(c) for c in (result.columns.get(w) or ())]
+                        for w in result.windows
+                    },
+                    "top_ticker_1s": result.top_ticker_1s,
+                },
+            )
+        )
+        return
+
+    display_desk_top_matrix(result)
+
+
 def broker_desk_flow(
     code: Annotated[str, typer.Argument(help="Broker desk code (e.g. AK)")],
     days: Annotated[
@@ -238,6 +308,60 @@ def broker_desk_flow(
         return
 
     display_desk_flow(result)
+
+
+def broker_desk_calendar(
+    code: Annotated[str, typer.Argument(help="Broker desk code (e.g. YP)")],
+    sessions: Annotated[
+        int,
+        typer.Option("--sessions", help="Max sessions (~month)", min=1, max=60),
+    ] = 22,
+    db_path: Annotated[
+        Optional[Path],
+        typer.Option("--db", help="SQLite database path"),
+    ] = None,
+    fmt: _FORMAT_OPT = None,
+) -> None:
+    """Session calendar: top stock · desk net · buy/sell (tracked desk only)."""
+    output_format = resolve_output_format(fmt or "table")
+    repo, foreign = _repo_and_codes(db_path)
+    result = ViewBrokerDeskCalendarUseCase(repo, foreign_broker_codes=foreign).execute(
+        ViewBrokerDeskCalendarRequest(broker_code=code, max_sessions=sessions)
+    )
+    if result is None:
+        exit_missing_desk_data(code)
+
+    if output_format == "json":
+        echo_json(
+            desk_envelope(
+                code=result.broker_code,
+                verb="calendar",
+                as_of=result.as_of,
+                scope_note=result.scope_note,
+                data={
+                    "broker_code": result.broker_code,
+                    "broker_name": result.broker_name,
+                    "broker_type": result.broker_type.value,
+                    "as_of": result.as_of.isoformat(),
+                    "sessions_cached": result.sessions_cached,
+                    "days": [
+                        {
+                            "date": d.date.isoformat(),
+                            "net_value": str(d.net_value),
+                            "buy_value": str(d.buy_value),
+                            "sell_value": str(d.sell_value),
+                            "top_ticker": d.top_ticker,
+                            "top_net": str(d.top_net),
+                            "ticker_count": d.ticker_count,
+                        }
+                        for d in result.days
+                    ],
+                },
+            )
+        )
+        return
+
+    display_desk_calendar(result)
 
 
 def broker_desk_history(

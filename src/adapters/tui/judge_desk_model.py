@@ -244,7 +244,7 @@ def build_judge_desk_model(
             effective_session=effective_session,
             market_context=market_context,
         )
-        footer = "esc board · p plan · j re-judge · present-only · Verdict mast"
+        footer = "d detail · esc board · p plan · j re-judge · present-only · Verdict mast"
 
     return JudgeDeskModel(
         ticker=ticker,

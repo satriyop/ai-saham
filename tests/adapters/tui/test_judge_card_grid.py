@@ -229,11 +229,15 @@ def test_cockpit_paints_each_section_card_slot():
                 # Textual raises NoMatches
                 assert "jd-card-more" in str(exc) or "NoMatches" in type(exc).__name__
 
-            for key in (CARD_RISK, CARD_TRADE_SETUP, CARD_ACCUM, CARD_DATA, CARD_SESSION):
+            # Compact default: primary cards only (session is secondary)
+            assert app._judge_detail_open is False
+            for key in (CARD_RISK, CARD_TRADE_SETUP, CARD_ACCUM, CARD_DATA):
                 el = app.query_one(f"#jd-card-{key}")
-                assert el.display is True, f"card {key} should be visible"
+                assert el.display is True, f"primary card {key} should be visible"
                 text = str(el.render())
                 assert text.strip(), f"card {key} empty"
+            session_el = app.query_one(f"#jd-card-{CARD_SESSION}")
+            assert session_el.display is False, "session card hidden in compact"
 
             risk_text = str(app.query_one(f"#jd-card-{CARD_RISK}").render())
             assert "RISK" in risk_text.upper()
@@ -244,5 +248,13 @@ def test_cockpit_paints_each_section_card_slot():
 
             action = str(app.query_one("#jd-action").render())
             assert "WATCH" in action
+
+            # d expands secondary cards via real toggle + chrome paint
+            app.action_toggle_detail()
+            await pilot.pause(0.1)
+            assert app._judge_detail_open is True
+            session_el = app.query_one(f"#jd-card-{CARD_SESSION}")
+            assert session_el.display is True, "session card visible after d detail"
+            assert str(session_el.render()).strip()
 
     asyncio.run(scenario())

@@ -37,9 +37,10 @@ def test_action_chip_styles_present():
     assert "AVOID" in avoid.plain
     # Styles applied (not plain monochrome)
     assert enter.spans or str(enter.style)
-    assert "#7ecfb8" in enter.markup or "7ecfb8" in repr(enter)
+    # OpenCode semantic greens/ambers/reds (not journey night-ink palette)
+    assert "#6fbf8a" in enter.markup or "6fbf8a" in repr(enter)
     assert "#d4b06a" in watch.markup or "d4b06a" in repr(watch)
-    assert "#e87a6e" in avoid.markup or "e87a6e" in repr(avoid)
+    assert "#c97a72" in avoid.markup or "c97a72" in repr(avoid)
 
 
 def test_gate_and_signal_markup():

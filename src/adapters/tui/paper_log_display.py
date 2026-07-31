@@ -22,14 +22,14 @@ def format_paper_confirm_body(
     """Notebook-style confirm body for PaperLogConfirmModal."""
     t = (ticker or "—").strip().upper() or "—"
     lines = [
-        "[bold #e8b86d]NOTEBOOK · PAPER ONLY[/]",
-        f"[bold #f0ebe3]Log paper · {t}[/]",
+        "[bold #c9a68a]PAPER TAPE · CONFIRM[/]",
+        f"[bold #e8e8e8]Notebook · {t}[/]",
         "",
-        "[#5c6575]GEOMETRY (from structure desk)[/]",
-        f"  Entry   [bold #e8b86d]{entry or '—'}[/]",
-        f"  Stop    [bold #e87a6e]{stop or '—'}[/]",
-        f"  Target  [bold #7ecfb8]{target or '—'}[/]",
-        f"  Lots    [bold #f0ebe3]{lots or '—'}[/]",
+        "[#555555]GEOMETRY · from plan structure[/]",
+        f"  Entry   [bold #c9a68a]{entry or '—'}[/]",
+        f"  Stop    [bold #c97a72]{stop or '—'}[/]",
+        f"  Target  [bold #6fbf8a]{target or '—'}[/]",
+        f"  Lots    [bold #e8e8e8]{lots or '—'}[/]",
     ]
     if plan_id:
         lines.append(f"  Plan    {plan_id}")
@@ -37,8 +37,7 @@ def format_paper_confirm_body(
         [
             "",
             "[#d4b06a]Paper only · no broker order.[/]",
-            "Uses saved swing_trade_plan · CLI: trade accum log --from-plan",
-            "[dim]Not learning corpus · not Action authority[/]",
+            "[dim]Notebook write · geometry from plan structure[/]",
         ]
     )
     return "\n".join(lines)
@@ -57,9 +56,9 @@ def format_paper_outcome_tape(result: Any) -> str:
 
     if refused:
         return (
-            f"[bold #e87a6e]PAPER TAPE · REFUSED[/]\n"
-            f"[bold #f0ebe3]{ticker}[/] · no write\n"
-            f"[#8b92a0]{message or 'refused'}[/]\n"
+            f"[bold #c97a72]PAPER TAPE · REFUSED[/]\n"
+            f"[bold #e8e8e8]{ticker}[/] · no write\n"
+            f"[#7a7a7a]{message or 'refused'}[/]\n"
             "[dim]no broker order · plan stage still open[/]"
         )
     if written:
@@ -73,16 +72,16 @@ def format_paper_outcome_tape(result: Any) -> str:
         geo_s = " · ".join(geo) if geo else "geometry saved"
         pid = f" · plan {plan_id}" if plan_id else ""
         return (
-            f"[bold #7ecfb8]PAPER TAPE · LOGGED[/]\n"
-            f"[bold #f0ebe3]{ticker}[/] · notebook write{pid}\n"
-            f"[#8b92a0]{geo_s}[/]\n"
-            f"[#8b92a0]{message or 'logged'}[/]\n"
-            "[dim]paper only · not learning · no broker order[/]"
+            f"[bold #6fbf8a]PAPER TAPE · LOGGED[/]\n"
+            f"[bold #e8e8e8]{ticker}[/] · notebook write{pid}\n"
+            f"[#7a7a7a]{geo_s}[/]\n"
+            f"[#7a7a7a]{message or 'logged'}[/]\n"
+            "[dim]paper only · no broker order[/]"
         )
     return (
         f"[bold #d4b06a]PAPER TAPE · NO WRITE[/]\n"
-        f"[bold #f0ebe3]{ticker}[/]\n"
-        f"[#8b92a0]{message or '0 rows / duplicate'}[/]\n"
+        f"[bold #e8e8e8]{ticker}[/]\n"
+        f"[#7a7a7a]{message or '0 rows / duplicate'}[/]\n"
         "[dim]no broker order[/]"
     )
 

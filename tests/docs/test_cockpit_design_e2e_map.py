@@ -50,7 +50,9 @@ def test_judge_not_digit_hotkey_only_enter_from_accum():
     assert 'showFrame("judge")' in html
     # digit map must not route a number key to judge
     assert '"2": "judge"' not in html
-    assert '"judge"' not in html.split("const map")[1].split("}")[0] if "const map" in html else True
+    assert (
+        '"judge"' not in html.split("const map")[1].split("}")[0] if "const map" in html else True
+    )
     # primary tabs start at Accum without Judge button label
     assert ">2 Plan<" in html or 'data-frame="plan">2 Plan' in html or "2 Plan" in html
 
@@ -77,7 +79,7 @@ def test_broker_enter_opens_full_desk_home_not_strip():
     assert 'data-deep="top"' in html
     assert 'data-deep="flow"' in html
     assert 'data-deep="hist"' in html
-    assert 'data-deep="ticker"' in html
+    assert 'data-deep="matrix"' in html
     assert "Top buy" in html and "Top sell" in html
     # Reject half-measure: "desk home strip" / "CLI parity later" without hub
     assert "desk home strip" not in html.lower()
@@ -100,7 +102,7 @@ def test_authority_board_enter_is_judge_not_ticker():
     assert 'showFrame("judge")' in html
     assert "present-only" in html.lower()
     # Enter on accum goes to judge, not ticker
-    assert "showFrame(\"judge\")" in html
+    assert 'showFrame("judge")' in html
     # paper write is deliberate (confirm overlay / no silent write)
     assert (
         "no silent write" in html.lower()
@@ -134,7 +136,7 @@ def test_detail_flags_present_for_code_richer_fields():
     assert 'data-flag="detail"' in html or "judgeDetailAll" in html
     assert "toggleJudgeDetail" in html or "setJudgeDetailOpen" in html
     for flag in ("stack", "readiness", "named", "mce", "limited"):
-        assert f'data-flag="{flag}"' in html or f"data-flag-panel=\"{flag}\"" in html
+        assert f'data-flag="{flag}"' in html or f'data-flag-panel="{flag}"' in html
     assert "judgeLimitedBanner" in html or "Limited judge" in html
     # Accum snapshot badge
     assert "accumSrcBadge" in html
@@ -145,9 +147,11 @@ def test_detail_flags_present_for_code_richer_fields():
     # Ticker detail (CLI full vs brief)
     assert "tickerDepthBody" in html or "tickerDetailAll" in html
     assert "toggleTickerDetail" in html or 'data-flag="detail"' in html
-    # Broker · top 5 net-buy matrix (m hub)
+    # Broker · top 5 net-buy matrix (m hub) · cell: net · avg buy · desk×ticker streak
     assert "brokerTop5Matrix" in html or "brokerMxBody" in html or 'data-deep="matrix"' in html
     assert "1s" in html and "20s" in html
+    assert "avg buy" in html.lower() or "avg_buy" in html or 'class="ap"' in html
+    assert "streak" in html.lower() or 'class="stk"' in html
 
 
 def test_preopen_enter_opens_auction_inspect_not_judge():
@@ -182,7 +186,9 @@ def test_paper_frame_is_notebook_tape_not_log_card():
     assert "Notebook tape" in html or "notebook tape" in html.lower()
     # confirm remains overlay for write path
     assert 'id="confirmOverlay"' in html
-    assert "no silent write" in html.lower() or "No silent write" in html or "no silent write" in html
+    assert (
+        "no silent write" in html.lower() or "No silent write" in html or "no silent write" in html
+    )
     # reject single log-card stage as the only paper UX
     assert "NOTEBOOK · PAPER ONLY" not in html
 
@@ -221,4 +227,9 @@ def test_ticker_frame_is_price_hero_hierarchy_not_flat_cli_only():
     ):
         assert f'data-panel="{key}"' in html, f"missing field slot {key}"
     # Density bars allowed; product charts forbidden as copy claim
-    assert "not a live chart" in html.lower() or "not charts" in html.lower() or "density ≠ chart" in html or "density bars" in html.lower()
+    assert (
+        "not a live chart" in html.lower()
+        or "not charts" in html.lower()
+        or "density ≠ chart" in html
+        or "density bars" in html.lower()
+    )

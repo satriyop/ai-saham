@@ -137,12 +137,16 @@ def test_broker_list_cells_contract_and_sign_tint():
 
 
 def test_harga_mast_never_action():
+    """Price mast product title is LAST · LOCAL CLOSE (not design jargon HARGA)."""
     mast = format_harga_mast(ticker="BBCA", price="6,275", as_of="2026-07-29")
-    assert "HARGA" in mast or "harga" in mast.lower()
+    assert "LAST · LOCAL CLOSE" in mast
+    assert "HARGA" not in mast
     assert "6,275" in mast
-    assert "not Action" in mast or "cache dashboard" in mast.lower()
-    # Must not present board Action chips as authority
-    assert "Action authority" in mast or "not Action" in mast
+    assert "local cache" in mast.lower() or "browse" in mast.lower()
+    # Must not invent board Action chips as authority stamps
+    assert " ENTER " not in f" {mast} "
+    assert "WATCH" not in mast
+    assert "not Action" not in mast  # no authority slogans on operator mast
 
     dash = SimpleNamespace(
         ticker="BBCA",
@@ -152,12 +156,15 @@ def test_harga_mast_never_action():
     )
     full = format_ticker_desk_from_dashboard(dash, body="Close 6,275\nFresh ok\n")
     assert "6,275" in full or "6275" in full
-    assert "HARGA" in full or "BBCA" in full
+    assert "LAST · LOCAL CLOSE" in full or "BBCA" in full
+    assert "HARGA" not in full
     assert "ENTER" not in full
+    assert "not Action" not in full
 
     from_text = format_ticker_desk_from_text(ticker="TLKM", body="Last: 3,180\nmore")
     assert "TLKM" in from_text
-    assert "3,180" in from_text or "HARGA" in from_text
+    assert "3,180" in from_text or "LAST · LOCAL CLOSE" in from_text
+    assert "HARGA" not in from_text
 
 
 def test_health_posters_distinct():
