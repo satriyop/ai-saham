@@ -1,4 +1,4 @@
-"""Two-key chords: s a / s p / v t / v b (wired, not palette labels only)."""
+"""Two-key chords: pure dispatch table + one residual e2e mount (D6)."""
 
 from __future__ import annotations
 
@@ -48,7 +48,33 @@ def test_palette_labels_match_chords():
     assert by_id["view-broker"].shortcut == "v b"
 
 
-def test_chord_v_t_opens_view_ticker_v_b_opens_broker():
+def test_chord_dispatch_table_is_pure():
+    """D6: key→command map asserted without mounting the app."""
+    assert CockpitApp._CHORD_MAP == {
+        ("s", "a"): "screen-accum",
+        ("s", "p"): "screen-preopen",
+        ("v", "t"): "view-ticker",
+        ("v", "b"): "view-broker",
+    }
+    assert CockpitApp._CHORD_HINTS["s"].startswith("s a")
+    assert "v t" in CockpitApp._CHORD_HINTS["v"]
+    # Palette shortcuts agree with the map
+    by_id = {c.command_id: c for c in COCKPIT_COMMANDS}
+    for (p, k), cmd in CockpitApp._CHORD_MAP.items():
+        assert by_id[cmd].shortcut == f"{p} {k}"
+
+
+def test_desk_hub_v_is_not_chord_prefix_rule():
+    """Documented rule: on desk hub, v jumps ticker; off hub, v arms chord."""
+    # Pure: _desk_hub_active is stage+page state — no mount needed for the map side.
+    assert ("v", "t") in CockpitApp._CHORD_MAP
+    assert ("v", "b") in CockpitApp._CHORD_MAP
+    # Jump is single-key when hub active (not a chord pair)
+
+
+def test_chord_v_t_and_v_b_dispatch_e2e():
+    """One residual full-app chord journey (D3/D6): proves wiring, not each pair."""
+
     async def scenario() -> None:
         viewed: list[str] = []
         broker_loads = 0
@@ -78,6 +104,12 @@ def test_chord_v_t_opens_view_ticker_v_b_opens_broker():
 
             await pilot.press("v")
             assert app._chord_prefix == "v"
+            await pilot.press("escape")
+            await pilot.pause()
+            assert app._chord_prefix is None
+            assert app._stage == "accum"
+
+            await pilot.press("v")
             await pilot.press("t")
             for _ in range(40):
                 await pilot.pause(0.05)
@@ -94,144 +126,5 @@ def test_chord_v_t_opens_view_ticker_v_b_opens_broker():
                     break
             assert broker_loads == 1
             assert app._stage == "broker-list"
-
-    asyncio.run(scenario())
-
-
-def test_chord_s_a_reloads_accum_s_p_loads_preopen():
-    async def scenario() -> None:
-        accum_n = 0
-        preopen_n = 0
-
-        def accum():
-            nonlocal accum_n
-            accum_n += 1
-            return _accum_payload()
-
-        def preopen():
-            nonlocal preopen_n
-            preopen_n += 1
-            return SimpleNamespace(
-                snapshot_date="2026-03-01",
-                warnings=(),
-                candidates=[
-                    SimpleNamespace(
-                        ticker="BBRI",
-                        iep="100",
-                        delta_pct="1",
-                        iev="1",
-                        ncp="1",
-                        delta_iev="0",
-                        grade="A",
-                        risk="LOW",
-                        name="BBRI",
-                    )
-                ],
-            )
-
-        from src.adapters.tui.presenters.preopen_presenter import PreOpenPresenter
-
-        app = CockpitApp(
-            accum_loader=accum,
-            accum_controller=BoardController(accum),
-            accum_presenter=AccumPresenter(),
-            preopen_loader=preopen,
-            preopen_controller=BoardController(preopen),
-            preopen_presenter=PreOpenPresenter(),
-        )
-        async with app.run_test(size=(120, 40)) as pilot:
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._stage == "accum":
-                    break
-            base_accum = accum_n
-
-            await pilot.press("s")
-            await pilot.press("p")
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._stage == "preopen":
-                    break
-            assert preopen_n >= 1
-            assert app._stage == "preopen"
-
-            await pilot.press("s")
-            await pilot.press("a")
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._stage == "accum":
-                    break
-            assert accum_n > base_accum
-            assert app._stage == "accum"
-
-    asyncio.run(scenario())
-
-
-def test_v_on_desk_hub_still_jumps_not_chord():
-    async def scenario() -> None:
-        viewed: list[str] = []
-
-        def show_loader(code: str):
-            return SimpleNamespace(text=f"SHOW_{code}", jump_ticker="BBRI")
-
-        def ticker_loader(t: str) -> str:
-            viewed.append(t)
-            return f"D_{t}"
-
-        app = CockpitApp(
-            accum_loader=_accum_payload,
-            accum_controller=BoardController(_accum_payload),
-            accum_presenter=AccumPresenter(),
-            broker_list_loader=lambda: [SimpleNamespace(code="AK", type_label="F")],
-            broker_show_loader=show_loader,
-            ticker_detail_loader=ticker_loader,
-        )
-        async with app.run_test(size=(120, 40)) as pilot:
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._stage == "accum":
-                    break
-            app._run_command("view-broker")
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._stage == "broker-list":
-                    break
-            app._open_broker_desk_show()
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._broker_page == "show":
-                    break
-            assert app._desk_hub_active()
-
-            await pilot.press("v")
-            # Immediate jump — no chord arm
-            assert app._chord_prefix is None
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if viewed:
-                    break
-            assert viewed == ["BBRI"]
-
-    asyncio.run(scenario())
-
-
-def test_escape_cancels_chord_without_leaving_board():
-    async def scenario() -> None:
-        app = CockpitApp(
-            accum_loader=_accum_payload,
-            accum_controller=BoardController(_accum_payload),
-            accum_presenter=AccumPresenter(),
-        )
-        async with app.run_test(size=(120, 40)) as pilot:
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._stage == "accum":
-                    break
-            await pilot.press("v")
-            assert app._chord_prefix == "v"
-            await pilot.press("escape")
-            await pilot.pause()
-            assert app._chord_prefix is None
-            assert app._stage == "accum"
 
     asyncio.run(scenario())

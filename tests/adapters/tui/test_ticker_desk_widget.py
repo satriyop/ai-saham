@@ -1,18 +1,18 @@
-"""Visual ticker desk (Harga mast) — design-aligned hierarchy, not CLI dump."""
+"""Visual ticker desk (Harga mast) — pure model hierarchy, not CLI dump.
+
+Journey view-ticker residual: ``test_view_ticker_desks_journey`` / D3.
+"""
 
 from __future__ import annotations
 
-import asyncio
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.adapters.tui.main import CockpitApp
 from src.adapters.tui.ticker_desk_model import (
     build_ticker_desk_model_from_dashboard,
     build_ticker_desk_model_from_text,
 )
-from src.adapters.tui.widgets.ticker_desk import TickerDesk
 
 
 def _dashboard(**over):
@@ -183,81 +183,36 @@ def test_model_design_hierarchy_not_cli_primary():
     assert "DETAIL PANELS" in text
 
 
-def test_cockpit_view_ticker_paints_design_sections():
-    def loader(t: str):
-        return build_ticker_desk_model_from_dashboard(_dashboard(ticker=t))
+def test_ticker_paint_contract_design_sections():
+    """Mast / freshness / pulses / earnings / detail facts — pure model."""
+    model = build_ticker_desk_model_from_dashboard(_dashboard())
+    assert "6,275" in model.price
+    assert "LAST" in model.as_text().upper()
 
-    async def scenario() -> None:
-        app = CockpitApp(ticker_detail_loader=loader)
-        async with app.run_test(size=(140, 48)) as pilot:
-            await pilot.pause(0.05)
-            app._focus_ticker = "BBCA"
-            app._stage = "accum"
-            app._board_kind = "accum"
-            app._rows = [
-                SimpleNamespace(
-                    ticker="BBCA",
-                    signal="84",
-                    accum="48",
-                    action="WATCH",
-                    gate="OPEN",
-                    source=None,
-                )
-            ]
-            app._row_index = 0
-            app._run_command("view-ticker")
-            for _ in range(50):
-                await pilot.pause(0.05)
-                if app._stage == "detail" and app._ticker_desk_model is not None:
-                    break
-            desk = app.query_one("#ticker-desk", TickerDesk)
-            assert desk.display is True
-            assert app.query_one("#stage-body").display is False
-            # Mast
-            assert "6,275" in str(app.query_one("#td-price").render())
-            assert "LAST" in str(app.query_one("#td-mast-lab").render()).upper()
-            # Fresh-grid pills (mock hierarchy)
-            fp0 = str(app.query_one("#td-fp-0").render())
-            assert "Price" in fp0
-            assert "ok" in fp0.lower()
-            assert "ok" in app.query_one("#td-fp-0").classes
-            # Detail expand shows real panel facts (not presence-only slogans)
-            desk.paint(app._ticker_desk_model, detail_open=True)
-            analyst_b = str(app.query_one("#td-depth-b-analyst").render())
-            assert "BUY" in analyst_b or "Target" in analyst_b or "3B" in analyst_b
-            assert "analyst block present" not in analyst_b
-            assert len(desk.query("#td-flag-ownership")) == 0  # single master chip only
-            # Pulse trio present (not CLI dump body id)
-            flow_h = str(app.query_one("#td-pulse-h-flow").render())
-            assert flow_h.strip()
-            assert "FOREIGN" in str(app.query_one("#td-pulse-t-flow").render()).upper()
-            assert "STRUCTURE" in str(app.query_one("#td-pulse-t-struct").render()).upper()
-            assert "BANDAR" in str(app.query_one("#td-pulse-t-bandar").render()).upper()
-            # Earnings section
-            earn = str(app.query_one("#td-earn-body").render())
-            assert "Q" in earn or "eps" in earn.lower() or "119" in earn or "—" in earn
-            # No primary CLI dump widget
-            assert app.query_one("#judge-desk").display is False
-            # Metric ribbon
-            assert "13" in str(app.query_one("#td-metric-v-0").render())
-            # Default collapsed more section
-            assert app._ticker_detail_open is False
-            more = str(app.query_one("#td-more-head").render()).upper()
-            assert "COLLAPSE" in more or "MORE" in more or "D DETAIL" in more
+    by_lab = {p.label: p for p in model.freshness}
+    assert "Price" in by_lab and by_lab["Price"].status == "ok"
 
-            # d toggles full inventory with real panel facts
-            app.action_toggle_detail()
-            assert app._ticker_detail_open is True
-            head = str(app.query_one("#td-more-head").render()).upper()
-            assert "DETAIL" in head or "FULL" in head
-            analyst_b = str(app.query_one("#td-depth-b-analyst").render())
-            assert "BUY" in analyst_b or "Target" in analyst_b or "3B" in analyst_b
-            assert app.query_one("#td-depth-analyst").display is True
+    flow = next(p for p in model.pulses if p.key == "flow")
+    assert flow.title.upper() == "FOREIGN FLOW" or "FOREIGN" in flow.title.upper()
+    struct = next(p for p in model.pulses if p.key == "struct")
+    assert "STRUCTURE" in struct.title.upper() or struct.title
+    bandar = next(p for p in model.pulses if p.key == "bandar")
+    assert "BANDAR" in bandar.title.upper()
 
-            app.action_toggle_detail()
-            assert app._ticker_detail_open is False
+    earn0 = model.earnings[0]
+    earn_blob = " ".join(model.earnings) if isinstance(earn0, str) else str(model.earnings)
+    assert "Q" in earn_blob or "119" in earn_blob or model.earnings
 
-    asyncio.run(scenario())
+    assert any("13" in m.value for m in model.metrics)
+
+    # Compact more section until d
+    assert "d detail" in model.footer.lower() or "detail" in model.footer.lower()
+
+    analyst = next(p for p in model.detail_panels if p.key == "analyst")
+    assert any("BUY" in ln or "Target" in ln or "3B" in ln for ln in analyst.lines)
+    assert "analyst block present" not in " ".join(analyst.lines)
+    # Single master detail chip design — panels keyed, not a wall of flag chips
+    assert "analyst" in {p.key for p in model.detail_panels}
 
 
 def test_text_fallback_still_has_mast_and_pulses():

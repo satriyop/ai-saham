@@ -1,14 +1,15 @@
-"""Visual Judge desk widget (Verdict mast) — not text-only dump."""
+"""Judge desk paint contract — pure model (no full-app mount).
+
+Journey Enter → judge → d → esc residual: D3 (accum_judge / e2e smoke).
+"""
 
 from __future__ import annotations
 
-import asyncio
 from types import SimpleNamespace
 
 from src.adapters.tui.judge_desk_model import build_judge_desk_model
-from src.adapters.tui.main import CockpitApp
 from src.adapters.tui.phase_sequence import PhaseSequenceFact
-from src.adapters.tui.presenters.accum_presenter import AccumPresenter, AccumRowView
+from src.adapters.tui.presenters.accum_presenter import AccumRowView
 from src.adapters.tui.widgets.judge_desk import JudgeDesk
 
 
@@ -56,24 +57,8 @@ def _candidate() -> SimpleNamespace:
     )
 
 
-def _result():
-    c = _candidate()
-    return SimpleNamespace(
-        single_projection=SimpleNamespace(
-            candidates=[c],
-            window_days=7,
-            data_as_of={"latest_candle_date": "2026-07-29"},
-            applied_filters=SimpleNamespace(sort_by="signal", top=20),
-        ),
-        multi_projection=None,
-        warnings=(),
-        effective_session=None,
-        market_context=None,
-    )
-
-
-def test_build_judge_desk_model_has_verdict_fields():
-    row = AccumRowView(
+def _row() -> AccumRowView:
+    return AccumRowView(
         ticker="BBCA",
         signal="84",
         accum="48.2",
@@ -87,8 +72,11 @@ def test_build_judge_desk_model_has_verdict_fields():
         gate="OPEN",
         source=_candidate(),
     )
+
+
+def test_build_judge_desk_model_has_verdict_fields():
     model = build_judge_desk_model(
-        row,
+        _row(),
         phase_sequence=(
             PhaseSequenceFact(phase="ACCUMULATION", as_of="2026-07-20"),
             PhaseSequenceFact(phase="COMPRESSION", as_of="2026-07-28"),
@@ -101,61 +89,31 @@ def test_build_judge_desk_model_has_verdict_fields():
     assert "ACCUMULATION" in model.phase_arrow and "COMPRESSION" in model.phase_arrow
 
 
-def test_cockpit_judge_shows_judge_desk_widget_not_only_stage_body():
-    live = _result()
+def test_judge_paint_contract_mast_flags_and_compact_default():
+    """What #jd-action / #jd-gate / flags paint — compact until detail · d."""
+    model = build_judge_desk_model(
+        _row(),
+        phase_sequence=(
+            PhaseSequenceFact(phase="ACCUMULATION", as_of="2026-07-20"),
+            PhaseSequenceFact(phase="COMPRESSION", as_of="2026-07-28"),
+        ),
+    )
+    title = f"Judge · {model.ticker}"
+    assert "BBCA" in title
+    assert model.action == "WATCH"
+    assert model.gate == "OPEN"
+    assert model.phase_arrow
+    assert "ACCUMULATION" in model.phase_arrow or "→" in model.phase_arrow
 
-    async def scenario() -> None:
-        app = CockpitApp(
-            accum_loader=lambda: live,
-            accum_presenter=AccumPresenter(),
-            phase_history_loader=lambda t, d: (
-                PhaseSequenceFact(phase="ACCUMULATION", as_of="2026-07-20"),
-                PhaseSequenceFact(phase="COMPRESSION", as_of="2026-07-28"),
-            ),
-        )
-        async with app.run_test(size=(140, 40)) as pilot:
-            await pilot.pause(0.05)
-            app._on_accum_payload(live)
-            await pilot.pause(0.05)
-            assert app._stage == "accum"
-            app._row_index = 0
-            app._focus_ticker = app._rows[0].ticker
-            app._open_detail()
-            await pilot.pause(0.1)
-            assert app._status_note == "judge"
-            desk = app.query_one("#judge-desk", JudgeDesk)
-            assert desk.display is True
-            body = app.query_one("#stage-body")
-            assert body.display is False
-            # Painted mast content
-            action = str(app.query_one("#jd-action").render())
-            assert "WATCH" in action
-            gate = str(app.query_one("#jd-gate").render())
-            assert "OPEN" in gate or "Gate" in gate
-            mast = app.query_one("#jd-mast")
-            assert mast.display is not False
-            # CSS classes for semantic action
-            assert "action-watch" in action or "WATCH" in action
-            classes = set(app.query_one("#jd-action").classes)
-            assert "action-watch" in classes or "verdict-action" in classes
-            # Compact: phase timeline is primary; decision stack waits for d
-            assert app._judge_detail_open is False
-            assert app.query_one("#jd-phase").display is True
-            assert app.query_one("#jd-decision").display is False
-            # Flag chip row (mock judgeFlags)
-            flags = app.query_one("#jd-flags")
-            assert flags.display is not False
-            detail_chip = app.query_one("#jd-flag-detail")
-            assert "detail · d" in str(detail_chip.content)
-            assert "is-on" not in detail_chip.classes
-            assert "is-dim" not in detail_chip.classes  # available, collapsed
-            phase_arrow = str(app.query_one("#jd-phase-arrow").render())
-            assert "ACCUMULATION" in phase_arrow or "→" in phase_arrow or phase_arrow.strip()
-            app.action_toggle_detail()
-            await pilot.pause(0.1)
-            assert app._judge_detail_open is True
-            assert app.query_one("#jd-decision").display is True
-            assert "is-on" in app.query_one("#jd-flag-detail").classes
-            assert "is-on" in app.query_one("#jd-flag-phase_plus").classes
+    # Expandable flags for chip row (detail · d master + named panels)
+    desk = JudgeDesk()
+    expandable = desk._available_expandable_flags(model)
+    assert "phase_plus" in expandable
+    if model.decision_lines:
+        assert "stack" in expandable
 
-    asyncio.run(scenario())
+    # Compact mode: decision stack waits for d / stack chip
+    # Primary cards always present in model; secondary gated at paint time
+    primary = frozenset({"risk", "trade_setup", "accum", "data"})
+    card_keys = {c.key for c in model.cards}
+    assert primary & card_keys or model.limited

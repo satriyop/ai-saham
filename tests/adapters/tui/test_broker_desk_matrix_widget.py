@@ -1,157 +1,67 @@
-"""Broker matrix desk widget paints structured model (Stage 2)."""
+"""Broker matrix desk paint contract — pure model (no full-app mount).
+
+Hub ``m`` journey + esc trail: ``test_view_broker_journey`` (D3 residual).
+"""
 
 from __future__ import annotations
 
-import asyncio
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
-from src.adapters.tui.broker_desk_matrix_model import build_broker_desk_matrix_model
-from src.adapters.tui.controllers.board_controller import BoardController
-from src.adapters.tui.main import CockpitApp
-from src.adapters.tui.presenters.accum_presenter import AccumPresenter
-from src.adapters.tui.widgets.broker_desk import BrokerDesk
-from src.adapters.tui.widgets.broker_matrix_desk import BrokerMatrixDesk
+from src.adapters.tui.broker_desk_matrix_model import (
+    build_broker_desk_matrix_model,
+    format_broker_desk_matrix_scraper_text,
+)
 from src.application.services.broker_desk_from_daily_flow import DeskTickerWindowCell
 from src.domain.entities.broker_flow import BrokerType
 
 
-def _accum_payload():
-    c = SimpleNamespace(
-        ticker="BBCA",
-        accum_score=50.0,
-        signal_assessment=None,
-        trade_setup=None,
-        risk_assessment=None,
-        setup_phase=None,
-        consecutive_streak=1,
-        rsi=50,
-        net_buy_ratio=0.5,
-        vwap_discount_pct=1.0,
-        current_price=1000,
-        name="BBCA",
+def _cell() -> DeskTickerWindowCell:
+    return DeskTickerWindowCell(
+        ticker="AMMN",
+        net_value=Decimal("6760000000"),
+        window=1,
+        sessions_used=1,
+        avg_buy_price=Decimal("9850"),
+        buy_streak=6,
+        is_partial=False,
     )
+
+
+def _result():
     return SimpleNamespace(
-        single_projection=SimpleNamespace(
-            candidates=[c],
-            window_days=7,
-            data_as_of={},
-            applied_filters=SimpleNamespace(sort_by="signal", top=20),
-        ),
-        effective_session=None,
-        market_context=None,
-        multi_projection=None,
-        warnings=(),
+        broker_code="YP",
+        broker_name="YP Desk",
+        as_of=date(2026, 7, 29),
+        broker_type=BrokerType.FOREIGN,
+        windows=(1, 3, 5, 10, 20),
+        columns={1: (_cell(),), 3: (), 5: (), 10: (), 20: ()},
+        sessions_cached=7,
+        scope_note="Tracked desk",
+        top_ticker_1s="AMMN",
     )
 
 
-def test_cockpit_paints_broker_matrix_widget_on_m():
-    async def scenario() -> None:
-        cell = DeskTickerWindowCell(
-            ticker="AMMN",
-            net_value=Decimal("6760000000"),
-            window=1,
-            sessions_used=1,
-            avg_buy_price=Decimal("9850"),
-            buy_streak=6,
-            is_partial=False,
-        )
-        result = SimpleNamespace(
-            broker_code="YP",
-            broker_name="YP Desk",
-            as_of=date(2026, 7, 29),
-            broker_type=BrokerType.FOREIGN,
-            windows=(1, 3, 5, 10, 20),
-            columns={1: (cell,), 3: (), 5: (), 10: (), 20: ()},
-            sessions_cached=7,
-            scope_note="Tracked desk",
-            top_ticker_1s="AMMN",
-        )
-        mx_model = build_broker_desk_matrix_model(result)
+def test_matrix_paint_contract_cell_hierarchy():
+    """What #mx-c-0-0 paint would show: ticker + streak + avg buy."""
+    model = build_broker_desk_matrix_model(_result())
+    assert model.empty is False
+    assert model.jump_ticker == "AMMN"
+    assert model.broker_code == "YP"
 
-        def show_loader(code: str):
-            from src.adapters.tui.broker_desk_home_model import build_broker_desk_home_model
+    cell0 = model.rows[0][0]
+    assert cell0 is not None and not cell0.empty
+    assert cell0.ticker == "AMMN"
+    assert cell0.streak_label == "6s"
+    assert cell0.avg_buy_display == "@ 9,850" or "9,850" in cell0.avg_buy_display
+    assert "6.76" in cell0.net_display or cell0.net_display.startswith("+")
 
-            home = build_broker_desk_home_model(
-                SimpleNamespace(
-                    broker_code=code,
-                    broker_name="YP Desk",
-                    broker_type=BrokerType.FOREIGN,
-                    as_of=date(2026, 7, 29),
-                    day_net_value=Decimal("1000000000"),
-                    day_net_lot=100,
-                    day_ticker_count=1,
-                    top_buy_stocks=(SimpleNamespace(ticker="AMMN", net_value=Decimal("1")),),
-                    top_sell_stocks=(),
-                    scope_note="Tracked",
-                )
-            )
-            return SimpleNamespace(text=f"SHOW_{code}", jump_ticker="AMMN", model=home)
+    # Title paint composes
+    title = f"Top 5 net buy · desk {model.broker_code}"
+    assert "YP" in title
 
-        def matrix_loader(code: str):
-            return SimpleNamespace(
-                text=f"MATRIX_BODY_{code}",
-                model=mx_model,
-                jump_ticker="AMMN",
-            )
-
-        app = CockpitApp(
-            accum_loader=_accum_payload,
-            accum_controller=BoardController(_accum_payload),
-            accum_presenter=AccumPresenter(),
-            broker_list_loader=lambda: [SimpleNamespace(code="YP", type_label="Foreign")],
-            broker_show_loader=show_loader,
-            broker_matrix_loader=matrix_loader,
-            broker_top_loader=lambda c: f"TOP_{c}",
-            broker_flow_loader=lambda c: f"FLOW_{c}",
-            broker_history_loader=lambda c: f"HIST_{c}",
-        )
-        async with app.run_test(size=(120, 40)) as pilot:
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._stage == "accum" and app._rows:
-                    break
-
-            app._run_command("view-broker")
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._stage == "broker-list":
-                    break
-
-            app._open_broker_desk_show()
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._stage == "detail" and app._broker_page == "show":
-                    break
-            assert app.query_one("#broker-desk", BrokerDesk).display is True
-
-            app.action_broker_matrix()
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._broker_page == "matrix" and app._stage == "detail":
-                    break
-
-            assert app._broker_page == "matrix"
-            assert app._broker_desk_matrix_model is not None
-            assert app._broker_desk_matrix_model.jump_ticker == "AMMN"
-            assert "MATRIX_BODY_YP" in app._detail_text
-
-            mx = app.query_one("#broker-matrix-desk", BrokerMatrixDesk)
-            assert mx.display is True
-            assert app.query_one("#broker-desk", BrokerDesk).display is False
-            cell0 = str(mx.query_one("#mx-c-0-0").content)
-            assert "AMMN" in cell0
-            assert "6s" in cell0
-            assert "@ 9,850" in cell0 or "9,850" in cell0
-
-            await pilot.press("escape")
-            for _ in range(40):
-                await pilot.pause(0.05)
-                if app._broker_page == "show":
-                    break
-            assert app._broker_page == "show"
-            assert app.query_one("#broker-desk", BrokerDesk).display is True
-            assert app.query_one("#broker-matrix-desk", BrokerMatrixDesk).display is False
-
-    asyncio.run(scenario())
+    assert model.body_contains_action_authority() is False
+    text = format_broker_desk_matrix_scraper_text(model)
+    assert "AMMN" in text
+    assert "MATRIX" not in text  # structured facts, not fake loader body

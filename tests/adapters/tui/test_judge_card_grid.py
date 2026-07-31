@@ -1,8 +1,7 @@
-"""Judge desk card grid: each section owns a card; no overflow dump."""
+"""Judge desk card grid: each section owns a card; no overflow dump — pure model."""
 
 from __future__ import annotations
 
-import asyncio
 from types import SimpleNamespace
 
 from src.adapters.tui.judge_desk_model import (
@@ -14,9 +13,7 @@ from src.adapters.tui.judge_desk_model import (
     CARD_TRADE_SETUP,
     build_judge_desk_model,
 )
-from src.adapters.tui.main import CockpitApp
-from src.adapters.tui.presenters.accum_presenter import AccumPresenter, AccumRowView
-from src.adapters.tui.widgets.judge_desk import JudgeDesk
+from src.adapters.tui.presenters.accum_presenter import AccumRowView
 
 
 def _gate(name: str, *, triggered: bool = False, outcome: str = "pass", reason: str = "ok"):
@@ -180,81 +177,45 @@ def test_limited_model_scalars_only_no_full_engine_cards():
     assert CARD_MARKET not in keys
 
 
-def test_cockpit_paints_each_section_card_slot():
-    c = _full_source()
-    result = SimpleNamespace(
-        single_projection=SimpleNamespace(
-            candidates=[c],
-            window_days=7,
-            data_as_of={"latest_candle_date": "2026-07-29"},
-            applied_filters=SimpleNamespace(sort_by="signal", top=20),
-        ),
-        multi_projection=None,
-        warnings=(),
-        effective_session=SimpleNamespace(
-            market_session_name="REGULAR",
-            analysis_as_of=__import__("datetime").date(2026, 7, 29),
-            latest_completed_session=__import__("datetime").date(2026, 7, 29),
-            resolution_source="ihsg_cache",
-        ),
-        market_context=SimpleNamespace(
-            regime=SimpleNamespace(value="NEUTRAL"),
-            conviction=0.49,
-            confidence=0.93,
-            stability=SimpleNamespace(value="TRANSITIONING"),
-            warning="recent regime change",
-        ),
+def test_paint_contract_primary_cards_and_no_overflow_slot():
+    """Primary risk/setup/accum/data always in model; no overflow dump card."""
+    mce = SimpleNamespace(
+        regime=SimpleNamespace(value="NEUTRAL"),
+        conviction=0.49,
+        confidence=0.93,
+        stability=SimpleNamespace(value="TRANSITIONING"),
+        warning="recent regime change",
     )
+    session = SimpleNamespace(
+        market_session_name="REGULAR",
+        analysis_as_of=__import__("datetime").date(2026, 7, 29),
+        latest_completed_session=__import__("datetime").date(2026, 7, 29),
+        resolution_source="ihsg_cache",
+    )
+    model = build_judge_desk_model(
+        _row(),
+        effective_session=session,
+        market_context=mce,
+    )
+    # No overflow dump key
+    keys = {c.key for c in model.cards}
+    assert "more" not in keys
+    assert "overflow" not in keys
 
-    async def scenario() -> None:
-        app = CockpitApp(
-            accum_loader=lambda: result,
-            accum_presenter=AccumPresenter(),
-        )
-        async with app.run_test(size=(140, 48)) as pilot:
-            await pilot.pause(0.05)
-            app._on_accum_payload(result)
-            await pilot.pause(0.05)
-            app._row_index = 0
-            app._focus_ticker = "BBCA"
-            app._open_detail()
-            await pilot.pause(0.1)
-            desk = app.query_one("#judge-desk", JudgeDesk)
-            assert desk.display is True
-            # No overflow dump id
-            try:
-                app.query_one("#jd-card-more")
-                raise AssertionError("overflow #jd-card-more must not exist")
-            except Exception as exc:
-                # Textual raises NoMatches
-                assert "jd-card-more" in str(exc) or "NoMatches" in type(exc).__name__
+    for key in (CARD_RISK, CARD_TRADE_SETUP, CARD_ACCUM, CARD_DATA):
+        card = model.card_by_key(key)
+        assert card is not None, f"primary card {key} missing"
+        text = f"{card.headline}\n" + "\n".join(card.lines)
+        assert text.strip(), f"card {key} empty"
 
-            # Compact default: primary cards only (session is secondary)
-            assert app._judge_detail_open is False
-            for key in (CARD_RISK, CARD_TRADE_SETUP, CARD_ACCUM, CARD_DATA):
-                el = app.query_one(f"#jd-card-{key}")
-                assert el.display is True, f"primary card {key} should be visible"
-                text = str(el.render())
-                assert text.strip(), f"card {key} empty"
-            session_el = app.query_one(f"#jd-card-{CARD_SESSION}")
-            assert session_el.display is False, "session card hidden in compact"
+    risk_text = (
+        model.card_by_key(CARD_RISK).headline + "\n" + "\n".join(model.card_by_key(CARD_RISK).lines)
+    )
+    assert "OPEN" in risk_text or "RISK" in risk_text.upper()
+    assert "FundamentalGate pass · F-score 4 > 3" not in risk_text
+    assert "F-score 4 > 3" not in risk_text
 
-            risk_text = str(app.query_one(f"#jd-card-{CARD_RISK}").render())
-            assert "RISK" in risk_text.upper()
-            assert "OPEN" in risk_text
-            assert "FundamentalGate pass · F-score 4 > 3" not in risk_text
-            # Compact chips, not multi-line gate essays
-            assert "F-score 4 > 3" not in risk_text
-
-            action = str(app.query_one("#jd-action").render())
-            assert "WATCH" in action
-
-            # d expands secondary cards via real toggle + chrome paint
-            app.action_toggle_detail()
-            await pilot.pause(0.1)
-            assert app._judge_detail_open is True
-            session_el = app.query_one(f"#jd-card-{CARD_SESSION}")
-            assert session_el.display is True, "session card visible after d detail"
-            assert str(session_el.render()).strip()
-
-    asyncio.run(scenario())
+    # Secondary session/market present in model (paint shows after d)
+    assert model.card_by_key(CARD_SESSION) is not None
+    assert model.card_by_key(CARD_MARKET) is not None
+    assert model.action == "WATCH"
