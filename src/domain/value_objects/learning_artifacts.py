@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any, ClassVar, Mapping
 
 LEARNING_SCHEMA_VERSION = 1
 
@@ -140,13 +140,22 @@ def _require_non_empty(name: str, value: str) -> None:
 
 
 def _artifact_payload(value: Any, *, id_field: str, digest_field: str) -> dict[str, Any]:
+    """Return the immutable content a digest is computed over.
+
+    Identity and the digest itself are dropped, then whatever the artifact
+    declares in ``DIGEST_EXCLUDED_FIELDS``. Popping is strict so a stale
+    declaration fails loudly instead of silently widening the hash.
+
+    Changing what this returns changes every future digest while leaving stored
+    rows on the old rule. Treat any edit as a schema bump: see
+    ``tests/domain/value_objects/test_learning_artifact_digest_contract.py``.
+    """
+
     payload = asdict(value)
     payload.pop(id_field)
     payload.pop(digest_field)
-    # Label identity is (observation_id, contract). Wall-clock labeled_at is ops
-    # audit only — must not force digest conflicts on daily cron re-runs.
-    if id_field == "label_id":
-        payload.pop("labeled_at", None)
+    for operational_field in type(value).DIGEST_EXCLUDED_FIELDS:
+        payload.pop(operational_field)
     return payload
 
 
@@ -165,6 +174,9 @@ def validate_artifact_integrity(
 
 @dataclass(frozen=True)
 class LearningObservation:
+    # Nothing excluded: captured_at does participate in this artifact's digest.
+    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset()
+
     observation_id: str
     artifact_digest: str
     schema_version: int
@@ -243,6 +255,8 @@ class LearningObservation:
 
 @dataclass(frozen=True)
 class LearningTrackSnapshot:
+    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset()
+
     snapshot_id: str
     artifact_digest: str
     schema_version: int
@@ -292,6 +306,10 @@ class LearningTrackSnapshot:
 
 @dataclass(frozen=True)
 class LearningOutcomeLabel:
+    # Identity is (observation_id, contract). labeled_at records when the cron
+    # happened to run, so hashing it would make every re-run a digest conflict.
+    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset({"labeled_at"})
+
     label_id: str
     artifact_digest: str
     schema_version: int
@@ -357,6 +375,8 @@ class LearningOutcomeLabel:
 
 @dataclass(frozen=True)
 class LearningEvaluation:
+    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset()
+
     evaluation_id: str
     artifact_digest: str
     schema_version: int
@@ -445,6 +465,8 @@ class LearningEvaluation:
 
 @dataclass(frozen=True)
 class LearningPolicyProposal:
+    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset()
+
     proposal_id: str
     artifact_digest: str
     schema_version: int
@@ -498,6 +520,8 @@ class LearningPolicyProposal:
 
 @dataclass(frozen=True)
 class LearningPolicyValidation:
+    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset()
+
     validation_id: str
     artifact_digest: str
     schema_version: int
@@ -585,6 +609,8 @@ class LearningPolicyValidation:
 
 @dataclass(frozen=True)
 class LearningPolicyApplication:
+    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset()
+
     application_id: str
     artifact_digest: str
     schema_version: int
