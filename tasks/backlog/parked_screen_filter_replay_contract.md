@@ -430,13 +430,17 @@ a second filtered capture mode, dual-write observations, or manufacture
 - `ai-saham` task/docs commit: (this commit — completion record only; no Python)
 - `ml-saham` implementation commits:
   - `7cc13b0` initial extract/classifier
-  - `37d7b51647af7c76b84e43918bdcce0c90ea7ef0` fail-closed cohort reconciliation
+  - `37d7b51` fail-closed cohort reconciliation
+  - `3c31b9949cc8349173c4a3158e88f8eef68105d6` H10 label counts on selected units only;
+    wrong-cohort/wrong-purpose aggregates; no string-numeric repair
 - Extracted / explicit-missing / unextractable counts by gate:
   - market_cap: numeric 765 / explicit_missing 1125 / unextractable 0
   - piotroski: numeric 765 / explicit_missing 1125 / unextractable 0
   - accum_score: numeric 1890 / missing 0
   - signal_score: numeric 1890 / missing 0
-- Capture-evaluated / H=10 metric-evaluable counts: 1890 selected / 1485 H=10 AVAILABLE
+- Capture-evaluated / corpus H10-label available / unavailable:
+  1890 selected / 1485 AVAILABLE / 405 unavailable
+  (counts use selected observation_ids only; not tournament metric-evaluable)
 - Storage before/after: zero production SQLite growth (read-only)
 - Verdict: `SUFFICIENT_FOR_REPLAY`
 - Separate follow-up task, if any: none required for extract sufficiency
