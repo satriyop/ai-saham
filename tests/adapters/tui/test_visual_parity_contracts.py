@@ -31,6 +31,19 @@ from src.adapters.tui.ticker_desk_model import build_ticker_desk_model_from_dash
 from src.domain.entities.broker_flow import BrokerType
 
 
+def test_broker_deep_empty_shell_is_structured_not_cli_dump():
+    """Text-only deep loaders still get empty structured models for widget paint."""
+    from src.adapters.tui.broker_desk_matrix_model import build_broker_desk_matrix_model
+    from src.adapters.tui.broker_desk_top_model import build_broker_desk_top_model
+
+    reason = "no desk data in local cache · fetch broker data"
+    mx = build_broker_desk_matrix_model(None, code="YP", empty_reason=reason)
+    top = build_broker_desk_top_model(None, code="YP", empty_reason=reason)
+    assert mx.empty and top.empty
+    assert "fetch" in mx.empty_reason.lower()
+    assert "CLI" not in mx.empty_reason and "CLI" not in top.empty_reason
+
+
 def test_opencode_tokens_locked_in_theme():
     assert OPENCODE_TOKENS["bg"] == "#0b0b0b"
     assert OPENCODE_TOKENS["sel_bg"] == "#c9a68a"
@@ -166,11 +179,24 @@ def test_product_operator_paint_path_has_no_implementer_cli_or_design_jargon():
         "local cache · not Action",
         "b desks · not Action",
         "not Action · esc back",
+        "CLI view broker",
     )
     for path in product_paths:
         text = path.read_text(encoding="utf-8")
         for ban in banned:
             assert ban not in text, f"{path}: residual implementer/design jargon {ban!r}"
+    # Operator chrome in main shell (meta / prompt) — no CLI or authority slogans
+    main_src = Path("src/adapters/tui/main.py").read_text(encoding="utf-8")
+    for ban in (
+        "CLI view broker",
+        "not Action · : or /",
+        "present-only · same object",
+        "j re-judge · not re-score",
+        "prompt · design only · not Action",
+        'placeholder="prompt · idle · not Action',
+    ):
+        assert ban not in main_src, f"main.py chrome noise: {ban!r}"
+    assert 'placeholder="prompt · idle · : or / to focus"' in main_src
     # chrome_cues loading body specifically
     from src.adapters.tui.chrome_cues import (
         broker_list_loading_body,

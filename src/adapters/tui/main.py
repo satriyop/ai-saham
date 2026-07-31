@@ -296,7 +296,7 @@ class CockpitApp(App[None]):
                     with Horizontal(id="prompt-rail"):
                         yield Static("›", id="prompt-affordance")
                         yield Input(
-                            placeholder="prompt · idle · not Action · : or / to focus",
+                            placeholder="prompt · idle · : or / to focus",
                             id="prompt-input",
                         )
                         yield Static("idle", id="prompt-mode")
@@ -1400,7 +1400,7 @@ class CockpitApp(App[None]):
         if self._status_note in {"judge", "re-judging"}:
             self._judge_detail_open = not bool(getattr(self, "_judge_detail_open", False))
             mode = "full" if self._judge_detail_open else "compact"
-            self._meta = f"{mode} · present-only · d toggle · j re-judge · not re-score"
+            self._meta = f"{mode} · d toggle · j re-judge"
             self._refresh_chrome()
             self.notify(f"Judge detail · {mode}", timeout=1.2)
             return
@@ -1409,7 +1409,7 @@ class CockpitApp(App[None]):
         ):
             self._preopen_detail_open = not bool(getattr(self, "_preopen_detail_open", False))
             mode = "full" if self._preopen_detail_open else "compact"
-            self._meta = f"{mode} · inspect · d toggle"
+            self._meta = f"{mode} · d toggle"
             self._refresh_chrome()
             self.notify(f"Pre-open detail · {mode}", timeout=1.2)
             return
@@ -1452,21 +1452,18 @@ class CockpitApp(App[None]):
         low = text.lower()
         if low in {"mode idle", "idle"}:
             self._set_prompt_mode_chip("idle")
-            self.notify("prompt · mode idle · not Action", timeout=1.2)
+            self.notify("prompt · mode idle", timeout=1.2)
             return
         if low in {"mode agent", "agent"}:
             self._set_prompt_mode_chip("agent")
-            self.notify("prompt · mode agent · design only · not wired", timeout=1.5)
+            self.notify("prompt · agent · not wired yet", timeout=1.5)
             return
         if low in {"mode cli", "cli"}:
             self._set_prompt_mode_chip("cli")
-            self.notify("prompt · mode cli · design only · not wired", timeout=1.5)
+            self.notify("prompt · cli · not wired yet", timeout=1.5)
             return
         if text:
-            self.notify(
-                "prompt · design only · not Action · no agent · no order",
-                timeout=1.8,
-            )
+            self.notify("prompt · not wired yet", timeout=1.5)
         try:
             rail = self.query_one("#prompt-rail", Horizontal)
             rail.remove_class("is-focus")
@@ -1584,7 +1581,7 @@ class CockpitApp(App[None]):
         """Enter on a table selects a row.
 
         Board: present-only engine inspect.
-        Broker list / ticker desks: desk show (CLI view broker show).
+        Broker list / ticker desks: desk show (home).
         """
         if self._modal_blocks_board_keys():
             return
@@ -2207,23 +2204,21 @@ class CockpitApp(App[None]):
             self._judge_limited = limited
             self._board_title = f"Judge · {ticker}"
             if limited:
-                self._meta = (
-                    "limited judge · snapshot/no source · j re-judge or r live for full desk"
-                )
+                self._meta = "limited judge · j re-judge or r live · d detail"
             else:
-                self._meta = "present-only · same object as board · j re-judge"
+                self._meta = "judge · j re-judge · d detail"
             self._status_note = "judge"
             self._judge_detail_open = False
         elif self._is_preopen_row(row):
             self._judge_limited = False
             self._preopen_detail_open = False
             self._board_title = f"Screen · pre-open · {ticker}"
-            self._meta = "inspect · board row · d detail"
+            self._meta = "inspect · d detail"
             self._status_note = "inspect"
         else:
             self._judge_limited = False
             self._board_title = f"Inspect · {ticker}"
-            self._meta = "present-only · board row"
+            self._meta = "inspect · board row"
             self._status_note = "inspect"
         self._refresh_chrome()
 
@@ -2392,7 +2387,7 @@ class CockpitApp(App[None]):
         self._execute_broker_list()
 
     def _open_ticker_desks(self, stock: str) -> None:
-        """From view ticker: stock → top desks (CLI view ticker top-brokers)."""
+        """From view ticker: stock → top desks (ticker-desks stage)."""
         stock = str(stock or "").upper()
         if not stock or stock == "—":
             self.notify("No ticker focused", timeout=1.5)
@@ -2574,14 +2569,14 @@ class CockpitApp(App[None]):
         }
         self._stage = "loading"
         self._board_title = titles.get(page, f"View · broker · {code}")
-        cli_verb = {
-            "top": "top-stocks",
+        deep_lab = {
+            "top": "buy/sell",
             "flow": "flow",
             "history": "history",
-            "matrix": "top-matrix",
+            "matrix": "top 5",
             "cal": "calendar",
         }.get(page, page)
-        self._meta = f"desk deep · esc home · CLI view broker {cli_verb}"
+        self._meta = f"desk deep · {deep_lab} · esc home · local cache"
         self._status_note = f"view broker {page}"
         self._refresh_chrome()
         self._execute_broker_deep(code, page)
@@ -2617,9 +2612,12 @@ class CockpitApp(App[None]):
                     format_broker_desk_home_scraper_text,
                 )
 
-                # Text-only loaders (journey tests): synthesize a non-empty home
-                # shell so hub keys + code still surface; keep original text body.
-                home_model = build_broker_desk_home_model(None, code=code)
+                # Always paint structured desk shell (never text dump as primary).
+                home_model = build_broker_desk_home_model(
+                    None,
+                    code=code,
+                    empty_reason="no desk day-net in local cache · fetch broker data",
+                )
                 if not text or "no broker_daily_flow" in text.lower():
                     text = format_broker_desk_home_scraper_text(home_model)
             esc_line = "  esc desks" if self._desk_entry == "ticker-desks" else "  esc list"
@@ -2680,37 +2678,46 @@ class CockpitApp(App[None]):
                     jump = str(jt).upper()
             if not text.strip():
                 text = f"[bold]{code}[/]\n\n[dim]no data · loader missing or empty[/]"
-            # Text-only deep loaders (tests): empty structured shell for paint path
+            # Always structured deep shell so widget path paints (never body-only dump).
+            empty_reason = "no desk data in local cache · fetch broker data"
             if page == "matrix" and deep_model is None:
                 from src.adapters.tui.broker_desk_matrix_model import (
                     build_broker_desk_matrix_model,
                 )
 
-                deep_model = build_broker_desk_matrix_model(None, code=code)
+                deep_model = build_broker_desk_matrix_model(
+                    None, code=code, empty_reason=empty_reason
+                )
             if page == "top" and deep_model is None:
                 from src.adapters.tui.broker_desk_top_model import (
                     build_broker_desk_top_model,
                 )
 
-                deep_model = build_broker_desk_top_model(None, code=code)
+                deep_model = build_broker_desk_top_model(None, code=code, empty_reason=empty_reason)
             if page == "flow" and deep_model is None:
                 from src.adapters.tui.broker_desk_flow_model import (
                     build_broker_desk_flow_model,
                 )
 
-                deep_model = build_broker_desk_flow_model(None, code=code)
+                deep_model = build_broker_desk_flow_model(
+                    None, code=code, empty_reason=empty_reason
+                )
             if page == "history" and deep_model is None:
                 from src.adapters.tui.broker_desk_history_model import (
                     build_broker_desk_history_model,
                 )
 
-                deep_model = build_broker_desk_history_model(None, code=code)
+                deep_model = build_broker_desk_history_model(
+                    None, code=code, empty_reason=empty_reason
+                )
             if page == "cal" and deep_model is None:
                 from src.adapters.tui.broker_desk_calendar_model import (
                     build_broker_desk_calendar_model,
                 )
 
-                deep_model = build_broker_desk_calendar_model(None, code=code)
+                deep_model = build_broker_desk_calendar_model(
+                    None, code=code, empty_reason=empty_reason
+                )
             titles = {
                 "top": "top-stocks",
                 "flow": "flow",

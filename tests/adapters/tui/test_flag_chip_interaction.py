@@ -90,6 +90,32 @@ def test_flag_chip_is_focusable_control():
     assert "is-on" in chip.classes
 
 
+def test_flag_chip_activate_posts_selected():
+    """Click / keyboard path posts Selected with flag_key."""
+    chip = FlagChip("detail", "detail · d", id="t-detail")
+    chip.set_chip_state(available=True, expanded=False)
+    posted: list[str] = []
+
+    def _capture(msg: FlagChip.Selected) -> None:
+        posted.append(msg.flag_key)
+
+    # Direct activate (same as Enter/Space/click)
+    orig_post = chip.post_message
+
+    def _post(msg):  # type: ignore[no-untyped-def]
+        if isinstance(msg, FlagChip.Selected):
+            posted.append(msg.flag_key)
+        return orig_post(msg)
+
+    chip.post_message = _post  # type: ignore[method-assign]
+    chip._activate()
+    assert posted == ["detail"]
+    # Dim chips do not fire
+    chip.set_chip_state(available=False, expanded=False)
+    chip._activate()
+    assert posted == ["detail"]
+
+
 def test_judge_stack_and_detail_expandable_flags_pure():
     """stack / phase+ / detail · d availability from model — paint open set."""
     model = build_judge_desk_model(

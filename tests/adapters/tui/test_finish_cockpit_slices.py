@@ -175,13 +175,14 @@ def test_judge_detail_toggle_and_ticker_d_dispatch():
     asyncio.run(scenario())
 
 
-def test_prompt_rail_idle_non_action_contract():
-    """Prompt rail idle copy — product language, not Action authority."""
-    idle_placeholder = "idle · not Action"
+def test_prompt_rail_idle_operator_copy():
+    """Prompt rail idle copy — operator chrome, no authority slogans."""
+    idle_placeholder = "prompt · idle · : or / to focus"
     idle_mode = "idle"
     affordance = "›"
     assert "idle" in idle_placeholder
-    assert "not action" in idle_placeholder.lower()
+    assert "not action" not in idle_placeholder.lower()
+    assert "CLI" not in idle_placeholder
     assert idle_mode == "idle"
     assert affordance.strip()
     assert "ENTER" not in idle_placeholder

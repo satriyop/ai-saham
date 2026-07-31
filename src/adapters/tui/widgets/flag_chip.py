@@ -7,6 +7,7 @@ Layer: Adapter (Textual widget)
 
 from __future__ import annotations
 
+from textual import events
 from textual.message import Message
 from textual.widgets import Static
 
@@ -101,6 +102,16 @@ class FlagChip(Static):
             self.add_class("is-on")
 
     def on_click(self) -> None:
+        self._activate()
+
+    def on_key(self, event: events.Key) -> None:
+        """Keyboard activate (Enter / Space) — same path as click."""
+        if event.key in {"enter", "space"}:
+            event.stop()
+            event.prevent_default()
+            self._activate()
+
+    def _activate(self) -> None:
         if not self._available:
             return
         self.post_message(self.Selected(self.flag_key))
