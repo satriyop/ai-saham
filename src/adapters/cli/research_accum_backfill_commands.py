@@ -267,7 +267,10 @@ def _display_backfill_response(
     typer.echo(f"  Universe size (range union): {response.universe_size}")
     typer.echo(f"  Evaluated: {response.evaluated_count}")
     typer.echo(f"  Selected: {response.selected_count}")
-    typer.echo(f"  Rejected: {response.rejected_count} (0 by construction; reject gates disabled)")
+    typer.echo(
+        f"  Rejected: {response.rejected_count} "
+        "(usually 0 by design: capture neutralizes score/structural reject gates)"
+    )
     typer.echo(f"  Unavailable: {response.unavailable_count}")
     typer.echo(f"  Universe membership source: {response.universe_membership_source}")
     if response.survivorship_limitation:
@@ -276,6 +279,12 @@ def _display_backfill_response(
         f"  Contains screen-rejected control: {response.contains_control_population} "
         f"({response.recall_eligibility})"
     )
+    if not response.contains_control_population:
+        typer.echo(
+            "  Note: not a bug in PIT membership — broker-observable capture is "
+            "negative-inclusive by labels, but not a screen-reject census. "
+            "Do not claim screener recall/precision until filter-replay is activated."
+        )
     if response.ticker_exclusions:
         typer.echo("")
         typer.echo("Ticker exclusions:")

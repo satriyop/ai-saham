@@ -106,17 +106,23 @@ class BackfillSignalObservationsResponse:
     universe_membership_source: str = ""
     survivorship_limitation: str | None = None
     ticker_exclusions: tuple[BackfillTickerExclusion, ...] = field(default_factory=tuple)
-    # DQ-003 Slice E candidate-only eligibility guard (criterion 11). True only
-    # if at least one observation persisted THIS run carries a screen_result
-    # other than "pass" (a genuine screen-rejected control). Derived from the
-    # same `rejected_count` aggregation Slice B already computes — no new read,
-    # no persistence change. Under the production capture path every reject gate
-    # is disabled (Slice C finding), so `rejected_count == 0` and this is False:
-    # the captured population is candidate-only and ineligible for screener
-    # recall/precision/filter-value claims. `recall_eligibility` states that
-    # reason machine-readably. A downstream recall/precision consumer (DQ-006)
-    # MUST check `contains_control_population` and refuse claims while it is
-    # False, pending the open design question in the Slice C finding.
+    # DQ-003 Slice E eligibility guard (criterion 11). True only if this run
+    # produced at least one evaluated non-pass (``rejected_count > 0``).
+    #
+    # Production capture **neutralizes score/structural reject gates** so the
+    # persisted set is the PIT-tradable, broker-observable population (negative-
+    # inclusive by forward labels). Therefore ``rejected_count`` is usually 0
+    # **by design**, not by missing data. That means:
+    # - suitable for path/outcome and factor studies on the broker-observable set
+    # - **not** a complete screen-reject census for classical screener
+    #   recall/precision/filter-value claims
+    #
+    # Consumers MUST check ``contains_control_population`` / ``recall_eligibility``
+    # and refuse screen-reject recall claims while ineligible. Do **not** "fix"
+    # by re-enabling capture reject gates without a named consumer and the
+    # filter-replay contract (see tasks/backlog/parked_screen_filter_replay_contract.md).
+    # ``contains_control_population`` alone is also insufficient for full
+    # denominator completeness (parked historical eligible-universe work).
     contains_control_population: bool = False
     recall_eligibility: str = "ineligible_candidate_only_no_screen_rejected_control"
 
@@ -357,17 +363,28 @@ class BackfillSignalObservationsUseCase:
             pit_window_sessions=self._pit_window_sessions,
         )
 
-        # DQ-003 Slice E (criterion 11): a genuine screen-rejected control exists
-        # only if at least one evaluated observation this run was not `pass`
-        # (rejected_count > 0). Derived from the aggregation above — no new read.
-        # A candidate-only population (rejected_count == 0) is ineligible for
-        # screener recall/precision/filter-value claims; the reason is stated
-        # machine-readably so a downstream consumer (DQ-006) can refuse claims.
+        # DQ-003 Slice E (criterion 11): screen-reject control presence this run.
+        # Capture policy usually yields rejected_count == 0 by design (gates
+        # neutralized). That is stamped, not silently papered over.
         contains_control_population = rejected_count > 0
         recall_eligibility = (
             "eligible_contains_screen_rejected_control"
             if contains_control_population
             else "ineligible_candidate_only_no_screen_rejected_control"
+        )
+        recall_note = (
+            "recall_eligibility=eligible_contains_screen_rejected_control "
+            f"(rejected_count={rejected_count})"
+            if contains_control_population
+            else (
+                "recall_eligibility=ineligible_candidate_only_no_screen_rejected_control: "
+                "capture neutralizes score/structural reject gates "
+                f"(rejected_count={rejected_count}); corpus is broker-observable / "
+                "outcome-negative-inclusive, not a screen-reject census. "
+                "Refuse screener recall/precision/filter-value claims until a named "
+                "filter-replay consumer is activated "
+                "(tasks/backlog/parked_screen_filter_replay_contract.md)."
+            )
         )
 
         return BackfillSignalObservationsResponse(
@@ -384,6 +401,7 @@ class BackfillSignalObservationsUseCase:
                 "features_by_window[7|30|90]; identity is window_id=TICKER:YYYY-MM-DD "
                 "and horizon_contract=accum_10d. Reruns with the same identity and "
                 "digest are idempotent; digest changes raise an immutable conflict.",
+                recall_note,
                 *market_context_notes,
             ),
             universe_size=len(membership_union),

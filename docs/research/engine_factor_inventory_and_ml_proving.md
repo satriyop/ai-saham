@@ -287,7 +287,12 @@ Primary DB: `data/db/data.db` (approx counts as of 2026-07-22 inventory).
    schema-8 rows may still rely on lean `candidate.risk_*` until re-backfill.
 2. **Single workflow cohort** (`screen_accum`); named swing-setup captures parked.
 3. **Only SWING_10D labels** generated (TACTICAL_3D / ACCUM_20D defined but empty).
-4. **No screen-rejected control population** (`contains_control_population=false`).
+4. **No screen-rejected control population** (`contains_control_population=false`) —
+   **by design** under capture gate neutralization (not a silent backfill bug).
+   Corpus is still negative-inclusive by forward labels on the broker-observable
+   set. Classical screener recall/precision needs the parked filter-replay
+   contract (`tasks/backlog/parked_screen_filter_replay_contract.md`), not a
+   casual re-enable of reject gates.
 5. **Raw-market labels only** (no net-executable IDX costs/limits/fills).
 6. **Short date span** for canonical panel — thin for walk-forward.
 7. Bandar / BCI / VWAP proving often needs **recompute from broker_daily_flow** when fingerprint lacks the exact gate input.
