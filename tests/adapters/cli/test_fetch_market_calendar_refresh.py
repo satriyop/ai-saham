@@ -244,6 +244,32 @@ def _base_monkeypatches(monkeypatch, tmp_path: Path):
             fail_count=0,
         ),
     )
+
+    # Isolate the command from the network. Independent of the calendar wiring
+    # under test, every `fetch_market` invocation also refreshes the market-status
+    # header (Stockbit) and the global context tickers (Yahoo ^VIX/EIDO/IDR=X),
+    # plus the macro calendar for a stockbit broker. Left live these do real HTTP
+    # (~2-3s of latency/timeouts per invoke) yet no test here asserts on them.
+    from src.application.use_case.refresh_market_context_inputs_use_case import (
+        RefreshMarketContextInputsResponse,
+    )
+
+    monkeypatch.setattr(
+        "src.infrastructure.browser.stockbit_market_time.fetch_and_cache_market_status",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "src.infrastructure.browser.stockbit_market_time.get_display_market_status",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "src.infrastructure.composition.fetch_market.fetch_market_context_inputs.refresh_market_context_inputs",
+        lambda db_path, days=1, **kwargs: RefreshMarketContextInputsResponse(statuses=()),
+    )
+    monkeypatch.setattr(
+        "src.infrastructure.composition.fetch_market.fetch_market_macro_calendar_refresh.refresh_market_macro_calendar",
+        lambda **kwargs: "skip:test",
+    )
     return tmp_path
 
 
