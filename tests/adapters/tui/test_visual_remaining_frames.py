@@ -263,6 +263,8 @@ def test_ticker_detail_flag_row_paint():
             desk.paint(model, detail_open=False)
             assert "detail · d" in str(desk.query_one("#td-flag-detail").content)
             assert "is-on" not in desk.query_one("#td-flag-detail").classes
+            # Design: single master chip only
+            assert not desk.query("#td-flag-analyst")
             desk.paint(model, detail_open=True)
             assert "is-on" in desk.query_one("#td-flag-detail").classes
 

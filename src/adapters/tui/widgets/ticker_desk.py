@@ -20,13 +20,19 @@ from src.adapters.tui.ticker_desk_model import (
 )
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
+# Design mock tickerDetailFlags: single master chip (detail · d).
+# Panel keys still used when expanding inventory body.
 _TICKER_PANEL_FLAGS = (
     "analyst",
     "ownership",
-    "sector",
+    "sector_macro",
+    "corp_actions",
     "insider",
+    "seasonality",
     "iev",
     "sentiment",
+    "profile",
+    "candles",
 )
 
 
@@ -310,8 +316,10 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-flags {
-        height: auto;
+        height: 1;
+        width: auto;
         margin: 0 0 1 0;
+        align: left middle;
     }
 
     TickerDesk .td-flag-lab {
@@ -319,6 +327,19 @@ class TickerDesk(Vertical):
         color: #6b6b6b;
         text-style: bold;
         padding-right: 1;
+    }
+
+    TickerDesk .td-sec-body {
+        color: #c8c8c8;
+        height: auto;
+    }
+
+    TickerDesk .td-depth-panel {
+        background: #141414;
+        border: solid #1c1c1c;
+        padding: 0 1 1 1;
+        margin: 0 0 1 0;
+        height: auto;
     }
 
     """
@@ -391,11 +412,10 @@ class TickerDesk(Vertical):
             )
             yield Static("", classes="td-earn", id="td-earn-body")
 
+        # Design: single master chip (detail · d) — not a wall of empty peach bars
         with Horizontal(classes="td-flags", id="td-flags"):
             yield Static("More", classes="td-flag-lab", id="td-flag-lab")
             yield FlagChip("detail", "detail · d", id="td-flag-detail")
-            for key in _TICKER_PANEL_FLAGS:
-                yield FlagChip(key, key, id=f"td-flag-{key}", classes="is-dim")
 
         with Vertical(classes="td-section", id="td-more-sec"):
             yield Static(
@@ -403,6 +423,12 @@ class TickerDesk(Vertical):
                 classes="td-sec-head",
                 id="td-more-head",
             )
+            # Precomposed depth panels (mock cli-stack) — filled on paint
+            with Vertical(id="td-depth-stack"):
+                for key in _TICKER_PANEL_FLAGS:
+                    with Vertical(classes="td-depth-panel", id=f"td-depth-{key}"):
+                        yield Static("", id=f"td-depth-t-{key}", classes="td-sec-head")
+                        yield Static("", id=f"td-depth-b-{key}", classes="td-sec-body")
             yield Static("", classes="td-sec-body", id="td-more-body")
 
         yield Static("", classes="td-footer", id="td-footer")
@@ -411,22 +437,10 @@ class TickerDesk(Vertical):
         event.stop()
         if self._model is None:
             return
-        key = event.flag_key
-        if key == "detail":
-            self._detail_all = not self._detail_all
-            if self._detail_all:
-                self._open_flags = set(self._available_panels(self._model))
-            else:
-                self._open_flags.clear()
-        elif key in _TICKER_PANEL_FLAGS:
-            avail = self._available_panels(self._model)
-            if key not in avail:
-                return
-            if key in self._open_flags:
-                self._open_flags.discard(key)
-            else:
-                self._open_flags.add(key)
-            self._detail_all = self._open_flags >= avail and bool(avail)
+        if event.flag_key != "detail":
+            return
+        self._detail_all = not self._detail_all
+        self._open_flags = set(self._available_panels(self._model)) if self._detail_all else set()
         self.paint(self._model, detail_open=self._detail_all, sync_from_detail=False)
         try:
             app = self.app
@@ -590,52 +604,49 @@ class TickerDesk(Vertical):
                 "[#555555]no earnings rows in local cache[/]"
             )
 
-        # Secondary / detail inventory (all or selected panel chips)
+        # Secondary / detail inventory (mock cli-stack panels with real lines)
         head = self.query_one("#td-more-head", Static)
         by_panel = {p.key: p for p in model.detail_panels}
-        if self._detail_all:
+        depth_open = self._detail_all or bool(open_flags)
+        if depth_open:
             head.update("DETAIL · full inventory · d collapse · local cache")
-            blocks: list[str] = []
-            for p in model.detail_panels:
-                st_col = "#6fbf8a" if p.status == "present" else "#555555"
-                blocks.append(f"[bold #d8d8d8]{p.title}[/]  [{st_col}]{p.status}[/]")
-                for line in p.lines[:4]:
-                    blocks.append(f"  [#7a7a7a]{line}[/]")
-            if not blocks:
-                blocks = [f"[#555555]{k:16}[/] [#d8d8d8]{v}[/]" for k, v in model.secondary[:6]]
-            self.query_one("#td-more-body", Static).update("\n".join(blocks) if blocks else "—")
-        elif open_flags:
-            head.update("DETAIL · selected panels · local cache")
-            blocks = []
+            self.query_one("#td-more-body", Static).update("")
+            self.query_one("#td-more-body", Static).display = False
             for key in _TICKER_PANEL_FLAGS:
-                if key not in open_flags:
-                    continue
+                panel_el = self.query_one(f"#td-depth-{key}", Vertical)
                 p = by_panel.get(key)
-                if p is None:
+                show = self._detail_all or key in open_flags
+                if not show or p is None:
+                    panel_el.display = False
                     continue
-                st_col = "#6fbf8a" if p.status == "present" else "#555555"
-                blocks.append(f"[bold #d8d8d8]{p.title}[/]  [{st_col}]{p.status}[/]")
-                for line in p.lines[:6]:
-                    blocks.append(f"  [#7a7a7a]{line}[/]")
-            self.query_one("#td-more-body", Static).update("\n".join(blocks) if blocks else "—")
+                panel_el.display = True
+                if p.status == "present":
+                    st = "[#6fbf8a]present[/]"
+                elif p.status == "missing":
+                    st = "[#555555]missing[/]"
+                else:
+                    st = f"[#555555]{p.status}[/]"
+                self.query_one(f"#td-depth-t-{key}", Static).update(
+                    f"[bold #d8d8d8]{p.title.upper()}[/]  {st}"
+                )
+                body_lines = list(p.lines[:8]) if p.lines else ["—"]
+                # Prefer facts over bare "present" slogans
+                self.query_one(f"#td-depth-b-{key}", Static).update(
+                    "\n".join(f"  {ln}" for ln in body_lines)
+                )
         else:
             head.update("MORE · collapsed · d detail · local panels")
+            for key in _TICKER_PANEL_FLAGS:
+                self.query_one(f"#td-depth-{key}", Vertical).display = False
             more_lines = [f"[#555555]{k:16}[/] [#d8d8d8]{v}[/]" for k, v in model.secondary[:6]]
-            self.query_one("#td-more-body", Static).update(
-                "\n".join(more_lines) if more_lines else "—"
-            )
+            body = self.query_one("#td-more-body", Static)
+            body.display = True
+            body.update("\n".join(more_lines) if more_lines else "—")
 
-        # Detail flag chips (mock tickerDetailFlags)
+        # Master chip only (design tickerDetailFlags)
         self.query_one("#td-flag-detail", FlagChip).set_chip_state(
             available=True, expanded=self._detail_all
         )
-        for key in _TICKER_PANEL_FLAGS:
-            panel = by_panel.get(key)
-            present = panel is not None and panel.status == "present"
-            self.query_one(f"#td-flag-{key}", FlagChip).set_chip_state(
-                available=present,
-                expanded=key in open_flags,
-            )
 
         foot = model.footer
         if self._detail_all and "d collapse" not in foot:

@@ -82,15 +82,54 @@ def _dashboard(**over):
                 eps_yoy_change=3.0,
             ),
         ),
-        analyst=object(),
-        ownership=object(),
-        insider_txns=(),
-        iev_rows=(object(),),
-        seasonality=object(),
+        analyst=SimpleNamespace(
+            buy_count=3,
+            hold_count=2,
+            sell_count=0,
+            consensus_label="BUY",
+            avg_price_target=7150.0,
+            upside_pct=13.9,
+            price_target_low=6800.0,
+            price_target_high=7600.0,
+            last_updated=date(2026, 7, 20),
+            fetched_at=None,
+            current_price=6275.0,
+        ),
+        ownership=SimpleNamespace(
+            top_holder_name="PT Dwimuria Investama Andalan",
+            top_holder_pct=54.9,
+            institution_pct=38.2,
+            individual_pct=6.9,
+            total_shares_formatted="123.28B",
+            report_date=date(2026, 3, 31),
+        ),
+        insider_txns=(
+            SimpleNamespace(
+                name="J. Widjaja",
+                role="Dir",
+                action_type="BUY",
+                shares=50000,
+                price=6100,
+                transaction_date=date(2026, 3, 12),
+            ),
+        ),
+        corp_actions=(
+            SimpleNamespace(
+                event_type="DIV",
+                ex_date=date(2026, 4, 17),
+                detail="Cash div Rp175 / share",
+                status="completed",
+            ),
+        ),
+        iev_rows=(SimpleNamespace(date=date(2026, 7, 29), iep=6275, iev=1_000_000, ncp=1.2),),
+        seasonality=SimpleNamespace(label="strong Q1", edge_label="positive"),
+        candles=(object(),) * 5,
+        sentiment=(),
         freshness=(
             SimpleNamespace(label="Price", status=SimpleNamespace(value="ok")),
             SimpleNamespace(label="Flow", status=SimpleNamespace(value="ok")),
             SimpleNamespace(label="Bandar", status=SimpleNamespace(value="ok")),
+            SimpleNamespace(label="Analyst", status=SimpleNamespace(value="ok")),
         ),
     )
     base.update(over)
@@ -111,7 +150,7 @@ def test_model_design_hierarchy_not_cli_primary():
     by_lab = {p.label: p for p in model.freshness}
     assert by_lab["Price"].status == "ok" and by_lab["Price"].value == "ok"
     assert by_lab["Flow"].status == "ok"
-    assert by_lab["Analyst"].status == "miss"  # unfilled mock slot
+    assert by_lab["Analyst"].status == "ok"
     assert "Freshness" in model.as_text() or "Price:ok" in model.as_text()
     keys = {p.key for p in model.pulses}
     assert keys == {"flow", "struct", "bandar"}
@@ -130,6 +169,11 @@ def test_model_design_hierarchy_not_cli_primary():
     assert "ownership" in keys
     assert "insider" in keys
     assert any(p.status == "present" for p in model.detail_panels)
+    analyst = next(p for p in model.detail_panels if p.key == "analyst")
+    assert any("BUY" in ln or "Target" in ln or "3B" in ln for ln in analyst.lines)
+    assert "analyst block present" not in " ".join(analyst.lines)
+    own = next(p for p in model.detail_panels if p.key == "ownership")
+    assert any("Dwimuria" in ln or "Institutional" in ln for ln in own.lines)
     assert "d detail" in model.footer
     # Primary as_text is hierarchical, not a Rich box dump
     text = model.as_text()
@@ -177,6 +221,12 @@ def test_cockpit_view_ticker_paints_design_sections():
             assert "Price" in fp0
             assert "ok" in fp0.lower()
             assert "ok" in app.query_one("#td-fp-0").classes
+            # Detail expand shows real panel facts (not presence-only slogans)
+            desk.paint(app._ticker_desk_model, detail_open=True)
+            analyst_b = str(app.query_one("#td-depth-b-analyst").render())
+            assert "BUY" in analyst_b or "Target" in analyst_b or "3B" in analyst_b
+            assert "analyst block present" not in analyst_b
+            assert len(desk.query("#td-flag-ownership")) == 0  # single master chip only
             # Pulse trio present (not CLI dump body id)
             flow_h = str(app.query_one("#td-pulse-h-flow").render())
             assert flow_h.strip()
@@ -195,13 +245,14 @@ def test_cockpit_view_ticker_paints_design_sections():
             more = str(app.query_one("#td-more-head").render()).upper()
             assert "COLLAPSE" in more or "MORE" in more or "D DETAIL" in more
 
-            # d toggles full inventory
+            # d toggles full inventory with real panel facts
             app.action_toggle_detail()
             assert app._ticker_detail_open is True
             head = str(app.query_one("#td-more-head").render()).upper()
             assert "DETAIL" in head or "FULL" in head
-            body_more = str(app.query_one("#td-more-body").render()).upper()
-            assert "ANALYST" in body_more or "OWNERSHIP" in body_more or "PRESENT" in body_more
+            analyst_b = str(app.query_one("#td-depth-b-analyst").render())
+            assert "BUY" in analyst_b or "Target" in analyst_b or "3B" in analyst_b
+            assert app.query_one("#td-depth-analyst").display is True
 
             app.action_toggle_detail()
             assert app._ticker_detail_open is False

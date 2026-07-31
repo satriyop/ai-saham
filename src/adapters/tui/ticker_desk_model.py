@@ -610,9 +610,9 @@ def _secondary_kv(dashboard: Any) -> list[tuple[str, str]]:
 
 
 def _detail_panels(dashboard: Any) -> list[TickerDetailPanel]:
-    """Full inventory summaries for ``d`` expand (extra browse panels).
+    """Full inventory for ``d`` expand — real fact lines (CLI panel fields).
 
-    Short presence + fact lines only — never invent Action or re-score.
+    Present-only browse; never invent Action or re-score.
     """
     panels: list[TickerDetailPanel] = []
 
@@ -624,88 +624,301 @@ def _detail_panels(dashboard: Any) -> list[TickerDetailPanel]:
         *,
         missing_hint: str = "not in local cache",
     ) -> None:
-        if present:
+        if present and lines:
             panels.append(TickerDetailPanel(key, title, "present", lines))
+        elif present:
+            panels.append(TickerDetailPanel(key, title, "present", ("cached · no scalar fields",)))
         else:
             panels.append(TickerDetailPanel(key, title, "missing", (missing_hint,)))
 
     analyst = getattr(dashboard, "analyst", None)
-    a_lines: tuple[str, ...] = ()
-    if analyst is not None:
-        bits = []
-        for attr, lab in (
-            ("consensus", "consensus"),
-            ("target_price", "target"),
-            ("rating", "rating"),
-            ("recommendation", "rec"),
-        ):
-            v = getattr(analyst, attr, None)
-            if v is not None:
-                bits.append(f"{lab} {v}")
-        a_lines = tuple(bits[:4]) if bits else ("analyst block present",)
-    add("analyst", "Analyst", analyst is not None, a_lines)
+    add("analyst", "Analyst Consensus", analyst is not None, _lines_analyst(analyst))
 
     own = getattr(dashboard, "ownership", None)
-    o_lines: tuple[str, ...] = ()
-    if own is not None:
-        bits = []
-        for attr, lab in (
-            ("foreign_pct", "foreign%"),
-            ("public_pct", "public%"),
-            ("institusi_pct", "inst%"),
-        ):
-            v = getattr(own, attr, None)
-            if v is not None:
-                try:
-                    bits.append(f"{lab} {float(v):.1f}")
-                except (TypeError, ValueError):
-                    bits.append(f"{lab} {v}")
-        o_lines = tuple(bits[:4]) if bits else ("ownership present",)
-    add("ownership", "Ownership", own is not None, o_lines)
+    add("ownership", "Ownership", own is not None, _lines_ownership(own))
 
     sector = getattr(dashboard, "sector_macro", None) or getattr(dashboard, "sector_context", None)
     add(
         "sector_macro",
         "Sector / macro",
         sector is not None,
-        ("diagnostic only · never Action",) if sector is not None else (),
+        _lines_sector(sector),
         missing_hint="diagnostic omitted or missing",
     )
 
     corp = getattr(dashboard, "corp_actions", None) or getattr(dashboard, "corporate_actions", None)
-    corp_n = len(corp) if isinstance(corp, (list, tuple)) else (1 if corp else 0)
-    add(
-        "corp_actions",
-        "Corp actions",
-        corp_n > 0,
-        (f"{corp_n} events",) if corp_n else (),
-    )
+    corp_list = list(corp) if isinstance(corp, (list, tuple)) else ([corp] if corp else [])
+    corp_list = [e for e in corp_list if getattr(e, "event_type", None) != "__NONE__"]
+    add("corp_actions", "Corporate Actions", bool(corp_list), _lines_corp(corp_list))
 
-    insider = getattr(dashboard, "insider_txns", None) or ()
-    add(
-        "insider",
-        "Insider",
-        bool(insider),
-        (f"{len(insider)} txns",) if insider else (),
-    )
+    insider = list(getattr(dashboard, "insider_txns", None) or ())
+    add("insider", "Insider Transactions", bool(insider), _lines_insider(insider))
 
     season = getattr(dashboard, "seasonality", None)
-    add("seasonality", "Seasonality", season is not None, ("present",) if season else ())
+    add("seasonality", "Seasonality", season is not None, _lines_seasonality(season))
 
-    iev = getattr(dashboard, "iev_rows", None) or ()
-    add("iev", "IEV / NCP", bool(iev), (f"{len(iev)} rows",) if iev else ())
+    iev = list(getattr(dashboard, "iev_rows", None) or ())
+    add("iev", "IEV / NCP", bool(iev), _lines_iev(iev))
 
     sent = getattr(dashboard, "sentiment", None)
-    add("sentiment", "Sentiment", sent is not None, ("present",) if sent else ())
+    sent_list = list(sent) if isinstance(sent, (list, tuple)) else ([sent] if sent else [])
+    add("sentiment", "News Sentiment", bool(sent_list), _lines_sentiment(sent_list))
 
     profile = getattr(dashboard, "profile", None)
-    add("profile", "Profile", profile is not None, ("notation / profile",) if profile else ())
+    notation = getattr(dashboard, "notation", None)
+    add(
+        "profile",
+        "Profile",
+        profile is not None or notation is not None,
+        _lines_profile(profile, notation),
+    )
 
     candles = getattr(dashboard, "candles", None) or getattr(dashboard, "ohlcv", None)
     c_n = len(candles) if isinstance(candles, (list, tuple)) else (1 if candles else 0)
-    add("candles", "Candles", c_n > 0, (f"{c_n} bars",) if c_n else ())
+    add(
+        "candles",
+        "Candles",
+        c_n > 0,
+        (f"{c_n} bars in local cache",) if c_n else (),
+    )
 
     return panels
+
+
+def _lines_analyst(ac: Any) -> tuple[str, ...]:
+    if ac is None:
+        return ()
+    lines: list[str] = []
+    buy = getattr(ac, "buy_count", None)
+    hold = getattr(ac, "hold_count", None)
+    sell = getattr(ac, "sell_count", None)
+    label = getattr(ac, "consensus_label", None)
+    if callable(label):
+        try:
+            label = label()
+        except Exception:
+            label = None
+    if buy is not None or hold is not None or sell is not None:
+        counts = f"{buy or 0}B · {hold or 0}H · {sell or 0}S"
+        if label:
+            lines.append(f"{counts} → {label}")
+        else:
+            lines.append(counts)
+    elif label:
+        lines.append(str(label))
+    avg = getattr(ac, "avg_price_target", None)
+    upside = getattr(ac, "upside_pct", None)
+    if callable(upside):
+        try:
+            upside = upside()
+        except Exception:
+            upside = None
+    if avg is not None:
+        try:
+            t = f"Target Rp{float(avg):,.0f} avg"
+            if upside is not None:
+                t += f" ({float(upside):+.1f}%)"
+            lines.append(t)
+        except (TypeError, ValueError):
+            lines.append(f"Target {avg}")
+    lo = getattr(ac, "price_target_low", None)
+    hi = getattr(ac, "price_target_high", None)
+    if lo is not None and hi is not None:
+        try:
+            lines.append(f"Range Rp{float(lo):,.0f} – Rp{float(hi):,.0f}")
+        except (TypeError, ValueError):
+            pass
+    updated = getattr(ac, "last_updated", None)
+    fetched = getattr(ac, "fetched_at", None)
+    meta = []
+    if updated:
+        meta.append(f"Updated {updated}")
+    if fetched is not None:
+        d = getattr(fetched, "date", None)
+        meta.append(f"Fetched {d() if callable(d) else (d or fetched)}")
+    if meta:
+        lines.append(" · ".join(str(m) for m in meta))
+    # Fallback: object present but no known fields
+    return tuple(lines[:6])
+
+
+def _lines_ownership(sh: Any) -> tuple[str, ...]:
+    if sh is None:
+        return ()
+    lines: list[str] = []
+    name = getattr(sh, "top_holder_name", None)
+    pct = getattr(sh, "top_holder_pct", None)
+    if name:
+        try:
+            if pct is not None:
+                lines.append(f"Top Holder  {name}  {float(pct):.1f}%")
+            else:
+                lines.append(f"Top Holder  {name}")
+        except (TypeError, ValueError):
+            lines.append(f"Top Holder  {name}")
+    inst = getattr(sh, "institution_pct", None)
+    if inst is not None:
+        try:
+            lines.append(f"Institutional  {float(inst):.1f}%")
+        except (TypeError, ValueError):
+            lines.append(f"Institutional  {inst}")
+    indiv = getattr(sh, "individual_pct", None)
+    if indiv is not None:
+        try:
+            lines.append(f"Individual  {float(indiv):.1f}%")
+        except (TypeError, ValueError):
+            lines.append(f"Individual  {indiv}")
+    total = getattr(sh, "total_shares_formatted", None) or getattr(sh, "total_shares", None)
+    if total is not None:
+        lines.append(f"Total Shares  {total}")
+    rd = getattr(sh, "report_date", None)
+    if rd:
+        lines.append(f"Report Date  {rd}")
+    return tuple(lines[:6])
+
+
+def _lines_sector(sec: Any) -> tuple[str, ...]:
+    if sec is None:
+        return ()
+    lines: list[str] = []
+    for attr, lab in (
+        ("sector", "Sector"),
+        ("sector_name", "Sector"),
+        ("regime", "Regime"),
+        ("label", "Label"),
+        ("peers_up_5d", "Peers up 5d"),
+        ("rel_strength", "Rel strength"),
+    ):
+        v = getattr(sec, attr, None)
+        if v is not None and str(v).strip():
+            lines.append(f"{lab}  {v}")
+    if not lines:
+        lines.append("diagnostic · local only")
+    return tuple(lines[:5])
+
+
+def _lines_corp(events: list[Any]) -> tuple[str, ...]:
+    lines: list[str] = []
+    for e in events[:4]:
+        et = str(getattr(e, "event_type", "") or "event").replace("_", " ")
+        ex = getattr(e, "ex_date", None) or "—"
+        detail = str(getattr(e, "detail", "") or "").strip() or "—"
+        lines.append(f"{ex}  {et}  {detail}"[:72])
+    if not lines and events:
+        lines.append(f"{len(events)} events")
+    return tuple(lines)
+
+
+def _lines_insider(txns: list[Any]) -> tuple[str, ...]:
+    lines: list[str] = []
+    for t in txns[:4]:
+        d = getattr(t, "transaction_date", None) or "—"
+        name = str(getattr(t, "name", "") or "—")[:16]
+        role = str(getattr(t, "role", "") or "")[:8]
+        action = str(getattr(t, "action_type", "") or "—")
+        shares = getattr(t, "shares", None)
+        price = getattr(t, "price", None)
+        sh = f"{int(shares):,}" if isinstance(shares, (int, float)) else "—"
+        try:
+            pr = f"Rp{float(price):,.0f}" if price else ""
+        except (TypeError, ValueError):
+            pr = ""
+        lines.append(f"{d}  {name}  {role}  {action}  {sh}  {pr}".strip()[:72])
+    if not lines and txns:
+        lines.append(f"{len(txns)} transactions")
+    return tuple(lines)
+
+
+def _lines_seasonality(s: Any) -> tuple[str, ...]:
+    if s is None:
+        return ()
+    lines: list[str] = []
+    for attr, lab in (
+        ("label", "Pattern"),
+        ("edge_label", "Edge"),
+        ("window", "Window"),
+        ("note", "Note"),
+        ("summary", "Summary"),
+    ):
+        v = getattr(s, attr, None)
+        if v is not None and str(v).strip():
+            lines.append(f"{lab}  {v}")
+    if not lines:
+        # object present — show compact repr of public attrs
+        for attr in ("best_month", "worst_month", "avg_return"):
+            v = getattr(s, attr, None)
+            if v is not None:
+                lines.append(f"{attr}  {v}")
+    if not lines:
+        lines.append("seasonality cached")
+    return tuple(lines[:5])
+
+
+def _lines_iev(rows: list[Any]) -> tuple[str, ...]:
+    lines: list[str] = []
+    for r in rows[:4]:
+        d = getattr(r, "date", None) or getattr(r, "session_date", None) or "—"
+        iep = getattr(r, "iep", None) or getattr(r, "price", None)
+        iev = getattr(r, "iev", None)
+        ncp = getattr(r, "ncp", None) or getattr(r, "iev_intensity", None)
+        parts = [str(d)]
+        if iep is not None:
+            parts.append(f"IEP {iep}")
+        if iev is not None:
+            parts.append(f"IEV {iev}")
+        if ncp is not None:
+            parts.append(f"NCP {ncp}")
+        lines.append("  ".join(parts)[:72])
+    if not lines and rows:
+        lines.append(f"{len(rows)} IEV rows")
+    return tuple(lines)
+
+
+def _lines_sentiment(logs: list[Any]) -> tuple[str, ...]:
+    lines: list[str] = []
+    for log in logs[:4]:
+        d = getattr(log, "date", None) or "—"
+        sent = getattr(log, "sentiment", None)
+        if hasattr(sent, "value"):
+            sent = sent.value
+        cat = getattr(log, "catalyst", None)
+        if hasattr(cat, "value"):
+            cat = cat.value
+        score = getattr(log, "score", None)
+        parts = [str(d), str(sent or "—")]
+        if cat:
+            parts.append(str(cat).replace("_", " "))
+        if score is not None:
+            try:
+                parts.append(f"{float(score):.2f}")
+            except (TypeError, ValueError):
+                parts.append(str(score))
+        lines.append("  ".join(parts)[:72])
+    if not lines and logs:
+        lines.append(f"{len(logs)} sentiment rows")
+    return tuple(lines)
+
+
+def _lines_profile(profile: Any, notation: Any) -> tuple[str, ...]:
+    lines: list[str] = []
+    src = profile or notation
+    if src is None:
+        return ()
+    for attr, lab in (
+        ("name", "Name"),
+        ("board", "Board"),
+        ("sector", "Sector"),
+        ("sub_sector", "Sub-sector"),
+        ("listing_date", "Listed"),
+        ("primary_profile", "Profile"),
+        ("tradeable", "Tradeable"),
+    ):
+        v = getattr(src, attr, None)
+        if v is not None and str(v).strip() and str(v) != "—":
+            lines.append(f"{lab}  {v}")
+    if not lines:
+        lines.append("notation / profile cached")
+    return tuple(lines[:6])
 
 
 def _window_net(points: list[Any], days: int) -> tuple[str, str]:

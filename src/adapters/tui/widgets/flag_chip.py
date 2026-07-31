@@ -17,31 +17,35 @@ class FlagChip(Static):
     DEFAULT_CSS = """
     FlagChip {
         width: auto;
+        min-width: 8;
+        max-width: 18;
         height: 1;
-        color: #8a8a8a;
+        color: #a0a0a0;
         background: #141414;
-        border: solid #1c1c1c;
+        border: solid #2a2a2a;
         padding: 0 1;
-        margin-right: 1;
+        margin: 0 1 0 0;
+        content-align: center middle;
+        text-style: none;
     }
     FlagChip:hover {
         color: #e8e8e8;
-        border: solid #333333;
+        border: solid #444444;
     }
     FlagChip:focus {
         border: solid #c9a68a;
         color: #e8e8e8;
     }
     FlagChip.is-on {
-        color: #0b0b0b;
+        color: #1a120c;
         background: #c9a68a;
         border: solid #c9a68a;
         text-style: bold;
     }
     FlagChip.is-dim {
-        color: #3a3a3a;
-        background: #101010;
-        border: solid #141414;
+        color: #555555;
+        background: #0e0e0e;
+        border: solid #1a1a1a;
     }
     FlagChip.warn {
         color: #d4b06a;
@@ -49,9 +53,10 @@ class FlagChip(Static):
         background: #1a1810;
     }
     FlagChip.warn.is-on {
-        color: #0b0b0b;
+        color: #1a120c;
         background: #d4b06a;
         border: solid #d4b06a;
+        text-style: bold;
     }
     """
 

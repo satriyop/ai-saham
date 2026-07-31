@@ -195,7 +195,7 @@ def test_matrix_cell_selected_sets_jump_ticker():
     asyncio.run(scenario())
 
 
-def test_ticker_analyst_chip_expands_panel():
+def test_ticker_detail_shows_real_panel_facts_not_presence_only():
     async def scenario() -> None:
         model = build_ticker_desk_model_from_dashboard(
             SimpleNamespace(
@@ -210,11 +210,32 @@ def test_ticker_analyst_chip_expands_panel():
                 foreign_flow_source="",
                 bandar=None,
                 earnings=(),
-                analyst=object(),
-                ownership=object(),
+                analyst=SimpleNamespace(
+                    buy_count=3,
+                    hold_count=2,
+                    sell_count=0,
+                    consensus_label="BUY",
+                    avg_price_target=7150.0,
+                    upside_pct=13.9,
+                    price_target_low=6800.0,
+                    price_target_high=7600.0,
+                    last_updated=None,
+                    fetched_at=None,
+                ),
+                ownership=SimpleNamespace(
+                    top_holder_name="PT Dwimuria",
+                    top_holder_pct=54.9,
+                    institution_pct=38.2,
+                    individual_pct=6.9,
+                    total_shares_formatted="123B",
+                    report_date=None,
+                ),
                 insider_txns=(),
+                corp_actions=(),
                 iev_rows=(),
                 seasonality=None,
+                candles=(),
+                sentiment=(),
                 freshness=(),
             )
         )
@@ -223,14 +244,17 @@ def test_ticker_analyst_chip_expands_panel():
             await pilot.pause(0.05)
             desk = app.query_one("#ticker-desk", TickerDesk)
             desk.display = True
-            desk.paint(model, detail_open=False)
+            desk.paint(model, detail_open=True)
             head = str(desk.query_one("#td-more-head").content)
-            assert "collapsed" in head.lower() or "MORE" in head
-            desk.on_flag_chip_selected(FlagChip.Selected("analyst"))
-            head2 = str(desk.query_one("#td-more-head").content)
-            assert "selected" in head2.lower() or "DETAIL" in head2
-            body = str(desk.query_one("#td-more-body").content)
-            assert body.strip()
+            assert "DETAIL" in head.upper() or "full" in head.lower()
+            # Only master chip in flag row (no wall of empty peach bars)
+            assert len(desk.query("#td-flag-analyst")) == 0
+            analyst_body = str(desk.query_one("#td-depth-b-analyst").content)
+            assert "BUY" in analyst_body or "Target" in analyst_body or "3B" in analyst_body
+            assert "analyst block present" not in analyst_body
+            own_body = str(desk.query_one("#td-depth-b-ownership").content)
+            assert "Dwimuria" in own_body or "Institutional" in own_body
+            assert desk.query_one("#td-depth-analyst").display is True
 
     asyncio.run(scenario())
 
