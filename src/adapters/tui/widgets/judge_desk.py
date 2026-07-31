@@ -19,6 +19,7 @@ from src.adapters.tui.judge_desk_model import (
     action_css_class,
     gate_css_class,
 )
+from src.adapters.tui.widgets.chip_bar import ChipBar
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
 # Max cards we pre-compose (full desk + limited scalars).
@@ -156,24 +157,6 @@ class JudgeDesk(Vertical):
         padding-top: 1;
     }
 
-    JudgeDesk .flag-row {
-        height: 3;
-        width: 100%;
-        margin: 0 0 1 0;
-        padding: 0 0 0 0;
-        border-bottom: solid #1c1c1c;
-        align: left middle;
-    }
-
-    JudgeDesk .flag-lab {
-        width: 8;
-        height: 3;
-        color: #6b6b6b;
-        text-style: bold;
-        padding-right: 1;
-        content-align: left middle;
-    }
-
     JudgeDesk .phase-block {
         background: #141414;
         border: solid #1c1c1c;
@@ -298,11 +281,15 @@ class JudgeDesk(Vertical):
             yield Static("", classes="phase-arrow", id="jd-phase-arrow")
             yield Static("", classes="phase-detail", id="jd-phase-detail")
             yield Static("", classes="phase-foot", id="jd-phase-foot")
-        # Density: one control — brief ↔ detail (CLI --detail)
-        with Horizontal(classes="flag-row", id="jd-flags"):
-            yield Static("Density", classes="flag-lab", id="jd-flag-lab")
-            yield FlagChip("detail", "detail · d", id="jd-flag-detail")
-            yield Static("brief", classes="flag-lab", id="jd-density-meta")
+        # Chip bar · density only · no row label (bible §1–2)
+        yield ChipBar(
+            id="jd-flags",
+            include_detail=True,
+            detail_id="jd-flag-detail",
+            meta_id="jd-density-meta",
+            meta_text="brief",
+            chip_id_prefix="jd-flag",
+        )
         with Vertical(classes="decision-block", id="jd-decision"):
             yield Static("DECISION STACK", classes="decision-title")
             yield Static("", id="jd-decision-body")

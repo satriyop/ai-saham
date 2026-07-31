@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260730y</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-chipbar</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -1175,7 +1175,7 @@
  .oc-hz .pos { color: var(--green); }
  .oc-hz .neg { color: var(--red); }
 
- /* Full CLI panel stack (ticker full mode · FULL_PANEL_ORDER) */
+ /* Detail CLI panel stack (ticker detail · FULL_PANEL_ORDER remainder) */
  .cli-stack {
  display: flex;
  flex-direction: column;
@@ -1896,7 +1896,7 @@
  .oc-geo .v.target { color: var(--green); }
 
 
-    /* Detail flags · expand when DTO present (code-richer fields) */
+    /* Shared Chip bar · plain Tab focus · no row labels (bible §1) */
     .flag-row {
       display: flex;
       flex-wrap: wrap;
@@ -1904,12 +1904,11 @@
       margin: 0 0 10px;
       align-items: center;
     }
-    .flag-row .flag-lab {
-      font-size: 10px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
+    /* meta = density status only — not a row label (Deep/Hub/Density forbidden) */
+    .flag-row .flag-meta {
+      font-size: 11px;
       color: var(--text-mute);
-      margin-right: 4px;
+      margin-left: 4px;
     }
     .flag-chip {
       font-family: var(--font-mono);
@@ -1920,18 +1919,26 @@
       background: var(--bg-elevated);
       color: var(--text-dim);
       cursor: pointer;
+      outline: none;
     }
     .flag-chip:hover { color: var(--text); border-color: #333; }
+    .flag-chip:focus-visible {
+      color: var(--text);
+      border-color: var(--sel-bg);
+      box-shadow: 0 0 0 1px var(--sel-bg);
+    }
     .flag-chip.is-on {
       color: var(--sel-text);
       background: var(--sel-bg);
       border-color: transparent;
       font-weight: 500;
     }
+    .flag-chip.is-on:focus-visible {
+      box-shadow: 0 0 0 1px var(--sel-dim);
+    }
     .flag-chip.is-hidden { display: none !important; }
     .flag-chip.is-dim {
       opacity: 0.45;
-      cursor: default;
     }
     .flag-chip.warn {
       color: var(--amber);
@@ -2156,7 +2163,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 31e</span>
+      <span class="rev" id="buildStamp">mock · 01-chipbar</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -2248,12 +2255,10 @@
               <div style="margin-top:6px;font-size:11px;color:var(--text-mute)" id="judgePhaseMeta">2026-07-20 · 2026-07-25 · now board</div>
             </div>
 
-            <!-- Judge density: brief (default) / detail (d) — CLI screen accum --detail dual.
-                 No multi-chip wall. Limited = banner only (orthogonal to brief). -->
-            <div class="flag-row" id="judgeFlags" data-flag-group="judge">
-              <span class="flag-lab">Density</span>
-              <button type="button" class="flag-chip" data-flag="detail" id="judgeDetailAll" title="Toggle detail · same job as CLI screen accum --detail">detail · d</button>
-              <span class="flag-lab" id="judgeDensityMeta" style="margin-left:8px;color:var(--text-mute)">brief</span>
+            <!-- Chip bar · density only · plain Tab · no row label -->
+            <div class="flag-row" id="judgeFlags" data-flag-group="judge" role="toolbar" aria-label="Judge chips">
+              <button type="button" class="flag-chip" data-flag="detail" id="judgeDetailAll" title="detail · d">detail · d</button>
+              <span class="flag-meta" id="judgeDensityMeta">brief</span>
             </div>
 
             <!-- Primary cards always (brief) -->
@@ -2459,11 +2464,10 @@
               </div>
             </div>
 
-            <div class="flag-row" data-flag-group="poi">
-              <span class="flag-lab">Detail</span>
-              <button type="button" class="flag-chip" data-flag="why">why</button>
-              <button type="button" class="flag-chip" data-flag="auction+">auction+</button>
-              <button type="button" class="flag-chip" data-flag="warn">warn</button>
+            <div class="flag-row" data-flag-group="poi" role="toolbar" aria-label="Pre-open chips">
+              <button type="button" class="flag-chip" data-flag="why" title="why">why</button>
+              <button type="button" class="flag-chip" data-flag="auction+" title="auction+">auction+</button>
+              <button type="button" class="flag-chip" data-flag="warn" title="warn">warn</button>
             </div>
             <div class="flag-panel" data-flag-panel="why" data-flag-group="poi">
               <h4>Why (board row)</h4>
@@ -2527,12 +2531,23 @@
  </div>
  </div>
 
- <!-- 6 TICKER · Price hero hierarchy (IA: tui-ticker-desk) · OpenCode · full fields -->
+ <!-- 6 TICKER · full show default (CLI view ticker show) · deep chips = sibling jobs -->
  <div class="stage-block is-hidden" id="detailView" style="display:none">
 <div class="section-label">View · ticker · <span id="detailTicker">BBCA</span></div>
 
- <div id="tickerFullPanels" data-mode="primary" data-hierarchy="price-hero">
- <!-- Stage A · Identity + freshness (journey primary) -->
+ <!-- Chip bar · jobs + density last · power b f o x n d · plain Tab -->
+ <div class="flag-row" data-flag-group="ticker" id="tickerJobFlags" style="margin-bottom:12px" role="toolbar" aria-label="Ticker chips">
+   <button type="button" class="flag-chip" data-deep="brokers" title="brokers · b · view ticker top-brokers">brokers</button>
+   <button type="button" class="flag-chip" data-deep="flow" title="flow · f · view ticker flow">flow</button>
+   <button type="button" class="flag-chip" data-deep="foreign" title="foreign · o · view ticker foreign-history">foreign</button>
+   <button type="button" class="flag-chip" data-deep="dist" title="dist · x · view ticker distribution">dist</button>
+   <button type="button" class="flag-chip" data-deep="fin" title="fin · n · view ticker financials">fin</button>
+   <button type="button" class="flag-chip" data-flag="detail" id="tickerDetailAll" title="detail · d">detail · d</button>
+   <span class="flag-meta" id="tickerDensityMeta">brief</span>
+ </div>
+
+ <div id="tickerFullPanels" data-mode="full" data-hierarchy="price-hero">
+ <!-- Stage A · Identity + freshness -->
  <div class="ticker-id" data-panel="identity">
  <div>
  <div class="mark" id="detailMark">BBCA</div>
@@ -2545,7 +2560,7 @@
  </div>
  <div class="asof">
  <strong>as of 2026-07-29</strong>
- local cache
+ brief · local cache
  </div>
  </div>
 
@@ -2560,17 +2575,17 @@
  <div class="fp ok"><span class="k">Own</span><span class="v">ok</span></div>
  <div class="fp ok"><span class="k">IEV</span><span class="v">ok</span></div>
  <div class="fp stale"><span class="k">Insider</span><span class="v">stale</span></div>
- <div class="fp miss"><span class="k">Sent</span><span class="v">—</span></div>
+ <!-- no Sent — cryptic Sentiment abbrev forbidden -->
  </div>
 
- <!-- Stage B · Price hero (price is the landscape) -->
- <section class="price-hero" data-panel="price_structure" aria-label="Price hero">
+ <!-- Stage B · Price hero · chg baseline-aligned with price -->
+ <section class="price-hero" data-panel="price_structure" aria-label="Last local close">
  <div>
  <div class="lab">Last · local close</div>
- <div class="price-row">
+ <div class="price-row" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
  <span class="ccy">Rp</span>
  <span class="price">6,275</span>
- <span class="chg">+0.8% 1d</span>
+ <span class="chg pos">+0.8% 1d</span>
  </div>
  </div>
  <div aria-label="Horizons from price_structure">
@@ -2678,10 +2693,7 @@
  </div>
  </div>
 
-               <div class="flag-row" data-flag-group="ticker" id="tickerDetailFlags">
-                <span class="flag-lab">More</span>
-                <button type="button" class="flag-chip" data-flag="detail" id="tickerDetailAll" title="Full panels · same idea as CLI without --brief / accum --detail">detail · d</button>
-              </div>
+              <!-- Detail (`d`): full panel remainder. Brief default = closed (BRIEF_PANEL_KEYS). -->
               <div class="ticker-depth-body" id="tickerDepthBody">
 <div class="cli-stack">
  <section class="cli-panel" data-panel="analyst">
@@ -2830,20 +2842,33 @@
               </div><!-- /tickerDepthBody -->
             </div><!-- /tickerFullPanels -->
 
-            <div class="footer-note">
- <span><span class="kbd">b</span> top desks</span>
- <span><span class="kbd">p</span> plan</span>
- <span><span class="kbd">esc</span> board</span>
- <span><span class="kbd">d</span> detail</span>
- </div>
+            <!-- Job sub-stage (CLI view ticker top-brokers|flow|…) · esc → show -->
+            <div id="tickerDeepStage" class="is-hidden" style="display:none" data-deep-stage>
+              <div class="section-label tight" id="tickerDeepTitle">View · ticker · BBCA · top-brokers</div>
+              <div class="cli-panel" style="margin-bottom:12px">
+                <div class="body" id="tickerDeepBody">
+                  <div class="line dim">local cache · design mock</div>
+                </div>
+              </div>
+              <div class="footer-note">
+                <span><span class="kbd">esc</span> show</span>
+              </div>
+            </div>
+
+            <div class="footer-note" id="tickerShowFooter">
+              <span><span class="kbd">b</span><span class="kbd">f</span><span class="kbd">o</span><span class="kbd">x</span><span class="kbd">n</span> jobs</span>
+              <span><span class="kbd">d</span> detail</span>
+              <span><span class="kbd">p</span> plan</span>
+              <span><span class="kbd">esc</span> trail</span>
+              <span class="dim">Tab chips</span>
+            </div>
  </div>
 
  <!-- 7 BROKER · Desk Radar → Enter desk home · OpenCode (IA: tui-broker-desk) -->
  <div class="stage-block is-hidden" id="brokerView">
-<div class="flag-row" data-flag-group="broker">
-              <span class="flag-lab">List</span>
-              <button type="button" class="flag-chip warn" data-flag="partial_net">partial_net</button>
-              <button type="button" class="flag-chip" data-flag="from_ticker">from_ticker</button>
+<div class="flag-row" data-flag-group="broker" role="toolbar" aria-label="Broker list chips">
+              <button type="button" class="flag-chip warn" data-flag="partial_net" title="partial_net">partial_net</button>
+              <button type="button" class="flag-chip" data-flag="from_ticker" title="from_ticker">from_ticker</button>
             </div>
             <div class="flag-panel" data-flag-panel="partial_net" data-flag-group="broker">
               <h4>Partial NetX</h4>
@@ -2928,12 +2953,12 @@
  </div>
  </section>
 
- <div class="broker-hub" id="brokerHub" role="tablist" aria-label="Desk deep">
-                <button type="button" class="is-on" data-deep="top"><kbd>t</kbd> buy/sell</button>
-                <button type="button" data-deep="flow"><kbd>f</kbd> flow</button>
-                <button type="button" data-deep="cal"><kbd>c</kbd> calendar</button>
-                <button type="button" data-deep="hist"><kbd>h</kbd> history</button>
-                <button type="button" data-deep="matrix"><kbd>m</kbd> top 5</button>
+ <div class="flag-row" id="brokerHub" role="toolbar" aria-label="Broker desk chips">
+                <button type="button" class="flag-chip is-on" data-deep="top" title="buy/sell · t">buy/sell</button>
+                <button type="button" class="flag-chip" data-deep="flow" title="flow · f">flow</button>
+                <button type="button" class="flag-chip" data-deep="cal" title="calendar · c">calendar</button>
+                <button type="button" class="flag-chip" data-deep="hist" title="history · h">history</button>
+                <button type="button" class="flag-chip" data-deep="matrix" title="top 5 · m">top 5</button>
               </div>
               <div class="broker-deep is-on" id="brokerDeepTop" data-deep-panel="top">
  <div class="split-buy-sell">
@@ -3305,6 +3330,8 @@
       boardSource: "snapshot", // snapshot | live
       judgeLimited: false,
       judgeDetailOpen: false, // d · CLI --detail analog
+      tickerDetailOpen: false, // brief default · d = detail (same dual as Judge)
+      tickerDeep: null, // null | brokers | flow | foreign | dist | fin
  paletteOpen: false,
  confirmOpen: false,
  filtered: [...COMMANDS],
@@ -3314,6 +3341,62 @@
  online: false,
  health: "empty",
  };
+
+    const TICKER_DEEP_JOBS = {
+      brokers: {
+        cli: "view ticker top-brokers",
+        title: "top-brokers",
+        body: [
+          ["#", "Code", "Type", "Net buy", "Share"],
+          ["1", "YP", "F", "+128.4B", "12.1%"],
+          ["2", "AK", "F", "+86.2B", "8.1%"],
+          ["3", "CC", "L", "+41.0B", "3.9%"],
+          ["4", "XL", "L", "−22.1B", "2.1%"],
+          ["5", "MS", "L", "−18.4B", "1.7%"],
+        ],
+      },
+      flow: {
+        cli: "view ticker flow",
+        title: "flow",
+        body: [
+          ["Window", "Net", "Buy days", "Sell days"],
+          ["1d", "−27.8B", "0", "1"],
+          ["5d", "−344B", "1", "4"],
+          ["20d", "−1.32T", "6", "14"],
+        ],
+      },
+      foreign: {
+        cli: "view ticker foreign-history",
+        title: "foreign-history",
+        body: [
+          ["Date", "Net", "Buy", "Sell"],
+          ["2026-07-29", "−27.8B", "41.2B", "69.0B"],
+          ["2026-07-28", "−62.1B", "38.0B", "100.1B"],
+          ["2026-07-25", "+12.4B", "55.2B", "42.8B"],
+        ],
+      },
+      dist: {
+        cli: "view ticker distribution",
+        title: "distribution",
+        body: [
+          ["Side", "Broker", "Type", "Lot"],
+          ["Buy", "YP", "F", "1.2M"],
+          ["Buy", "AK", "F", "0.9M"],
+          ["Sell", "CC", "L", "0.7M"],
+          ["Sell", "XL", "L", "0.5M"],
+        ],
+      },
+      fin: {
+        cli: "view ticker financials",
+        title: "financials",
+        body: [
+          ["Period", "Revenue", "Net income", "EPS"],
+          ["Q1 2026", "28.4T", "14.7T", "119.1"],
+          ["Q4 2025", "27.9T", "14.1T", "114.7"],
+          ["Q3 2025", "26.8T", "13.7T", "111.4"],
+        ],
+      },
+    };
 
  const $ = (id) => document.getElementById(id);
  const must = (id) => { const el = $(id); if (!el) console.warn("missing #"+id); return el; };
@@ -3851,6 +3934,11 @@
  if (!opts.keepPalette) closePalette();
  if (!opts.keepConfirm) closeConfirm();
 
+ // Leaving ticker: clear deep sub-stage (show trail reset)
+ if (state.frame === "detail" && frame !== "detail" && state.tickerDeep) {
+   closeTickerDeep(false);
+ }
+
  state.frame = frame;
  state.cacheEmpty = frame === "empty";
  hideAllViews();
@@ -4013,11 +4101,19 @@
  $("statusScreen").textContent = "health";
  $("statusRows").textContent = "0 rows";
  } else if (state.frame === "detail") {
- $("viewTitle").textContent = `View · ticker · ${t}`;
- $("viewMeta").innerHTML = state.tickerDetailOpen
-          ? `<span class="dot">·</span> full · local cache`
-          : `<span class="dot">·</span> local cache · d detail`;
- $("statusScreen").textContent = "view ticker";
+        if (state.tickerDeep && TICKER_DEEP_JOBS[state.tickerDeep]) {
+          const job = TICKER_DEEP_JOBS[state.tickerDeep];
+          $("viewTitle").textContent = `View · ticker · ${t} · ${job.title}`;
+          $("viewMeta").innerHTML = `<span class="dot">·</span> ${job.cli} · local cache`;
+          $("statusScreen").textContent = `view ticker ${job.title}`;
+        } else {
+          $("viewTitle").textContent = `View · ticker · ${t}`;
+          // Brief default · d = detail (same dual as Judge)
+          $("viewMeta").innerHTML = state.tickerDetailOpen
+            ? `<span class="dot">·</span> detail · local cache`
+            : `<span class="dot">·</span> brief · local cache`;
+          $("statusScreen").textContent = "view ticker";
+        }
  $("statusRows").textContent = t;
  } else if (state.frame === "broker") {
  const b = BROKER[state.brokerIndex] || {};
@@ -4043,7 +4139,11 @@
  if (state.frame === "empty") {
  $("sideFocus").innerHTML = `<strong>none</strong><br />fetch first · ctrl+p`;
  } else if (state.frame === "detail") {
- $("sideFocus").innerHTML = `<strong>${t}</strong><br />b desks · p plan · esc board`;
+        if (state.tickerDeep) {
+          $("sideFocus").innerHTML = `<strong>${t}</strong><br />esc show · p plan`;
+        } else {
+          $("sideFocus").innerHTML = `<strong>${t}</strong><br />d detail · p plan · esc`;
+        }
  } else if (state.frame === "broker") {
  const b = BROKER[state.brokerIndex] || {};
  if (state.brokerMode === "home") {
@@ -4383,6 +4483,12 @@
           closePreopenInspect();
           return;
         }
+        // ticker deep job → show first (trail)
+        if (state.frame === "detail" && state.tickerDeep) {
+          e.preventDefault();
+          closeTickerDeep(true);
+          return;
+        }
         if (["detail", "judge", "plan", "paper", "broker", "preopen"].includes(state.frame)) {
           e.preventDefault();
           showFrame(state.cacheEmpty ? "empty" : "accum");
@@ -4480,15 +4586,19 @@
  }
 
       if (state.frame === "detail") {
-        if (e.key.toLowerCase() === "d") {
+        const tk = e.key.toLowerCase();
+        // power letters · jobs work on show or job sub-stage; d only on show
+        if (tk === "d") {
+          if (state.tickerDeep) return; // density only when show visible
           e.preventDefault();
           toggleTickerDetail();
           return;
         }
-        if (e.key.toLowerCase() === "p") { e.preventDefault(); showFrame("plan"); return; }
-        if (e.key.toLowerCase() === "b") {
+        if (tk === "p") { e.preventDefault(); showFrame("plan"); return; }
+        const jobKey = { b: "brokers", f: "flow", o: "foreign", x: "dist", n: "fin" }[tk];
+        if (jobKey) {
           e.preventDefault();
-          showFrame("broker");
+          setTickerDeep(jobKey);
           return;
         }
       }
@@ -4600,22 +4710,128 @@
       );
     }
 
+    // Ticker density: brief default · d → detail (same dual as Judge)
+    // Job chips (brokers/flow/foreign/dist/fin) are sibling CLI verbs — not density.
     function setTickerDetailOpen(open) {
       state.tickerDetailOpen = !!open;
       const btn = $("tickerDetailAll");
       if (btn) btn.classList.toggle("is-on", state.tickerDetailOpen);
       const body = $("tickerDepthBody");
+      // Brief default: body closed; detail opens FULL_PANEL_ORDER remainder
       if (body) body.classList.toggle("is-open", state.tickerDetailOpen);
+      const meta = $("tickerDensityMeta");
+      if (meta) meta.textContent = state.tickerDetailOpen ? "detail" : "brief";
+      const asof = document.querySelector("#tickerFullPanels .asof");
+      if (asof) {
+        asof.innerHTML = state.tickerDetailOpen
+          ? "<strong>as of 2026-07-29</strong> detail · local cache"
+          : "<strong>as of 2026-07-29</strong> brief · local cache";
+      }
       if (state.frame === "detail") updateChrome();
     }
 
     function toggleTickerDetail() {
+      // d / detail · d — same pattern as Judge
+      if (state.tickerDeep) closeTickerDeep(false);
       setTickerDetailOpen(!state.tickerDetailOpen);
       toast(
         state.tickerDetailOpen
-          ? "Ticker detail on · full panels"
-          : "Ticker detail off · dashboard"
+          ? "Ticker detail · full show"
+          : "Ticker brief · default"
       );
+    }
+
+    function renderTickerDeepBody(job) {
+      const spec = TICKER_DEEP_JOBS[job];
+      const el = $("tickerDeepBody");
+      if (!el || !spec) return;
+      const rows = spec.body || [];
+      if (!rows.length) {
+        el.innerHTML = '<div class="empty-slot">not cached</div>';
+        return;
+      }
+      const head = rows[0];
+      const data = rows.slice(1);
+      let html = '<table class="mini-tbl"><thead><tr>';
+      head.forEach((h, i) => {
+        html += `<th${i > 0 ? ' class="num"' : ""}>${h}</th>`;
+      });
+      html += "</tr></thead><tbody>";
+      data.forEach((r) => {
+        html += "<tr>";
+        r.forEach((c, i) => {
+          const neg = String(c).includes("−") || String(c).startsWith("-");
+          const pos = String(c).includes("+");
+          const cls = i === 0 ? "" : ` class="num${neg ? " neg" : pos ? " pos" : ""}"`;
+          html += `<td${cls}>${c}</td>`;
+        });
+        html += "</tr>";
+      });
+      html += "</tbody></table>";
+      html += `<div class="line dim" style="margin-top:8px">CLI · saham ${spec.cli} ${focusTicker().t || "BBCA"} · local cache</div>`;
+      el.innerHTML = html;
+    }
+
+    function setTickerDeep(job) {
+      const t = focusTicker().t || "BBCA";
+      if (!job || !TICKER_DEEP_JOBS[job]) {
+        closeTickerDeep(false);
+        return;
+      }
+      // second click same chip → close deep (back to show)
+      if (state.tickerDeep === job) {
+        closeTickerDeep(true);
+        return;
+      }
+      state.tickerDeep = job;
+      const spec = TICKER_DEEP_JOBS[job];
+      const stage = $("tickerDeepStage");
+      const full = $("tickerFullPanels");
+      const foot = $("tickerShowFooter");
+      if (full) full.style.display = "none";
+      if (foot) foot.style.display = "none";
+      if (stage) {
+        stage.style.display = "block";
+        stage.classList.remove("is-hidden");
+      }
+      const title = $("tickerDeepTitle");
+      if (title) title.textContent = `View · ticker · ${t} · ${spec.title}`;
+      renderTickerDeepBody(job);
+      document.querySelectorAll("#tickerJobFlags .flag-chip[data-deep]").forEach((b) => {
+        b.classList.toggle("is-on", b.dataset.deep === job);
+      });
+      const meta = $("tickerDensityMeta");
+      if (meta) meta.textContent = spec.title;
+      updateChrome();
+      toast(`${spec.cli} ${t}`);
+    }
+
+    function closeTickerDeep(announce) {
+      state.tickerDeep = null;
+      const stage = $("tickerDeepStage");
+      const full = $("tickerFullPanels");
+      const foot = $("tickerShowFooter");
+      if (stage) {
+        stage.style.display = "none";
+        stage.classList.add("is-hidden");
+      }
+      if (full) full.style.display = "";
+      if (foot) foot.style.display = "";
+      document.querySelectorAll("#tickerJobFlags .flag-chip[data-deep]").forEach((b) => {
+        b.classList.remove("is-on");
+      });
+      const meta = $("tickerDensityMeta");
+      if (meta) meta.textContent = state.tickerDetailOpen ? "detail" : "brief";
+      if (state.frame === "detail") updateChrome();
+      if (announce) toast(state.tickerDetailOpen ? "Ticker detail" : "Ticker brief");
+    }
+
+    function wireTickerJobChips() {
+      document.querySelectorAll("#tickerJobFlags .flag-chip[data-deep]").forEach((btn) => {
+        if (btn.dataset.wired) return;
+        btn.dataset.wired = "1";
+        btn.addEventListener("click", () => setTickerDeep(btn.dataset.deep));
+      });
     }
 
     function wireFlagGroups() {
@@ -4730,6 +4946,8 @@
 
     wireFlagGroups();
     wireAccumSrcBadge();
+    wireTickerJobChips();
+    setTickerDetailOpen(false); // brief default (same dual as Judge)
     wirePromptRail();
     renderAccum();
     renderPreopen();

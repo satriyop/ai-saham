@@ -17,6 +17,7 @@ from src.adapters.tui.preopen_inspect_model import (
     FLAG_DEFS,
     PreOpenInspectModel,
 )
+from src.adapters.tui.widgets.chip_bar import ChipBar
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
 
@@ -77,16 +78,6 @@ class PreopenInspectDesk(Vertical):
         color: #555555;
         text-style: bold;
     }
-    PreopenInspectDesk .flag-row {
-        height: auto;
-        margin: 0 0 1 0;
-    }
-    PreopenInspectDesk .flag-lab {
-        width: auto;
-        color: #6b6b6b;
-        text-style: bold;
-        padding-right: 1;
-    }
     PreopenInspectDesk .poi-panel {
         background: #141414;
         border: solid #1c1c1c;
@@ -120,10 +111,12 @@ class PreopenInspectDesk(Vertical):
         with Vertical(classes="poi-levels", id="poi-levels"):
             yield Static("LEVELS", classes="poi-sec-title")
             yield Static("", id="poi-levels-body")
-        with Horizontal(classes="flag-row", id="poi-flags"):
-            yield Static("Detail", classes="flag-lab", id="poi-flag-lab")
-            for key, label in FLAG_DEFS:
-                yield FlagChip(key, label, id=f"poi-flag-{key}", classes="is-dim")
+        # Option chips only (bible §2) — no density wall / no row label
+        yield ChipBar(
+            id="poi-flags",
+            chips=tuple((k, lab) for k, lab in FLAG_DEFS if k != "detail"),
+            chip_id_prefix="poi-flag",
+        )
         with Vertical(classes="poi-panel", id="poi-panel-why"):
             yield Static("WHY", classes="poi-sec-title")
             yield Static("", id="poi-why-body")
@@ -209,13 +202,18 @@ class PreopenInspectDesk(Vertical):
 
         by_flag = {c.key: c for c in model.flags}
         for key, _label in FLAG_DEFS:
+            if key == "detail":
+                continue  # no density chip on pre-open (option chips only)
             chip_m = by_flag.get(key)
-            available = True if key == "detail" else bool(chip_m and chip_m.available)
+            available = bool(chip_m and chip_m.available)
             warn = bool(chip_m and chip_m.warn)
-            expanded = self._detail_all if key == "detail" else key in open_flags
-            self.query_one(f"#poi-flag-{key}", FlagChip).set_chip_state(
-                available=available, expanded=expanded, warn=warn
-            )
+            expanded = key in open_flags
+            try:
+                self.query_one(f"#poi-flag-{key}", FlagChip).set_chip_state(
+                    available=available, expanded=expanded, warn=warn
+                )
+            except Exception:
+                pass
 
         why_panel = self.query_one("#poi-panel-why", Vertical)
         auction_panel = self.query_one("#poi-panel-auction", Vertical)

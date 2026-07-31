@@ -102,11 +102,12 @@ def test_broker_home_deep_flag_chips():
             scope_note="Tracked desk",
         )
     )
-    for key, lab in (("t", "deep.t"), ("m", "deep.m")):
+    for key, lab in (("t", "buy/sell"), ("m", "top 5")):
         chip = FlagChip(key, lab, id=f"bd-flag-{key}")
         chip.set_chip_state(available=not home.empty, expanded=False)
         assert chip.flag_key == key
         assert chip._available is True
+        assert "deep." not in lab
 
 
 def test_flow_history_structured_density_not_row_dump_only():

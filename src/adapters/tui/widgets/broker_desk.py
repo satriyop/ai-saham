@@ -13,6 +13,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
 from src.adapters.tui.broker_desk_home_model import BrokerDeskHomeModel
+from src.adapters.tui.widgets.chip_bar import BROKER_HOME_CHIPS, ChipBar
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
 
@@ -203,21 +204,6 @@ class BrokerDesk(Vertical):
         border-bottom: solid #1c1c1c;
     }
 
-    BrokerDesk .bd-flag-lab {
-        width: auto;
-        color: #6b6b6b;
-        text-style: bold;
-        padding-right: 1;
-    }
-
-    BrokerDesk .bd-flag-chip {
-        width: auto;
-        color: #8a8a8a;
-        background: #141414;
-        border: solid #1c1c1c;
-        padding: 0 1;
-        margin-right: 1;
-    }
     """
 
     def compose(self) -> ComposeResult:
@@ -244,16 +230,11 @@ class BrokerDesk(Vertical):
                 yield Static("Top sell · day", classes="bd-col-title")
                 for i in range(5):
                     yield Static("", id=f"bd-sell-{i}", classes="bd-row")
-        with Horizontal(classes="bd-flags", id="bd-flags"):
-            yield Static("Deep", classes="bd-flag-lab", id="bd-flag-lab")
-            for key, lab in (
-                ("t", "deep.t"),
-                ("f", "deep.f"),
-                ("c", "deep.c"),
-                ("h", "deep.h"),
-                ("m", "deep.m"),
-            ):
-                yield FlagChip(key, lab, id=f"bd-flag-{key}")
+        yield ChipBar(
+            id="bd-flags",
+            chips=BROKER_HOME_CHIPS,
+            chip_id_prefix="bd-flag",
+        )
         yield Static("", id="bd-empty", classes="bd-empty")
         yield Static("", id="bd-hub", classes="bd-hub")
 
@@ -317,10 +298,17 @@ class BrokerDesk(Vertical):
             empty.update("")
             empty.display = False
 
-        # Deep affordance chips (keys navigate; chips = bible deep.* flags)
-        for key in ("t", "f", "c", "h", "m"):
-            chip = self.query_one(f"#bd-flag-{key}", FlagChip)
-            chip.set_chip_state(available=not model.empty, expanded=False)
+        # Job chips (product labels · power t f c h m)
+        try:
+            bar = self.query_one("#bd-flags", ChipBar)
+            if model.empty:
+                bar.paint_states(dim_keys=("t", "f", "c", "h", "m"))
+            else:
+                bar.paint_states(on_keys=())
+        except Exception:
+            for key in ("t", "f", "c", "h", "m"):
+                chip = self.query_one(f"#bd-flag-{key}", FlagChip)
+                chip.set_chip_state(available=not model.empty, expanded=False)
 
         self.query_one("#bd-hub", Static).update(model.hub_keys)
 

@@ -1,6 +1,7 @@
-"""Shared OpenCode flag-chip control (present-only expand affordance).
+"""Shared OpenCode flag-chip control (Chip bar contract).
 
-Click toggles named detail panels. Never invents Action authority.
+Navigation: mouse click · Tab focus · Enter/Space activate.
+Never invents Action authority. Use inside :class:`ChipBar` when possible.
 
 Layer: Adapter (Textual widget)
 """

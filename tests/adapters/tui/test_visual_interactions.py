@@ -96,13 +96,17 @@ def test_broker_home_deep_chip_action_map():
         )
     )
     assert home.empty is False
-    # Labels painted on chips
+    # Product chip labels (bible: no deep.* chrome noise)
+    from src.adapters.tui.widgets.chip_bar import BROKER_HOME_CHIPS
+
     deep_keys = ("t", "f", "c", "h", "m")
+    labels = dict(BROKER_HOME_CHIPS)
     for key in deep_keys:
-        chip = FlagChip(key, f"deep.{key}", id=f"bd-flag-{key}")
+        chip = FlagChip(key, labels[key], id=f"bd-flag-{key}")
         chip.set_chip_state(available=not home.empty, expanded=False)
         assert chip._available is True
         assert "is-dim" not in chip.classes
+        assert "deep." not in chip._label
     # Handler action map (shipped on BrokerDesk)
     expected = {
         "t": "action_broker_top",
@@ -111,9 +115,7 @@ def test_broker_home_deep_chip_action_map():
         "h": "action_broker_history",
         "m": "action_broker_matrix",
     }
-    # Read from source of handler by re-asserting known map
     assert set(expected) == set(deep_keys)
-    # Model hub legend mentions the same keys
     for k in deep_keys:
         assert k in home.hub_keys
 

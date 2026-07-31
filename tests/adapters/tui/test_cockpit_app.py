@@ -141,15 +141,13 @@ def test_palette_view_ticker_is_dashboard_not_board_inspect():
                 if app._stage == "detail" and viewed:
                     break
             assert viewed == ["BBCA"]
-            assert "View · ticker desk · BBCA" in app._board_title
+            assert "View · ticker · BBCA" in app._board_title
             assert app._status_note == "view ticker"
             assert app._ticker_desk_model is not None
             assert app._ticker_desk_model.ticker == "BBCA"
             # String loader body preserved on model; primary detail_text is desk hierarchy
             assert "DASHBOARD_FOR_BBCA" in (app._ticker_desk_model.body or "")
-            assert (
-                "LAST · LOCAL CLOSE" in app._detail_text or "View · ticker desk" in app._detail_text
-            )
+            assert "LAST · LOCAL CLOSE" in app._detail_text or "View · ticker" in app._detail_text
             assert "HARGA MAST" not in app._detail_text
             # Board Enter → judge, not dashboard
             await pilot.press("escape")

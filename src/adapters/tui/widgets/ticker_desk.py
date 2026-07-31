@@ -18,10 +18,10 @@ from src.adapters.tui.ticker_desk_model import (
     TickerFreshPill,
     bar_glyphs,
 )
+from src.adapters.tui.widgets.chip_bar import TICKER_JOB_CHIPS, ChipBar
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
-# Design mock tickerDetailFlags: single master chip (detail · d).
-# Panel keys still used when expanding inventory body.
+# Detail-mode panel inventory (FULL_PANEL_ORDER remainder).
 _TICKER_PANEL_FLAGS = (
     "analyst",
     "ownership",
@@ -34,6 +34,7 @@ _TICKER_PANEL_FLAGS = (
     "profile",
     "candles",
 )
+_TICKER_JOB_KEYS = frozenset(k for k, _ in TICKER_JOB_CHIPS)
 
 
 class TickerDesk(Vertical):
@@ -326,22 +327,6 @@ class TickerDesk(Vertical):
         padding-top: 1;
     }
 
-    TickerDesk .td-flags {
-        height: 1;
-        width: auto;
-        margin: 0 0 1 0;
-        padding: 0 0 1 0;
-        border-bottom: solid #1c1c1c;
-        align: left middle;
-    }
-
-    TickerDesk .td-flag-lab {
-        width: auto;
-        color: #6b6b6b;
-        text-style: bold;
-        padding-right: 1;
-    }
-
     TickerDesk .td-sec-body {
         color: #c8c8c8;
         height: auto;
@@ -363,9 +348,21 @@ class TickerDesk(Vertical):
         self._model: TickerDeskModel | None = None
         self._open_flags: set[str] = set()
         self._detail_all: bool = False
+        self._active_job: str | None = None
 
     def compose(self) -> ComposeResult:
         yield Static("", classes="td-crumb", id="td-crumb")
+
+        # Chip bar first under crumb: jobs + density · no row label (bible §2)
+        yield ChipBar(
+            id="td-flags",
+            chips=TICKER_JOB_CHIPS,
+            chip_id_prefix="td-flag",
+            include_detail=True,
+            detail_id="td-flag-detail",
+            meta_id="td-density-meta",
+            meta_text="brief",
+        )
 
         with Horizontal(classes="td-identity", id="td-identity"):
             yield Static("—", classes="td-mark", id="td-mark")
@@ -426,11 +423,6 @@ class TickerDesk(Vertical):
             )
             yield Static("", classes="td-earn", id="td-earn-body")
 
-        # Design: single master chip (detail · d) — not a wall of empty peach bars
-        with Horizontal(classes="td-flags", id="td-flags"):
-            yield Static("More", classes="td-flag-lab", id="td-flag-lab")
-            yield FlagChip("detail", "detail · d", id="td-flag-detail")
-
         with Vertical(classes="td-section", id="td-more-sec"):
             yield Static(
                 "MORE · local panels",
@@ -449,9 +441,18 @@ class TickerDesk(Vertical):
 
     def on_flag_chip_selected(self, event: FlagChip.Selected) -> None:
         event.stop()
+        key = event.flag_key
+        if key in _TICKER_JOB_KEYS:
+            try:
+                app = self.app
+            except Exception:
+                return
+            if hasattr(app, "action_ticker_job"):
+                app.action_ticker_job(key)  # type: ignore[attr-defined]
+            return
         if self._model is None:
             return
-        if event.flag_key != "detail":
+        if key != "detail":
             return
         self._detail_all = not self._detail_all
         self._open_flags = set(self._available_panels(self._model)) if self._detail_all else set()
@@ -462,6 +463,14 @@ class TickerDesk(Vertical):
                 app._ticker_detail_open = self._detail_all  # type: ignore[attr-defined]
         except Exception:
             pass
+
+    def set_active_job(self, job: str | None) -> None:
+        """Highlight job chip when a sibling job stage is open."""
+        self._active_job = job
+        if self._model is not None:
+            self.paint(self._model, detail_open=self._detail_all, sync_from_detail=False)
+        else:
+            self._paint_chip_bar()
 
     def _available_panels(self, model: TickerDeskModel) -> set[str]:
         return {
@@ -509,9 +518,10 @@ class TickerDesk(Vertical):
         if self._detail_all:
             open_flags |= self._available_panels(model)
         detail_open = self._detail_all or bool(open_flags)
-        mode = "full · local cache" if self._detail_all else "local cache"
+        density = "detail" if self._detail_all else "brief"
         self.query_one("#td-crumb", Static).update(
-            f"View · ticker desk · [bold #e8e8e8]{model.ticker}[/]   [#555555]{mode} · browse[/]"
+            f"View · ticker · [bold #e8e8e8]{model.ticker}[/]   "
+            f"[#555555]{density} · local cache · browse[/]"
         )
         self.query_one("#td-mark", Static).update(model.ticker)
         self.query_one("#td-name", Static).update(
@@ -618,12 +628,14 @@ class TickerDesk(Vertical):
                 "[#555555]no earnings rows in local cache[/]"
             )
 
-        # Secondary / detail inventory (mock cli-stack panels with real lines)
+        # Detail inventory (BRIEF collapses; detail · d expands)
         head = self.query_one("#td-more-head", Static)
         by_panel = {p.key: p for p in model.detail_panels}
         depth_open = self._detail_all or bool(open_flags)
+        more_sec = self.query_one("#td-more-sec", Vertical)
         if depth_open:
-            head.update("DETAIL · full inventory · d collapse · local cache")
+            more_sec.display = True
+            head.update("DETAIL · full inventory · d · local cache")
             self.query_one("#td-more-body", Static).update("")
             self.query_one("#td-more-body", Static).display = False
             for key in _TICKER_PANEL_FLAGS:
@@ -644,27 +656,41 @@ class TickerDesk(Vertical):
                     f"[bold #d8d8d8]{p.title.upper()}[/]  {st}"
                 )
                 body_lines = list(p.lines[:8]) if p.lines else ["—"]
-                # Prefer facts over bare "present" slogans
                 self.query_one(f"#td-depth-b-{key}", Static).update(
                     "\n".join(f"  {ln}" for ln in body_lines)
                 )
         else:
-            head.update("MORE · collapsed · d detail · local panels")
+            # Brief default: hide extended inventory wall
+            more_sec.display = False
             for key in _TICKER_PANEL_FLAGS:
                 self.query_one(f"#td-depth-{key}", Vertical).display = False
-            more_lines = [f"[#555555]{k:16}[/] [#d8d8d8]{v}[/]" for k, v in model.secondary[:6]]
-            body = self.query_one("#td-more-body", Static)
-            body.display = True
-            body.update("\n".join(more_lines) if more_lines else "—")
 
-        # Master chip only (design tickerDetailFlags)
-        self.query_one("#td-flag-detail", FlagChip).set_chip_state(
-            available=True, expanded=self._detail_all
-        )
+        self._paint_chip_bar()
 
-        foot = model.footer
-        if self._detail_all and "d collapse" not in foot:
-            foot = foot.replace("d detail", "d collapse", 1)
+        foot = model.footer or ""
+        foot = foot.replace("d detail", "d detail").replace("d collapse", "d detail")
+        if "d detail" not in foot and "b f o x n" not in foot:
+            foot = f"b f o x n jobs · d detail · {foot}".strip(" ·")
+        if self._detail_all:
+            foot = foot.replace("d detail", "d brief", 1)
         self.query_one("#td-footer", Static).update(
             f"[#555555]{foot}[/]\n[#d4b06a]{model.authority}[/]"
         )
+
+    def _paint_chip_bar(self) -> None:
+        on_keys: set[str] = set()
+        if self._detail_all:
+            on_keys.add("detail")
+        if self._active_job:
+            on_keys.add(self._active_job)
+        try:
+            bar = self.query_one("#td-flags", ChipBar)
+            bar.paint_states(on_keys=on_keys)
+            bar.set_meta("detail" if self._detail_all else "brief")
+        except Exception:
+            try:
+                self.query_one("#td-flag-detail", FlagChip).set_chip_state(
+                    available=True, expanded=self._detail_all
+                )
+            except Exception:
+                pass

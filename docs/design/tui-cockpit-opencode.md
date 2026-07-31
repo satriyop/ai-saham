@@ -22,6 +22,7 @@ Put implementer notes **only in this doc** (or code comments). Never as stage bo
 | `IA tui-*.html` · `JudgeDeskModel` · `FULL_PANEL_ORDER` | This doc · code modules |
 | `cols 1:1 TUI` · `Evidence strip · focus row` | Column contracts below |
 | Design jargon as operator copy (`Price hero` in body titles) | Use product titles: View · ticker · BBCA |
+| Row labels `Deep` · `Hub` · `Density` · `List` · `Flags` | Chip text only · see Chip bar contract |
 
 ### Column contracts (implementer)
 
@@ -39,7 +40,7 @@ Put implementer notes **only in this doc** (or code comments). Never as stage bo
 |--------|-----------|---------|
 | **OpenCode taste** | **Bible for TUI visuals** | Black-on-black, peach selection, mono density, hairlines, cards/tables |
 | **Journey / desk HTML** | **Inspiration only** | Stage map, keys, Action vs browse, column contracts, hierarchy *ideas* |
-| **Shipped TUI code** | **Data richness** | When DTOs are richer than primary stage, density is **brief ↔ detail** (CLI-aligned), not always-on walls |
+| **Shipped TUI code** | **Data richness** | Density duals **brief ↔ detail (`d`)**; chip bars open jobs / options |
 
 Ship Textual against **`.app` inside this mock**. Design-tools strip is for reviewing frames in browser only.
 
@@ -52,9 +53,9 @@ Ship Textual against **`.app` inside this mock**. Design-tools strip is for revi
 | 1 | Accum | Action discover | Signal radar · **snapshot\|live** badge · Action chips · Enter → Judge |
 | 2 | Plan | Structure | Geometry triangle · inherit Action · `l` paper confirm |
 | 3 | Paper | Notebook | Notebook tape · write via plan `l` confirm |
-| 4 | Pre-open | Auction | IEP board → Enter **inspect** (flags: why / auction+ / warn) |
-| 5 | Ticker | Browse | Price hero · **brief/full** density (`d`) · CLI `view ticker --brief` dual |
-| 6 | Broker | Browse | Radar → Enter net hero · flags partial_net / from_ticker · deep.t\|f\|h\|m |
+| 4 | Pre-open | Auction | IEP board → Enter **inspect** (option chips) |
+| 5 | Ticker | Browse | **brief / detail (`d`)** · job chips → CLI siblings |
+| 6 | Broker | Browse | Radar → Enter desk home · list options · desk job chips |
 | 7 | Health | Honesty | Empty / zero / lag / ready posters |
 | 8 | Palette | Nav | Ctrl+P · peach selection |
 
@@ -76,41 +77,220 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 | Stage | Enter from | What |
 |-------|------------|------|
 | **Judge** | Accum **Enter** only | Verdict hero · **brief (default) / detail (`d`)** · limited = **banner** only |
-| Pre-open inspect | Pre-open board Enter | IEP hero + optional auction flags |
-| Broker home | Broker radar Enter | Net hero + hub · deep keys |
+| Pre-open inspect | Pre-open board Enter | IEP hero + option chips |
+| Broker home | Broker radar Enter | Net hero + job chip bar |
 
 **Reject:** Judge as a top frame-switch button or number key.  
 **Reject:** Judge multi-chip wall (`stack` · `readiness` · `named` · `mce` · `phase+` · `limited` pills).
 
 ---
 
-## Density: brief ↔ detail (CLI multi-surface)
+## Density duals (CLI multi-surface) — one dual everywhere
 
-Operator density is **one dual**, not a chip menu. Vocabulary matches CLI flags.
+| Surface | Default | Toggle | CLI analog |
+|---------|---------|--------|------------|
+| **Judge** (Action · screen-shaped) | **brief** | `d` → **detail** | without / with `--detail` |
+| **Ticker show** (browse · view-shaped) | **brief** | `d` → **detail** | `show --brief` / full `show` |
 
-| Surface | Brief (default) | Detail / full | CLI analog |
-|---------|-----------------|---------------|------------|
-| **Judge** (Action · screen-shaped) | Mast · phase · primary cards | + decision stack · phase ledger · secondary / diagnostic cards in fixed order | `screen accum` **without** / **with** `--detail` |
-| **Ticker** (browse · view-shaped) | Dashboard hierarchy (ops brief-class) | Full panel inventory | `view ticker show` **with** / **without** `--brief` |
+**Vocabulary (shared)**
 
-**Locked rules**
+| Term | Means | Not |
+|------|--------|-----|
+| **brief / detail** | Density dual on Judge **and** Ticker | limited state · job chips |
+| **limited** | Snapshot / no candidate on Judge | density mode |
+| **Job chip** | Sibling CLI / desk page for focus entity | density expand |
+| **Option chip** | Optional panel or list filter | density · Action |
+| **Chip bar** | Shared horizontal control row | free-floating one-off buttons |
 
-1. **`limited` ≠ `brief`.** Limited = snapshot / no candidate object (state). Brief = less density on the same object.  
-2. Judge default open = **brief**. Key **`d`** toggles **detail**. Meta copy: `brief` / `detail` (not a six-pill flag row).  
-3. Optional **one** affordance only: footer `d detail` or a single `detail · d` control — not per-panel chips.  
-4. Detail body is **fixed section order** when on; empty sections omit or show honest empty — do not invent.  
-5. Limited recovery: **banner + meta** · `j` re-judge · `r` live — never a limited density chip.  
-6. Diagnostic (named setups, MCE) may appear under **detail** only; never Action authority.  
-7. Density bars = scalar sugar only — not charts.
+**Locked rules (shared)**
 
-### Other stage flags (not Judge density)
+1. **`limited` ≠ `brief`.**  
+2. Density is **one dual per surface**: **brief (default) ↔ detail (`d`)**. Same words on Judge and Ticker.  
+3. Density control = **one** affordance: chip **`detail · d`** and/or key **`d`** — not a panel-name wall.  
+4. Empty sections omit or honest empty — do not invent.  
+5. Diagnostic never Action authority.  
+6. Density bars = scalar sugar only — not charts.  
+7. Job / option chips are **not** density. Labels stand alone — **no** row-label chrome.
 
-| Stage | Controls | Notes |
-|-------|----------|--------|
-| Accum | `snapshot` \| `live` badge | board source chrome |
-| Pre-open inspect | optional `why` · `auction+` · `warn` | auction path only |
-| Broker list | `partial_net` · `from_ticker` | list state |
-| Broker home | hub keys `t`/`f`/`c`/`h`/`m` | deep pages, not density brief/detail |
+---
+
+## 1. Shared Chip bar contract (foundation)
+
+**Authority:** every stage that exposes density, jobs, or options uses **this** interaction model.  
+**Order:** implement foundation first in TUI (shared widget), then wire stage inventories.  
+**Workflow:** design + mock first · Textual only after explicit go.
+
+### Placement & chrome
+
+| Rule | Spec |
+|------|------|
+| Placement | One horizontal row under the stage section label (or under mast if no separate title) |
+| Contents | Chips only · optional **meta** text after chips (`brief` / `detail`) — meta is status, not a chip |
+| Row labels | **Forbidden** in product UI: `Deep`, `Hub`, `Density`, `List`, `Detail`, `Flags` |
+| Chip label | Short product / CLI word only (`brokers`, `flow`, `detail · d`, `buy/sell`) |
+| Order | **Jobs / options first** (left → right) · **density last** when present |
+| Missing data | Chip **dim** (still focusable) or omit — honest; never invent content |
+
+### Navigation (locked — plain Tab)
+
+| Input | Behavior |
+|-------|----------|
+| **Mouse click** | Activate chip (toggle or open job) · focus moves to that chip |
+| **Tab** | Next focusable control in the normal app/stage chain (**plain** focus chain) |
+| **Shift+Tab** | Previous focusable control |
+| **Enter** / **Space** | Activate **focused** chip |
+| **Power letter** | Stage-local shortcut when listed below — same effect as click |
+| **`d`** | Density only (Judge + Ticker **show**) — never a job letter |
+| **Digits `1`–`8`** | Primary frames only — **never** chips |
+| **`esc`** | Trail nested job / inspect / home; does not wipe unrelated toggles unless stage says so |
+
+**Reject:** roving ←/→ chip groups (not this product).  
+**Reject:** trapping Tab forever inside the bar — Tab may leave into body / sidebar / prompt.
+
+### Visual states
+
+| State | Paint |
+|-------|--------|
+| Default | Hairline chip · mute text |
+| Hover | Brighter border (pointer) |
+| **Focus** (Tab) | Peach outline / focus ring — keyboard-visible |
+| **Active / on** | Filled or `is-on` (job open, option open, density detail) |
+| Dim / unavailable | Reduced opacity · still honest |
+
+### Semantics by chip kind
+
+| Kind | Activate means | Examples |
+|------|----------------|----------|
+| **Density** | Toggle brief ↔ detail on current stage body | `detail · d` |
+| **Job** | Open sibling CLI / desk page · `esc` trail back | ticker `brokers`… · broker `buy/sell`… |
+| **Option** | Toggle optional panel or list filter | pre-open `why` · broker `partial_net` |
+
+Jobs never invent Action. Options never re-score.
+
+### TUI implementer notes (later · order)
+
+1. Shared `ChipBar` + `Chip` (or equivalent) in `src/adapters/tui/` — one CSS + focus behavior.  
+2. Each chip: focusable control · click + Enter/Space.  
+3. Rely on Textual **default Tab** focus chain — do not reimplement Tab.  
+4. Stage `on_key` only for **documented power letters** + global `d` / `p` / `esc`.  
+5. Wire stages in inventory order: Judge → Ticker → Pre-open inspect → Broker list → Broker home.  
+6. Visual tokens match mock `.flag-chip` (focus ring + `is-on`).
+
+---
+
+## 2. Consistent chip navigation (all stages)
+
+Every row below is a **chip bar** under the Shared Chip bar contract.  
+Power keys are **stage-local** (only while that stage owns input).
+
+### Judge (nested)
+
+| Chip | Kind | Power | Effect |
+|------|------|-------|--------|
+| **detail · d** | density | `d` | brief ↔ detail |
+
+- Meta after bar: `brief` \| `detail`.  
+- **No** multi-chip wall. Limited = **banner** only · not a chip.  
+- Nav: click · Tab · Enter/Space · `d`.
+
+### Ticker show (`v t`)
+
+| Chip | Kind | Power | CLI / effect |
+|------|------|-------|----------------|
+| **brokers** | job | **`b`** | `view ticker top-brokers` |
+| **flow** | job | **`f`** | `view ticker flow` (foreign flow summary / `broker_summaries`) |
+| **foreign** | job | **`o`** | `view ticker foreign-history` |
+| **dist** | job | **`x`** | `view ticker distribution` |
+| **fin** | job | **`n`** | `view ticker financials` |
+| **detail · d** | density | **`d`** | brief ↔ detail on **show** body |
+
+- Chip label **`flow`** kept (CLI verb). Data is a summary table; power key is still **`f`**.  
+- Job → sub-stage titled with CLI job name · bar remains · switch via chip or letter · `esc` → show.  
+- **`d` only when show body is visible** (not while a job table is front). Prefer: `esc` first, then `d`.  
+- Also: `p` plan · `esc` trail.  
+- Nav: click · Tab · Enter/Space · **`b f o x n d`**.
+
+### Pre-open inspect
+
+| Chip | Kind | Power | Effect |
+|------|------|-------|--------|
+| **why** | option | — | toggle why panel |
+| **auction+** | option | — | toggle auction+ panel |
+| **warn** | option | — | toggle warn panel |
+
+- Nav: click · Tab · Enter/Space only (no letter soup).
+
+### Broker list (radar)
+
+| Chip | Kind | Power | Effect |
+|------|------|-------|--------|
+| **partial_net** | option | — | list honesty / filter state |
+| **from_ticker** | option | — | desks-from-ticker trail |
+
+- Nav: click · Tab · Enter/Space only.
+
+### Broker home (desk)
+
+| Chip | Kind | Power | Effect |
+|------|------|-------|--------|
+| **buy/sell** | job | **`t`** | latest session dual heat |
+| **flow** | job | **`f`** | this desk day-net series |
+| **calendar** | job | **`c`** | ~1 month desk calendar |
+| **history** | job | **`h`** | per-ticker daily for desk |
+| **top 5** | job | **`m`** | multi-window top-5 matrix |
+
+- Same chip bar model (labels speak; no “Hub” word in UI).  
+- `v` → view ticker for desk top (1s #1) — not a chip.  
+- Ticker `f` ≠ broker `f` (different stages — both valid).  
+- Nav: click · Tab · Enter/Space · **`t f c h m`**.
+
+### Stages without chip bar
+
+Accum (source badge only) · Plan · Paper · Health · Palette.
+
+---
+
+## Ticker stage (content lock)
+
+**Chip bar rules:** §2 Ticker show only — do not fork navigation here.  
+**Lock date:** 2026-08-01 · multi-surface with `view ticker *`.
+
+### Default: brief (consistent with Judge)
+
+- Open density = **brief**.  
+- Panel set: `BRIEF_PANEL_KEYS` via  
+  `src/application/services/ticker_dashboard_layout.py` · `panel_keys_for_mode(brief=True)`.  
+- CLI: brief ≈ `saham view ticker show TICKER --brief`.  
+- **`d` / `detail · d`** → detail = `FULL_PANEL_ORDER` / full show without `--brief`.  
+- Meta: **`brief`** (default) · **`detail`** · local cache. Never “full”.  
+- Paint may re-group hierarchy around panel keys (multi-surface keys stay).
+
+### Panel inventory (authority = layout module)
+
+| Mode | Keys (order preserved from `FULL_PANEL_ORDER`) |
+|------|--------------------------------------------------|
+| **Brief** (default) | identity · freshness · valuation · price_structure · earnings · bandar · foreign_flow |
+| **Detail** (`d`) | + analyst · ownership · sector_macro · corp_actions · insider · seasonality · iev · **sentiment** · profile · candles (remainder) |
+
+- `sector_macro` = diagnostic (ADR-053) · detail only.  
+- **sentiment** panel = detail only · honest empty when not cached.
+
+### Freshness grid — no cryptic labels
+
+| Keep (short, readable) | Drop |
+|------------------------|------|
+| Price · Flow · Bandar · Earn · Fund · Analyst · Own · IEV · Insider | **`Sent`** |
+
+- If news freshness later: **`News`** or full **`Sentiment`**, never `Sent`.
+
+### Job sub-stage chrome
+
+| Piece | Spec |
+|-------|------|
+| Title | `View · ticker · BBCA · top-brokers` (CLI job name) |
+| Body | Table / series from that CLI job · empty honest |
+| Trail | `esc` → show · chips / letters switch job |
+| Meta | `local cache` · never Action |
 
 ---
 
@@ -119,7 +299,7 @@ Operator density is **one dual**, not a chip menu. Vocabulary matches CLI flags.
 | Path | Keys | Must not |
 |------|------|----------|
 | **Action** | Board `Enter` → Judge · `p` Plan · `l` Paper | Ticker/broker invent Action |
-| **Browse** | `v t` · `v b` · broker Enter home · `t`/`f`/`h`/`m` | ENTER/WATCH/AVOID authority |
+| **Browse** | `v t` · `v b` · broker Enter home · chip bar jobs | ENTER/WATCH/AVOID authority |
 | **Paper** | Confirm after geometry | Auto-write · corpus · orders |
 | **Pre-open** | Enter → auction inspect | Same stage as accum Judge |
 
@@ -131,10 +311,10 @@ Operator density is **one dual**, not a chip menu. Vocabulary matches CLI flags.
 
 ### Judge (nested · screen-shaped)
 - **Brief (default):** Action · Gate · Signal · Accum · Authority% · Family · Why · phase timeline · primary cards  
-- **Detail (`d`):** + decision stack · phase ledger lines · secondary / diagnostic cards (fixed order; omit if no data)  
-- CLI multi-surface: default ≈ without `--detail` · `d` ≈ with `--detail`  
-- **Limited** (orthogonal): banner + meta when snapshot/no candidate · `j` / `r` — **not** a density chip  
-- **No** multi-chip row (`stack` / `readiness` / `named` / `mce` / `phase+` / `limited` pills)
+- **Detail (`d`):** + decision stack · phase ledger · secondary / diagnostic cards (fixed order; omit if no data)  
+- Chip bar: **`detail · d`** only · meta brief|detail  
+- CLI: without / with `--detail`  
+- **Limited:** banner + meta · `j` / `r` — not a chip  
 
 ### Accum
 - Cols 1:1 `BOARD_COLUMN_LABELS`  
@@ -142,33 +322,25 @@ Operator density is **one dual**, not a chip menu. Vocabulary matches CLI flags.
 
 ### Pre-open inspect
 - Primary: grade · risk · IEP · levels  
-- Optional flags: why · auction+ (trend · broker tag · backing_score · buy_streak) · warn  
+- Chip bar options: why · auction+ · warn (Tab / click; no power letters)  
 
-### Ticker (`v t` · on par with `saham view ticker show`)
-- **Brief-class primary:** identity · freshness · last close · horizons · fundamentals · pulse · earnings  
-  — CLI **`--brief`**-class density  
-- **`d` (full):** panel inventory (analyst · ownership · sector · corp · insider · seasonality · iev · sentiment · profile · candles)  
-  — CLI show **without** `--brief`  
-- Header meta: `local cache` / `full · local cache` · or brief/detail wording — no design jargon  
-- Footer: `d` detail · `b` desks · `p` plan · `esc`
+### Ticker (`v t` · multi-surface with `view ticker *`)
+- **Brief (default)** / **Detail (`d`)** — same dual as Judge  
+- Freshness: Price · Flow · Bandar · Earn · Fund · Analyst · Own · IEV · Insider — **no `Sent`**  
+- Chip bar jobs: **brokers · flow · foreign · dist · fin** + **detail · d**  
+- Power: **`b f o x n d`** · `p` plan · `esc` trail  
+- Price mast: last · local close · chg **baseline-aligned**  
+- **TUI:** after design lock · use shared ChipBar  
 
 ### Broker (`v b` · desk-centric)
-- Radar + Enter home: **day net for that desk code** (tracked `broker_daily_flow`)  
-- Hub:
-  - **`t` buy/sell** — dual heat **latest session only** (buy + sell sides)
-  - **`f` flow** — this desk’s day-net series (`ViewBrokerDeskFlow`)
-  - **`c` calendar** — ~1 month: top stock collected + desk net + B/S per session day
-  - **`h` history** — per-ticker daily for this desk
-  - **`m` top 5** — **matrix** of top **5 net buy** names across windows **1s · 3s · 5s · 10s · 20s** (default emphasis **1s**); each cell: **ticker · streak · net · avg buy**  
-    - **streak** = consecutive sessions this **desk** net-bought **that ticker** (ending at as_of) — not desk-wide Net streak, not market foreign streak  
-    - **avg buy** = desk `avg_buy_price` for that desk×ticker×window (multi-session = volume-weighted)  
-    - click cell → view ticker
-  - **`v`** — open view ticker for desk’s current top (1s #1), not a hub tab  
+- Radar chip bar: partial_net · from_ticker  
+- Home: day net for desk code · job chips **buy/sell · flow · calendar · history · top 5** · keys **`t f c h m`**  
+- Matrix cell: ticker · streak · net · avg buy · click → ticker  
+- `v` → view ticker desk top · not a chip  
 - Never market foreign total  
-- **Session vs multi-window:** `t` = latest dual · `m` = multi-session top-5 net buy
 
 ### Plan / Paper / Health
-- Plan geometry triangle · paper tape · health posters (unchanged contracts)
+- Plan geometry · paper tape · health posters (unchanged)
 
 ---
 
@@ -177,14 +349,21 @@ Operator density is **one dual**, not a chip menu. Vocabulary matches CLI flags.
 - `#0b0b0b` / `#141414` / `#1c1c1c` · peach `#c9a68a`  
 - Semantic green / amber / red  
 - Hierarchy by weight — not Fraunces  
+- Chip **focus ring** = peach (keyboard path must be visible)
 
 ### Reject
 - Night-ink as ship skin  
 - Judge as primary tab  
-- Flat CLI dump as only ticker stage  
-- Always-on full depth wall without brief/detail toggle  
-- Judge multi-chip wall (per-panel expand pills)  
-- Confusing **limited** (state) with **brief** (density)  
+- Flat CLI dump as only ticker stage without hierarchy  
+- Judge multi-chip density wall  
+- Ticker density inverted vs Judge (must be **brief default · detail `d`**)  
+- Row chrome noise (`Deep`, `Hub`, `Density`, `List`, …)  
+- Roving ←/→ chip bars (plain Tab only)  
+- Density chips that invent panel names  
+- Cryptic freshness labels (**`Sent`**, etc.)  
+- Confusing **limited** with **brief**  
+- Job chips that re-score or invent Action  
+- Digits for chips  
 - Product charts  
 
 ---
@@ -193,4 +372,4 @@ Operator density is **one dual**, not a chip menu. Vocabulary matches CLI flags.
 
 - ADR: [`ADR-051`](../adr/ADR-051-tui-opencode-cockpit-clean-break.md)  
 - Journey: [`tui-journey-hub.html`](./tui-journey-hub.html)  
-- Code: `src/adapters/tui/` (`JudgeDeskModel`, `TickerDeskModel`, presenters, `main.py` stages)  
+- Code (later): `src/adapters/tui/` shared ChipBar · stage desks · presenters  

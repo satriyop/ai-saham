@@ -82,6 +82,9 @@ class CockpitApp(App[None]):
         # `v` is chord prefix off desk hub (v t / v b); on desk hub = jump ticker
         # (handled in on_key so prefix chords do not fight single-key v).
         Binding("b", "ticker_desks", "Ticker→desks", show=False),
+        Binding("o", "ticker_job_foreign", "Ticker foreign", show=False),
+        Binding("x", "ticker_job_dist", "Ticker dist", show=False),
+        Binding("n", "ticker_job_fin", "Ticker fin", show=False),
         Binding("d", "toggle_detail", "Detail", show=False),
         # Prompt rail focus (OpenCode chrome · non-Action)
         Binding("colon", "focus_prompt", "Prompt", show=False),
@@ -275,9 +278,8 @@ class CockpitApp(App[None]):
                         yield HealthPosterDesk(id="health-poster-desk")
                     # Mock src-badge (snapshot|live) above dense board table
                     yield Static("", id="board-source-badge", classes="hide")
-                    # Broker list flag chips (real chips, not one Static line)
+                    # Broker list chip bar — no row label (bible §1–2)
                     with Horizontal(id="board-flag-row", classes="board-flag-row"):
-                        yield Static("List", id="board-flag-lab")
                         yield FlagChip(
                             "partial_net",
                             "partial_net",
@@ -485,7 +487,7 @@ class CockpitApp(App[None]):
                 "v view ticker · esc desk trail · Ctrl+P"
             )
         if self._stage == "detail" and self._status_note == "view ticker":
-            return "↑↓/PgUp/PgDn scroll · d detail · b top desks · esc back · p plan · Ctrl+P"
+            return "↑↓ scroll · b f o x n jobs · d detail · p plan · esc trail · Ctrl+P · Tab chips"
         if self._stage == "detail" and self._status_note in {"judge", "re-judging"}:
             if self._judge_limited:
                 return (
@@ -1349,7 +1351,13 @@ class CockpitApp(App[None]):
         self._open_broker_deep("top")
 
     def action_broker_flow(self) -> None:
-        if self._modal_blocks_board_keys() or not self._desk_hub_active():
+        """Desk hub ``f`` or ticker show ``f`` → flow job (stage-local)."""
+        if self._modal_blocks_board_keys():
+            return
+        if self._stage == "detail" and self._status_note == "view ticker":
+            self.action_ticker_job("flow")
+            return
+        if not self._desk_hub_active():
             return
         self._open_broker_deep("flow")
 
@@ -1380,39 +1388,86 @@ class CockpitApp(App[None]):
         self._open_view_ticker_dashboard(from_desk=True)
 
     def action_toggle_detail(self) -> None:
-        """Shared ``d``: ticker / judge / pre-open inspect panel expand by stage."""
+        """Shared ``d``: brief ↔ detail on Judge + Ticker show (Chip bar contract)."""
         if self._modal_blocks_board_keys():
             return
         if self._stage != "detail":
             return
         if self._status_note == "view ticker":
             self._ticker_detail_open = not bool(getattr(self, "_ticker_detail_open", False))
-            # Design bible: header meta is local cache / full · local cache only
-            if self._ticker_detail_open:
-                self._meta = "full · local cache" + (" · from desk" if self._view_from_desk else "")
-            else:
-                self._meta = "local cache" + (" · from desk" if self._view_from_desk else "")
+            density = "detail" if self._ticker_detail_open else "brief"
+            self._meta = density + (" · from desk" if self._view_from_desk else "")
             self._refresh_chrome()
-            self.notify(
-                f"Ticker detail · {'full' if self._ticker_detail_open else 'brief'}", timeout=1.2
-            )
+            self.notify(f"Ticker · {density}", timeout=1.2)
             return
         if self._status_note in {"judge", "re-judging"}:
             self._judge_detail_open = not bool(getattr(self, "_judge_detail_open", False))
             density = "detail" if self._judge_detail_open else "brief"
-            self._meta = f"{density} · d toggle · j re-judge"
+            self._meta = f"{density} · d · j re-judge"
             self._refresh_chrome()
-            self.notify(f"Judge · {density} (CLI --detail dual)", timeout=1.2)
+            self.notify(f"Judge · {density}", timeout=1.2)
             return
         if self._status_note == "inspect" and (
             self._board_kind == "preopen" or self._detail_return_stage == "preopen"
         ):
+            # Pre-open: d still expands optional panels (no density chip on bar)
             self._preopen_detail_open = not bool(getattr(self, "_preopen_detail_open", False))
-            mode = "full" if self._preopen_detail_open else "compact"
+            mode = "detail" if self._preopen_detail_open else "brief"
             self._meta = f"{mode} · d toggle"
             self._refresh_chrome()
-            self.notify(f"Pre-open detail · {mode}", timeout=1.2)
+            self.notify(f"Pre-open · {mode}", timeout=1.2)
             return
+
+    def action_ticker_job(self, job: str) -> None:
+        """Ticker job chips / power keys · sibling CLI verbs (browse only)."""
+        if self._modal_blocks_board_keys():
+            return
+        if self._stage != "detail" or self._status_note != "view ticker":
+            return
+        job = (job or "").strip().lower()
+        if job == "brokers":
+            self.action_ticker_desks()
+            return
+        cli = {
+            "flow": "view ticker flow",
+            "foreign": "view ticker foreign-history",
+            "dist": "view ticker distribution",
+            "fin": "view ticker financials",
+        }.get(job)
+        if not cli:
+            return
+        # Job sub-stage: present-only stub until dedicated desk loaders land.
+        # Chips + keys are live; body is honest local-cache path (no Action).
+        stock = str(self._focus_ticker or "").upper()
+        try:
+            desk = self.query_one("#ticker-desk")
+            if hasattr(desk, "set_active_job"):
+                desk.set_active_job(job)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        self._meta = f"{cli} · local cache"
+        self._status_note = "view ticker"
+        self._detail_text = (
+            f"View · ticker · {stock} · {job}\n"
+            f"CLI · saham {cli} {stock}\n\n"
+            f"[#6b6b6b]Job stage · local cache · browse only · esc show · "
+            f"chips switch job[/]\n"
+            f"[#555555]Full table paint ships with dual-surface loader "
+            f"(same path as CLI).[/]"
+        )
+        self._board_title = f"View · ticker · {stock} · {job}"
+        self._refresh_chrome()
+        # Keep ticker desk visible with job chip on; show job note in notify
+        self.notify(f"{cli} {stock}", timeout=1.5)
+
+    def action_ticker_job_foreign(self) -> None:
+        self.action_ticker_job("foreign")
+
+    def action_ticker_job_dist(self) -> None:
+        self.action_ticker_job("dist")
+
+    def action_ticker_job_fin(self) -> None:
+        self.action_ticker_job("fin")
 
     def action_focus_prompt(self) -> None:
         """Focus OpenCode prompt rail (: or /). Non-Action chrome only."""
@@ -1491,6 +1546,12 @@ class CockpitApp(App[None]):
         if not stock or stock == "—":
             self.notify("No ticker focused", timeout=1.5)
             return
+        try:
+            desk = self.query_one("#ticker-desk")
+            if hasattr(desk, "set_active_job"):
+                desk.set_active_job("brokers")  # type: ignore[attr-defined]
+        except Exception:
+            pass
         self._open_ticker_desks(stock)
 
     def action_refresh_local(self) -> None:
@@ -2360,9 +2421,16 @@ class CockpitApp(App[None]):
                 self._remember_return_stage()
             self._broker_page = None
         self._stage = "loading"
-        self._board_title = f"View · ticker show · {ticker}"
-        self._meta = "local cache · dashboard"
+        self._board_title = f"View · ticker · {ticker}"
+        self._meta = "brief · local cache"
         self._status_note = "view ticker"
+        self._ticker_detail_open = False  # brief default (same dual as Judge)
+        try:
+            desk = self.query_one("#ticker-desk")
+            if hasattr(desk, "set_active_job"):
+                desk.set_active_job(None)  # type: ignore[attr-defined]
+        except Exception:
+            pass
         self._refresh_chrome()
         self._execute_view_ticker(ticker)
 
@@ -2842,8 +2910,8 @@ class CockpitApp(App[None]):
             model = model_from_loader_result(ticker, model_or_text)
         if not isinstance(model, TickerDeskModel):
             model = build_ticker_desk_model_from_text(ticker=ticker, body=str(model_or_text or ""))
-        actions = "\n\n[#9b8fb8]Actions (TUI)[/]\n  b top desks for this stock\n" + (
-            "  esc → desk home\n" if self._view_from_desk else "  esc back\n"
+        actions = "\n\n[#9b8fb8]Actions (TUI)[/]\n  b f o x n jobs · d detail · Tab chips\n" + (
+            "  esc → desk home\n" if self._view_from_desk else "  esc trail\n"
         )
         body = model.body or ""
         if "Actions (TUI)" not in body:
@@ -2853,16 +2921,16 @@ class CockpitApp(App[None]):
 
         model = replace(model, body=body.strip())
         self._ticker_desk_model = model
-        self._ticker_detail_open = False  # open brief; d expands inventory
+        self._ticker_detail_open = False  # brief default · d → detail
         self._detail_text = model.as_text()
         self._stage = "detail"
-        self._board_title = f"View · ticker desk · {ticker}"
-        # Design bible ticker header meta: local cache | full · local cache
+        self._board_title = f"View · ticker · {ticker}"
+        # Density meta: brief (default) / detail — same dual as Judge
         if self._view_from_desk:
-            self._meta = "local cache · from desk"
+            self._meta = "brief · from desk"
             self._broker_page = None  # not a desk page; trail via _view_from_desk
         else:
-            self._meta = "local cache"
+            self._meta = "brief · local cache"
         self._status_note = "view ticker"
         self._focus_ticker = ticker
         self._refresh_chrome()
