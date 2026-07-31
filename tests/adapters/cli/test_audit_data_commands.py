@@ -184,6 +184,7 @@ def test_source_contracts_json_output_includes_dq_001e_signal_artifact_tables(tm
         "learning_policy_proposals",
         "learning_policy_validations",
         "learning_policy_applications",
+        "learning_policy_snapshots",
         "market_context_snapshots",
         "regime_observations",
     ):
@@ -316,9 +317,7 @@ def test_reconcile_sources_json_output_includes_dq_001e_artifact_checks(tmp_path
     )
     assert learning_obs["status"] == "FAIL"
     learning_lab = next(
-        c
-        for c in payload["checks"]
-        if c["name"] == "learning_outcome_labels_identity_linkage"
+        c for c in payload["checks"] if c["name"] == "learning_outcome_labels_identity_linkage"
     )
     assert learning_lab["status"] == "FAIL"
 

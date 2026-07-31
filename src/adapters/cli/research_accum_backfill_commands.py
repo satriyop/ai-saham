@@ -5,7 +5,7 @@ Layer: Adapter
 """
 
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -16,6 +16,12 @@ from src.adapters.composition.screen_accum_workflow_factory import (
 )
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
+)
+from src.application.services.engine_bootstrap.risk_config_resolvers import (
+    resolve_risk_gates,
+)
+from src.application.services.engine_bootstrap.signal_scoring_config_resolver import (
+    resolve_signal_engine_config,
 )
 from src.application.services.lean_observation_identity import (
     LeanObservationIdentity,
@@ -39,6 +45,11 @@ from src.application.use_case.backfill_signal_observations_use_case import (
     BackfillSignalObservationsResponse,
     BackfillSignalObservationsUseCase,
 )
+from src.application.use_case.ensure_accumulation_policy_snapshots_use_case import (
+    EnsureAccumulationPolicySnapshotsRequest,
+    EnsureAccumulationPolicySnapshotsUseCase,
+)
+from src.domain.value_objects.learning_artifacts import LearningContractError
 from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY_CONTRACT,
@@ -47,11 +58,18 @@ from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
 from src.infrastructure.config.app_config import load_app_config
+from src.infrastructure.config.engine_config_loader import load_engine_config
 from src.infrastructure.config.market_context_factory import evaluate_market_context
+from src.infrastructure.config.signal_engine_config_loader import (
+    load_signal_engine_config_raw,
+)
 from src.infrastructure.config.swing_policy_config_loader import load_swing_policy_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
     IHSGTradingSessionCalendarProvider,
+)
+from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+    SQLiteLearningArtifactRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
@@ -173,15 +191,38 @@ def run_signal_observation_corpus_write(
     # Resolve the lean observation identity ONCE. The adapter reads config file
     # contents (I/O) and passes the canonical string to the application
     # resolver, which owns the hashing/policy. N is material and folded in.
+    resolved_config_canonical = _read_scoring_config_canonical(
+        cfg.config_paths,
+        pit_tradable_lookback_sessions=pit_window,
+    )
     observation_identity = LeanObservationIdentity(
         observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
-        semantic_compatibility_id=resolve_lean_semantic_compatibility_id(
-            _read_scoring_config_canonical(
-                cfg.config_paths,
-                pit_tradable_lookback_sessions=pit_window,
-            )
-        ),
+        semantic_compatibility_id=resolve_lean_semantic_compatibility_id(resolved_config_canonical),
     )
+
+    # Same typed resolvers used by live Signal/Risk engines (ADR-059). Adapter
+    # wires I/O only; EnsureAccumulationPolicySnapshotsUseCase owns assembly.
+    signal_engine_config = resolve_signal_engine_config(load_signal_engine_config_raw())
+    structural_gates, execution_gates = resolve_risk_gates(
+        load_engine_config(Path(cfg.config_paths.risk_engine))
+    )
+    learning_repo = SQLiteLearningArtifactRepository(resolved_db)
+    try:
+        EnsureAccumulationPolicySnapshotsUseCase(learning_repo).execute(
+            EnsureAccumulationPolicySnapshotsRequest(
+                resolved_config_canonical=resolved_config_canonical,
+                observation_identity=observation_identity,
+                accum_score_policy=accumulation_config.accum_score_policy,
+                signal_engine_config=signal_engine_config,
+                structural_gates=structural_gates,
+                execution_gates=execution_gates,
+                created_at=datetime.now(timezone.utc),
+                source_revision="",
+            )
+        )
+    except LearningContractError as exc:
+        typer.echo(f"[error] production policy snapshot ensure failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
 
     return BackfillSignalObservationsUseCase(
         record_observations_use_case=screen_bundle.record_observations_use_case,

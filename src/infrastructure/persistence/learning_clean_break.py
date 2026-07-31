@@ -34,6 +34,7 @@ LEARNING_TABLES = (
     "learning_policy_proposals",
     "learning_policy_validations",
     "learning_policy_applications",
+    "learning_policy_snapshots",
 )
 
 
@@ -46,7 +47,7 @@ class LearningCleanBreakReport:
 
 
 def apply_learning_clean_break(db_path: Path) -> LearningCleanBreakReport:
-    """Drop the five retired tables and create the seven canonical tables.
+    """Drop the five retired tables and create the canonical learning tables.
 
     The entire schema transition is one ``BEGIN IMMEDIATE`` transaction. Any
     missing postcondition or foreign-key violation rolls it back.

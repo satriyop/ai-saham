@@ -128,9 +128,7 @@ def pre_open_labels(
             "conflict_count": sum(c["conflict_count"] for c in cohort_results),
             "observation_count": sum(c["observation_count"] for c in cohort_results),
         }
-        conflict_ids = [
-            lid for c in cohort_results for lid in c["conflict_label_ids"]
-        ]
+        conflict_ids = [lid for c in cohort_results for lid in c["conflict_label_ids"]]
         if fmt == "json":
             typer.echo(json.dumps(payload, indent=2))
             return

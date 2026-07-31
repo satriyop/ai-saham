@@ -61,8 +61,7 @@ def resolve_compatibility_id(
     available = list_compatibility_ids(repo, purpose)
     if len(available) != 1:
         raise typer.BadParameter(
-            "specify --compatibility-id; available cohorts: "
-            + (", ".join(available) or "none")
+            "specify --compatibility-id; available cohorts: " + (", ".join(available) or "none")
         )
     return available[0]
 
@@ -84,8 +83,7 @@ def resolve_label_compatibility_ids(
     available = list_compatibility_ids(repo, purpose)
     if not available:
         raise typer.BadParameter(
-            f"no observations with compatibility_id for purpose={purpose.value}; "
-            "nothing to label"
+            f"no observations with compatibility_id for purpose={purpose.value}; nothing to label"
         )
     return available
 

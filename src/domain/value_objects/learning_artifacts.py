@@ -67,6 +67,28 @@ class LearningContractId(str, Enum):
     SWING_PROPOSAL = "swing_policy_proposal.v1"
     SWING_VALIDATION = "paired_oos_swing_policy_validation.v1"
     YAML_APPLICATION = "yaml_policy_application.v1"
+    # ADR-059: cohort-bound production policy identity for ML challenges.
+    PRODUCTION_POLICY_SNAPSHOT = "production_policy_snapshot.v1"
+
+
+# Closed v1 accumulation export set (ADR-059). A seventh ID needs a new task.
+PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS = "screener.accum.score_weights"
+PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS = "signal.accum.evidence_group_weights"
+PRODUCTION_POLICY_ID_SIGNAL_FLAGS = "signal.accum.flags"
+PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION = "signal.accum.classification"
+PRODUCTION_POLICY_ID_RISK_HARD_GATES = "risk.accum.hard_gates"
+PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE = "signal.accum.raw_score"
+
+ACCUMULATION_PRODUCTION_POLICY_IDS: tuple[str, ...] = (
+    PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
+    PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
+    PRODUCTION_POLICY_ID_SIGNAL_FLAGS,
+    PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION,
+    PRODUCTION_POLICY_ID_RISK_HARD_GATES,
+    PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE,
+)
+
+PRODUCTION_POLICY_VERSION_V1 = "v1"
 
 
 _OBSERVATION_CONTRACT_BY_PURPOSE = MappingProxyType(
@@ -675,3 +697,137 @@ class LearningPolicyApplication:
                 ),
             }
         )
+
+
+def material_config_hash_from_canonical(resolved_config_canonical: str) -> str:
+    """Hash whole resolved-config bytes for the policy-snapshot row column.
+
+    Distinct from lean ``compatibility_id``: this hash covers config content
+    only (no schema / semantic-engine / evidence-contract version fold-in).
+    """
+
+    if not isinstance(resolved_config_canonical, str):
+        raise LearningContractError(
+            "resolved_config_canonical must be a str, got "
+            f"{type(resolved_config_canonical).__name__}"
+        )
+    digest = hashlib.sha256(resolved_config_canonical.encode("utf-8")).hexdigest()
+    return "sha256:" + digest
+
+
+def policy_snapshot_payload_digest(canonical_payload: Mapping[str, Any]) -> str:
+    """SHA-256 of canonical payload JSON (lowercase hex, no prefix)."""
+
+    return hashlib.sha256(canonical_json(canonical_payload).encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class ProductionPolicySnapshot:
+    """Cohort-bound production policy identity (ADR-059).
+
+    ``payload_digest`` covers only ``canonical_payload``. ``created_at`` and
+    ``source_revision`` are provenance and must not affect identity or digest.
+    """
+
+    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset({"created_at", "source_revision"})
+
+    snapshot_id: str
+    schema_version: int
+    contract_id: LearningContractId
+    purpose: AssessmentPurpose
+    learning_observation_contract_id: str
+    producer_observation_contract: str
+    compatibility_id: str
+    policy_id: str
+    policy_version: str
+    decision_type: str
+    semantic_engine_contract_id: str
+    material_config_hash: str
+    canonical_payload: Mapping[str, Any]
+    payload_digest: str
+    source_revision: str
+    created_at: datetime
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        purpose: AssessmentPurpose,
+        learning_observation_contract_id: str,
+        producer_observation_contract: str,
+        compatibility_id: str,
+        policy_id: str,
+        policy_version: str,
+        decision_type: str,
+        semantic_engine_contract_id: str,
+        material_config_hash: str,
+        canonical_payload: Mapping[str, Any],
+        source_revision: str,
+        created_at: datetime,
+    ) -> ProductionPolicySnapshot:
+        for name, value in (
+            ("learning_observation_contract_id", learning_observation_contract_id),
+            ("producer_observation_contract", producer_observation_contract),
+            ("compatibility_id", compatibility_id),
+            ("policy_id", policy_id),
+            ("policy_version", policy_version),
+            ("decision_type", decision_type),
+            ("semantic_engine_contract_id", semantic_engine_contract_id),
+            ("material_config_hash", material_config_hash),
+        ):
+            _require_non_empty(name, value)
+        if not isinstance(canonical_payload, Mapping) or not canonical_payload:
+            raise LearningContractError("canonical_payload must be a non-empty mapping")
+        if created_at.tzinfo is None or created_at.utcoffset() is None:
+            raise LearningContractError("created_at must be timezone-aware")
+
+        identity = {
+            "purpose": purpose,
+            "learning_observation_contract_id": learning_observation_contract_id,
+            "producer_observation_contract": producer_observation_contract,
+            "compatibility_id": compatibility_id,
+            "policy_id": policy_id,
+        }
+        snapshot_id = stable_learning_id(LearningContractId.PRODUCTION_POLICY_SNAPSHOT, identity)
+        payload = dict(canonical_payload)
+        digest = policy_snapshot_payload_digest(payload)
+        return cls(
+            snapshot_id=snapshot_id,
+            schema_version=LEARNING_SCHEMA_VERSION,
+            contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT,
+            purpose=purpose,
+            learning_observation_contract_id=learning_observation_contract_id,
+            producer_observation_contract=producer_observation_contract,
+            compatibility_id=compatibility_id,
+            policy_id=policy_id,
+            policy_version=policy_version,
+            decision_type=decision_type,
+            semantic_engine_contract_id=semantic_engine_contract_id,
+            material_config_hash=material_config_hash,
+            canonical_payload=payload,
+            payload_digest=digest,
+            source_revision=source_revision,
+            created_at=created_at,
+        )
+
+
+def validate_policy_snapshot_integrity(snapshot: ProductionPolicySnapshot) -> None:
+    """Reject a snapshot whose id or payload digest no longer matches content."""
+
+    if snapshot.contract_id is not LearningContractId.PRODUCTION_POLICY_SNAPSHOT:
+        raise LearningContractError("policy snapshot contract_id mismatch")
+    expected_id = stable_learning_id(
+        LearningContractId.PRODUCTION_POLICY_SNAPSHOT,
+        {
+            "purpose": snapshot.purpose,
+            "learning_observation_contract_id": snapshot.learning_observation_contract_id,
+            "producer_observation_contract": snapshot.producer_observation_contract,
+            "compatibility_id": snapshot.compatibility_id,
+            "policy_id": snapshot.policy_id,
+        },
+    )
+    if snapshot.snapshot_id != expected_id:
+        raise LearningContractError("policy snapshot_id does not match its identity")
+    expected_digest = policy_snapshot_payload_digest(snapshot.canonical_payload)
+    if snapshot.payload_digest != expected_digest:
+        raise LearningContractError("policy snapshot payload_digest does not match payload")

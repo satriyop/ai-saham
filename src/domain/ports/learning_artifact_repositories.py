@@ -13,6 +13,7 @@ from src.domain.value_objects.learning_artifacts import (
     LearningPolicyProposal,
     LearningPolicyValidation,
     LearningTrackSnapshot,
+    ProductionPolicySnapshot,
 )
 
 
@@ -70,3 +71,26 @@ class LearningPolicyApplicationRepository(Protocol):
     ) -> LearningPolicyApplication | None: ...
 
     def list_applications(self) -> Sequence[LearningPolicyApplication]: ...
+
+
+class LearningPolicySnapshotRepository(Protocol):
+    """Immutable production-policy snapshots bound to a compatibility cohort."""
+
+    def add_policy_snapshot(self, artifact: ProductionPolicySnapshot) -> bool: ...
+
+    def get_policy_snapshot(self, snapshot_id: str) -> ProductionPolicySnapshot | None: ...
+
+    def get_policy_snapshot_by_binding(
+        self,
+        *,
+        purpose: AssessmentPurpose,
+        compatibility_id: str,
+        policy_id: str,
+    ) -> ProductionPolicySnapshot | None: ...
+
+    def list_policy_snapshots(
+        self,
+        *,
+        purpose: AssessmentPurpose,
+        compatibility_id: str,
+    ) -> Sequence[ProductionPolicySnapshot]: ...

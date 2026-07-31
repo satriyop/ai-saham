@@ -632,8 +632,7 @@ def test_artifact_findings_are_included_in_response():
     response = use_case.execute()
 
     assert any(
-        f.code == "LEARNING_OBSERVATIONS_INVALID_DECISION_PAYLOAD_JSON"
-        for f in response.findings
+        f.code == "LEARNING_OBSERVATIONS_INVALID_DECISION_PAYLOAD_JSON" for f in response.findings
     )
     check = next(c for c in response.checks if c.name == "learning_observations_identity")
     assert check.status == "FAIL"

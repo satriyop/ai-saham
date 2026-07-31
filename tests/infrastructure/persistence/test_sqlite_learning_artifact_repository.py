@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from src.domain.value_objects.learning_artifacts import (
+    PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     AssessmentPurpose,
     EvaluationMethod,
     EvaluationReadiness,
@@ -19,6 +20,7 @@ from src.domain.value_objects.learning_artifacts import (
     LearningPolicyValidation,
     LearningTrackSnapshot,
     OutcomeBasis,
+    ProductionPolicySnapshot,
     ValidationStatus,
 )
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
@@ -101,6 +103,7 @@ def test_schema_enables_foreign_keys_and_creates_exact_learning_tables(
         "learning_policy_proposals",
         "learning_policy_validations",
         "learning_policy_applications",
+        "learning_policy_snapshots",
     }
 
 
@@ -255,3 +258,60 @@ def test_delete_is_restricted_for_linked_artifacts(tmp_path: Path) -> None:
                 "DELETE FROM learning_observations WHERE observation_id = ?",
                 (observation.observation_id,),
             )
+
+
+def _policy_snapshot(
+    *,
+    policy_id: str = PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
+    weight: float = 33.3,
+) -> ProductionPolicySnapshot:
+    return ProductionPolicySnapshot.create(
+        purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+        learning_observation_contract_id=(LearningContractId.ACCUMULATION_OBSERVATION.value),
+        producer_observation_contract="accumulation-discovery.v2",
+        compatibility_id="sha256:" + ("ab" * 32),
+        policy_id=policy_id,
+        policy_version="v1",
+        decision_type="score",
+        semantic_engine_contract_id="accum_score_policy.v1",
+        material_config_hash="sha256:" + ("cd" * 32),
+        canonical_payload={
+            "policy_id": policy_id,
+            "components": [{"key": "consistency", "enabled": True, "weight": weight}],
+        },
+        source_revision="test",
+        created_at=NOW,
+    )
+
+
+def test_policy_snapshot_round_trip_and_idempotent(tmp_path: Path) -> None:
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    snap = _policy_snapshot()
+
+    assert repository.add_policy_snapshot(snap) is True
+    assert repository.add_policy_snapshot(snap) is False
+    loaded = repository.get_policy_snapshot(snap.snapshot_id)
+    assert loaded == snap
+    by_binding = repository.get_policy_snapshot_by_binding(
+        purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+        compatibility_id=snap.compatibility_id,
+        policy_id=snap.policy_id,
+    )
+    assert by_binding == snap
+    listed = repository.list_policy_snapshots(
+        purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+        compatibility_id=snap.compatibility_id,
+    )
+    assert listed == (snap,)
+
+
+def test_policy_snapshot_digest_conflict_fails_closed(tmp_path: Path) -> None:
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    first = _policy_snapshot(weight=33.3)
+    second = _policy_snapshot(weight=40.0)
+    assert first.snapshot_id == second.snapshot_id
+    assert first.payload_digest != second.payload_digest
+
+    assert repository.add_policy_snapshot(first) is True
+    with pytest.raises(LearningContractError, match="immutable artifact conflict"):
+        repository.add_policy_snapshot(second)

@@ -51,6 +51,9 @@ _TABLE_CATALOG: dict[str, _TableAuditSpec] = {
     "learning_policy_applications": _TableAuditSpec(
         "applied_at", ("application_id", "proposal_id")
     ),
+    "learning_policy_snapshots": _TableAuditSpec(
+        "created_at", ("snapshot_id", "payload_digest", "compatibility_id", "policy_id")
+    ),
     "stock_meta": _TableAuditSpec("fetched_at", ("ticker", "fetched_at")),
     "analyst_cache": _TableAuditSpec("fetched_date", ("ticker", "fetched_date")),
     # Task template named these tables "insider_activity_cache",

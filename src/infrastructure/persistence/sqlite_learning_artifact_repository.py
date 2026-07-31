@@ -24,9 +24,11 @@ from src.domain.value_objects.learning_artifacts import (
     LearningPolicyValidation,
     LearningTrackSnapshot,
     OutcomeBasis,
+    ProductionPolicySnapshot,
     ValidationStatus,
     canonical_json,
     validate_artifact_integrity,
+    validate_policy_snapshot_integrity,
 )
 
 LEARNING_MIGRATION_NAMESPACE = "database_owned_learning"
@@ -194,6 +196,33 @@ LEARNING_SCHEMA_STATEMENTS = (
             ON DELETE RESTRICT
     )
     """,
+    # ADR-059: cohort-bound production policy snapshots (no FK parent table in v1).
+    """
+    CREATE TABLE IF NOT EXISTS learning_policy_snapshots (
+        snapshot_id TEXT PRIMARY KEY,
+        schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+        contract_id TEXT NOT NULL CHECK (contract_id = 'production_policy_snapshot.v1'),
+        purpose TEXT NOT NULL,
+        learning_observation_contract_id TEXT NOT NULL,
+        producer_observation_contract TEXT NOT NULL,
+        compatibility_id TEXT NOT NULL,
+        policy_id TEXT NOT NULL,
+        policy_version TEXT NOT NULL,
+        decision_type TEXT NOT NULL,
+        semantic_engine_contract_id TEXT NOT NULL,
+        material_config_hash TEXT NOT NULL,
+        canonical_payload_json TEXT NOT NULL,
+        payload_digest TEXT NOT NULL,
+        source_revision TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        artifact_json TEXT NOT NULL,
+        UNIQUE (purpose, compatibility_id, policy_id)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_learning_policy_snapshots_cohort
+    ON learning_policy_snapshots(purpose, compatibility_id, policy_id)
+    """,
 )
 
 Artifact = TypeVar("Artifact")
@@ -214,7 +243,12 @@ def connect_learning_database(db_path: Path) -> sqlite3.Connection:
 
 
 def create_learning_schema(connection: sqlite3.Connection) -> None:
-    """Create only the seven canonical tables and their indexes."""
+    """Create the canonical learning tables and their indexes.
+
+    Statements use CREATE IF NOT EXISTS so additive tables (e.g. ADR-059
+    ``learning_policy_snapshots``) apply on existing databases that already
+    recorded migration version 1.
+    """
 
     connection.execute("""
         CREATE TABLE IF NOT EXISTS _schema_migrations (
@@ -230,6 +264,14 @@ def create_learning_schema(connection: sqlite3.Connection) -> None:
         """
         INSERT OR IGNORE INTO _schema_migrations(namespace, version)
         VALUES (?, 1)
+        """,
+        (LEARNING_MIGRATION_NAMESPACE,),
+    )
+    # Version 2: production policy snapshots (ADR-059). Idempotent CREATE above.
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO _schema_migrations(namespace, version)
+        VALUES (?, 2)
         """,
         (LEARNING_MIGRATION_NAMESPACE,),
     )
@@ -256,13 +298,14 @@ def _immutable_insert(
     digest: str,
     insert_sql: str,
     values: tuple[Any, ...],
+    digest_column: str = "artifact_digest",
 ) -> bool:
     existing = connection.execute(
-        f"SELECT artifact_digest FROM {table} WHERE {id_column} = ?",  # noqa: S608
+        f"SELECT {digest_column} AS digest FROM {table} WHERE {id_column} = ?",  # noqa: S608
         (artifact_id,),
     ).fetchone()
     if existing is not None:
-        if existing["artifact_digest"] == digest:
+        if existing["digest"] == digest:
             return False
         raise LearningContractError(f"immutable artifact conflict for {table}.{artifact_id}")
     connection.execute(insert_sql, values)
@@ -353,8 +396,19 @@ def _application_from_dict(data: dict[str, Any]) -> LearningPolicyApplication:
     )
 
 
+def _policy_snapshot_from_dict(data: dict[str, Any]) -> ProductionPolicySnapshot:
+    return ProductionPolicySnapshot(
+        **{
+            **data,
+            "contract_id": LearningContractId(data["contract_id"]),
+            "purpose": AssessmentPurpose(data["purpose"]),
+            "created_at": datetime.fromisoformat(data["created_at"]),
+        }
+    )
+
+
 class SQLiteLearningArtifactRepository:
-    """One transaction-safe implementation shared by the seven narrow ports."""
+    """One transaction-safe implementation shared by the learning ports."""
 
     def __init__(self, db_path: str | Path) -> None:
         self._db_path = Path(db_path).expanduser()
@@ -691,3 +745,81 @@ class SQLiteLearningArtifactRepository:
                 ORDER BY applied_at, application_id
                 """).fetchall()
         return tuple(_load_json(row, _application_from_dict) for row in rows)
+
+    def add_policy_snapshot(self, artifact: ProductionPolicySnapshot) -> bool:
+        validate_policy_snapshot_integrity(artifact)
+        with self._connect() as connection:
+            return _immutable_insert(
+                connection,
+                table="learning_policy_snapshots",
+                id_column="snapshot_id",
+                artifact_id=artifact.snapshot_id,
+                digest=artifact.payload_digest,
+                digest_column="payload_digest",
+                insert_sql="""
+                    INSERT INTO learning_policy_snapshots VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    )
+                """,
+                values=(
+                    artifact.snapshot_id,
+                    artifact.schema_version,
+                    artifact.contract_id.value,
+                    artifact.purpose.value,
+                    artifact.learning_observation_contract_id,
+                    artifact.producer_observation_contract,
+                    artifact.compatibility_id,
+                    artifact.policy_id,
+                    artifact.policy_version,
+                    artifact.decision_type,
+                    artifact.semantic_engine_contract_id,
+                    artifact.material_config_hash,
+                    canonical_json(artifact.canonical_payload),
+                    artifact.payload_digest,
+                    artifact.source_revision,
+                    artifact.created_at.isoformat(),
+                    _artifact_json(artifact),
+                ),
+            )
+
+    def get_policy_snapshot(self, snapshot_id: str) -> ProductionPolicySnapshot | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT artifact_json FROM learning_policy_snapshots WHERE snapshot_id = ?",
+                (snapshot_id,),
+            ).fetchone()
+        return None if row is None else _load_json(row, _policy_snapshot_from_dict)
+
+    def get_policy_snapshot_by_binding(
+        self,
+        *,
+        purpose: AssessmentPurpose,
+        compatibility_id: str,
+        policy_id: str,
+    ) -> ProductionPolicySnapshot | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT artifact_json FROM learning_policy_snapshots
+                WHERE purpose = ? AND compatibility_id = ? AND policy_id = ?
+                """,
+                (purpose.value, compatibility_id, policy_id),
+            ).fetchone()
+        return None if row is None else _load_json(row, _policy_snapshot_from_dict)
+
+    def list_policy_snapshots(
+        self,
+        *,
+        purpose: AssessmentPurpose,
+        compatibility_id: str,
+    ) -> Sequence[ProductionPolicySnapshot]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT artifact_json FROM learning_policy_snapshots
+                WHERE purpose = ? AND compatibility_id = ?
+                ORDER BY policy_id
+                """,
+                (purpose.value, compatibility_id),
+            ).fetchall()
+        return tuple(_load_json(row, _policy_snapshot_from_dict) for row in rows)
