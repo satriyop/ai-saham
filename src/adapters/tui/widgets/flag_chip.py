@@ -106,7 +106,10 @@ class FlagChip(Static):
         if expanded:
             self.add_class("is-on")
 
-    def on_click(self) -> None:
+    def on_click(self, event: events.Click) -> None:
+        """Activate chip; stop bubble so stage remounts cannot steal the click."""
+        event.stop()
+        event.prevent_default()
         self._activate()
 
     def on_key(self, event: events.Key) -> None:
@@ -119,6 +122,11 @@ class FlagChip(Static):
     def _activate(self) -> None:
         if not self._available:
             return
+        # Focus chip so detail paint does not yank focus to scroll mid-toolbar use
+        try:
+            self.focus()
+        except Exception:
+            pass
         self.post_message(self.Selected(self.flag_key))
 
 

@@ -97,6 +97,44 @@ def is_broker_list_loading(*, stage: str, board_title: str = "", status_note: st
     return "broker" in title and "list" in title
 
 
+def should_keep_board_during_loading(
+    *,
+    stage: str,
+    board_kind: str = "",
+    status_note: str = "",
+    board_title: str = "",
+    has_rows: bool = False,
+) -> bool:
+    """Whether loading may leave the accum/preopen DataTable visible.
+
+    **Yes** only for same-surface board recompute (status contains recomput…).
+    **No** for instrument navigations (view ticker jobs, broker show/deep, desks):
+    unmasking the board under a chip click steals the click → accidental Judge.
+    """
+    if stage != "loading" or not has_rows:
+        return False
+    kind = (board_kind or "").strip().lower()
+    if kind not in {"accum", "preopen"}:
+        return False
+    note = (status_note or "").strip().lower()
+    title = (board_title or "").strip().lower()
+    # Explicit instrument / browse surfaces — never keep board
+    if note.startswith("view ticker") or note.startswith("view broker"):
+        return False
+    if "loading ticker" in note or "loading broker" in note:
+        return False
+    if "ticker desk" in title or "broker show" in title or "broker top" in title:
+        return False
+    if "broker flow" in title or "broker history" in title or "broker calendar" in title:
+        return False
+    if "ticker desks" in title or "broker list" in title:
+        return False
+    # Same-surface board recompute only
+    if "recomput" in note:
+        return True
+    return False
+
+
 def loading_stage_body(
     *,
     board_title: str = "",
@@ -107,4 +145,9 @@ def loading_stage_body(
     if is_broker_list_loading(stage=stage, board_title=board_title, status_note=status_note):
         return broker_list_loading_body()
     title = (board_title or "Local board").strip() or "Local board"
+    note = (status_note or "").strip().lower()
+    if note.startswith("view ticker") or "ticker" in title:
+        return f"[#d4b06a]Loading…[/]\n\n{title}\n[dim]Local cache · ticker surface · not hung[/]"
+    if note.startswith("view broker") or "broker" in title:
+        return f"[#d4b06a]Loading…[/]\n\n{title}\n[dim]Local cache · broker surface · not hung[/]"
     return f"[#d4b06a]Loading local board…[/]\n\n{title}\n[dim]Reading local cache · not hung[/]"

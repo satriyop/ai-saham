@@ -1044,18 +1044,20 @@ class CockpitApp(App[None]):
                 body.display = True
                 body.update(self._paper_outcome or "Paper · notebook")
         elif self._stage == "loading":
-            from src.adapters.tui.chrome_cues import is_broker_list_loading, loading_stage_body
+            from src.adapters.tui.chrome_cues import (
+                loading_stage_body,
+                should_keep_board_during_loading,
+            )
 
-            # Blank loading only when there is no prior board to keep (criterion 1).
-            # Broker list has no prior board table — always show named loading body.
-            keep_board = (
-                self._rows
-                and self._board_kind in {"accum", "preopen"}
-                and not is_broker_list_loading(
-                    stage=self._stage,
-                    board_title=self._board_title,
-                    status_note=self._status_note,
-                )
+            # Keep board ONLY for same-surface board recompute.
+            # Instrument loads (ticker jobs, broker show/deep) must never unmask
+            # the DataTable under a chip click (steals click → accidental Judge).
+            keep_board = should_keep_board_during_loading(
+                stage=self._stage,
+                board_kind=str(self._board_kind or ""),
+                status_note=self._status_note,
+                board_title=self._board_title,
+                has_rows=bool(self._rows),
             )
             if keep_board:
                 scroll.display = False
@@ -1092,14 +1094,14 @@ class CockpitApp(App[None]):
             table.display = False
             evidence.display = False
             self._paint_detail_stage(body=body, scroll=scroll)
-            # Focus scroll so ↑↓ / wheel / PgUp/PgDn work on long pages.
-            scroll.focus()
+            # Do not steal focus from chip bar / prompt (chip click consistency).
+            self._focus_detail_scroll_if_safe(scroll)
         elif self._stage == "plan":
             scroll.display = True
             table.display = False
             evidence.display = False
             self._paint_plan_stage(body=body)
-            scroll.focus()
+            self._focus_detail_scroll_if_safe(scroll)
         elif self._stage in {"broker-list", "ticker-desks"}:
             scroll.display = False
             table.display = True
@@ -1479,13 +1481,66 @@ class CockpitApp(App[None]):
             return
         self._open_ticker_job(job, stock)
 
+    def _focus_detail_scroll_if_safe(self, scroll: VerticalScroll) -> None:
+        """Focus scroll for page keys only when focus is not on chips/prompt."""
+        try:
+            focused = self.focused
+        except Exception:
+            focused = None
+        if focused is not None:
+            # Chip bar / FlagChip / prompt input: leave focus where operator put it
+            try:
+                from src.adapters.tui.widgets.flag_chip import FlagChip
+
+                if isinstance(focused, FlagChip):
+                    return
+            except Exception:
+                pass
+            fid = getattr(focused, "id", None) or ""
+            if fid in {"prompt-input", "prompt-rail"}:
+                return
+            # Any descendant of a ChipBar — keep chip toolbar focus
+            try:
+                from src.adapters.tui.widgets.chip_bar import ChipBar
+
+                node = focused
+                for _ in range(8):
+                    parent = getattr(node, "parent", None)
+                    if parent is None:
+                        break
+                    if isinstance(parent, ChipBar):
+                        return
+                    node = parent
+            except Exception:
+                pass
+        try:
+            scroll.focus()
+        except Exception:
+            pass
+
     def _open_ticker_job(self, job: str, stock: str) -> None:
-        """Load CLI-path job body and paint under ticker chip bar."""
+        """Load CLI-path job body in-place under ticker chip bar (no board flash)."""
         self._ticker_job = job
-        self._stage = "loading"
+        # Stay on detail instrument — never global loading+keep_board (chip click safe)
+        self._stage = "detail"
         self._board_title = f"View · ticker · {stock} · {job}"
-        self._meta = f"{job} · local cache"
-        self._status_note = "loading ticker job"
+        self._meta = f"{job} · loading · local cache"
+        self._status_note = f"view ticker {job}"
+        loading_body = (
+            f"Loading {job}…\n"
+            f"saham view ticker {job} {stock}\n\n"
+            "Local cache · not hung · esc show · chips switch job"
+        )
+        try:
+            desk = self.query_one("#ticker-desk")
+            if hasattr(desk, "set_job_view"):
+                desk.set_job_view(  # type: ignore[attr-defined]
+                    job,
+                    title=f"View · ticker · {stock} · {job}",
+                    body=loading_body,
+                )
+        except Exception:
+            pass
         self._refresh_chrome()
         self._execute_ticker_job(job, stock)
 
@@ -2715,7 +2770,12 @@ class CockpitApp(App[None]):
             self._detail_return_stage = "broker-list"
         # ticker-desks entry keeps board return in _detail_return_stage for later
         esc_hint = "esc desks" if self._desk_entry == "ticker-desks" else "esc list"
-        self._stage = "loading"
+        # From list/desks: named loading body (never keep_board unmask of accum).
+        # From deep→home trail already on detail: stay on detail instrument.
+        if self._stage in {"broker-list", "ticker-desks"}:
+            self._stage = "loading"
+        else:
+            self._stage = "detail"
         self._board_title = f"View · broker show · {code}"
         self._meta = f"desk home · t/f/h/m deep · v stock · {esc_hint}"
         self._status_note = "view broker show"
@@ -2735,7 +2795,8 @@ class CockpitApp(App[None]):
             "matrix": f"View · broker top-matrix · {code}",
             "cal": f"View · broker calendar · {code}",
         }
-        self._stage = "loading"
+        # Chip/key deep pages: stay on detail instrument (no board unmask under click)
+        self._stage = "detail"
         self._board_title = titles.get(page, f"View · broker · {code}")
         deep_lab = {
             "top": "buy/sell",
@@ -2744,8 +2805,19 @@ class CockpitApp(App[None]):
             "matrix": "top 5",
             "cal": "calendar",
         }.get(page, page)
-        self._meta = f"desk deep · {deep_lab} · esc home · local cache"
+        self._meta = f"desk deep · {deep_lab} · loading · esc home · local cache"
         self._status_note = f"view broker {page}"
+        # Clear prior page model so paint shows honest empty/loading model
+        if page == "top":
+            self._broker_desk_top_model = None
+        elif page == "flow":
+            self._broker_desk_flow_model = None
+        elif page == "history":
+            self._broker_desk_history_model = None
+        elif page == "matrix":
+            self._broker_desk_matrix_model = None
+        elif page == "cal":
+            self._broker_desk_calendar_model = None
         self._refresh_chrome()
         self._execute_broker_deep(code, page)
 
