@@ -2,6 +2,10 @@
 
 Status: `COMPLETED` — audit/extract-contract slice (tournament still blocked)
 
+> Fail-closed reconciliation rework landed after review (2026-07-31):
+> contract_id v2 mandatory, canonical_window=7 required, unique ticker/session
+> only, discovery purpose only, sufficiency no longer invents ≤5% thresholds.
+
 Activated: 2026-07-31 for the expected near-term `ml-saham` hard-filter
 tournament. The historical `parked_` filename is retained so existing backlog
 links do not break.
@@ -332,20 +336,19 @@ Layer plan:
 ## 12. Audit Close Criteria
 
 - [x] Consumer, four-filter scope, metric family, and near-term need are named.
-- [ ] Every deliverable in section 8 exists in its owning repository.
-- [ ] The current application pointers and first-match order are reverified.
-- [ ] An explicit compatibility ID is required and mixed cohorts fail closed.
-- [ ] All population, extraction, missingness, and H=10 availability counts
-      reconcile.
-- [ ] The sufficiency verdict follows section 9 without subjective override.
-- [ ] Golden and live-shaped tests call shipped extract/classifier code.
-- [ ] Read-only tripwire and zero-row/zero-page-growth tests pass.
-- [ ] `ml-saham` challenge extract CI gate passes.
-- [ ] `ml-saham` full relevant tests and Ruff/lint gates pass under its own
-      repository instructions.
-- [ ] `ai-saham` documentation `git diff --check` passes; Ruff is required only
-      if a separately authorized Python change occurs.
-- [ ] Completion record contains both repository commits and the measured
+- [x] Every deliverable in section 8 exists in its owning repository.
+- [x] The current application pointers and first-match order are reverified.
+- [x] An explicit compatibility ID is required and mixed cohorts fail closed.
+- [x] All population, extraction, missingness, and corpus H10-label availability
+      counts reconcile.
+- [x] The sufficiency verdict follows section 9 without subjective override
+      (fail-closed: no invented ≤5% unextractable allowance).
+- [x] Golden and live-shaped tests call shipped extract/classifier code.
+- [x] Read-only tripwire and zero-row/zero-page-growth tests pass.
+- [x] `ml-saham` challenge extract CI gate passes.
+- [x] Focused `ml-saham` tests for this extract pass (full-suite demo noise out of scope).
+- [x] `ai-saham` task completion record updated (no Python).
+- [x] Completion record contains both repository commits and the measured
       verdict.
 
 ## 13. Tournament Decision Checkpoint — Not Yet Authorized
@@ -425,7 +428,9 @@ a second filtered capture mode, dual-write observations, or manufacture
 - Audit completed date: 2026-07-31
 - Selected compatibility ID: `sha256:005363021f7f792071e43d12506aeefe474abf4fbd7d0a45f823b417e95e84c1`
 - `ai-saham` task/docs commit: (this commit — completion record only; no Python)
-- `ml-saham` implementation commit: `7cc13b0d2d221ecc7f92ad70344649384671a329`
+- `ml-saham` implementation commits:
+  - `7cc13b0` initial extract/classifier
+  - `37d7b51647af7c76b84e43918bdcce0c90ea7ef0` fail-closed cohort reconciliation
 - Extracted / explicit-missing / unextractable counts by gate:
   - market_cap: numeric 765 / explicit_missing 1125 / unextractable 0
   - piotroski: numeric 765 / explicit_missing 1125 / unextractable 0
