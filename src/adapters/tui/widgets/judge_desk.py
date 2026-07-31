@@ -71,7 +71,8 @@ class JudgeDesk(Vertical):
 
     JudgeDesk .verdict-mast {
         background: #141414;
-        border: solid #2a2430;
+        border: solid #1c1c1c;
+        border-left: solid #c9a68a;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
@@ -91,7 +92,8 @@ class JudgeDesk(Vertical):
         width: auto;
         text-style: bold;
         color: #e8e8e8;
-        padding-right: 2;
+        padding: 0 2 0 0;
+        content-align: left middle;
     }
 
     JudgeDesk .verdict-action.action-enter { color: #6fbf8a; }
@@ -103,16 +105,20 @@ class JudgeDesk(Vertical):
         width: auto;
         color: #d4b06a;
         padding: 0 1;
+        border: solid #2a2a2a;
+        background: #121212;
     }
 
     JudgeDesk .verdict-gate.gate-open {
         color: #6fbf8a;
         background: #121a14;
+        border: solid #1c4038;
     }
 
     JudgeDesk .verdict-gate.gate-block {
         color: #c97a72;
         background: #1a1212;
+        border: solid #3a2220;
     }
 
     JudgeDesk .verdict-gate.gate-other { color: #d4b06a; }
@@ -120,6 +126,8 @@ class JudgeDesk(Vertical):
     JudgeDesk .score-strip {
         height: auto;
         margin-top: 1;
+        padding-top: 1;
+        border-top: solid #1c1c1c;
     }
 
     JudgeDesk .score-cell {
@@ -129,7 +137,7 @@ class JudgeDesk(Vertical):
     }
 
     JudgeDesk .score-k {
-        color: #555555;
+        color: #6b6b6b;
         text-style: bold;
     }
 
@@ -140,14 +148,17 @@ class JudgeDesk(Vertical):
 
     JudgeDesk .verdict-why {
         margin-top: 1;
-        color: #7a7a7a;
+        color: #a0a0a0;
         height: auto;
+        border-top: solid #1c1c1c;
+        padding-top: 1;
     }
 
     JudgeDesk .flag-row {
         height: auto;
         margin: 0 0 1 0;
-        padding: 0 0;
+        padding: 0 0 1 0;
+        border-bottom: solid #1c1c1c;
     }
 
     JudgeDesk .flag-lab {
@@ -161,13 +172,14 @@ class JudgeDesk(Vertical):
     JudgeDesk .phase-block {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #3a4252;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
     }
 
     JudgeDesk .phase-title {
-        color: #555555;
+        color: #6b6b6b;
         text-style: bold;
     }
 
@@ -179,12 +191,13 @@ class JudgeDesk(Vertical):
     }
 
     JudgeDesk .phase-detail {
-        color: #555555;
+        color: #6b6b6b;
         height: auto;
+        margin-top: 1;
     }
 
     JudgeDesk .phase-foot {
-        color: #3a4252;
+        color: #555555;
     }
 
     JudgeDesk .decision-block {
@@ -198,7 +211,7 @@ class JudgeDesk(Vertical):
     }
 
     JudgeDesk .decision-title {
-        color: #555555;
+        color: #6b6b6b;
         text-style: bold;
     }
 
@@ -219,7 +232,7 @@ class JudgeDesk(Vertical):
         background: #141414;
         border: solid #1c1c1c;
         border-left: solid #3a4252;
-        padding: 1 1;
+        padding: 1 2;
         margin-right: 1;
         height: auto;
         color: #7a7a7a;
@@ -381,7 +394,8 @@ class JudgeDesk(Vertical):
             action_el.remove_class(c)
         action_el.add_class("verdict-action")
         action_el.add_class(action_css_class(model.action))
-        action_el.update(f"  {model.action or '—'}  ")
+        # Hero action weight (mock: large Action next to Gate badge)
+        action_el.update(f" {model.action or '—'} ")
 
         gate_el = self.query_one("#jd-gate", Static)
         for c in ("gate-open", "gate-block", "gate-other"):
@@ -391,17 +405,22 @@ class JudgeDesk(Vertical):
         gate_el.update(f" Gate {model.gate or '—'} ")
 
         for i in range(6):
+            k_el = self.query_one(f"#jd-score-k-{i}", Static)
+            v_el = self.query_one(f"#jd-score-v-{i}", Static)
+            cell_wrap = self.query_one(f"#jd-score-{i}", Vertical)
             if i < len(model.scores):
                 cell = model.scores[i]
-                self.query_one(f"#jd-score-k-{i}", Static).update(cell.label.upper())
-                self.query_one(f"#jd-score-v-{i}", Static).update(cell.value)
+                cell_wrap.display = True
+                k_el.update(cell.label.upper())
+                v_el.update(cell.value)
             else:
-                self.query_one(f"#jd-score-k-{i}", Static).update("")
-                self.query_one(f"#jd-score-v-{i}", Static).update("")
+                cell_wrap.display = False
+                k_el.update("")
+                v_el.update("")
 
         why = model.why if model.why and model.why != "—" else "—"
         self.query_one("#jd-why", Static).update(
-            f"[bold #d8d8d8]Why {model.action or '—'}[/]  {why}"
+            f"[bold #c9a68a]Why[/] [bold #e8e8e8]{model.action or '—'}[/]  [#a0a0a0]{why}[/]"
         )
 
         # Phase timeline: always on (primary). Extra detail when phase+ open.
@@ -626,13 +645,13 @@ def _colorize_body_line(ln: str) -> str:
 
 
 def _format_phase_arrow(arrow: str) -> str:
-    """Highlight the last node (current phase) in brass."""
+    """Timeline nodes: prior dim · arrows mute · current brass (mock timeline)."""
     if "→" not in arrow:
-        return f"[bold #e8e8e8]{arrow}[/]"
-    parts = [p.strip() for p in arrow.split("→")]
+        return f"[bold #d4b06a]{arrow}[/]"
+    parts = [p.strip() for p in arrow.split("→") if p.strip()]
     if not parts:
         return arrow
     *head, last = parts
-    bits = [f"[#7a7a7a]{h}[/]" for h in head]
+    bits = [f"[#6b6b6b]{h}[/]" for h in head]
     bits.append(f"[bold #d4b06a]{last}[/]")
-    return " [dim]→[/] ".join(bits)
+    return " [#3a4252]→[/] ".join(bits)

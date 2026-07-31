@@ -89,6 +89,18 @@ def test_build_judge_desk_model_has_verdict_fields():
     assert "ACCUMULATION" in model.phase_arrow and "COMPRESSION" in model.phase_arrow
 
 
+def test_phase_arrow_marks_current_brass():
+    from src.adapters.tui.widgets.judge_desk import _format_phase_arrow
+
+    rendered = _format_phase_arrow("ACCUMULATION → COMPRESSION")
+    assert "ACCUMULATION" in rendered
+    assert "COMPRESSION" in rendered
+    assert "#d4b06a" in rendered  # current node brass
+    assert "→" in rendered
+    solo = _format_phase_arrow("NONE")
+    assert "NONE" in solo and "#d4b06a" in solo
+
+
 def test_judge_paint_contract_mast_flags_and_compact_default():
     """What #jd-action / #jd-gate / flags paint — compact until detail · d."""
     model = build_judge_desk_model(

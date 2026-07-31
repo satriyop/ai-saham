@@ -42,7 +42,8 @@ class PlanDesk(Vertical):
     PlanDesk .inherit-strip {
         background: #141414;
         border: solid #1c1c1c;
-        padding: 0 1;
+        border-left: solid #c9a68a;
+        padding: 1 1;
         margin-bottom: 1;
         height: auto;
     }
@@ -52,6 +53,7 @@ class PlanDesk(Vertical):
         text-style: bold;
         padding-right: 2;
         color: #d4b06a;
+        content-align: left middle;
     }
 
     PlanDesk .inherit-action.action-enter { color: #6fbf8a; }
@@ -60,13 +62,15 @@ class PlanDesk(Vertical):
     PlanDesk .inherit-action.action-other { color: #e8e8e8; }
 
     PlanDesk .inherit-note {
-        color: #555555;
+        color: #6b6b6b;
         height: auto;
+        content-align: left middle;
     }
 
     PlanDesk .geo-mast {
         background: #141414;
-        border: solid #1c4038;
+        border: solid #1c1c1c;
+        border-left: solid #6fbf8a;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
@@ -80,6 +84,9 @@ class PlanDesk(Vertical):
     PlanDesk .geo-tri {
         height: auto;
         margin: 1 0;
+        padding: 1 0;
+        border-top: solid #1c1c1c;
+        border-bottom: solid #1c1c1c;
     }
 
     PlanDesk .geo-pt {
@@ -89,13 +96,14 @@ class PlanDesk(Vertical):
     }
 
     PlanDesk .geo-k {
-        color: #555555;
+        color: #6b6b6b;
         text-style: bold;
     }
 
     PlanDesk .geo-v {
         color: #e8e8e8;
         text-style: bold;
+        margin-top: 0;
     }
 
     PlanDesk .geo-v.entry { color: #c9a68a; }
@@ -104,8 +112,9 @@ class PlanDesk(Vertical):
 
     PlanDesk .geo-arr {
         width: auto;
-        color: #3a4252;
+        color: #555555;
         padding: 1 1 0 0;
+        content-align: center middle;
     }
 
     PlanDesk .lots-row {
@@ -121,7 +130,7 @@ class PlanDesk(Vertical):
     }
 
     PlanDesk .lots-k {
-        color: #555555;
+        color: #6b6b6b;
         text-style: bold;
     }
 
@@ -164,7 +173,7 @@ class PlanDesk(Vertical):
         background: #141414;
         border: solid #1c1c1c;
         border-left: solid #3a4252;
-        padding: 1 1;
+        padding: 1 2;
         margin-right: 1;
         height: auto;
         color: #7a7a7a;
@@ -249,15 +258,15 @@ class PlanDesk(Vertical):
     def paint(self, model: PlanDeskModel) -> None:
         """Refresh all child statics from model."""
         self._model = model
-        self.query_one("#pd-title", Static).update(f"Plan · {model.ticker} · structure")
+        self.query_one("#pd-title", Static).update(f"Plan · {model.ticker}")
         self.query_one("#pd-sub", Static).update(
-            f"from {model.source} · #{model.rank}/{model.total} · structure only · local"
+            f"from {model.source} · #{model.rank}/{model.total} · local structure"
         )
 
         running = self.query_one("#pd-running", Static)
         if model.running and not model.has_geometry:
             running.display = True
-            running.update("Running… local plan swing (structure only · no order)")
+            running.update("Running… local plan swing · no order")
         else:
             running.display = False
             running.update("")
@@ -267,9 +276,13 @@ class PlanDesk(Vertical):
             act.remove_class(c)
         act.add_class("inherit-action")
         act.add_class(action_css_class(model.action))
-        act.update(f"  {model.action or '—'}  ")
-        self.query_one("#pd-inherit-note", Static).update(model.inherit_note)
+        act.update(f" {model.action or '—'} ")
+        note = model.inherit_note or "inherited from board · structure only"
+        self.query_one("#pd-inherit-note", Static).update(note)
 
+        # Geometry hero label: Structure · horizon (mock geo-hero)
+        horizon = model.horizon or "swing"
+        self.query_one("#pd-geo-lab", Static).update(f"Structure · {horizon}")
         self.query_one("#pd-entry", Static).update(model.entry or "—")
         self.query_one("#pd-stop", Static).update(model.stop or "—")
         self.query_one("#pd-target", Static).update(model.target or "—")
@@ -285,10 +298,7 @@ class PlanDesk(Vertical):
             extra = ""
             if model.incomplete_reason:
                 extra = f" · {model.incomplete_reason}"
-            no_order.update(
-                "No broker order. Geometry freezes for paper journal · "
-                "use plan · l to paper log" + extra
-            )
+            no_order.update("No broker order · geometry for paper journal · l to paper log" + extra)
         else:
             no_order.display = False
 

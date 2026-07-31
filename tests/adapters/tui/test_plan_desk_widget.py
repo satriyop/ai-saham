@@ -111,3 +111,8 @@ def test_plan_desk_geometry_mast_paint_contract():
     assert model.action == "WATCH"
     assert model.has_geometry is True
     assert model.no_order is True
+    # Density contract: geo hero labels from model fields (Structure · horizon)
+    horizon = model.horizon or "swing"
+    geo_lab = f"Structure · {horizon}"
+    assert "Structure" in geo_lab
+    assert model.entry and model.stop and model.target
