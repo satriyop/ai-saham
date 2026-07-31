@@ -1928,6 +1928,7 @@
       border-color: transparent;
       font-weight: 500;
     }
+    .flag-chip.is-hidden { display: none !important; }
     .flag-chip.is-dim {
       opacity: 0.45;
       cursor: default;
@@ -2247,15 +2248,19 @@
               <div style="margin-top:6px;font-size:11px;color:var(--text-mute)" id="judgePhaseMeta">2026-07-20 · 2026-07-25 · now board</div>
             </div>
 
+            <!-- Data-contextual flags (not a static always-on wall).
+                 Compact live example: available chips idle; missing data dim;
+                 limited hidden unless snapshot/no-candidate. -->
             <div class="flag-row" id="judgeFlags" data-flag-group="judge">
               <span class="flag-lab">Detail</span>
-              <button type="button" class="flag-chip" data-flag="detail" id="judgeDetailAll" title="Toggle all detail panels · same idea as CLI --detail">detail · d</button>
-              <button type="button" class="flag-chip" data-flag="stack">stack</button>
-              <button type="button" class="flag-chip" data-flag="readiness">readiness</button>
-              <button type="button" class="flag-chip" data-flag="named">named</button>
-              <button type="button" class="flag-chip" data-flag="mce">mce</button>
-              <button type="button" class="flag-chip" data-flag="phase+">phase+</button>
-              <button type="button" class="flag-chip warn" data-flag="limited" id="judgeFlagLimited">limited</button>
+              <button type="button" class="flag-chip" data-flag="detail" id="judgeDetailAll" title="Master: open all available panels">detail · d</button>
+              <button type="button" class="flag-chip" data-flag="stack" title="Available when decision stack exists">stack</button>
+              <button type="button" class="flag-chip" data-flag="readiness" title="Available when readiness text exists">readiness</button>
+              <button type="button" class="flag-chip is-dim" data-flag="named" title="Dim when no named setups">named</button>
+              <button type="button" class="flag-chip is-dim" data-flag="mce" title="Dim when no market_context">mce</button>
+              <button type="button" class="flag-chip" data-flag="phase+" title="Available when phase timeline exists">phase+</button>
+              <!-- limited: only shown when limited judge; compact full judge = hidden -->
+              <button type="button" class="flag-chip warn is-hidden" data-flag="limited" id="judgeFlagLimited" title="State chip · snapshot/no candidate only">limited</button>
             </div>
 
             <div class="flag-panel" data-flag-panel="stack" data-flag-group="judge">
@@ -3475,9 +3480,15 @@
       const ban = $("judgeLimitedBanner");
       if (ban) ban.classList.toggle("is-hidden", !limited);
       const chip = $("judgeFlagLimited");
-      if (chip) chip.classList.toggle("is-on", limited);
+      if (chip) {
+        // State chip: hide when full judge; warn+on when limited only
+        chip.classList.toggle("is-hidden", !limited);
+        chip.classList.toggle("warn", limited);
+        chip.classList.toggle("is-on", limited);
+        chip.classList.toggle("is-dim", false);
+      }
       const panel = document.querySelector('.flag-panel[data-flag-group="judge"][data-flag-panel="limited"]');
-      if (panel && limited) panel.classList.add("is-open");
+      if (panel) panel.classList.toggle("is-open", limited);
       if ($("judgeTickerLab")) {
         const f = ACCUM[state.rowIndex] || {};
         $("judgeTickerLab").textContent = f.t || "—";
@@ -4603,6 +4614,7 @@
     function setJudgeDetailOpen(open) {
       state.judgeDetailOpen = !!open;
       const allBtn = $("judgeDetailAll");
+      // Master chip alone is-on when full detail; singles stay available/dim (not peach wall)
       if (allBtn) allBtn.classList.toggle("is-on", state.judgeDetailOpen);
       JUDGE_DETAIL_FLAGS.forEach((flag) => {
         const chip = document.querySelector(
@@ -4611,8 +4623,13 @@
         const panel = document.querySelector(
           '.flag-panel[data-flag-group="judge"][data-flag-panel="' + flag + '"]'
         );
-        if (chip) chip.classList.toggle("is-on", state.judgeDetailOpen);
-        if (panel) panel.classList.toggle("is-open", state.judgeDetailOpen);
+        if (chip) {
+          // Do not force is-on on every single when master opens
+          if (state.judgeDetailOpen) chip.classList.remove("is-on");
+        }
+        // Open panels only for chips that have data (not is-dim)
+        const hasData = chip && !chip.classList.contains("is-dim");
+        if (panel) panel.classList.toggle("is-open", state.judgeDetailOpen && hasData);
       });
       // limited stays state-driven (snapshot), not part of --detail dump
     }

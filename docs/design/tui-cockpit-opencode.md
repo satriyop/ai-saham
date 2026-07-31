@@ -85,23 +85,46 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 
 ## Detail flags (code-richer data)
 
-Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills). Expand only when data exists (or limited/snapshot is true).
+Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).  
+**Chips are data-contextual — not a static wall of always-on pills.**
 
 | Stage | Flags | Code source |
 |-------|-------|-------------|
 | Accum | `snapshot` \| `live` badge | `board_source` / chrome_cues |
-| Judge | **`d` / `detail`** = all panels (CLI `--detail`) · singles: `stack` · `readiness` · `named` · `mce` · `phase+` · `limited` | `JudgeDeskModel` / `decision_display` · screen accum `--detail` |
+| Judge | **`d` / `detail`** master · singles: `stack` · `readiness` · `named` · `mce` · `phase+` · **`limited` state** | `JudgeDeskModel` (availability from real fields) |
 | Pre-open inspect | `why` · `auction+` · `warn` | `preopen_engine_inspect_presenter` |
-| Ticker | **`d` / `detail`** = full CLI panels (inverse of `view ticker --brief`) | Primary = dashboard hierarchy; detail = remaining FULL_PANEL_ORDER |
-| Broker list | `partial_net` · `from_ticker` | `has_partial_netx` · `ticker-desks` stage |
-| Broker home | `deep.t` · `deep.f` · `deep.c` · `deep.h` · `deep.m` | ViewBrokerDesk top/flow/calendar/history/top-matrix loaders |
+| Ticker | **`d` / `detail`** | Primary = dashboard hierarchy; detail = inventory panels |
+| Broker list | `partial_net` · `from_ticker` | `has_partial_netx` · ticker-desks stage |
+| Broker home | `deep.t` · `deep.f` · `deep.c` · `deep.h` · `deep.m` | hub loaders |
+
+### Judge flag states (from live data — design + TUI must match)
+
+| Chip | Available when | `is-on` when | Notes |
+|------|----------------|--------------|--------|
+| `detail · d` | always (master) | **only** master detail open | Opens all *available* panels; does **not** paint every single chip peach |
+| `stack` | `decision_lines` non-empty | that panel open **and** master not sole driver | Dim if no decision stack |
+| `readiness` | readiness string meaningful | that panel open | Dim if no readiness text |
+| `named` | named_setups card present | that panel open | Dim if no named setups (common) |
+| `mce` | market card present | that panel open | Dim if no market_context |
+| `phase+` | phase timeline non-empty | that panel open | Dim if no phase arrow |
+| `limited` | **row is limited** (snapshot / no candidate) | state active when limited | **Hide** when full judge · warn style when limited · not a toggle |
+
+**Visual states (OpenCode pills)**
+
+| Class | Look | Meaning |
+|-------|------|---------|
+| (default available) | dark fill · gray border · readable label | can expand |
+| `is-dim` | darker · muted label | no data for this chip |
+| `is-on` | peach fill · dark text | this panel/master is open |
+| `warn` | brass border/fill | limited state only |
 
 **Rules**
 
-1. Chip visible when data/state can exist; dim when not loaded.  
-2. Expand = more panels in-stage (scroll), not a new Action path.  
-3. Diagnostic (`mce`, named setups, sector_macro) never implies ENTER.  
-4. Density bars = scalar sugar only — not charts.
+1. **Never** show a solid peach wall of every chip by default. Compact = available/dim only; no `is-on` until expand.  
+2. Master `detail · d` `is-on` alone when full detail is open; singles stay available (or dim), not all peach.  
+3. Dim when data missing — do not invent panels.  
+4. Diagnostic (`mce`, named) never implies ENTER.  
+5. Density bars = scalar sugar only — not charts.
 
 ---
 
@@ -122,10 +145,10 @@ Primary stage stays scannable. Richer DTO fields hang on **chips** (mono pills).
 
 ### Judge (nested)
 - Primary: Action · Gate · Signal · Accum · Authority% · Family · Why · phase timeline · primary cards  
-- **`d`** (or chip `detail · d`): toggle **all** detail panels — same idea as CLI `screen accum --detail` / full vs compact  
-- Single chips still work for one panel at a time  
-- `limited` is **state** (snapshot / no candidate), not part of `--detail`; `j` / `r` recover full object  
-- Detail expand never invents fields when limited
+- **`d`** / chip `detail · d`: toggle **all available** detail panels (CLI `--detail` idea) · master chip only `is-on`  
+- Single chips: open one panel; `is-on` only that chip  
+- `limited`: **state chip** — shown only when limited; hide on full live judge; `j` / `r` recover  
+- Never invent fields when limited; never peach-fill chips that have no data
 
 ### Accum
 - Cols 1:1 `BOARD_COLUMN_LABELS`  

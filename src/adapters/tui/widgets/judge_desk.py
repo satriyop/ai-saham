@@ -350,7 +350,8 @@ class JudgeDesk(Vertical):
             avail = self._available_expandable_flags(self._model)
             if key not in avail:
                 return
-            if key in self._open_flags:
+            # Opening a single exits master-only mode for is-on highlighting
+            if key in self._open_flags and not self._detail_all:
                 self._open_flags.discard(key)
             else:
                 self._open_flags.add(key)
@@ -376,16 +377,25 @@ class JudgeDesk(Vertical):
         Compact: verdict mast + phase timeline + flag chips + primary cards.
         Expanded flags / ``d``: decision stack, phase+, secondary cards.
         """
+        from src.adapters.tui.judge_flag_states import (
+            expandable_flags_available,
+            judge_flag_chip_states,
+            open_panels,
+        )
+
         self._model = model
         if sync_from_detail:
             self._detail_all = detail_open
             if detail_open:
-                self._open_flags = set(self._available_expandable_flags(model))
+                self._open_flags = set(expandable_flags_available(model))
             else:
                 self._open_flags.clear()
-        open_flags = set(self._open_flags)
-        if self._detail_all:
-            open_flags |= self._available_expandable_flags(model)
+        # Panels open via master d or individual chips (data-gated)
+        open_flags = open_panels(
+            model,
+            detail_all=self._detail_all,
+            open_flags=self._open_flags,
+        )
 
         mode = "full" if (self._detail_all or open_flags) else "compact"
         self.query_one("#jd-title", Static).update(f"Judge · {model.ticker}")
@@ -465,57 +475,21 @@ class JudgeDesk(Vertical):
             foot_el.update("")
             foot_el.display = False
 
-        # Flag chips reflect availability + expanded open_flags
-        by_key = {c.key: c for c in model.cards}
-        has_stack = bool(model.decision_lines)
-        has_readiness = bool(model.readiness and model.readiness != "—")
-        has_named = by_key.get("named_setups") is not None
-        has_mce = by_key.get("market") is not None
-        has_phase = bool(model.phase_arrow)
-        self._paint_flag_chip(
-            "detail",
-            available=True,
-            expanded=self._detail_all,
-            warn=False,
-        )
-        self._paint_flag_chip(
-            "stack",
-            available=has_stack,
-            expanded="stack" in open_flags,
-            warn=False,
-        )
-        self._paint_flag_chip(
-            "readiness",
-            available=has_readiness,
-            expanded="readiness" in open_flags,
-            warn=False,
-        )
-        self._paint_flag_chip(
-            "named",
-            available=has_named,
-            expanded="named" in open_flags,
-            warn=False,
-        )
-        self._paint_flag_chip(
-            "mce",
-            available=has_mce,
-            expanded="mce" in open_flags,
-            warn=False,
-        )
-        self._paint_flag_chip(
-            "phase_plus",
-            available=has_phase,
-            expanded="phase_plus" in open_flags,
-            warn=False,
-        )
-        self._paint_flag_chip(
-            "limited",
-            available=model.limited,
-            expanded=model.limited,
-            warn=True,
-        )
+        # Flag chips: data-contextual (design bible) — not a peach wall
+        for st in judge_flag_chip_states(
+            model,
+            detail_all=self._detail_all,
+            open_flags=self._open_flags,
+        ):
+            self._paint_flag_chip(
+                st.key,
+                available=st.available,
+                expanded=st.expanded,
+                warn=st.warn,
+                visible=st.visible,
+            )
 
-        # Decision stack when stack flag open
+        # Decision stack when stack panel open (via master or single)
         decision_block = self.query_one("#jd-decision", Vertical)
         if "stack" in open_flags:
             decision_block.display = True
@@ -528,6 +502,7 @@ class JudgeDesk(Vertical):
 
         # Primary cards always; secondary cards when matching flag / detail all
         # readiness → data card; named → named_setups; mce → market; detail all → all secondary
+        by_key = {c.key: c for c in model.cards}
         show_secondary = {
             "session": self._detail_all,
             "market": "mce" in open_flags or self._detail_all,
@@ -581,19 +556,9 @@ class JudgeDesk(Vertical):
         self.query_one("#jd-footer", Static).update(foot)
 
     def _available_expandable_flags(self, model: JudgeDeskModel) -> set[str]:
-        by_key = {c.key: c for c in model.cards}
-        out: set[str] = set()
-        if model.decision_lines:
-            out.add("stack")
-        if model.readiness and model.readiness != "—":
-            out.add("readiness")
-        if by_key.get("named_setups") is not None:
-            out.add("named")
-        if by_key.get("market") is not None:
-            out.add("mce")
-        if model.phase_arrow:
-            out.add("phase_plus")
-        return out
+        from src.adapters.tui.judge_flag_states import expandable_flags_available
+
+        return expandable_flags_available(model)
 
     def _paint_flag_chip(
         self,
@@ -602,8 +567,13 @@ class JudgeDesk(Vertical):
         available: bool,
         expanded: bool,
         warn: bool,
+        visible: bool = True,
     ) -> None:
         el = self.query_one(f"#jd-flag-{key}", FlagChip)
+        el.display = visible
+        if not visible:
+            el.set_chip_state(available=False, expanded=False, warn=False)
+            return
         el.set_chip_state(available=available, expanded=expanded, warn=warn)
 
 
