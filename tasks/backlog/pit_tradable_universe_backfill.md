@@ -1,6 +1,6 @@
 # Point-In-Time Tradable Universe For Historical Backfill
 
-Status: `READY`
+Status: `COMPLETED`
 
 Source: survivorship-bias investigation 2026-07-31 (pointer
 `src/adapters/cli/research_accum_backfill_commands.py:169`). Companion to — **not
@@ -65,8 +65,9 @@ no-op.
   and is replaced by a **narrower, still-honest** note: tradable-universe PIT
   only; index membership not reconstructed; delistings before the ingestion
   window (pre-2025-07) are physically absent.
-- Applies to both `run_signal_observation_corpus_write` and the accumulation
-  backfill/capture membership identity.
+- Applies to the single shared `run_signal_observation_corpus_write` path (used
+  by BOTH `research signal backfill` and `research accum capture` — one writer,
+  two commands). There is no separate accum membership writer.
 
 ## 4. Non-Goals
 
@@ -88,20 +89,73 @@ no-op.
   the narrower disclosure, it does not vanish.
 - Re-running the same semantic backfill must not change membership for a past
   `as_of_date` given the same candle coverage.
+- `N` is corpus-material: changing it changes which tickers enter observations,
+  so it MUST fold into the lean `semantic_compatibility_id` (put N in a config
+  file already in `_SCORING_CONFIG_PATH_ATTRS`, or add its file to that tuple).
+  Config-only without this hashing would silently under-fork the cohort.
+
+## 5a. Resolved Design Decisions (2026-07-31)
+
+Confirmed before coding; these are binding for the implementing agent.
+
+1. **Per-date membership (crux).** Re-derive membership INSIDE the use case
+   `trading_date` loop. Inject `membership_resolver: Callable[[date],
+   tuple[str, ...]]`; the fixed `request.tickers` authority is removed. Feed each
+   date's set to the screen builder, `_has_any_ticker_candle`, the exclusion
+   loop, and `persist_multi_window(universe_tickers=...)`. Adapter must not
+   pre-resolve. (Without this `@pit` is cosmetic.)
+2. **Intersection semantics:**
+   - Named universe → `named_today ∩ candle-active(N)`. Honest label; does not
+     claim historical index membership (that residual is parked Slice B).
+   - `cached` → **pure candle-active(N), NO intersection** with today's cache.
+     Intersecting would re-introduce survivorship (a delisted name isn't cached).
+     This is the deliberate board-wide-PIT case.
+3. **N = 10 trading sessions** (IHSG calendar, not calendar days). Bias toward
+   avoiding false-exclusion of live illiquids near long breaks. Config surface:
+   `config/default.yaml` only, no CLI flag (see the identity-hash invariant).
+4. **`@pit` always-on** for corpus-write paths; no `--membership current` escape
+   hatch. The `@pit`/`@current` branch stays use-case-owned and driven by the
+   identity string, so both branches are unit-testable at the seam without a CLI
+   flag. Live/interactive resolution unchanged.
+5. **Scope = the one shared `run_signal_observation_corpus_write`.** Fixes both
+   `signal backfill` and `accum capture`. Pre-open capture untouched.
+6. **Port:** extend domain `MarketDataRepository` with
+   `list_tickers_with_candles_between(start, end) -> list[str]` + SQLite impl.
+   Keep it calendar-agnostic (pure date range); the application service converts
+   "N sessions ending as_of" → `[start_session, as_of]` via the IHSG calendar.
+7. **Aggregates:** `universe_size` = union of PIT members across processed dates
+   (distinct; documented as a range union, not per-date). `ticker_exclusions`
+   evaluated against that date's PIT set only.
+8. **Resolver seam:** new sibling `resolve_pit_tradable_membership(...)`, NOT an
+   `as_of_date` param on `resolve_tickers`, so interactive callers cannot
+   accidentally change live behavior.
+9. **Narrowed limitation — paste-ready (interpolate N):**
+   - Named: `Tradable-universe PIT: named universe ∩ tickers with a candle in the
+     last {N} trading sessions ending at the observation date. Not historical
+     index/eligible membership — names dropped from today's {universe} list, and
+     names delisted before the local ingestion window, remain absent.`
+   - `cached`/board: `Board-wide tradable-universe PIT: tickers with a candle in
+     the last {N} trading sessions ending at the observation date. Not historical
+     index/eligible membership — names delisted before the local ingestion window
+     remain absent.`
+10. **No migration** of existing `@current` rows; document do-not-mix-populations.
+    **Audit evaluator out of scope** — follow-up in
+    `audit_learning_corpus_pit_invariants.md`.
 
 ## 6. Architecture Impact
 
 ```md
 Layer plan:
-- Domain: not touched (membership derivation is application policy).
-- Application: universe_loader gains as_of_date + PIT-membership derivation;
-  backfill use case membership-source policy (@current vs @pit) and the
-  narrowed survivorship_limitation wording.
-- Infrastructure: new MarketDataRepository port method to list tickers active in
-  a date window (SELECT DISTINCT ticker FROM candles WHERE date BETWEEN ? AND ?),
-  implemented on SQLiteMarketRepository.
-- Adapter: research_accum_backfill_commands.py stays thin — passes as_of_date /
-  membership identity only; owns no policy.
+- Domain: MarketDataRepository port gains ONE read-method signature
+  (list_tickers_with_candles_between); no entity/VO behavior change.
+- Application: new sibling resolve_pit_tradable_membership(as_of_date, universe,
+  N) service (named ∩ candle-active, or board-wide for cached); backfill use case
+  re-derives membership per trading_date via injected resolver, owns the
+  @current/@pit policy branch and the narrowed survivorship_limitation.
+- Infrastructure: SQLite impl of the port method
+  (SELECT DISTINCT ticker FROM candles WHERE date BETWEEN ? AND ?).
+- Adapter: research_accum_backfill_commands.py stays thin — wires the resolver
+  and passes the @pit identity; owns no policy.
 ```
 
 - New dependency: No.
@@ -182,10 +236,20 @@ Layer plan:
 
 ## Completion Record
 
-- Completed date:
-- Implementation commit:
+- Completed date: 2026-07-31
+- Implementation commit: (pending user commit)
 - Files changed:
+  - `src/domain/ports/market_data_repository.py` — `list_tickers_with_candles_between`
+  - `src/infrastructure/persistence/sqlite_market_repository.py` — SQL impl
+  - `src/application/services/pit_tradable_membership.py` — session window + resolver
+  - `src/application/use_case/backfill_signal_observations_use_case.py` — per-date membership, `@pit` policy
+  - `src/adapters/cli/research_accum_backfill_commands.py` — wire resolver, stamp `@pit`, fold N into identity
+  - `config/default.yaml` + `AnalysisConfig.pit_tradable_lookback_sessions`
+  - tests (resolver, backfill use case recreated, sqlite, identity fold) + MDR fakes
+  - README note on `@pit` / do-not-mix populations
 - Commands run:
-- Verification result:
+  - `pytest` focused suites (66+ related green)
+  - `ruff check src/ tests/` + `ruff format --check src/ tests/`
+- Verification result: lint gate green; focused unit tests green
 - Remaining parked slices (index membership): still in
   `parked_screen_rejected_controls_and_universe.md`

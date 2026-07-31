@@ -100,6 +100,9 @@ class MemoryMarketRepository(MarketDataRepository):
             return None
         return candles[0].date, candles[-1].date
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 def test_refresh_backfills_older_gap_without_refetching_current_data():
     repo = MemoryMarketRepository()

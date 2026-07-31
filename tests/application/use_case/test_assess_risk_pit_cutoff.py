@@ -105,6 +105,9 @@ class RecordingRepo(MarketDataRepository):
         rows = sorted(rows, key=lambda c: c.date)
         return rows[0].date, rows[-1].date
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 def _make_evaluator(repo: MarketDataRepository, history_days: int = 300) -> AssessRiskGateEvaluator:
     return AssessRiskGateEvaluator(

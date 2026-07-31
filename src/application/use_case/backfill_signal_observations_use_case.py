@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from src.application.dto.signal_evidence_execution_context import (
     SignalEvidenceExecutionContext,
@@ -29,6 +30,9 @@ from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
+
+# Membership resolver: (as_of_date) -> sorted/uppercase-ready ticker sequence.
+MembershipResolver = Callable[[date], Sequence[str]]
 
 
 @dataclass(frozen=True)
@@ -65,12 +69,11 @@ class BackfillTickerExclusion:
 
 @dataclass(frozen=True)
 class BackfillSignalObservationsRequest:
-    tickers: tuple[str, ...]
     start_date: date
     end_date: date
     windows: tuple[int, ...] = (7, 30, 90)
     # Universe-membership identity (transport decided by the adapter). The
-    # adapter sets this to e.g. "lq45@current"; the use case copies it onto the
+    # adapter sets this to e.g. "lq45@pit"; the use case copies it onto the
     # response and derives the survivorship limitation from it. The adapter must
     # not compute the survivorship policy — only pass the universe identity.
     universe_membership_source: str = ""
@@ -93,6 +96,8 @@ class BackfillSignalObservationsResponse:
     # production config (all reject gates disabled; see the Slice C finding), so
     # `selected_count == evaluated_count` today. `evaluated_count` cross-checks
     # `saved_observation_count`: every evaluated ticker is persisted.
+    # `universe_size` is the distinct union of PIT members across processed dates
+    # (range union), not a single-day membership count.
     universe_size: int = 0
     evaluated_count: int = 0
     selected_count: int = 0
@@ -139,8 +144,46 @@ class BackfillSignalObservationsResponse:
         }
 
 
+def survivorship_limitation_for_source(
+    universe_membership_source: str,
+    *,
+    pit_window_sessions: int,
+) -> str | None:
+    """Derive survivorship disclosure from membership identity (use-case policy)."""
+    source = universe_membership_source.strip()
+    if source.endswith("@current"):
+        return (
+            "Universe membership resolved from the current universe "
+            "(historical membership unavailable); captured population is "
+            "survivorship-biased and cannot support point-in-time universe "
+            "claims."
+        )
+    if source.endswith("@pit"):
+        universe_key = source[: -len("@pit")]
+        n = pit_window_sessions
+        if universe_key == "cached":
+            return (
+                "Board-wide tradable-universe PIT: tickers with a candle in "
+                f"the last {n} trading sessions ending at the observation date. "
+                "Not historical index/eligible membership — names delisted "
+                "before the local ingestion window remain absent."
+            )
+        return (
+            "Tradable-universe PIT: named universe ∩ tickers with a candle in the "
+            f"last {n} trading sessions ending at the observation date. Not historical "
+            f"index/eligible membership — names dropped from today's {universe_key} list, and "
+            "names delisted before the local ingestion window, remain absent."
+        )
+    return None
+
+
 class BackfillSignalObservationsUseCase:
-    """Create historical candidate observations before optional label generation."""
+    """Create historical candidate observations before optional label generation.
+
+    Membership is re-derived per trading date via ``membership_resolver`` (PIT
+    tradable universe). The adapter must not pass a fixed ticker list as
+    membership authority.
+    """
 
     # Broker SESSION_ALIGNED lag is 1; keep a few proven sessions so LATE vs
     # CURRENT remains measurable without a 14-calendar-day window that
@@ -155,10 +198,14 @@ class BackfillSignalObservationsUseCase:
         screen_request_builder: BuildSignalObservationScreenRequest,
         market_data_repository: MarketDataRepository,
         observation_identity: LeanObservationIdentity,
-        evaluate_market_context: "Callable[..., MarketContext] | None" = None,
+        membership_resolver: MembershipResolver,
+        pit_window_sessions: int,
+        evaluate_market_context: Callable[..., MarketContext] | None = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
         evidence_context_builder: SignalEvidenceExecutionContextBuilder | None = None,
     ) -> None:
+        if pit_window_sessions < 1:
+            raise ValueError(f"pit_window_sessions must be >= 1, got {pit_window_sessions}")
         self._record = record_observations_use_case
         self._request_builder = screen_request_builder
         self._market = market_data_repository
@@ -166,6 +213,8 @@ class BackfillSignalObservationsUseCase:
         # config file contents) and stamped onto every capture context. This
         # use case never computes the hash; it only transports the resolved id.
         self._observation_identity = observation_identity
+        self._membership_resolver = membership_resolver
+        self._pit_window_sessions = pit_window_sessions
         self._evaluate_market_context = evaluate_market_context
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
             market_data_repository
@@ -178,10 +227,9 @@ class BackfillSignalObservationsUseCase:
     ) -> BackfillSignalObservationsResponse:
         if request.end_date < request.start_date:
             raise ValueError("end_date must be on or after start_date")
-        if not request.tickers:
-            raise ValueError("at least one ticker is required")
 
-        tickers = tuple(ticker.upper() for ticker in request.tickers)
+        # Trading-date axis is IHSG only — do not fall back to a universe
+        # member (would circularly depend on membership and reintroduce bias).
         trading_dates = tuple(
             _dates_from_candles(
                 self._market.get_candles(
@@ -191,16 +239,6 @@ class BackfillSignalObservationsUseCase:
                 )
             )
         )
-        if not trading_dates:
-            trading_dates = tuple(
-                _dates_from_candles(
-                    self._market.get_candles(
-                        tickers[0],
-                        start_date=request.start_date,
-                        end_date=request.end_date,
-                    )
-                )
-            )
 
         processed: list[date] = []
         skipped: list[BackfillSkippedDate] = []
@@ -215,8 +253,22 @@ class BackfillSignalObservationsUseCase:
         selected_count = 0
         rejected_count = 0
         unavailable_count = 0
+        membership_union: set[str] = set()
+
+        if not trading_dates:
+            market_context_notes.append("ihsg_calendar_unavailable")
 
         for trading_date in trading_dates:
+            tickers = tuple(ticker.upper() for ticker in self._membership_resolver(trading_date))
+            if not tickers:
+                skipped.append(
+                    BackfillSkippedDate(
+                        date=trading_date,
+                        reason="empty_pit_membership",
+                    )
+                )
+                continue
+
             if not self._has_any_ticker_candle(tickers, trading_date):
                 skipped.append(
                     BackfillSkippedDate(
@@ -283,11 +335,12 @@ class BackfillSignalObservationsUseCase:
                 canonical_window=7,
             )
             processed.append(trading_date)
+            membership_union.update(tickers)
 
             # A universe ticker that produced no observation on this processed
             # date (across all windows) was never evaluated because its source
             # input was unavailable — the only real ticker-boundary exclusion
-            # today (criterion 12; Slice C finding). Per-date, deduped.
+            # today (criterion 12; Slice C finding). Per-date PIT set only.
             for ticker in tickers:
                 if ticker not in evaluated_tickers_for_date:
                     ticker_exclusions.append(
@@ -298,18 +351,10 @@ class BackfillSignalObservationsUseCase:
                         )
                     )
 
-        # Survivorship limitation is owned by the use case, not the adapter. A
-        # `@current` membership source means historical membership is
-        # unavailable, so the captured universe is the current one and is
-        # survivorship-biased. Building a historical-membership platform is out
-        # of scope (parked; see DQ-003 deferral triggers).
-        survivorship_limitation = (
-            "Universe membership resolved from the current universe "
-            "(historical membership unavailable); captured population is "
-            "survivorship-biased and cannot support point-in-time universe "
-            "claims."
-            if request.universe_membership_source.endswith("@current")
-            else None
+        # Survivorship limitation is owned by the use case, not the adapter.
+        survivorship_limitation = survivorship_limitation_for_source(
+            request.universe_membership_source,
+            pit_window_sessions=self._pit_window_sessions,
         )
 
         # DQ-003 Slice E (criterion 11): a genuine screen-rejected control exists
@@ -341,7 +386,7 @@ class BackfillSignalObservationsUseCase:
                 "digest are idempotent; digest changes raise an immutable conflict.",
                 *market_context_notes,
             ),
-            universe_size=len(request.tickers),
+            universe_size=len(membership_union),
             evaluated_count=evaluated_count,
             selected_count=selected_count,
             rejected_count=rejected_count,

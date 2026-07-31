@@ -44,6 +44,7 @@ def signal_capture_observations(
     """Capture canonical accumulation learning observations for one session.
 
     Writes database-owned ADR-056 session observations. Labels are a separate step.
+    Membership is point-in-time tradable (``{universe}@pit``), same as backfill.
     """
     try:
         session_date = date.fromisoformat(session)

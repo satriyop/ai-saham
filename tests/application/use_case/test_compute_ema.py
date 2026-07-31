@@ -72,6 +72,9 @@ class MockRepository(MarketDataRepository):
         sorted_candles = sorted(filtered, key=lambda c: c.date)
         return (sorted_candles[0].date, sorted_candles[-1].date)
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 # --- Tests ---
 

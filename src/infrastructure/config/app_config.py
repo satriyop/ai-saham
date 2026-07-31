@@ -81,6 +81,9 @@ class AnalysisConfig:
     universe: str = "lq45"
     regime_universe: str = "idx80"
     format: str = "table"
+    # N trading sessions for PIT tradable-universe membership on corpus write.
+    # Folded into lean semantic_compatibility_id by the research backfill adapter.
+    pit_tradable_lookback_sessions: int = 10
 
 
 @dataclass(frozen=True)

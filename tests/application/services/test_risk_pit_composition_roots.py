@@ -95,6 +95,9 @@ class RecordingRepo(MarketDataRepository):
         rows = sorted(rows, key=lambda c: c.date)
         return rows[0].date, rows[-1].date
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 def test_assess_with_context_threads_cutoff():
     """RiskEngine.assess_with_context(..., as_of_date=D) must bound every

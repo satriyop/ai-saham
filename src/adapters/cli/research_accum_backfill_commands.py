@@ -21,13 +21,19 @@ from src.application.services.lean_observation_identity import (
     LeanObservationIdentity,
     resolve_lean_semantic_compatibility_id,
 )
+from src.application.services.pit_tradable_membership import (
+    resolve_pit_tradable_membership,
+)
 from src.application.services.signal_evidence_execution_context_builder import (
     SignalEvidenceExecutionContextBuilder,
 )
 from src.application.services.signal_observation_request_builder import (
     BuildSignalObservationScreenRequest,
 )
-from src.application.services.universe_loader import UniverseNotFoundError, resolve_tickers
+from src.application.services.universe_loader import (
+    UniverseNotFoundError,
+    load_universe,
+)
 from src.application.use_case.backfill_signal_observations_use_case import (
     BackfillSignalObservationsRequest,
     BackfillSignalObservationsResponse,
@@ -47,7 +53,6 @@ from src.infrastructure.config.universe_config_loader import YamlUniverseConfigL
 from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
     IHSGTradingSessionCalendarProvider,
 )
-from src.infrastructure.persistence.sqlite_broker_repository import SQLiteBrokerRepository
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 # Scoring config files whose resolved content is folded into the lean
@@ -69,7 +74,11 @@ _SCORING_CONFIG_PATH_ATTRS = (
 )
 
 
-def _read_scoring_config_canonical(config_paths) -> str:
+def _read_scoring_config_canonical(
+    config_paths,
+    *,
+    pit_tradable_lookback_sessions: int,
+) -> str:
     """Read the resolved scoring config file contents into a deterministic
     canonical string.
 
@@ -77,12 +86,17 @@ def _read_scoring_config_canonical(config_paths) -> str:
     rendered as a path-labelled block, blocks are ordered by path so the string
     is deterministic regardless of attribute order, and a NUL delimiter keeps
     file boundaries unambiguous. The application resolver hashes this string.
+
+    ``pit_tradable_lookback_sessions`` (N) is corpus-material and is folded in
+    explicitly so changing N forks the lean cohort without hashing all of
+    ``default.yaml``.
     """
     rel_paths = sorted({getattr(config_paths, attr) for attr in _SCORING_CONFIG_PATH_ATTRS})
     blocks = []
     for rel_path in rel_paths:
         content = Path(rel_path).read_text(encoding="utf-8")
         blocks.append(f"# path: {rel_path}\n{content}")
+    blocks.append(f"# pit_tradable_lookback_sessions\n{int(pit_tradable_lookback_sessions)}")
     return "\n\x00\n".join(blocks)
 
 
@@ -95,26 +109,46 @@ def run_signal_observation_corpus_write(
 ) -> BackfillSignalObservationsResponse:
     """Compose and run observation corpus write for a date range.
 
-    Shared by ``research signal backfill`` and ``research signal capture``.
+    Shared by ``research accum backfill`` and ``research accum capture``.
     Adapter owns I/O and wiring; ``BackfillSignalObservationsUseCase`` owns policy.
+
+    Membership is point-in-time tradable (candle presence), re-derived per date
+    inside the use case. Stamps ``{universe}@pit``.
     """
     cfg = load_app_config()
-    try:
-        tickers = resolve_tickers(
-            universe=universe,
-            explicit=[],
-            db_path=resolved_db,
-            loader=YamlUniverseConfigLoader(),
-            repository=SQLiteBrokerRepository(resolved_db),
+    pit_window = int(cfg.analysis.pit_tradable_lookback_sessions)
+    if pit_window < 1:
+        typer.echo(
+            f"[error] analysis.pit_tradable_lookback_sessions must be >= 1, got {pit_window}",
+            err=True,
         )
-    except (UniverseNotFoundError, FileNotFoundError) as exc:
-        typer.echo(f"[error] {exc}", err=True)
-        raise typer.Exit(1)
-    if not tickers:
-        typer.echo(f"[error] Universe {universe!r} resolved to no tickers.", err=True)
         raise typer.Exit(1)
 
+    loader = YamlUniverseConfigLoader()
+    named_tickers: list[str] | None
+    if universe == "cached":
+        # Board-wide pure candle-active — do not intersect with broker cache.
+        named_tickers = None
+    else:
+        try:
+            named_tickers = load_universe(universe, loader)
+        except (UniverseNotFoundError, FileNotFoundError) as exc:
+            typer.echo(f"[error] {exc}", err=True)
+            raise typer.Exit(1)
+        if not named_tickers:
+            typer.echo(f"[error] Universe {universe!r} resolved to no tickers.", err=True)
+            raise typer.Exit(1)
+
     market_repo = SQLiteMarketRepository(resolved_db)
+
+    def membership_resolver(as_of: date) -> tuple[str, ...]:
+        return resolve_pit_tradable_membership(
+            as_of_date=as_of,
+            window_sessions=pit_window,
+            market_repository=market_repo,
+            named_tickers=named_tickers,
+        )
+
     accumulation_config = load_accumulation_screener_config()
     swing_policy = load_swing_policy_config()
     screen_bundle = create_accumulation_screen_workflow_bundle(
@@ -138,11 +172,14 @@ def run_signal_observation_corpus_write(
 
     # Resolve the lean observation identity ONCE. The adapter reads config file
     # contents (I/O) and passes the canonical string to the application
-    # resolver, which owns the hashing/policy.
+    # resolver, which owns the hashing/policy. N is material and folded in.
     observation_identity = LeanObservationIdentity(
         observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
         semantic_compatibility_id=resolve_lean_semantic_compatibility_id(
-            _read_scoring_config_canonical(cfg.config_paths)
+            _read_scoring_config_canonical(
+                cfg.config_paths,
+                pit_tradable_lookback_sessions=pit_window,
+            )
         ),
     )
 
@@ -151,6 +188,8 @@ def run_signal_observation_corpus_write(
         screen_request_builder=screen_request_builder,
         market_data_repository=market_repo,
         observation_identity=observation_identity,
+        membership_resolver=membership_resolver,
+        pit_window_sessions=pit_window,
         evaluate_market_context=_evaluate_market_context_for_corpus,
         session_resolver=EffectiveMarketSessionResolver(market_repo),
         evidence_context_builder=SignalEvidenceExecutionContextBuilder(
@@ -163,13 +202,10 @@ def run_signal_observation_corpus_write(
         ),
     ).execute(
         BackfillSignalObservationsRequest(
-            tickers=tuple(tickers),
             start_date=start_date,
             end_date=end_date,
-            # Current-universe membership identity. Historical membership is
-            # unavailable; the use case turns the `@current` suffix into the
-            # survivorship limitation note (adapter passes identity only).
-            universe_membership_source=f"{universe}@current",
+            # PIT tradable membership identity. Use case owns survivorship text.
+            universe_membership_source=f"{universe}@pit",
         )
     )
 
@@ -184,7 +220,11 @@ def signal_backfill_observations(
     fmt: Annotated[str, typer.Option("--format", help="Output format: table or json")] = "table",
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
 ) -> None:
-    """Backfill historical accumulation learning observations from local data."""
+    """Backfill historical accumulation learning observations from local data.
+
+    Uses point-in-time tradable membership (candle presence over N sessions),
+    stamped as ``{universe}@pit``. Not historical index membership.
+    """
     cfg = load_app_config()
     resolved_db = db_path or Path(cfg.storage.db_path)
     try:
@@ -224,7 +264,7 @@ def _display_backfill_response(
     typer.echo(f"Unavailable labels: {response.unavailable_label_count}")
     typer.echo("")
     typer.echo("Capture boundary:")
-    typer.echo(f"  Universe size: {response.universe_size}")
+    typer.echo(f"  Universe size (range union): {response.universe_size}")
     typer.echo(f"  Evaluated: {response.evaluated_count}")
     typer.echo(f"  Selected: {response.selected_count}")
     typer.echo(f"  Rejected: {response.rejected_count} (0 by construction; reject gates disabled)")

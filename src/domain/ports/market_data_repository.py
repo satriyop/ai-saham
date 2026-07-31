@@ -93,6 +93,24 @@ class MarketDataRepository(ABC):
         """
         pass
 
+    @abstractmethod
+    def list_tickers_with_candles_between(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> list[str]:
+        """
+        Return distinct tickers that have at least one candle in
+        ``[start_date, end_date]`` (inclusive), sorted ascending.
+
+        Calendar-agnostic: callers map trading-session windows to calendar
+        dates before calling. Empty list when none match.
+
+        Raises:
+            MarketDataRepositoryError: If the query fails.
+        """
+        pass
+
 
 class MarketDataRepositoryError(Exception):
     """Raised when market data repository encounters an error."""

@@ -51,6 +51,9 @@ class _MockRepo(MarketDataRepository):
         rows = self.get_candles(ticker)
         return (rows[0].date, rows[-1].date) if rows else None
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 def _flat_candles(ticker: str = "BBCA", count: int = 365, price: float = 5000.0) -> list[Candle]:
     """Flat-price candles with liquid volume (above IDR 5B/day threshold).

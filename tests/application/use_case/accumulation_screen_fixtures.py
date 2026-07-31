@@ -73,6 +73,9 @@ class MockMarketRepository(MarketDataRepository):
             return None
         return rows[0].date, rows[-1].date
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 class MockBrokerRepository(BrokerDataRepository):
     def __init__(self, summaries: list[BrokerSummary]) -> None:

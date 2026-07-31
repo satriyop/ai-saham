@@ -75,6 +75,9 @@ class _StubMarketRepository(MarketDataRepository):
             return None
         return rows[0].date, rows[-1].date
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 class _StubBrokerRepository(BrokerDataRepository):
     """Minimal BrokerDataRepository with no broker/flow data (empty results)."""

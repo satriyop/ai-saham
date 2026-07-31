@@ -54,6 +54,9 @@ class FakeMarketDataRepository(MarketDataRepository):
             return None
         return rows[0].date, rows[-1].date
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 def _wib(y, m, d, hh, mm) -> datetime:
     return datetime(y, m, d, hh, mm, tzinfo=IDX_TIMEZONE)

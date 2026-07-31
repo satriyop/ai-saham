@@ -69,6 +69,11 @@ analysis:
   universe: lq45         # default universe for daily briefings
   regime_universe: idx80 # universe used for market regime detection
   format: table          # output format: table | json
+  # N trading sessions for PIT tradable-universe membership on research corpus
+  # write (backfill/capture). Candle presence in the last N IHSG sessions ending
+  # at the observation date defines tradable membership. Material to lean
+  # semantic_compatibility_id — changing N forks the learning cohort.
+  pit_tradable_lookback_sessions: 10
 
 # ── Trading ───────────────────────────────────────────────────────────────
 trading:

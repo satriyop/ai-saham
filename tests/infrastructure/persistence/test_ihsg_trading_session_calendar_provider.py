@@ -51,6 +51,9 @@ class FakeMarketRepository(MarketDataRepository):
         dates = [c.date for c in rows]
         return min(dates), max(dates)
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 class TestBoundedQuery:
     def test_query_is_bounded_by_coverage_start_and_end(self, tmp_path: Path):

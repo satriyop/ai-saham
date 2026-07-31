@@ -99,6 +99,9 @@ class _MockRepo(MarketDataRepository):
         rows = self.get_candles(ticker)
         return (rows[0].date, rows[-1].date) if rows else None
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 def _flat_candles(count=365, price=5000.0):
     from datetime import timedelta

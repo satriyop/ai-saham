@@ -42,6 +42,9 @@ class InMemoryMarketRepository(MarketDataRepository):
             return None
         return candles[0].date, candles[-1].date
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 class InMemoryBrokerRepository(BrokerDataRepository):
     def __init__(self, summaries: list[BrokerSummary] | None = None) -> None:

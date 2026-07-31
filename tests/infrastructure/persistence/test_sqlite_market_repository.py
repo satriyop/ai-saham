@@ -185,6 +185,36 @@ class TestSQLiteMarketRepository:
         assert bbca[0].ticker == "BBCA"
         assert bbri[0].ticker == "BBRI"
 
+    def test_list_tickers_with_candles_between_filters_window(self, repository):
+        repository.save_candles(
+            [
+                make_candle("BBCA", 1),
+                make_candle("BBCA", 5),
+                make_candle("BBRI", 3),
+                make_candle("TLKM", 10),
+            ]
+        )
+        result = repository.list_tickers_with_candles_between(
+            date(2024, 1, 2),
+            date(2024, 1, 5),
+        )
+        assert result == ["BBCA", "BBRI"]
+
+    def test_list_tickers_with_candles_between_inclusive_bounds(self, repository):
+        repository.save_candles([make_candle("BBCA", 1), make_candle("BBRI", 5)])
+        assert repository.list_tickers_with_candles_between(date(2024, 1, 1), date(2024, 1, 1)) == [
+            "BBCA"
+        ]
+        assert repository.list_tickers_with_candles_between(date(2024, 1, 5), date(2024, 1, 5)) == [
+            "BBRI"
+        ]
+
+    def test_list_tickers_with_candles_between_inverted_range_empty(self, repository):
+        repository.save_candles([make_candle("BBCA", 1)])
+        assert (
+            repository.list_tickers_with_candles_between(date(2024, 1, 5), date(2024, 1, 1)) == []
+        )
+
     def test_empty_candles_list_no_error(self, repository):
         """Should handle empty candles list gracefully."""
         repository.save_candles([])  # Should not raise

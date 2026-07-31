@@ -236,6 +236,12 @@ SQLite DB and never auto-promotes config.
 | Accum scoring / policy tournament / factor KEEP·DEMOTE | **`ml-saham`** — `challenge run` / `challenge factor` |
 | Accum cohort evaluate (`research accum evaluate`) | **Dropped** — see [BOUNDARY.md](BOUNDARY.md) |
 
+Research corpus writes (`research accum capture` / `backfill`) stamp membership as
+`{universe}@pit`: tradable names with a candle in the last N IHSG sessions
+(`analysis.pit_tradable_lookback_sessions`, default 10). This is **not** historical
+index membership. Pre-`@pit` rows stamped `@current` remain in the DB — do not mix
+`@current` and `@pit` populations as one tuning cohort.
+
 Full ownership matrix and vocabulary: **[BOUNDARY.md](BOUNDARY.md)**.
 
 ## Architecture and boundaries

@@ -281,6 +281,30 @@ class SQLiteMarketRepository(MarketDataRepository):
         except sqlite3.Error as e:
             raise MarketDataRepositoryError(f"Failed to list tickers: {e}") from e
 
+    def list_tickers_with_candles_between(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> list[str]:
+        """Return distinct tickers with ≥1 candle in [start_date, end_date]."""
+        if start_date > end_date:
+            return []
+        try:
+            with self._get_connection() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT DISTINCT ticker FROM candles
+                    WHERE date >= ? AND date <= ?
+                    ORDER BY ticker ASC
+                    """,
+                    [start_date.isoformat(), end_date.isoformat()],
+                ).fetchall()
+            return [row["ticker"] for row in rows]
+        except sqlite3.Error as e:
+            raise MarketDataRepositoryError(
+                f"Failed to list tickers with candles between {start_date} and {end_date}: {e}"
+            ) from e
+
     def _row_to_candle(self, row: sqlite3.Row) -> Candle:
         """Convert database row to Candle entity."""
         open_val = Decimal(row["open"])

@@ -131,6 +131,9 @@ class MockRepository(MarketDataRepository):
         sorted_candles = sorted(filtered, key=lambda c: c.date)
         return (sorted_candles[0].date, sorted_candles[-1].date)
 
+    def list_tickers_with_candles_between(self, start_date, end_date):
+        return []
+
 
 def create_temp_rules_file(content: str) -> Path:
     """Create a temporary YAML rules file."""
