@@ -38,6 +38,21 @@ def test_action_chip_styles_present():
     assert "#6fbf8a" in enter.markup or "6fbf8a" in repr(enter)
     assert "#d4b06a" in watch.markup or "d4b06a" in repr(watch)
     assert "#c97a72" in avoid.markup or "c97a72" in repr(avoid)
+    # No opaque cell backgrounds — they punch black holes through peach cursor
+    for cell in (enter, watch, avoid):
+        blob = cell.markup + repr(cell)
+        assert " on " not in blob.lower() or "on #" not in blob
+        assert "#121a14" not in blob and "#1a1810" not in blob and "#1a1212" not in blob
+
+
+def test_phase_cell_no_opaque_background():
+    from src.adapters.tui.board_cell_markup import format_phase_cell
+
+    phase = format_phase_cell("COMPRESS")
+    assert "COMPRESS" in phase.plain
+    blob = phase.markup + repr(phase)
+    assert "#141414" not in blob
+    assert " on " not in blob
 
 
 def test_gate_and_signal_markup():

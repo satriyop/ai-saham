@@ -22,18 +22,15 @@ from src.adapters.shared.trade_action_labels import (
     WATCH_LIKE,
 )
 
-# OpenCode semantic tokens
+# OpenCode semantic tokens (foreground only on board cells — no opaque ``on``
+# backgrounds; those punch black holes through DataTable peach cursor wash.)
 _MINT = "#6fbf8a"
-_MINT_BG = "#121a14"
 _BRASS = "#d4b06a"
-_BRASS_BG = "#1a1810"
 _CORAL = "#c97a72"
-_CORAL_BG = "#1a1212"
 _FOG = "#e8e8e8"
 _MIST = "#7a7a7a"
 _ASH = "#555555"
 _TICKER = "#e8e8e8"
-_LIFT = "#141414"
 _PEACH = "#c9a68a"
 
 
@@ -97,14 +94,19 @@ def signal_heat_band(signal: str) -> str:
 
 
 def format_action_cell(action: str) -> Text:
+    """Action chip — foreground only (no cell ``on`` bg).
+
+    Opaque Rich backgrounds fight DataTable cursor wash (peach selection)
+    and leave a black void in the Action column on the focused row.
+    """
     a = (action or "—").strip() or "—"
     u = a.upper()
     if u in ENTER_LIKE:
-        return Text(f" {u} ", style=f"bold {_MINT} on {_MINT_BG}")
+        return Text(f" {u} ", style=f"bold {_MINT}")
     if u in WATCH_LIKE:
-        return Text(f" {u} ", style=f"bold {_BRASS} on {_BRASS_BG}")
+        return Text(f" {u} ", style=f"bold {_BRASS}")
     if u in AVOID_LIKE:
-        return Text(f" {u} ", style=f"bold {_CORAL} on {_CORAL_BG}")
+        return Text(f" {u} ", style=f"bold {_CORAL}")
     return Text(f" {a} ", style=_MIST)
 
 
@@ -119,8 +121,9 @@ def format_gate_cell(gate: str) -> Text:
 
 
 def format_phase_cell(phase: str) -> Text:
+    """Phase label — no cell bg (same cursor-wash rule as Action)."""
     p = (phase or "—").strip() or "—"
-    return Text(f" {p} ", style=f"{_MIST} on {_LIFT}")
+    return Text(f" {p} ", style=_MIST)
 
 
 def format_plain_num(value: str) -> Text:
