@@ -163,7 +163,7 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 |------|----------------|----------|
 | **Density** | Toggle brief ↔ detail on current stage body | `detail · d` |
 | **Job** | Open sibling CLI / desk page · `esc` trail back | ticker `brokers`… · broker `buy/sell`… |
-| **Option** | Toggle optional panel or list filter | pre-open `why` · broker `partial_net` |
+| **Option** | Toggle optional panel | pre-open `why` · `auction+` · `warn` |
 
 Jobs never invent Action. Options never re-score.
 
@@ -220,14 +220,18 @@ Power keys are **stage-local** (only while that stage owns input).
 
 - Nav: click · Tab · Enter/Space only (no letter soup).
 
-### Broker list (radar)
+### Broker list / stock desks (radar) — **no chip bar**
 
-| Chip | Kind | Power | Effect |
-|------|------|-------|--------|
-| **partial_net** | option | — | list honesty / filter state |
-| **from_ticker** | option | — | desks-from-ticker trail |
+Honesty lives in **title + meta + footer**, not cryptic chips.
 
-- Nav: click · Tab · Enter/Space only.
+| Surface | Title | Meta / footer honesty |
+|---------|-------|------------------------|
+| Tracked radar (`v b`) | `View · broker list` | `{n} desks · tracked · Enter home` |
+| From stock (`b` on ticker) | `View · desks · BBCA` | `{n} desks · top brokers · Enter home` |
+| Thin Net windows | (same title) | append **`· thin NetX (partial sessions)`** when any desk lacks full Net3/5/… sample |
+
+**Reject:** operator chips named `partial_net` / `from_ticker` (code keys as chrome).  
+**Reject:** status chips that look like filters but do not change the table.
 
 ### Broker home (desk)
 
@@ -246,7 +250,7 @@ Power keys are **stage-local** (only while that stage owns input).
 
 ### Stages without chip bar
 
-Accum (source badge only) · Plan · Paper · Health · Palette.
+Accum (source badge only) · Broker list / stock desks (honesty in meta) · Plan · Paper · Health · Palette.
 
 ---
 
@@ -333,7 +337,7 @@ Accum (source badge only) · Plan · Paper · Health · Palette.
 - **TUI:** after design lock · use shared ChipBar  
 
 ### Broker (`v b` · desk-centric)
-- Radar chip bar: partial_net · from_ticker  
+- Radar / stock desks: **no chip bar** · title `View · desks · TICKER` or `View · broker list` · meta honesty for thin NetX
 - Home: day net for desk code · job chips **buy/sell · flow · calendar · history · top 5** · keys **`t f c h m`**  
 - Matrix cell: ticker · streak · net · avg buy · click → ticker  
 - `v` → view ticker desk top · not a chip  

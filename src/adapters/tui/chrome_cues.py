@@ -66,6 +66,52 @@ def accum_source_badge_kind(*, board_source: str) -> str:
     return "hide"
 
 
+def broker_list_title() -> str:
+    """Tracked-desk radar (View broker)."""
+    return "View · broker list"
+
+
+def ticker_desks_title(stock: str) -> str:
+    """Stock → top desks trail (from ticker brokers chip / b)."""
+    s = (stock or "—").strip().upper() or "—"
+    return f"View · desks · {s}"
+
+
+def broker_radar_meta(
+    *,
+    desk_count: int,
+    from_stock: str | None = None,
+    with_flow: int | None = None,
+    as_of: str | None = None,
+    note: str | None = None,
+    has_partial_netx: bool = False,
+) -> str:
+    """Operator meta for broker list or stock desks — no chip jargon.
+
+    ``from_stock`` set → stock-scoped desks; else tracked radar.
+    ``has_partial_netx`` → thin multi-session Net windows honesty.
+    """
+    parts: list[str] = []
+    if as_of:
+        parts.append(f"as of {as_of}")
+    parts.append(f"{desk_count} desks")
+    if from_stock:
+        parts.append("top brokers")
+    else:
+        if with_flow is not None:
+            parts.append(f"{with_flow} with flow")
+        parts.append("tracked")
+    if note and str(note).strip():
+        n = str(note).strip()
+        # Skip note fragments that only repeat partial honesty
+        if "partial" not in n.lower():
+            parts.append(n)
+    parts.append("Enter home")
+    if has_partial_netx:
+        parts.append("thin NetX (partial sessions)")
+    return " · ".join(parts)
+
+
 def broker_list_loading_body() -> str:
     """Main stage body while view-broker list worker is in flight."""
     return (

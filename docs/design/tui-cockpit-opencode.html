@@ -2865,31 +2865,20 @@
  </div>
 
  <!-- 7 BROKER · Desk Radar → Enter desk home · OpenCode (IA: tui-broker-desk) -->
+ <!-- No partial_net / from_ticker chips — honesty in title+meta only -->
  <div class="stage-block is-hidden" id="brokerView">
-<div class="flag-row" data-flag-group="broker" role="toolbar" aria-label="Broker list chips">
-              <button type="button" class="flag-chip warn" data-flag="partial_net" title="partial_net">partial_net</button>
-              <button type="button" class="flag-chip" data-flag="from_ticker" title="from_ticker">from_ticker</button>
-            </div>
-            <div class="flag-panel" data-flag-panel="partial_net" data-flag-group="broker">
-              <h4>Partial NetX</h4>
-              <p style="margin:0;color:var(--text-dim)">Some desks lack full Net5 · footer when <code>has_partial_netx</code>.</p>
-            </div>
-            <div class="flag-panel" data-flag-panel="from_ticker" data-flag-group="broker">
-              <h4>From ticker · desks</h4>
-              <p style="margin:0;color:var(--text-dim)">Code stage <code>ticker-desks</code>: stock → desks. Trail via ticker <span class="kbd">b</span>.</p>
-            </div>
 
  <!-- 7a · Desk radar (list) -->
  <div class="broker-sub is-on" id="brokerRadar" data-broker-mode="radar">
  
  <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;font-size:11.5px;color:var(--text-mute)">
  <div>
- Tracked desks · sorted by |Net5| · <strong style="color:var(--text);font-weight:500">Enter → desk home</strong><br />
-
+ <strong style="color:var(--text);font-weight:500">View · desks · BBCA</strong>
+ · 12 desks · top brokers · Enter home<br />
+ <span style="color:var(--amber)">thin NetX (partial sessions)</span> when any desk sample &lt; window
  </div>
  <div style="text-align:right">
- Net5 amp bar = design sugar (not a new score)<br />
- mint buy · coral sell · # = ticker count
+ Net columns = multi-session stock nets · mint buy · coral sell
  </div>
  </div>
  <table class="result-table dense" id="brokerTable">

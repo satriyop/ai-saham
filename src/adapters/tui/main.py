@@ -272,7 +272,6 @@ class CockpitApp(App[None]):
                         )
 
                         yield PreopenInspectDesk(id="preopen-inspect-desk")
-                        from src.adapters.tui.widgets.flag_chip import FlagChip
                         from src.adapters.tui.widgets.health_poster_desk import (
                             HealthPosterDesk,
                         )
@@ -282,20 +281,7 @@ class CockpitApp(App[None]):
                         yield HealthPosterDesk(id="health-poster-desk")
                     # Mock src-badge (snapshot|live) above dense board table
                     yield Static("", id="board-source-badge", classes="hide")
-                    # Broker list chip bar — no row label (bible §1–2)
-                    with Horizontal(id="board-flag-row", classes="board-flag-row"):
-                        yield FlagChip(
-                            "partial_net",
-                            "partial_net",
-                            id="board-flag-partial_net",
-                            classes="is-dim",
-                        )
-                        yield FlagChip(
-                            "from_ticker",
-                            "from_ticker",
-                            id="board-flag-from_ticker",
-                            classes="is-dim",
-                        )
+                    # Broker list / stock desks: honesty in title+meta only (no chips)
                     yield DataTable(id="board-table")
                     yield Static("", id="evidence-strip")
                     yield Static(self._footer_hint(), id="board-footer")
@@ -398,28 +384,6 @@ class CockpitApp(App[None]):
         badge.display = True
         badge.add_class(kind)
 
-    def _paint_board_flag_row(self) -> None:
-        """Broker list flag chips (bible: partial_net · from_ticker)."""
-        from src.adapters.tui.widgets.flag_chip import FlagChip
-
-        try:
-            row = self.query_one("#board-flag-row", Horizontal)
-            partial_chip = self.query_one("#board-flag-partial_net", FlagChip)
-            from_chip = self.query_one("#board-flag-from_ticker", FlagChip)
-        except Exception:
-            return
-        if self._stage in {"broker-list", "ticker-desks"}:
-            partial = any(
-                bool(getattr(r, "has_partial_netx", False) or getattr(r, "partial_net", False))
-                for r in (self._broker_rows or [])
-            )
-            from_ticker = bool(self._ticker_desks_stock) or self._stage == "ticker-desks"
-            partial_chip.set_chip_state(available=True, expanded=partial, warn=partial)
-            from_chip.set_chip_state(available=True, expanded=from_ticker)
-            row.display = True
-            return
-        row.display = False
-
     def _status_text(self) -> str:
         mode = "recomputing" if self._recomputing else self._mode
         if self._board_source == "snapshot" and not self._recomputing and self._stage == "accum":
@@ -468,16 +432,16 @@ class CockpitApp(App[None]):
                 "IEV snapshot board · Enter = present-only inspect"
             )
         if self._stage == "broker-list":
-            return "↑↓ move · Enter desk home · esc back · Ctrl+P · view broker list"
-        if self._stage == "ticker-desks":
             if any(getattr(r, "has_partial_netx", False) for r in self._broker_rows):
                 return (
-                    "↑↓ · Enter desk · esc ticker · "
-                    "* NetX partial = sessions < window (value*(used/X))"
+                    "↑↓ · Enter desk · esc · Ctrl+P · thin NetX = fewer sessions than window label"
                 )
+            return "↑↓ move · Enter desk home · esc back · Ctrl+P · tracked desks"
+        if self._stage == "ticker-desks":
+            if any(getattr(r, "has_partial_netx", False) for r in self._broker_rows):
+                return "↑↓ · Enter desk · esc ticker · thin NetX = fewer sessions than window label"
             return (
-                "↑↓ move · Enter desk home · esc → view ticker · Ctrl+P · "
-                "tops day · Net3/5/7/10/20 stock sessions"
+                "↑↓ move · Enter desk home · esc → ticker · Ctrl+P · stock desks · Net3/5/7/10/20"
             )
         if self._stage == "detail" and self._broker_page in {
             "show",
@@ -982,7 +946,6 @@ class CockpitApp(App[None]):
             else f"{self._focus_ticker} · Enter judge · j re-judge · p plan"
         )
         self._paint_board_source_badge()
-        self._paint_board_flag_row()
 
         body = self.query_one("#stage-body", Static)
         scroll = self.query_one("#stage-scroll", VerticalScroll)
@@ -2620,15 +2583,19 @@ class CockpitApp(App[None]):
         self._broker_desk_code = None
         self._broker_page = None
         self._desk_entry = None
+        from src.adapters.tui.chrome_cues import ticker_desks_title
+
         self._stage = "loading"
-        self._board_title = f"View · ticker desks · {stock}"
-        self._meta = "top desks for stock · local cache"
+        self._board_title = ticker_desks_title(stock)
+        self._meta = f"loading desks · {stock} · local cache"
         self._status_note = "view ticker desks"
         self._refresh_chrome()
         self._execute_ticker_desks(stock)
 
     def _restore_ticker_desks_table(self) -> None:
         """Return from desk show to the stock→desks table without re-fetch."""
+        from src.adapters.tui.chrome_cues import broker_radar_meta, ticker_desks_title
+
         stock = self._ticker_desks_stock or "—"
         self._broker_page = None
         self._broker_desk_code = None
@@ -2636,9 +2603,17 @@ class CockpitApp(App[None]):
         self._desk_entry = "ticker-desks"
         self._stage = "ticker-desks"
         self._plan_running = False
-        self._board_title = f"View · ticker desks · {stock}"
-        n = len(self._broker_rows)
-        self._meta = f"{n} desks · {stock} · Enter home · esc view ticker"
+        self._board_title = ticker_desks_title(stock)
+        partial = any(
+            bool(getattr(r, "has_partial_netx", False) or getattr(r, "partial_net", False))
+            for r in (self._broker_rows or [])
+        )
+        self._meta = broker_radar_meta(
+            desk_count=len(self._broker_rows or []),
+            from_stock=str(stock),
+            has_partial_netx=partial,
+            note="esc ticker",
+        )
         self._status_note = "view ticker desks"
         if self._broker_rows and 0 <= self._broker_row_index < len(self._broker_rows):
             self._focus_ticker = str(
@@ -2687,12 +2662,21 @@ class CockpitApp(App[None]):
             self._refresh_chrome()
             self.notify("View broker · no tracked desks", timeout=2.0)
             return
+        from src.adapters.tui.chrome_cues import broker_list_title, broker_radar_meta
+
         self._stage = "broker-list"
         self._focus_ticker = str(getattr(self._broker_rows[0], "code", "—"))
-        self._board_title = "View · broker list"
+        self._board_title = broker_list_title()
         with_data = sum(1 for r in self._broker_rows if getattr(r, "has_data", True))
-        self._meta = (
-            f"{len(self._broker_rows)} desks · {with_data} with flow · Enter home · sorted |Net5|"
+        partial = any(
+            bool(getattr(r, "has_partial_netx", False) or getattr(r, "partial_net", False))
+            for r in self._broker_rows
+        )
+        self._meta = broker_radar_meta(
+            desk_count=len(self._broker_rows),
+            with_flow=with_data,
+            has_partial_netx=partial,
+            note="sorted |Net5|",
         )
         self._status_note = "view broker list"
         self._render_board_table()
@@ -2713,25 +2697,39 @@ class CockpitApp(App[None]):
         self._broker_jump_ticker = None
         self._view_from_desk = False
         self._desk_entry = "ticker-desks"
+        from src.adapters.tui.chrome_cues import broker_radar_meta, ticker_desks_title
+
         self._stage = "ticker-desks"
-        self._board_title = f"View · ticker desks · {stock}"
+        self._board_title = ticker_desks_title(stock)
         as_of_s = str(as_of) if as_of else "—"
-        note_s = str(note) if note else "top buyers/sellers"
+        note_s = str(note) if note else ""
+        partial = any(
+            bool(getattr(r, "has_partial_netx", False) or getattr(r, "partial_net", False))
+            for r in self._broker_rows
+        )
         if not self._broker_rows:
-            self._meta = f"as of {as_of_s} · {note_s} · 0 desks"
+            self._meta = broker_radar_meta(
+                desk_count=0,
+                from_stock=stock,
+                as_of=as_of_s,
+                note=note_s or None,
+                has_partial_netx=False,
+            )
             self._status_note = "view ticker desks"
             self._focus_ticker = stock
             self._render_board_table()
             self._refresh_chrome()
             self.query_one("#board-table", DataTable).focus()
-            self.notify(f"Ticker desks · {stock} · empty", timeout=2.0)
+            self.notify(f"Desks · {stock} · empty", timeout=2.0)
             return
         self._focus_ticker = str(getattr(self._broker_rows[0], "code", "—"))
-        self._meta = f"as of {as_of_s} · {len(self._broker_rows)} desks · {note_s} · Enter home"
-        if any(getattr(r, "has_partial_netx", False) for r in self._broker_rows):
-            # Keep warning visible even if note was truncated in chrome width.
-            if "partial" not in self._meta.lower():
-                self._meta = f"{self._meta} · * NetX partial (used/X)"
+        self._meta = broker_radar_meta(
+            desk_count=len(self._broker_rows),
+            from_stock=stock,
+            as_of=as_of_s,
+            note=note_s or None,
+            has_partial_netx=partial,
+        )
         self._status_note = "view ticker desks"
         self._render_board_table()
         self._refresh_chrome()

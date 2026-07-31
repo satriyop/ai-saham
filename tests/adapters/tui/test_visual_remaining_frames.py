@@ -234,15 +234,19 @@ def test_paper_and_health_opencode_density_copy():
 
 
 def test_broker_list_flag_row_partial_net_rule():
+    """No operator chips for partial_net / from_ticker — meta strings only."""
+    from src.adapters.tui.chrome_cues import broker_radar_meta, ticker_desks_title
+
     rows = [
         SimpleNamespace(code="YP", type_label="Foreign", has_partial_netx=True),
     ]
     partial_on = any(getattr(r, "has_partial_netx", False) for r in rows)
     assert partial_on is True
-    partial = FlagChip("partial_net", "partial_net", id="board-flag-partial_net")
-    from_t = FlagChip("from_ticker", "from ticker", id="board-flag-from_ticker")
-    partial.set_chip_state(available=True, expanded=partial_on)
-    from_t.set_chip_state(available=True, expanded=False)
-    assert partial.flag_key == "partial_net"
-    assert from_t.flag_key == "from_ticker"
-    assert "is-on" in partial.classes
+    meta = broker_radar_meta(
+        desk_count=len(rows),
+        from_stock="BBCA",
+        has_partial_netx=partial_on,
+    )
+    assert "thin NetX" in meta
+    assert ticker_desks_title("BBCA").startswith("View · desks ·")
+    assert "partial_net" not in meta

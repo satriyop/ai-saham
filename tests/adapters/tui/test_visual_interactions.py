@@ -206,12 +206,26 @@ def test_ticker_detail_real_panel_facts_not_presence_only():
 
 
 def test_broker_list_partial_net_flag_logic():
-    """partial_net chip on when any row has has_partial_netx (pure rule)."""
+    """List honesty is meta copy — not partial_net / from_ticker chips."""
+    from src.adapters.tui.chrome_cues import (
+        broker_list_title,
+        broker_radar_meta,
+        ticker_desks_title,
+    )
+
     rows = [SimpleNamespace(code="YP", has_partial_netx=True)]
     partial_on = any(
         getattr(r, "has_partial_netx", False) or getattr(r, "partial_net", False) for r in rows
     )
     assert partial_on is True
-    chip = FlagChip("partial_net", "partial_net", id="board-flag-partial_net")
-    chip.set_chip_state(available=True, expanded=partial_on)
-    assert "is-on" in chip.classes or chip._available
+    assert broker_list_title() == "View · broker list"
+    assert ticker_desks_title("bbca") == "View · desks · BBCA"
+    meta = broker_radar_meta(
+        desk_count=len(rows),
+        from_stock="BBCA",
+        has_partial_netx=partial_on,
+    )
+    assert "thin NetX (partial sessions)" in meta
+    assert "top brokers" in meta
+    assert "partial_net" not in meta
+    assert "from_ticker" not in meta
