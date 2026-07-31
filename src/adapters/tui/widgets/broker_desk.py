@@ -46,6 +46,7 @@ class BrokerDesk(Vertical):
     BrokerDesk .bd-hero {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #c9a68a;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
@@ -80,12 +81,11 @@ class BrokerDesk(Vertical):
         text-style: bold;
         color: #e8e8e8;
         padding-right: 1;
-        text-style: bold;
     }
 
     BrokerDesk .bd-unit {
         width: auto;
-        color: #555555;
+        color: #6b6b6b;
         content-align: left bottom;
     }
 
@@ -103,6 +103,8 @@ class BrokerDesk(Vertical):
         color: #6b6b6b;
         margin-top: 1;
         height: auto;
+        border-top: solid #1c1c1c;
+        padding-top: 1;
     }
 
     BrokerDesk .bd-side {
@@ -115,6 +117,7 @@ class BrokerDesk(Vertical):
     BrokerDesk .bd-stat {
         height: auto;
         color: #a0a0a0;
+        margin-bottom: 0;
     }
 
     BrokerDesk .bd-stat .k {
@@ -138,18 +141,35 @@ class BrokerDesk(Vertical):
     BrokerDesk .bd-col {
         width: 1fr;
         height: auto;
-        padding-right: 1;
+        padding: 0 1 1 1;
+        margin-right: 1;
+        background: #141414;
+        border: solid #1c1c1c;
+    }
+
+    BrokerDesk .bd-col.buy {
+        border-left: solid #6fbf8a;
+    }
+
+    BrokerDesk .bd-col.sell {
+        border-left: solid #c97a72;
+        margin-right: 0;
     }
 
     BrokerDesk .bd-col-title {
         color: #c9a68a;
         text-style: bold;
         margin-bottom: 0;
+        height: auto;
+        border-bottom: solid #1c1c1c;
+        padding-bottom: 0;
     }
 
     BrokerDesk .bd-row {
         height: auto;
         color: #c8c8c8;
+        border-top: solid #1c1c1c;
+        padding: 0 0;
     }
 
     BrokerDesk .bd-row .tk {
@@ -164,6 +184,7 @@ class BrokerDesk(Vertical):
     BrokerDesk .bd-hub {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #3a4252;
         padding: 0 1;
         height: auto;
         color: #9b8fb8;
@@ -178,6 +199,8 @@ class BrokerDesk(Vertical):
     BrokerDesk .bd-flags {
         height: auto;
         margin: 0 0 1 0;
+        padding: 0 0 1 0;
+        border-bottom: solid #1c1c1c;
     }
 
     BrokerDesk .bd-flag-lab {
@@ -213,12 +236,12 @@ class BrokerDesk(Vertical):
                 for i in range(4):
                     yield Static("", id=f"bd-stat-{i}", classes="bd-stat")
         with Horizontal(classes="bd-cols", id="bd-cols"):
-            with Vertical(classes="bd-col", id="bd-buy-col"):
-                yield Static("Top buy", classes="bd-col-title")
+            with Vertical(classes="bd-col buy", id="bd-buy-col"):
+                yield Static("Top buy · day", classes="bd-col-title")
                 for i in range(5):
                     yield Static("", id=f"bd-buy-{i}", classes="bd-row")
-            with Vertical(classes="bd-col", id="bd-sell-col"):
-                yield Static("Top sell", classes="bd-col-title")
+            with Vertical(classes="bd-col sell", id="bd-sell-col"):
+                yield Static("Top sell · day", classes="bd-col-title")
                 for i in range(5):
                     yield Static("", id=f"bd-sell-{i}", classes="bd-row")
         with Horizontal(classes="bd-flags", id="bd-flags"):
@@ -239,19 +262,19 @@ class BrokerDesk(Vertical):
 
     def paint(self, model: BrokerDeskHomeModel) -> None:
         """Paint structured desk home from pure model."""
-        self.query_one("#bd-title", Static).update(
-            f"View · broker · {model.broker_code}  ({model.broker_name})"
-        )
+        self.query_one("#bd-title", Static).update(f"Broker · {model.broker_code}")
         self.query_one("#bd-sub", Static).update(
-            f"type {model.type_label} · as of {model.as_of} · local cache"
+            f"{model.broker_name} · {model.type_label} · as of {model.as_of} · local cache"
         )
         self.query_one("#bd-scope", Static).update(model.scope_note)
+        self.query_one("#bd-lab", Static).update("Day net · desk")
 
         net_row = self.query_one("#bd-net-row", Horizontal)
         net_row.remove_class("pos", "neg", "flat")
         net_row.add_class(model.day_net_tone if model.day_net_tone in {"pos", "neg"} else "flat")
         self.query_one("#bd-sign", Static).update(model.day_net_sign or " ")
         self.query_one("#bd-amt", Static).update(model.day_net_amount)
+        self.query_one("#bd-unit", Static).update("IDR")
         self.query_one("#bd-subline", Static).update(model.day_net_sub)
 
         for i in range(4):

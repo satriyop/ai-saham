@@ -31,6 +31,25 @@ from src.adapters.tui.ticker_desk_model import build_ticker_desk_model_from_dash
 from src.domain.entities.broker_flow import BrokerType
 
 
+def test_density_css_left_accents_on_instrument_desks():
+    """OpenCode density: peach/semantic left borders on primary heroes."""
+    from src.adapters.tui.widgets.broker_desk import BrokerDesk
+    from src.adapters.tui.widgets.broker_top_desk import BrokerTopDesk
+    from src.adapters.tui.widgets.judge_desk import JudgeDesk
+    from src.adapters.tui.widgets.plan_desk import PlanDesk
+    from src.adapters.tui.widgets.ticker_desk import TickerDesk
+
+    for cls, marker in (
+        (JudgeDesk, "border-left: solid #c9a68a"),
+        (PlanDesk, "border-left: solid #6fbf8a"),
+        (BrokerDesk, "border-left: solid #c9a68a"),
+        (BrokerTopDesk, "border-left: solid #6fbf8a"),
+        (TickerDesk, "border-left: solid #c9a68a"),
+    ):
+        css = cls.DEFAULT_CSS
+        assert marker in css, f"{cls.__name__} missing density accent {marker!r}"
+
+
 def test_broker_deep_empty_shell_is_structured_not_cli_dump():
     """Text-only deep loaders still get empty structured models for widget paint."""
     from src.adapters.tui.broker_desk_matrix_model import build_broker_desk_matrix_model

@@ -79,6 +79,8 @@ class BrokerTopDesk(Vertical):
         text-style: bold;
         margin-bottom: 0;
         height: auto;
+        border-bottom: solid #1c1c1c;
+        padding-bottom: 0;
     }
 
     BrokerTopDesk .tp-col-title.sell {
@@ -95,7 +97,8 @@ class BrokerTopDesk(Vertical):
 
     BrokerTopDesk .tp-rank {
         width: 3;
-        color: #555555;
+        color: #6b6b6b;
+        text-style: bold;
     }
 
     BrokerTopDesk .tp-t {
@@ -106,12 +109,12 @@ class BrokerTopDesk(Vertical):
 
     BrokerTopDesk .tp-bar {
         width: 1fr;
-        color: #2a4038;
+        color: #3a5a48;
         height: auto;
     }
 
     BrokerTopDesk .tp-bar.sell {
-        color: #402a2a;
+        color: #5a3a3a;
     }
 
     BrokerTopDesk .tp-n {
@@ -127,7 +130,7 @@ class BrokerTopDesk(Vertical):
 
     BrokerTopDesk .tp-lot {
         width: 10;
-        color: #555555;
+        color: #6b6b6b;
         text-align: right;
     }
 
@@ -140,6 +143,7 @@ class BrokerTopDesk(Vertical):
     BrokerTopDesk .tp-hub {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #3a4252;
         padding: 0 1;
         height: auto;
         color: #9b8fb8;
@@ -193,13 +197,13 @@ class BrokerTopDesk(Vertical):
         self.display = False
 
     def paint(self, model: BrokerDeskTopModel) -> None:
-        self.query_one("#tp-title", Static).update(
-            f"Buy / sell · desk {model.broker_code} · latest session"
-        )
+        self.query_one("#tp-title", Static).update(f"Buy / sell · {model.broker_code}")
         self.query_one("#tp-sub", Static).update(
-            f"{model.broker_name} · {model.type_label} · {model.session_date}"
+            f"{model.broker_name} · {model.type_label} · {model.session_date} · latest session"
         )
         self.query_one("#tp-scope", Static).update(model.scope_note)
+        self.query_one("#tp-buy-title", Static).update("Top buy · latest")
+        self.query_one("#tp-sell-title", Static).update("Top sell · latest")
 
         self._paint_side(side="buy", rows=model.buys, empty_first=not model.buys)
         self._paint_side(side="sell", rows=model.sells, empty_first=not model.sells)

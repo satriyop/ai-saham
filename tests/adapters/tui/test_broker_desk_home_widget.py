@@ -58,12 +58,14 @@ def test_home_paint_contract_hero_hub_and_no_action_authority():
     assert model.day_net_tone == "pos"
     assert model.empty is False
 
-    # Title / sub strings paint() composes
-    title = f"View · broker · {model.broker_code}  ({model.broker_name})"
-    assert "YP" in title and "YP Desk" in title
-    sub = f"type {model.type_label} · as of {model.as_of} · local cache"
+    # Title / sub strings paint() composes (density: Broker · CODE hero)
+    title = f"Broker · {model.broker_code}"
+    assert title == "Broker · YP"
+    sub = f"{model.broker_name} · {model.type_label} · as of {model.as_of} · local cache"
+    assert "YP Desk" in sub
     assert "Foreign" in sub or model.type_label
     assert model.as_of == "2026-07-29" or "2026-07-29" in str(model.as_of)
+    assert "Day net" in "Day net · desk"  # hero lab
 
     # Hub keys (what #bd-hub would show) — deep affordances
     assert model.hub_keys == HUB_KEY_LEGEND

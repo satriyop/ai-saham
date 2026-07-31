@@ -136,10 +136,11 @@ class TickerDesk(Vertical):
         color: #6b6b6b;
     }
 
-    /* Mast */
+    /* Mast — price is landscape (mock price-hero) */
     TickerDesk .td-mast {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #c9a68a;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
@@ -163,8 +164,9 @@ class TickerDesk(Vertical):
 
     TickerDesk .td-currency {
         width: auto;
-        color: #555555;
+        color: #6b6b6b;
         padding-right: 1;
+        content-align: left bottom;
     }
 
     TickerDesk .td-price {
@@ -178,34 +180,42 @@ class TickerDesk(Vertical):
         width: auto;
         text-style: bold;
         color: #7a7a7a;
-        background: #141414;
+        background: #121212;
+        border: solid #2a2a2a;
         padding: 0 1;
+        content-align: left middle;
     }
 
     TickerDesk .td-chg.pos {
         color: #6fbf8a;
         background: #121a14;
+        border: solid #1c4038;
     }
 
     TickerDesk .td-chg.neg {
         color: #c97a72;
         background: #1a1212;
+        border: solid #3a2220;
     }
 
     TickerDesk .td-tape {
-        color: #3a4252;
+        color: #555555;
         height: auto;
-        margin-top: 0;
+        margin-top: 1;
+        border-top: solid #1c1c1c;
+        padding-top: 0;
     }
 
     TickerDesk .td-mast-right {
         width: 2fr;
         height: auto;
+        border-left: solid #1c1c1c;
+        padding-left: 1;
     }
 
     TickerDesk .td-hz-line {
         height: auto;
-        color: #7a7a7a;
+        color: #a0a0a0;
     }
 
     /* Ribbon */
@@ -218,13 +228,13 @@ class TickerDesk(Vertical):
         width: 1fr;
         background: #141414;
         border: solid #1c1c1c;
-        padding: 0 1;
+        padding: 0 1 1 1;
         margin-right: 1;
         height: auto;
     }
 
     TickerDesk .td-metric-k {
-        color: #555555;
+        color: #6b6b6b;
         text-style: bold;
     }
 
@@ -234,7 +244,7 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-metric-u {
-        color: #3a4252;
+        color: #555555;
     }
 
     /* Pulse trio */
@@ -259,7 +269,7 @@ class TickerDesk(Vertical):
     TickerDesk .td-pulse.tone-neutral { border-left: solid #a89cc9; }
 
     TickerDesk .td-pulse-title {
-        color: #555555;
+        color: #6b6b6b;
         text-style: bold;
     }
 
@@ -273,12 +283,12 @@ class TickerDesk(Vertical):
     TickerDesk .td-pulse-head.neg { color: #c97a72; }
 
     TickerDesk .td-pulse-sub {
-        color: #555555;
+        color: #6b6b6b;
         height: auto;
     }
 
     TickerDesk .td-pulse-body {
-        color: #7a7a7a;
+        color: #a0a0a0;
         height: auto;
         margin-top: 0;
     }
@@ -287,13 +297,14 @@ class TickerDesk(Vertical):
     TickerDesk .td-section {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #3a4252;
         padding: 1 1;
         margin-bottom: 1;
         height: auto;
     }
 
     TickerDesk .td-sec-head {
-        color: #555555;
+        color: #6b6b6b;
         text-style: bold;
         height: auto;
     }
@@ -319,6 +330,8 @@ class TickerDesk(Vertical):
         height: 1;
         width: auto;
         margin: 0 0 1 0;
+        padding: 0 0 1 0;
+        border-bottom: solid #1c1c1c;
         align: left middle;
     }
 
@@ -337,6 +350,7 @@ class TickerDesk(Vertical):
     TickerDesk .td-depth-panel {
         background: #141414;
         border: solid #1c1c1c;
+        border-left: solid #c9a68a;
         padding: 0 1 1 1;
         margin: 0 0 1 0;
         height: auto;

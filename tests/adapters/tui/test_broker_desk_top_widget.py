@@ -41,9 +41,10 @@ def test_top_paint_contract_buy_and_sell_sides():
     assert model.sells[0].ticker == "BBCA"
     assert model.sells[0].tone == "neg"
 
-    title = f"Buy / sell · desk {model.broker_code} · latest session"
-    assert "YP" in title
+    title = f"Buy / sell · {model.broker_code}"
+    assert title == "Buy / sell · YP"
     assert model.hub_keys
+    assert model.session_date
 
     assert model.body_contains_action_authority() is False
     text = format_broker_desk_top_scraper_text(model)
