@@ -12,6 +12,12 @@ Lean `CONTROL-POPULATION` for `accumulation-discovery` is **closed** with
 stamped limitations (`contains_control_population=false`, current-universe
 survivorship disclosure). This task owns only the parked product gaps.
 
+> Slice B boundary (2026-07-31): the lighter **PIT tradable-universe** path —
+> candle-presence membership now that the board is swept nightly — is split out
+> as READY in `tasks/backlog/pit_tradable_universe_backfill.md`. That task does
+> **not** close Slice B here, which remains the only path to true historical
+> *index/eligible* membership and pre-ingestion delistings.
+
 ## Task Metadata
 
 - Task type: Feature

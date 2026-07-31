@@ -66,6 +66,12 @@ read -r -d '' SAHAM_CRON << ENTRIES || true
 37 9 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham research pre-open evaluate --format json' >> $LOG_DIR/pre-open-evaluate.log 2>&1
 # Swing EOD — refresh LQ45 candles after EOD data should be available 18:30 WIB
 30 18 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch market --universe lq45' >> $LOG_DIR/swing-fetch-market.log 2>&1
+# Board candle sweep — broad + shallow (candle-only). Fixes ragged-tail coverage
+# across the whole tracked board so absence becomes informative (didn't-trade vs
+# not-requested), which the point-in-time universe reconstruction depends on.
+# Kept separate from the 18:30 lq45 job: that one is narrow+deep (broker/enrichment);
+# this one is broad+shallow. Use 'mbx' instead of 'cached' to also discover new listings.
+35 18 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch market --universe cached --candles-only --no-enrichment --no-meta --no-calendar --no-macro-calendar' >> $LOG_DIR/board-candle-sweep.log 2>&1
 # Accumulation: capture assess writes setup_phase_ledger (canonical window 7)
 # then corpus observations. Manual capture-before-cron is OK (same assess path).
 # One-time after upgrade: saham research accum backfill-phase-ledger
