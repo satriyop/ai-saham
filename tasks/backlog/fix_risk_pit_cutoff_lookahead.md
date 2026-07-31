@@ -1,6 +1,6 @@
 # Fix — Risk Assessment Ignores The Historical Cutoff (PIT Look-Ahead)
 
-Status: `READY`
+Status: `COMPLETED`
 
 Source: look-ahead audit 2026-07-31 (measured against `data/db/data.db`).
 
@@ -549,16 +549,37 @@ and lower priority; it must not block this fix.
 
 ## Completion Record
 
-- Completed date:
-- Implementation commit:
-- Files changed:
-- Composition roots updated:
+- Completed date: 2026-07-31
+- Implementation commit (code): `34fc4360` — `fix(risk): bound risk path by point-in-time cutoff`
+- Ops / clean-break commit: (this commit; purge script FK + task closeout)
+- Files changed (ops slice):
+  - `scripts/purge_accum_learning_corpus.py` — `PRAGMA foreign_keys = ON` + enforce check
+  - this task file status/completion
+- Composition roots updated: yes (in `34fc4360`; not re-done)
 - Commands run:
-- Test result:
-- Lint result:
-- Backup taken (path / size):
-- Purge dry-run counts vs expected (1,890 / 4,050 / 1):
-- Purge executed at:
+  - `cp data/db/data.db data/db/backups/data.db.pre-risk-pit-clean-break-20260731_144912`
+  - `python scripts/purge_accum_learning_corpus.py --db data/db/data.db` (dry-run)
+  - `python scripts/purge_accum_learning_corpus.py --db data/db/data.db --execute`
+  - `saham research accum backfill --universe lq45 --start 2026-06-02 --end 2026-07-30`
+  - `saham research accum labels --all-label-contracts`
+  - `saham research accum backfill-phase-ledger`
+  - `saham research accum status`
+- Test result: prior code suite already green at `34fc4360`; PIT unit suites re-checked earlier (21 passed)
+- Lint result: n/a for ops-only DB work; purge script only small change
+- Backup taken (path / size): `data/db/backups/data.db.pre-risk-pit-clean-break-20260731_144912` (~1.2G)
+- Purge dry-run counts vs expected (1,890 / 4,050 / 1): **matched** (plus 12 non-accum obs untouched)
+- Purge executed at: 2026-07-31 ~14:49 local
 - Re-capture run (range / universe / new compatibility_id):
-- Post-fix verification (cohort count, rows with `risk.snapshot_date > session_date`):
+  - universe `lq45`, `2026-06-02` → `2026-07-30`, 42 sessions, 1890 rows
+  - membership stamp `lq45@pit` (post–tradable-universe work)
+  - `compatibility_id` = `sha256:005363021f7f792071e43d12506aeefe474abf4fbd7d0a45f823b417e95e84c1` (single cohort)
+  - labels: 4320 available (3d/10d/20d; tail sessions skipped for insufficient forward path)
+- Post-fix verification:
+  - cohorts: **1**
+  - `risk.snapshot_date > session_date`: **0** (all 1890 equal session on window 7)
+  - `gate_context.snapshot_date == session_date`: **1890 / 1890**
+  - pre-open / non-accum observations: **12** untouched
 - Rows that changed verdict vs the pre-purge measurements:
+  - Pre-fix: 30 GOTO false `LiquidityGate` structural blocks (cache-head look-ahead)
+  - Post-fix: GOTO `LiquidityGate` structural triggers = **12** (matches pre-audit “blocked at both cutoffs”)
+  - Of the other 30 sessions: **18** all-gates-pass, **12** `BandarGate` (execution) — liquidity false-positive class is gone

@@ -19,6 +19,18 @@ if str(_ROOT) not in sys.path:
 from src.infrastructure.config.app_config import load_app_config  # noqa: E402
 
 
+def _connect(db: Path) -> sqlite3.Connection:
+    """Open SQLite with mandatory FK enforcement (same as learning repo)."""
+    con = sqlite3.connect(str(db))
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA foreign_keys = ON")
+    enabled = con.execute("PRAGMA foreign_keys").fetchone()[0]
+    if enabled != 1:
+        con.close()
+        raise RuntimeError("SQLite foreign key enforcement is required")
+    return con
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, default=None, help="SQLite path (default: app config)")
@@ -29,8 +41,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     db = args.db or Path(load_app_config().storage.db_path)
-    con = sqlite3.connect(db)
-    con.row_factory = sqlite3.Row
+    con = _connect(db)
 
     obs_ids = [
         r["observation_id"]
@@ -52,14 +63,20 @@ def main() -> int:
         "SELECT COUNT(*) AS c FROM learning_evaluations "
         "WHERE purpose = 'ACCUMULATION_DISCOVERY'"
     ).fetchone()["c"]
+    n_preopen = con.execute(
+        "SELECT COUNT(*) AS c FROM learning_observations "
+        "WHERE purpose != 'ACCUMULATION_DISCOVERY'"
+    ).fetchone()["c"]
 
     print(f"db: {db}")
     print(f"accum observations: {n_obs}")
     print(f"labels for those obs: {n_labels}")
     print(f"accum evaluations: {n_eval}")
+    print(f"non-accum observations (untouched): {n_preopen}")
 
     if not args.execute:
         print("dry-run only; pass --execute to delete")
+        con.close()
         return 0
 
     if obs_ids:
@@ -72,6 +89,7 @@ def main() -> int:
     con.execute("DELETE FROM learning_observations WHERE purpose = 'ACCUMULATION_DISCOVERY'")
     con.commit()
     print("deleted.")
+    con.close()
     return 0
 
 
