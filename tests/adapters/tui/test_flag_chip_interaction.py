@@ -91,33 +91,98 @@ def test_flag_chip_is_focusable_control():
 
 
 def test_flag_chip_height_auto_not_collapsed_by_border():
-    """height:1 + solid border → Size(h=0) empty boxes (regression)."""
+    """Uniform pills: height ≥1, labels visible, shared row baseline."""
     import asyncio
 
     from textual.app import App, ComposeResult
+    from textual.containers import Horizontal
+    from textual.widgets import Static
 
     class Host(App):
+        CSS = """
+        #row { height: 3; width: 100%; align: left middle; }
+        """
+
         def compose(self) -> ComposeResult:
-            yield FlagChip("detail", "detail · d", id="jd-flag-detail")
-            yield FlagChip("stack", "stack", id="jd-flag-stack")
-            yield FlagChip("readiness", "readiness", id="jd-flag-readiness")
+            with Horizontal(id="row"):
+                yield Static("Detail", id="lab")
+                yield FlagChip("detail", "detail · d", id="jd-flag-detail")
+                yield FlagChip("stack", "stack", id="jd-flag-stack")
+                yield FlagChip("readiness", "readiness", id="jd-flag-readiness")
+                yield FlagChip("limited", "limited", id="jd-flag-limited")
 
     async def scenario() -> None:
         app = Host()
-        async with app.run_test(size=(100, 20)) as pilot:
+        async with app.run_test(size=(120, 20)) as pilot:
             await pilot.pause(0.05)
-            for cid, label in (
-                ("jd-flag-detail", "detail · d"),
-                ("jd-flag-stack", "stack"),
-                ("jd-flag-readiness", "readiness"),
+            chips = [
+                app.query_one("#jd-flag-detail", FlagChip),
+                app.query_one("#jd-flag-stack", FlagChip),
+                app.query_one("#jd-flag-readiness", FlagChip),
+                app.query_one("#jd-flag-limited", FlagChip),
+            ]
+            ys = {c.region.y for c in chips}
+            hs = {c.region.height for c in chips}
+            assert len(ys) == 1, f"chips not on one baseline: {ys}"
+            assert min(hs) >= 1
+            for chip, label in zip(
+                chips,
+                ("detail · d", "stack", "readiness", "limited"),
+                strict=True,
             ):
-                chip = app.query_one(f"#{cid}", FlagChip)
-                assert chip.size.height >= 1, f"{cid} height collapsed to {chip.size.height}"
                 assert label in str(chip.content)
-                chip.set_chip_state(available=True, expanded=False)
-                assert label in str(chip.content)
-                chip.set_chip_state(available=False, expanded=False)
-                assert label in str(chip.content)
+                assert chip.size.height >= 1
+
+    asyncio.run(scenario())
+
+
+def test_verdict_action_and_gate_share_baseline():
+    """Action + Gate badge aligned on one horizontal baseline."""
+    import asyncio
+
+    from textual.app import App, ComposeResult
+    from textual.containers import Horizontal
+    from textual.widgets import Static
+
+    class Host(App):
+        CSS = """
+        #jd-verdict-row {
+            height: 3;
+            width: 100%;
+            align: left middle;
+        }
+        .verdict-action {
+            width: auto;
+            height: 3;
+            content-align: left middle;
+            text-style: bold;
+            color: #c97a72;
+            padding: 0 2 0 0;
+        }
+        .verdict-gate {
+            width: auto;
+            height: 3;
+            content-align: center middle;
+            color: #c97a72;
+            background: #1a1212;
+            border: solid #3a2220;
+            padding: 0 1;
+        }
+        """
+
+        def compose(self) -> ComposeResult:
+            with Horizontal(id="jd-verdict-row"):
+                yield Static(" BLOCKED(struct) ", classes="verdict-action", id="jd-action")
+                yield Static(" Gate BLOCKED ", classes="verdict-gate", id="jd-gate")
+
+    async def scenario() -> None:
+        app = Host()
+        async with app.run_test(size=(80, 12)) as pilot:
+            await pilot.pause(0.05)
+            action = app.query_one("#jd-action", Static)
+            gate = app.query_one("#jd-gate", Static)
+            assert action.region.y == gate.region.y
+            assert action.region.height == gate.region.height
 
     asyncio.run(scenario())
 

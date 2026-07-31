@@ -89,6 +89,15 @@ def test_build_judge_desk_model_has_verdict_fields():
     assert "ACCUMULATION" in model.phase_arrow and "COMPRESSION" in model.phase_arrow
 
 
+def test_action_css_class_blocked_struct_is_coral():
+    from src.adapters.tui.judge_desk_model import action_css_class
+
+    assert action_css_class("ENTER") == "action-enter"
+    assert action_css_class("WATCH") == "action-watch"
+    assert action_css_class("BLOCKED(struct)") == "action-avoid"
+    assert action_css_class("BLOCKED") == "action-avoid"
+
+
 def test_score_ready_label_no_midword_clip():
     from src.adapters.tui.judge_desk_model import _score_ready_label
 

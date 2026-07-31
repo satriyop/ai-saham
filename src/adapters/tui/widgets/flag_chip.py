@@ -17,11 +17,10 @@ class FlagChip(Static):
 
     DEFAULT_CSS = """
     FlagChip {
-        /* height:auto — solid border + height:1 collapses content to 0 (empty boxes) */
+        /* Uniform OpenCode pills: fixed row height so labels + borders align */
         width: auto;
-        height: auto;
-        min-width: 7;
-        max-width: 14;
+        min-width: 9;
+        height: 3;
         color: #c8c8c8;
         background: #141414;
         border: solid #2a2a2a;
@@ -32,7 +31,8 @@ class FlagChip(Static):
     }
     FlagChip:hover {
         color: #e8e8e8;
-        border: solid #444444;
+        border: solid #555555;
+        background: #1a1a1a;
     }
     FlagChip:focus {
         border: solid #c9a68a;
@@ -45,7 +45,6 @@ class FlagChip(Static):
         text-style: bold;
     }
     FlagChip.is-dim {
-        /* still readable; was #555 on #0e0e0e ≈ invisible empty frames */
         color: #6b6b6b;
         background: #121212;
         border: solid #2a2a2a;

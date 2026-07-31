@@ -81,15 +81,21 @@ class JudgeDesk(Vertical):
     JudgeDesk .verdict-lab {
         color: #c9a68a;
         text-style: bold;
+        height: 1;
+        margin-bottom: 0;
     }
 
+    /* Single baseline row: Action hero + Gate badge (mock: flex align baseline) */
     JudgeDesk .verdict-row {
-        height: auto;
-        margin: 1 0;
+        height: 3;
+        width: 100%;
+        margin: 0 0 1 0;
+        align: left middle;
     }
 
     JudgeDesk .verdict-action {
         width: auto;
+        height: 3;
         text-style: bold;
         color: #e8e8e8;
         padding: 0 2 0 0;
@@ -103,10 +109,12 @@ class JudgeDesk(Vertical):
 
     JudgeDesk .verdict-gate {
         width: auto;
+        height: 3;
         color: #d4b06a;
         padding: 0 1;
         border: solid #2a2a2a;
         background: #121212;
+        content-align: center middle;
     }
 
     JudgeDesk .verdict-gate.gate-open {
@@ -159,16 +167,17 @@ class JudgeDesk(Vertical):
     }
 
     JudgeDesk .flag-row {
-        height: auto;
+        height: 3;
         width: 100%;
         margin: 0 0 1 0;
-        padding: 0 0 1 0;
+        padding: 0 0 0 0;
         border-bottom: solid #1c1c1c;
         align: left middle;
     }
 
     JudgeDesk .flag-lab {
-        width: auto;
+        width: 8;
+        height: 3;
         color: #6b6b6b;
         text-style: bold;
         padding-right: 1;
@@ -400,7 +409,7 @@ class JudgeDesk(Vertical):
             action_el.remove_class(c)
         action_el.add_class("verdict-action")
         action_el.add_class(action_css_class(model.action))
-        # Hero action weight (mock: large Action next to Gate badge)
+        # Hero action + Gate badge on shared baseline (verdict-row height:3)
         action_el.update(f" {model.action or '—'} ")
 
         gate_el = self.query_one("#jd-gate", Static)

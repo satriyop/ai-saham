@@ -643,11 +643,12 @@ def _strip_markup(s: str) -> str:
 
 def action_css_class(action: str) -> str:
     a = (action or "").strip().upper()
-    if a in ENTER_LIKE:
+    if a in ENTER_LIKE or a.startswith("ENTER"):
         return "action-enter"
-    if a in AVOID_LIKE:
+    # BLOCKED / BLOCKED(struct) / AVOID — coral like Gate block
+    if a in AVOID_LIKE or a.startswith("BLOCK") or a.startswith("AVOID"):
         return "action-avoid"
-    if a in WATCH_LIKE:
+    if a in WATCH_LIKE or a.startswith("WATCH"):
         return "action-watch"
     return "action-other"
 
