@@ -276,6 +276,15 @@ class StockbitSeasonalityProvider(SeasonalityProvider, StockbitCachingProvider):
         )
 
     def _write_cache(self, ticker: str, year: int, month: int, edge: SeasonalEdge | None) -> None:
+        # Provenance invariant: never persist a row without a source. A no-data or
+        # failed fetch (edge is None, or an edge with a blank source) is a
+        # persistence no-op — not a null-everything row. Such rows produced chronic
+        # audit churn (INVALID_SOURCE + ALL_METRICS_NULL that repair-seasonality-cache
+        # had to quarantine) and never served the cache anyway, since _read_cache
+        # rejects null-metric rows. See tasks/backlog/
+        # fix_seasonality_negative_cache_null_provenance.md.
+        if edge is None or not edge.source or not edge.source.strip():
+            return
         month_key = self._current_month_key()
         fetched_str = (
             edge.fetched_at.isoformat() if edge and edge.fetched_at else datetime.now().isoformat()

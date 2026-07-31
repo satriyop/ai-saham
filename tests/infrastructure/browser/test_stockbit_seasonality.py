@@ -244,7 +244,7 @@ def test_get_seasonal_edge_ignores_future_snapshot_for_as_of_date(tmp_path):
     assert edge is None
 
 
-def _edge(ticker: str, avg: float, fetched_at: datetime):
+def _edge(ticker: str, avg: float, fetched_at: datetime, source: str = "stockbit"):
     from src.domain.value_objects.seasonal_edge import SeasonalEdge
 
     return SeasonalEdge(
@@ -255,6 +255,61 @@ def _edge(ticker: str, avg: float, fetched_at: datetime):
         positive_years=3,
         total_years=5,
         back_years=5,
-        source="stockbit",
+        source=source,
         fetched_at=fetched_at,
     )
+
+
+def _row_count(provider: StockbitSeasonalityProvider, ticker: str = "BBCA") -> int:
+    with provider._get_conn() as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM seasonality_cache WHERE ticker = ?", (ticker,)
+        ).fetchone()[0]
+
+
+# ── Provenance invariant: a no-data / source-less fetch is a persistence no-op ──
+# (fix_seasonality_negative_cache_null_provenance.md). Writing null-source,
+# all-null-metric rows produced chronic INVALID_SOURCE + ALL_METRICS_NULL audit
+# churn; the writer must never persist a row without provenance.
+
+
+def test_write_cache_persists_nothing_for_none_edge(tmp_path):
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+
+    provider._write_cache("BBCA", 2026, 7, None)
+
+    assert _row_count(provider) == 0
+
+
+def test_write_cache_persists_nothing_for_blank_source_edge(tmp_path):
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+
+    provider._write_cache(
+        "BBCA", 2026, 7, _edge("BBCA", avg=1.0, fetched_at=datetime(2026, 6, 1, 9), source="  ")
+    )
+
+    assert _row_count(provider) == 0
+
+
+def test_write_cache_persists_valid_edge(tmp_path):
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+
+    provider._write_cache(
+        "BBCA", 2026, 7, _edge("BBCA", avg=1.0, fetched_at=datetime(2026, 6, 1, 9))
+    )
+
+    assert _row_count(provider) == 1
+    edge = provider._read_cache("BBCA", 2026, 7)
+    assert edge is not None
+    assert edge.source == "stockbit"
+
+
+def test_get_seasonal_edge_persists_nothing_on_no_data_fetch(tmp_path):
+    # api_client=None makes _fetch return None (the no-data path). The old writer
+    # persisted a null-source, all-null row here; the guard must leave the cache empty.
+    provider = StockbitSeasonalityProvider(api_client=None, db_path=tmp_path / "data.db")
+
+    result = provider.get_seasonal_edge("BBCA", 2026, 7)
+
+    assert result is None
+    assert _row_count(provider) == 0
