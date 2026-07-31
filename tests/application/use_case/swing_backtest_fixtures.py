@@ -102,9 +102,11 @@ class MockBrokerRepository(BrokerDataRepository):
 class FakeRiskEngine:
     def __init__(self) -> None:
         self.contexts = []
+        self.as_of_dates = []
 
-    def assess_with_context(self, ticker, gate_context, market_context=None):
+    def assess_with_context(self, ticker, gate_context, market_context=None, as_of_date=None):
         self.contexts.append(gate_context)
+        self.as_of_dates.append(as_of_date)
         assessment = RiskAssessment(
             rationale=("all gates passed",),
             snapshot_date=gate_context.snapshot_date,
@@ -125,7 +127,7 @@ class FakeRiskEngine:
 
 
 class FailingRiskEngine:
-    def assess_with_context(self, ticker, gate_context, market_context=None):
+    def assess_with_context(self, ticker, gate_context, market_context=None, as_of_date=None):
         raise ValueError("missing attribution inputs")
 
 

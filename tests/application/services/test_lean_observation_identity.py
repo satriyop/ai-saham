@@ -101,3 +101,19 @@ def test_lean_identity_rejects_non_compat_id_type() -> None:
             observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
             semantic_compatibility_id="sha256:" + "0" * 64,  # type: ignore[arg-type]
         )
+
+
+def test_semantic_engine_version_participates_in_fork(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A SEMANTIC_ENGINE_VERSION bump must fork the cohort id even though the
+    config content passed to the resolver is byte-for-byte identical."""
+    config = "accumulation_screener:\n  min_signal_score: 40\n"
+    unpatched = resolve_lean_semantic_compatibility_id(config)
+
+    monkeypatch.setattr(
+        "src.application.services.lean_observation_identity.SEMANTIC_ENGINE_VERSION",
+        "9.9-test",
+    )
+    patched = resolve_lean_semantic_compatibility_id(config)
+
+    assert patched != unpatched
+    assert patched.value != unpatched.value

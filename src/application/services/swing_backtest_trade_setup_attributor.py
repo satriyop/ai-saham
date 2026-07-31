@@ -39,6 +39,7 @@ class SwingBacktestTradeSetupAttributor:
                 candidate.ticker,
                 self._build_gate_context(candidate, signal_date),
                 market_context=market_context,
+                as_of_date=signal_date,
             )
         except Exception as exc:
             logger.debug(

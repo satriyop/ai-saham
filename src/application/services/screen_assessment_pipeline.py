@@ -148,7 +148,7 @@ class ScreenAssessmentPipeline:
                     "pre-built GateContext path"
                 )
             return self._risk_use_case.execute(
-                AssessRiskRequest(ticker=ticker, gate_context=gate_ctx)
+                AssessRiskRequest(ticker=ticker, gate_context=gate_ctx, as_of_date=as_of_date)
             )
 
         if self._risk_engine is None:

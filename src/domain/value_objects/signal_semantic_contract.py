@@ -23,7 +23,12 @@ _LOWERCASE_SNAKE = re.compile(r"^[a-z][a-z0-9_]*$")
 ACCUMULATION_DISCOVERY_CONTRACT = ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT
 
 EVIDENCE_CONTRACT_VERSION = "1.5"
-SEMANTIC_ENGINE_VERSION = "1.4"
+# 1.5: risk-path PIT cutoff fix — as_of_date now bounds indicator aggregation and
+# LiquidityGate candle enrichment, so historical risk gate verdicts change
+# (deterministic decision behavior). SEMANTIC_ENGINE only; EVIDENCE_CONTRACT
+# unchanged (no evidence meaning/authority/derivation change). See
+# tasks/backlog/fix_risk_pit_cutoff_lookahead.md.
+SEMANTIC_ENGINE_VERSION = "1.5"
 
 _EXECUTION_LABEL_POLICY_VERSIONS: tuple[tuple[str, str], ...] = (
     ("TACTICAL_3D", "tactical_3d_v1"),

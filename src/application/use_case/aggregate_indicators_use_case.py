@@ -31,6 +31,7 @@ class AggregateIndicatorsRequest:
     ema_period: int = 20
     rsi_period: int = 14
     days: int = 365  # How many days of history to return
+    as_of_date: date | None = None  # Hard inclusive cutoff; None = latest cached (live)
 
 
 @dataclass
@@ -121,6 +122,7 @@ class AggregateIndicatorsUseCase:
                 period=request.sma_period,
                 price_field="close",
                 days=request.days,
+                as_of_date=request.as_of_date,
             )
         )
 
@@ -130,6 +132,7 @@ class AggregateIndicatorsUseCase:
                 period=request.ema_period,
                 price_field="close",
                 days=request.days,
+                as_of_date=request.as_of_date,
             )
         )
 
@@ -138,6 +141,7 @@ class AggregateIndicatorsUseCase:
                 ticker=ticker,
                 period=request.rsi_period,
                 days=request.days,
+                as_of_date=request.as_of_date,
             )
         )
 

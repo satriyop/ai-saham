@@ -89,7 +89,7 @@ def test_valid_contract():
 def test_known_instance_exists():
     assert ACCUMULATION_DISCOVERY.observation_contract == ACCUMULATION_DISCOVERY_CONTRACT
     assert ACCUMULATION_DISCOVERY.evidence_contract_version == "1.5"
-    assert ACCUMULATION_DISCOVERY.semantic_engine_version == "1.4"
+    assert ACCUMULATION_DISCOVERY.semantic_engine_version == "1.5"
     assert ACCUMULATION_DISCOVERY.observation_schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION
     assert ACCUMULATION_DISCOVERY.label_schema_version == SIGNAL_FORWARD_LABEL_SCHEMA_VERSION
     assert len(ACCUMULATION_DISCOVERY.common_material_config_paths) > 0

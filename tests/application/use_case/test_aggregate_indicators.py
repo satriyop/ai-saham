@@ -350,6 +350,69 @@ class TestAggregateIndicatorsResponseDTO:
         assert response.has_values is False
 
 
+class TestAggregateIndicatorsPitCutoff:
+    """PIT cutoff (`as_of_date`) behavior — fixed dates, no `date.today()`."""
+
+    _START = date(2026, 1, 1)
+    _CUTOFF = date(2026, 1, 1) + timedelta(days=150)
+
+    @staticmethod
+    def _fixed_trending_candles(
+        ticker: str, count: int, start: date, start_price: float = 100.0, trend: float = 1.0
+    ) -> list[Candle]:
+        """Same shape as make_trending_candles() but anchored to a fixed start date."""
+        candles = []
+        for i in range(count):
+            price = Decimal(str(start_price + i * trend))
+            candles.append(
+                Candle(
+                    ticker=ticker,
+                    date=start + timedelta(days=i),
+                    open=price,
+                    high=price + Decimal("1"),
+                    low=price - Decimal("1"),
+                    close=price,
+                    volume=100000,
+                )
+            )
+        return candles
+
+    def test_aggregate_cutoff_bounds_snapshots(self):
+        """Snapshots must never extend past a mid-history as_of_date cutoff,
+        and the snapshot on the last date <= cutoff must match the unbounded
+        run's snapshot for that same date."""
+        candles = self._fixed_trending_candles("BBCA", 260, self._START)
+        repository = MockRepository(candles)
+        use_case = AggregateIndicatorsUseCase(repository)
+
+        unbounded = use_case.execute(AggregateIndicatorsRequest(ticker="BBCA"))
+        bounded = use_case.execute(
+            AggregateIndicatorsRequest(ticker="BBCA", as_of_date=self._CUTOFF)
+        )
+
+        assert bounded.has_values
+        assert bounded.snapshots[-1].date <= self._CUTOFF
+        assert all(s.date <= self._CUTOFF for s in bounded.snapshots)
+
+        last_bounded = bounded.snapshots[-1]
+        unbounded_by_date = {s.date: s for s in unbounded.snapshots}
+        matching_unbounded = unbounded_by_date[last_bounded.date]
+        assert matching_unbounded.sma == last_bounded.sma
+        assert matching_unbounded.ema == last_bounded.ema
+        assert matching_unbounded.rsi == last_bounded.rsi
+
+    def test_aggregate_live_none_unchanged(self):
+        """as_of_date=None must be identical to omitting the field."""
+        candles = self._fixed_trending_candles("BBCA", 260, self._START)
+        repository = MockRepository(candles)
+        use_case = AggregateIndicatorsUseCase(repository)
+
+        explicit_none = use_case.execute(AggregateIndicatorsRequest(ticker="BBCA", as_of_date=None))
+        omitted = use_case.execute(AggregateIndicatorsRequest(ticker="BBCA"))
+
+        assert explicit_none.snapshots == omitted.snapshots
+
+
 class TestAggregateIndicatorsRequestDTO:
     """Test AggregateIndicatorsRequest DTO defaults."""
 

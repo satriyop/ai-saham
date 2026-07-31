@@ -128,6 +128,7 @@ class RiskEngine:
                 ema_period=self._indicator_defaults.ema_period,
                 rsi_period=self._indicator_defaults.rsi_period,
                 gate_context=gate_ctx,
+                as_of_date=as_of_date,
             )
         )
         return _apply_regime_gate(response, market_context, self._market_context_gate)
@@ -137,6 +138,7 @@ class RiskEngine:
         ticker: str,
         gate_context: GateContext,
         market_context: "MarketContext | None" = None,
+        as_of_date: date | None = None,
     ) -> AssessRiskResponse:
         """
         Pipeline path: caller supplies pre-loaded GateContext.
@@ -144,6 +146,9 @@ class RiskEngine:
         Intended for screener loops (800+ tickers) where candidate data is
         already loaded — avoids N+1 provider fetches per ticker.
         Wire up by passing this engine to the screener instead of AssessRiskUseCase.
+
+        as_of_date threads the point-in-time cutoff to the risk path (historical
+        replay). When set, it must equal gate_context.snapshot_date. None = live.
         """
         response = self._use_case.execute(
             AssessRiskRequest(
@@ -152,6 +157,7 @@ class RiskEngine:
                 ema_period=self._indicator_defaults.ema_period,
                 rsi_period=self._indicator_defaults.rsi_period,
                 gate_context=gate_context,
+                as_of_date=as_of_date,
             )
         )
         return _apply_regime_gate(response, market_context, self._market_context_gate)

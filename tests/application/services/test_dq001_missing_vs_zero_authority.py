@@ -223,13 +223,13 @@ def test_fingerprint_round_trip_preserves_coverage_and_missing():
 
 
 def test_schema_versions_bumped_for_dq001():
-    # Current cohort after named setup match persistence
-    # (v8 / engine 1.4 / evidence 1.5). OBSERVATION_SCHEMA only — scoring
-    # authority contracts unchanged from v7.
+    # Current cohort after the risk-path PIT cutoff fix
+    # (v9 / engine 1.5 / evidence 1.5). Engine bump forks the cohort;
+    # EVIDENCE_CONTRACT unchanged (no evidence-semantics change).
     assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 9
     assert SIGNAL_FORWARD_LABEL_SCHEMA_VERSION == 3
     assert EVIDENCE_CONTRACT_VERSION == "1.5"
-    assert SEMANTIC_ENGINE_VERSION == "1.4"
+    assert SEMANTIC_ENGINE_VERSION == "1.5"
 
 
 def test_schema_4_observations_are_noncanonical():

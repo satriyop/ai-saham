@@ -27,6 +27,7 @@ class ComputeSMARequest:
     period: int = 20
     price_field: PriceField = "close"
     days: int = 365  # How many days of history to load
+    as_of_date: date | None = None  # Hard inclusive cutoff; None = latest cached (live)
 
 
 _COVERAGE_TOLERANCE_DAYS = 7  # acceptable shortfall before emitting a warning
@@ -113,7 +114,24 @@ class ComputeSMAUseCase:
 
         earliest_date, latest_date = date_range
 
-        available_days = (latest_date - earliest_date).days + 1
+        # Bound the upper anchor by the point-in-time cutoff. None = live (cache
+        # head). A cutoff before all cached data yields no values (fail closed;
+        # never fall back to an unbounded read).
+        end_date = (
+            latest_date if request.as_of_date is None else min(latest_date, request.as_of_date)
+        )
+        if end_date < earliest_date:
+            return ComputeSMAResponse(
+                ticker=ticker,
+                period=request.period,
+                price_field=request.price_field,
+                values=[],
+                candle_count=0,
+                sma_count=0,
+                date_range=None,
+            )
+
+        available_days = (end_date - earliest_date).days + 1
         coverage_warning: str | None = None
         if available_days < request.days - _COVERAGE_TOLERANCE_DAYS:
             coverage_warning = (
@@ -123,8 +141,7 @@ class ComputeSMAUseCase:
 
         # Calculate how far back we need to go, but don't go beyond available data
         days_back = min(request.days, available_days)
-        start_date = latest_date - timedelta(days=days_back - 1)
-        end_date = latest_date
+        start_date = end_date - timedelta(days=days_back - 1)
 
         # Fetch candles from cache
         candles = self._repository.get_candles(ticker, start_date, end_date)

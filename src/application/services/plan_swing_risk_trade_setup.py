@@ -125,6 +125,10 @@ class PlanSwingRiskTradeSetupComposer:
                             indicator_defaults.rsi_period if indicator_defaults is not None else 14
                         ),
                         gate_context=gate_ctx,
+                        # snapshot_date is request.today: `--as-of` when supplied,
+                        # else date.today(). Passing it is the PIT cutoff for a
+                        # historical plan and a no-op live (cutoff >= cache head).
+                        as_of_date=snapshot_date,
                     )
                 )
             elif self._risk_engine is not None and gate_ctx is not None:
@@ -132,6 +136,9 @@ class PlanSwingRiskTradeSetupComposer:
                     ticker=ticker,
                     gate_context=gate_ctx,
                     market_context=None,
+                    # Matches gate_ctx.snapshot_date, which build_gate_context
+                    # already stamps with the same request.today.
+                    as_of_date=snapshot_date,
                 )
             elif self._risk_engine is not None:
                 risk_response = self._risk_engine.assess(
@@ -150,6 +157,7 @@ class PlanSwingRiskTradeSetupComposer:
                     AssessRiskRequest(
                         ticker=ticker,
                         gate_context=gate_ctx,
+                        as_of_date=snapshot_date,
                     )
                 )
         except Exception as exc:

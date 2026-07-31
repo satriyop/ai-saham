@@ -27,6 +27,7 @@ class ComputeRSIRequest:
     ticker: str
     period: int = 14  # Industry standard RSI period
     days: int = 365  # How many days of history to return
+    as_of_date: date | None = None  # Hard inclusive cutoff; None = latest cached (live)
 
 
 _COVERAGE_TOLERANCE_DAYS = 7  # acceptable shortfall before emitting a warning
@@ -120,7 +121,24 @@ class ComputeRSIUseCase:
 
         earliest_date, latest_date = date_range
 
-        available_days = (latest_date - earliest_date).days + 1
+        # Bound the upper anchor by the point-in-time cutoff. None = live (cache
+        # head). A cutoff before all cached data yields no values (fail closed;
+        # never fall back to an unbounded read). The warm-up buffer still applies
+        # relative to the bounded end_date.
+        end_date = (
+            latest_date if request.as_of_date is None else min(latest_date, request.as_of_date)
+        )
+        if end_date < earliest_date:
+            return ComputeRSIResponse(
+                ticker=ticker,
+                period=request.period,
+                values=[],
+                candle_count=0,
+                rsi_count=0,
+                date_range=None,
+            )
+
+        available_days = (end_date - earliest_date).days + 1
         coverage_warning: str | None = None
         if available_days < request.days - _COVERAGE_TOLERANCE_DAYS:
             coverage_warning = (
@@ -132,14 +150,14 @@ class ComputeRSIUseCase:
         warm_up_days = request.period * self.WARM_UP_MULTIPLIER
 
         # Calculate how far back we need to go, but don't go beyond available data
-        total_days_needed = min(request.days + warm_up_days, (latest_date - earliest_date).days + 1)
-        fetch_start_date = latest_date - timedelta(days=total_days_needed - 1)
+        total_days_needed = min(request.days + warm_up_days, available_days)
+        fetch_start_date = end_date - timedelta(days=total_days_needed - 1)
 
         # User cutoff: after excluding warm-up buffer
-        user_cutoff_date = latest_date - timedelta(days=request.days - 1)
+        user_cutoff_date = end_date - timedelta(days=request.days - 1)
 
         # Fetch candles from cache (over-fetched to include warm-up region)
-        candles = self._repository.get_candles(ticker, fetch_start_date, latest_date)
+        candles = self._repository.get_candles(ticker, fetch_start_date, end_date)
 
         # Handle no data case
         if not candles:

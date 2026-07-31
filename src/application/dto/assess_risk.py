@@ -30,6 +30,11 @@ class AssessRiskRequest:
     # If provided and the use case has gates configured, gates run before
     # the technical rule engine (structural) and after (execution).
     gate_context: GateContext | None = None
+    # Point-in-time cutoff for the risk path. None means "latest cached data"
+    # (live). A value is a hard inclusive cutoff: no candle dated after it may
+    # be read or retained, directly or transitively. Sole cutoff authority —
+    # GateContext.snapshot_date must agree with it when both are present.
+    as_of_date: date | None = None
 
 
 @dataclass

@@ -49,6 +49,21 @@ class AssessRiskGateEvaluator:
         Raises:
             ValueError: If ticker invalid or insufficient data
         """
+        # PIT cutoff validation — must run before any repository read.
+        # AssessRiskRequest.as_of_date is the sole cutoff authority; when it is
+        # set, GateContext.snapshot_date must agree with it. Disagreement is a
+        # contract error, never silently reconciled.
+        if (
+            request.as_of_date is not None
+            and request.gate_context is not None
+            and request.gate_context.snapshot_date != request.as_of_date
+        ):
+            raise ValueError(
+                f"as_of_date ({request.as_of_date}) does not match "
+                f"gate_context.snapshot_date ({request.gate_context.snapshot_date}); "
+                "the risk-path cutoff and the gate-context session date must agree"
+            )
+
         agg_use_case = AggregateIndicatorsUseCase(self._repository)
         agg_response = agg_use_case.execute(
             AggregateIndicatorsRequest(
@@ -57,11 +72,24 @@ class AssessRiskGateEvaluator:
                 ema_period=request.ema_period,
                 rsi_period=request.rsi_period,
                 days=self._indicator_history_days,
+                as_of_date=request.as_of_date,
             )
         )
 
         if not agg_response.has_values:
             ticker_upper = request.ticker.upper()
+            if request.as_of_date is not None:
+                # Never retry unbounded — that would reintroduce the look-ahead.
+                # The fetch hint still applies: the cache may simply lack history
+                # covering the cutoff window. Live callers pass today as the
+                # cutoff, so this is also the ordinary "not fetched yet" message.
+                raise ValueError(
+                    f"Insufficient data for {ticker_upper} at or before cutoff "
+                    f"{request.as_of_date}: no indicator values available on or "
+                    f"before that date. Run 'saham fetch market {ticker_upper} "
+                    f"--days {self._indicator_history_days}' if the local cache "
+                    "lacks history for that window."
+                )
             raise ValueError(
                 f"Insufficient data for {ticker_upper}. Run "
                 f"'saham fetch market {ticker_upper} --days "
@@ -218,11 +246,14 @@ class AssessRiskGateEvaluator:
 
         ctx = request.gate_context
         # Enrich with candles for LiquidityGate only if not already provided.
-        # Use snapshot_date as end_date to prevent look-ahead in backtests.
+        # Bound the candle read by the PIT cutoff when one is set; otherwise use
+        # the latest snapshot date (live). This is the sole look-ahead guard for
+        # the LiquidityGate recent-candle leg — the cutoff, not the cache head.
+        candle_end_date = request.as_of_date if request.as_of_date is not None else snapshot_date
         if not ctx.recent_candles:
             candles = self._repository.get_candles(
                 request.ticker.upper(),
-                end_date=snapshot_date,
+                end_date=candle_end_date,
             )
             ctx = replace(ctx, recent_candles=tuple(candles[-self._gate_recent_candle_lookback :]))
         if latest_snapshot is not None and ctx.latest_snapshot is None:

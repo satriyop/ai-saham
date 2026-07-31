@@ -233,7 +233,7 @@ class _FakeRiskEngine:
             rsi_period=14,
         )
 
-    def assess_with_context(self, ticker, gate_context, market_context=None):
+    def assess_with_context(self, ticker, gate_context, market_context=None, as_of_date=None):
         return self._make_response()
 
     def assess(self, ticker, as_of_date=None, market_context=None):
