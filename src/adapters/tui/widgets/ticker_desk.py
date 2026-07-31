@@ -349,6 +349,8 @@ class TickerDesk(Vertical):
         self._open_flags: set[str] = set()
         self._detail_all: bool = False
         self._active_job: str | None = None
+        self._job_title: str = ""
+        self._job_body: str = ""
 
     def compose(self) -> ComposeResult:
         yield Static("", classes="td-crumb", id="td-crumb")
@@ -363,6 +365,11 @@ class TickerDesk(Vertical):
             meta_id="td-density-meta",
             meta_text="brief",
         )
+
+        # Job sub-stage body (CLI sibling · chips stay mounted)
+        with Vertical(classes="td-section", id="td-job-sec"):
+            yield Static("", classes="td-sec-head", id="td-job-head")
+            yield Static("", classes="td-sec-body", id="td-job-body")
 
         with Horizontal(classes="td-identity", id="td-identity"):
             yield Static("—", classes="td-mark", id="td-mark")
@@ -466,11 +473,23 @@ class TickerDesk(Vertical):
 
     def set_active_job(self, job: str | None) -> None:
         """Highlight job chip when a sibling job stage is open."""
+        self.set_job_view(job)
+
+    def set_job_view(
+        self,
+        job: str | None,
+        *,
+        title: str = "",
+        body: str = "",
+    ) -> None:
+        """Show/hide job body under chip bar (browse-only CLI sibling)."""
         self._active_job = job
+        self._job_title = title or ""
+        self._job_body = body or ""
         if self._model is not None:
             self.paint(self._model, detail_open=self._detail_all, sync_from_detail=False)
         else:
-            self._paint_chip_bar()
+            self._paint_job_and_chips_only()
 
     def _available_panels(self, model: TickerDeskModel) -> set[str]:
         return {
@@ -519,10 +538,35 @@ class TickerDesk(Vertical):
             open_flags |= self._available_panels(model)
         detail_open = self._detail_all or bool(open_flags)
         density = "detail" if self._detail_all else "brief"
-        self.query_one("#td-crumb", Static).update(
-            f"View · ticker · [bold #e8e8e8]{model.ticker}[/]   "
-            f"[#555555]{density} · local cache · browse[/]"
-        )
+        if self._active_job:
+            self.query_one("#td-crumb", Static).update(
+                f"View · ticker · [bold #e8e8e8]{model.ticker}[/]   "
+                f"[#555555]{self._active_job} · local cache · browse[/]"
+            )
+        else:
+            self.query_one("#td-crumb", Static).update(
+                f"View · ticker · [bold #e8e8e8]{model.ticker}[/]   "
+                f"[#555555]{density} · local cache · browse[/]"
+            )
+        job_mode = bool(self._active_job and self._job_body)
+        self._set_show_panels_visible(not job_mode)
+        if job_mode:
+            job_sec = self.query_one("#td-job-sec", Vertical)
+            job_sec.display = True
+            self.query_one("#td-job-head", Static).update(
+                (self._job_title or self._active_job or "job").upper()
+            )
+            self.query_one("#td-job-body", Static).update(self._job_body)
+            self._paint_chip_bar()
+            foot = "esc show · chips switch job · b f o x n · browse only"
+            self.query_one("#td-footer", Static).update(
+                f"[#555555]{foot}[/]\n[#d4b06a]{model.authority}[/]"
+            )
+            return
+        try:
+            self.query_one("#td-job-sec", Vertical).display = False
+        except Exception:
+            pass
         self.query_one("#td-mark", Static).update(model.ticker)
         self.query_one("#td-name", Static).update(
             f"[bold #d8d8d8]{model.name}[/]" if model.name != "—" else ""
@@ -679,18 +723,54 @@ class TickerDesk(Vertical):
 
     def _paint_chip_bar(self) -> None:
         on_keys: set[str] = set()
-        if self._detail_all:
+        if self._detail_all and not self._active_job:
             on_keys.add("detail")
         if self._active_job:
             on_keys.add(self._active_job)
         try:
             bar = self.query_one("#td-flags", ChipBar)
             bar.paint_states(on_keys=on_keys)
-            bar.set_meta("detail" if self._detail_all else "brief")
+            if self._active_job:
+                bar.set_meta(self._active_job)
+            else:
+                bar.set_meta("detail" if self._detail_all else "brief")
         except Exception:
             try:
                 self.query_one("#td-flag-detail", FlagChip).set_chip_state(
-                    available=True, expanded=self._detail_all
+                    available=True, expanded=self._detail_all and not self._active_job
                 )
             except Exception:
                 pass
+
+    def _set_show_panels_visible(self, visible: bool) -> None:
+        for sid in (
+            "td-identity",
+            "td-fresh-sec",
+            "td-mast",
+            "td-ribbon",
+            "td-trio",
+            "td-earn-sec",
+            "td-more-sec",
+        ):
+            try:
+                self.query_one(f"#{sid}").display = visible
+            except Exception:
+                pass
+
+    def _paint_job_and_chips_only(self) -> None:
+        """When model not yet painted, still show job body + chips."""
+        try:
+            job_sec = self.query_one("#td-job-sec", Vertical)
+            if self._active_job and self._job_body:
+                job_sec.display = True
+                self.query_one("#td-job-head", Static).update(
+                    (self._job_title or self._active_job or "job").upper()
+                )
+                self.query_one("#td-job-body", Static).update(self._job_body)
+                self._set_show_panels_visible(False)
+            else:
+                job_sec.display = False
+                self._set_show_panels_visible(True)
+        except Exception:
+            pass
+        self._paint_chip_bar()

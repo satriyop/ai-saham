@@ -125,6 +125,7 @@ class CockpitApp(App[None]):
         broker_matrix_loader: Callable[[str], Any] | None = None,
         broker_calendar_loader: Callable[[str], Any] | None = None,
         ticker_desks_loader: Callable[[str], Any] | None = None,
+        ticker_job_loader: Callable[[str, str], Any] | None = None,
         accum_controller: Any | None = None,
         preopen_controller: Any | None = None,
         accum_presenter: Any | None = None,
@@ -151,6 +152,7 @@ class CockpitApp(App[None]):
         self._broker_matrix_loader = broker_matrix_loader
         self._broker_calendar_loader = broker_calendar_loader
         self._ticker_desks_loader = ticker_desks_loader
+        self._ticker_job_loader = ticker_job_loader
         self._ticker_judge_loader = ticker_judge_loader
         self._cache_health_loader = cache_health_loader
         self._paper_log_runner = paper_log_runner
@@ -180,6 +182,8 @@ class CockpitApp(App[None]):
         self._broker_desk_history_model: Any | None = None
         self._broker_desk_calendar_model: Any | None = None
         self._ticker_detail_open: bool = False
+        self._ticker_job: str | None = None  # flow|foreign|dist|fin while job open
+        self._ticker_job_text: Any | None = None
         self._judge_detail_open: bool = False
         self._preopen_detail_open: bool = False
         self._prompt_mode: str = "idle"  # idle | agent | cli (display only)
@@ -643,7 +647,9 @@ class CockpitApp(App[None]):
         is_preopen_inspect = self._status_note == "inspect" and (
             self._board_kind == "preopen" or self._detail_return_stage == "preopen"
         )
-        is_view_ticker = self._status_note == "view ticker"
+        is_view_ticker = self._status_note == "view ticker" or (
+            bool(self._ticker_job) and str(self._status_note or "").startswith("view ticker")
+        )
         desk_code = self._broker_desk_code is not None
         is_broker_home = self._broker_page == "show" and desk_code
         is_broker_matrix = self._broker_page == "matrix" and desk_code
@@ -773,6 +779,14 @@ class CockpitApp(App[None]):
                 model,
                 detail_open=bool(getattr(self, "_ticker_detail_open", False)),
             )
+            # Re-apply job body after paint (chips stay; show panels hide)
+            job_text = getattr(self, "_ticker_job_text", None)
+            job = getattr(self, "_ticker_job", None)
+            if job and job_text is not None and hasattr(ticker_desk, "set_job_view"):
+                from src.adapters.shared.view_ticker_job_text import TickerJobText
+
+                if isinstance(job_text, TickerJobText):
+                    ticker_desk.set_job_view(job, title=job_text.title, body=job_text.body)
             return
 
         if is_broker_home and broker_desk is not None:
@@ -1264,6 +1278,10 @@ class CockpitApp(App[None]):
                     self._update_accum_evidence()
             return
         if self._stage in {"detail", "plan"}:
+            # Ticker job (flow/foreign/dist/fin) → show first
+            if self._stage == "detail" and self._ticker_job:
+                self._close_ticker_job()
+                return
             # Desk trail: deep → show → list or ticker-desks.
             if self._stage == "detail" and self._broker_page in {
                 "top",
@@ -1393,7 +1411,12 @@ class CockpitApp(App[None]):
             return
         if self._stage != "detail":
             return
-        if self._status_note == "view ticker":
+        if self._status_note == "view ticker" or (
+            self._ticker_job and str(self._status_note or "").startswith("view ticker")
+        ):
+            # Density only when show is front (not job sub-stage)
+            if self._ticker_job:
+                return
             self._ticker_detail_open = not bool(getattr(self, "_ticker_detail_open", False))
             density = "detail" if self._ticker_detail_open else "brief"
             self._meta = density + (" · from desk" if self._view_from_desk else "")
@@ -1422,43 +1445,104 @@ class CockpitApp(App[None]):
         """Ticker job chips / power keys · sibling CLI verbs (browse only)."""
         if self._modal_blocks_board_keys():
             return
-        if self._stage != "detail" or self._status_note != "view ticker":
+        # Allow open when show or already on a ticker job (switch jobs)
+        if self._stage != "detail":
+            return
+        note = str(self._status_note or "")
+        if (
+            note != "view ticker"
+            and not note.startswith("view ticker")
+            and self._ticker_job is None
+        ):
             return
         job = (job or "").strip().lower()
         if job == "brokers":
+            self._ticker_job = None
+            self._ticker_job_text = None
             self.action_ticker_desks()
             return
-        cli = {
-            "flow": "view ticker flow",
-            "foreign": "view ticker foreign-history",
-            "dist": "view ticker distribution",
-            "fin": "view ticker financials",
-        }.get(job)
-        if not cli:
+        if job not in {"flow", "foreign", "dist", "fin"}:
             return
-        # Job sub-stage: present-only stub until dedicated desk loaders land.
-        # Chips + keys are live; body is honest local-cache path (no Action).
+        # Second press same job → close to show
+        if self._ticker_job == job:
+            self._close_ticker_job()
+            return
         stock = str(self._focus_ticker or "").upper()
+        if not stock or stock == "—":
+            self.notify("No ticker focused", timeout=1.5)
+            return
+        self._open_ticker_job(job, stock)
+
+    def _open_ticker_job(self, job: str, stock: str) -> None:
+        """Load CLI-path job body and paint under ticker chip bar."""
+        self._ticker_job = job
+        self._stage = "loading"
+        self._board_title = f"View · ticker · {stock} · {job}"
+        self._meta = f"{job} · local cache"
+        self._status_note = "loading ticker job"
+        self._refresh_chrome()
+        self._execute_ticker_job(job, stock)
+
+    def _close_ticker_job(self) -> None:
+        """Trail: job → ticker show (density preserved)."""
+        stock = str(self._focus_ticker or "").upper()
+        self._ticker_job = None
+        self._ticker_job_text = None
+        self._stage = "detail"
+        self._status_note = "view ticker"
+        density = "detail" if self._ticker_detail_open else "brief"
+        self._meta = (
+            f"{density} · from desk" if self._view_from_desk else f"{density} · local cache"
+        )
+        self._board_title = f"View · ticker · {stock}"
         try:
             desk = self.query_one("#ticker-desk")
-            if hasattr(desk, "set_active_job"):
+            if hasattr(desk, "set_job_view"):
+                desk.set_job_view(None)  # type: ignore[attr-defined]
+            elif hasattr(desk, "set_active_job"):
+                desk.set_active_job(None)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        self._refresh_chrome()
+        self.notify("Ticker show", timeout=0.8)
+
+    @work(thread=True, exclusive=True, group="detail")
+    def _execute_ticker_job(self, job: str, stock: str) -> None:
+        try:
+            if self._ticker_job_loader is not None:
+                payload = self._ticker_job_loader(job, stock)
+            else:
+                from src.adapters.shared.view_ticker_job_text import empty_ticker_job
+
+                payload = empty_ticker_job(job, stock, message="no ticker job loader")
+            dispatch_if_active(self, self._on_ticker_job_ready, job, stock, payload)
+        except Exception as exc:
+            dispatch_if_active(self, self._on_board_error, f"view ticker {job}: {exc}")
+
+    def _on_ticker_job_ready(self, job: str, stock: str, payload: Any) -> None:
+        from src.adapters.shared.view_ticker_job_text import TickerJobText, empty_ticker_job
+
+        if not isinstance(payload, TickerJobText):
+            payload = empty_ticker_job(job, stock, message="invalid job payload")
+        self._ticker_job = job
+        self._ticker_job_text = payload
+        self._detail_text = payload.as_text()
+        self._stage = "detail"
+        self._board_title = payload.title
+        self._meta = f"{payload.cli_verb} · local cache"
+        self._status_note = f"view ticker {job}"
+        self._focus_ticker = stock
+        try:
+            desk = self.query_one("#ticker-desk")
+            if hasattr(desk, "set_job_view"):
+                desk.set_job_view(job, title=payload.title, body=payload.body)  # type: ignore[attr-defined]
+            elif hasattr(desk, "set_active_job"):
                 desk.set_active_job(job)  # type: ignore[attr-defined]
         except Exception:
             pass
-        self._meta = f"{cli} · local cache"
-        self._status_note = "view ticker"
-        self._detail_text = (
-            f"View · ticker · {stock} · {job}\n"
-            f"CLI · saham {cli} {stock}\n\n"
-            f"[#6b6b6b]Job stage · local cache · browse only · esc show · "
-            f"chips switch job[/]\n"
-            f"[#555555]Full table paint ships with dual-surface loader "
-            f"(same path as CLI).[/]"
-        )
-        self._board_title = f"View · ticker · {stock} · {job}"
         self._refresh_chrome()
-        # Keep ticker desk visible with job chip on; show job note in notify
-        self.notify(f"{cli} {stock}", timeout=1.5)
+        note = "empty" if payload.empty else "ok"
+        self.notify(f"{payload.cli_verb} {stock} · {note}", timeout=1.5)
 
     def action_ticker_job_foreign(self) -> None:
         self.action_ticker_job("foreign")
@@ -2425,9 +2509,13 @@ class CockpitApp(App[None]):
         self._meta = "brief · local cache"
         self._status_note = "view ticker"
         self._ticker_detail_open = False  # brief default (same dual as Judge)
+        self._ticker_job = None
+        self._ticker_job_text = None
         try:
             desk = self.query_one("#ticker-desk")
-            if hasattr(desk, "set_active_job"):
+            if hasattr(desk, "set_job_view"):
+                desk.set_job_view(None)  # type: ignore[attr-defined]
+            elif hasattr(desk, "set_active_job"):
                 desk.set_active_job(None)  # type: ignore[attr-defined]
         except Exception:
             pass

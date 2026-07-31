@@ -90,6 +90,7 @@ def create_tui_app(
         broker_matrix_loader=_BrokerDeepLoader(db_path, "matrix"),
         broker_calendar_loader=_BrokerDeepLoader(db_path, "cal"),
         ticker_desks_loader=_TickerTopBrokersLoader(db_path),
+        ticker_job_loader=_TickerJobLoader(db_path),
         ticker_judge_loader=ticker_judge_loader,
         cache_health_loader=cache_health_loader,
         paper_log_runner=paper_log_runner,
@@ -404,6 +405,104 @@ class _TickerTopBrokersLoader:
                 has_partial_netx=partial > 0,
                 rows=tuple(rows),
             )
+
+
+class _TickerJobLoader:
+    """Stock-axis ticker jobs: flow · foreign · dist · fin (CLI use-case path).
+
+    Same deps as CLI via build_view_ticker_deps; pure formatters in
+    adapters.shared.view_ticker_job_text.
+    """
+
+    def __init__(self, db_path: Path) -> None:
+        self._db_path = db_path
+        self._lock = Lock()
+
+    def __call__(self, job: str, ticker: str) -> Any:
+        with self._lock:
+            from src.adapters.shared.view_ticker_job_text import (
+                empty_ticker_job,
+                format_ticker_distribution_job,
+                format_ticker_financials_job,
+                format_ticker_flow_job,
+                format_ticker_foreign_history_job,
+            )
+            from src.application.use_case.view_ticker_distribution_use_case import (
+                ViewTickerDistributionRequest,
+            )
+            from src.application.use_case.view_ticker_financials_use_case import (
+                ViewTickerFinancialsRequest,
+            )
+            from src.application.use_case.view_ticker_flow_use_case import (
+                ViewTickerFlowRequest,
+            )
+            from src.application.use_case.view_ticker_foreign_history_use_case import (
+                ViewTickerForeignHistoryRequest,
+            )
+            from src.infrastructure.composition.view_ticker_deps import build_view_ticker_deps
+
+            ticker_u = str(ticker).upper()
+            job_k = (job or "").strip().lower()
+            deps = build_view_ticker_deps(self._db_path)
+
+            if job_k == "flow":
+                result = deps.flow.execute(ViewTickerFlowRequest(ticker=ticker_u, days=10))
+                if result is None:
+                    return empty_ticker_job("flow", ticker_u)
+                return format_ticker_flow_job(
+                    result.ticker,
+                    result.summaries,
+                    total_net=result.total_net_value,
+                    buy_days=result.buy_days,
+                    sell_days=result.sell_days,
+                    fetch_hint=result.fetch_hint,
+                )
+
+            if job_k == "foreign":
+                result = deps.foreign_history.execute(
+                    ViewTickerForeignHistoryRequest(ticker=ticker_u, days=30)
+                )
+                if result is None:
+                    return empty_ticker_job("foreign", ticker_u)
+                return format_ticker_foreign_history_job(
+                    result.ticker,
+                    result.points,
+                    resolved_source=result.resolved_source,
+                    fetch_hint=result.fetch_hint,
+                )
+
+            if job_k == "dist":
+                result = deps.distribution.execute(ViewTickerDistributionRequest(ticker=ticker_u))
+                if result is None:
+                    return empty_ticker_job("dist", ticker_u)
+                return format_ticker_distribution_job(
+                    result.ticker,
+                    result.snapshot,
+                    as_of=result.as_of,
+                    fetch_hint=result.fetch_hint,
+                )
+
+            if job_k == "fin":
+                results = []
+                for kind in ("income", "balance", "cashflow"):
+                    results.append(
+                        deps.financials.execute(
+                            ViewTickerFinancialsRequest(
+                                ticker=ticker_u,
+                                statement=kind,  # type: ignore[arg-type]
+                                period_type="quarter",
+                                limit=8,
+                                source="yahoo",
+                            )
+                        )
+                    )
+                return format_ticker_financials_job(
+                    ticker_u,
+                    results,
+                    fetch_hint=results[0].fetch_hint if results else None,
+                )
+
+            return empty_ticker_job(job_k or "flow", ticker_u, message="unknown job")
 
 
 def _broker_repo_and_foreign(db_path: Path):

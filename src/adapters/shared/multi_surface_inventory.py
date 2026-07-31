@@ -32,6 +32,10 @@ REQUIRED_DUAL_SURFACE_JOB_IDS: frozenset[str] = frozenset(
         "screen-preopen",
         "view-ticker-show",
         "view-ticker-top-brokers",
+        "view-ticker-flow",
+        "view-ticker-foreign-history",
+        "view-ticker-distribution",
+        "view-ticker-financials",
         "view-broker-list",
         "view-broker-show",
         "view-broker-top-stocks",
@@ -101,6 +105,56 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
             "TUI table adds stock-scoped Net3/5/7/10/20 + partial *(used/X) markers "
             "(presentation; ranking still use-case tops)",
             "CLI Rich buyer/seller tables; TUI DataTable stage",
+        ),
+    ),
+    DualSurfaceJob(
+        job_id="view-ticker-flow",
+        product_name="View ticker flow (foreign summary)",
+        cli_surface="saham view ticker flow",
+        tui_surface="flow chip / f on view ticker",
+        shared_application_path=(
+            "ViewTickerFlowUseCase via build_view_ticker_deps; "
+            "format via adapters.shared.view_ticker_job_text.format_ticker_flow_job"
+        ),
+        intentional_deltas=(
+            "TUI mono job panel under ticker chip bar vs CLI Rich panel/table",
+            "JSON envelope is CLI-only",
+        ),
+    ),
+    DualSurfaceJob(
+        job_id="view-ticker-foreign-history",
+        product_name="View ticker foreign-history",
+        cli_surface="saham view ticker foreign-history",
+        tui_surface="foreign chip / o on view ticker",
+        shared_application_path=(
+            "ViewTickerForeignHistoryUseCase via build_view_ticker_deps; "
+            "format via view_ticker_job_text.format_ticker_foreign_history_job"
+        ),
+        intentional_deltas=("TUI mono job panel vs CLI Rich table",),
+    ),
+    DualSurfaceJob(
+        job_id="view-ticker-distribution",
+        product_name="View ticker distribution",
+        cli_surface="saham view ticker distribution",
+        tui_surface="dist chip / x on view ticker",
+        shared_application_path=(
+            "ViewTickerDistributionUseCase via build_view_ticker_deps; "
+            "format via view_ticker_job_text.format_ticker_distribution_job"
+        ),
+        intentional_deltas=("TUI mono job panel vs CLI typer ASCII tables",),
+    ),
+    DualSurfaceJob(
+        job_id="view-ticker-financials",
+        product_name="View ticker financials",
+        cli_surface="saham view ticker financials",
+        tui_surface="fin chip / n on view ticker",
+        shared_application_path=(
+            "ViewTickerFinancialsUseCase (income+balance+cashflow default) via "
+            "build_view_ticker_deps; format via view_ticker_job_text.format_ticker_financials_job"
+        ),
+        intentional_deltas=(
+            "TUI compact metric lines vs CLI Rich multi-column tables",
+            "Default all three statements (same as CLI --statement all)",
         ),
     ),
     DualSurfaceJob(
