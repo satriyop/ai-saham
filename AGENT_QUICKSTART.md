@@ -149,6 +149,19 @@ ruff check src/ tests/ --fix
 ruff format src/ tests/
 ```
 
+## Test Execution
+
+- **Fast inner loop:** `pytest -m "not tui"` (~60–80s, ~5.7k tests). The `tui`
+  marker is cost-based — auto-applied to any `tests/adapters/tui` test that
+  mounts a Textual app via `run_test` (see `tests/adapters/tui/conftest.py`).
+- ⚠ **`-m "not tui"` excludes the ~38 full-app TUI tests.** If you touched TUI
+  code, also run `pytest -m tui`, or run the full `pytest`. A partial-selector
+  green is **not** a close criterion for TUI changes; CI runs the full suite.
+- Writing a CLI test that does `runner.invoke(app, …)` for `screen accum` /
+  `fetch market` / `today`? It leaks live Stockbit/Yahoo I/O unless you stub the
+  refresh/market-status/context seams — see the `codebase-known-pitfalls` skill,
+  §23, before assuming a slow/"hanging" CLI test is a real hang.
+
 ## Fix Stale Docstrings In Files You Touch
 
 When you edit a file, correct any docstring or comment in the code you touch that

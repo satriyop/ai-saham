@@ -1014,6 +1014,63 @@ rationale=response.assessment.rationale + tuple(new_items)    # ✓
 
 ---
 
+## 23. CLI `runner.invoke(app, …)` Tests Leak Live Network — Stub Every I/O Seam, Not Just the Use Case
+
+**Context:** `runner.invoke(app, [...])` runs the *entire* command, not just the
+unit under test. The live-first CLI commands (`screen accum`, `today`,
+`fetch market`) fetch/refresh as **side effects around** the core use case.
+Mocking only the headline factory leaves *secondary* seams doing real
+Stockbit/Yahoo HTTP — each `invoke` blocks ~10–14s on a TCP connect, and a
+file of ~20–40 invokes exceeds the 120s cap and looks like a hang.
+
+**The failure mode (fixed commits 30d017ed, cdd61e3d):**
+```python
+# Mocks the workflow factory — but screen accum ALSO auto-refreshes explicit
+# tickers first (ADR-054 S1: _refresh_explicit_tickers_for_screen ->
+# auto_refresh_swing_data -> live Stockbit candle fetch).
+monkeypatch.setattr(
+    "src.adapters.composition.screen_deps.create_run_accumulation_screen_workflow_use_case",
+    fake_uc,
+)
+result = runner.invoke(app, ["screen", "accum", "INDF", "--format", "json"])  # ~12s: real fetch
+```
+
+**Diagnosing a "hang":** it is almost never a hang — it is cumulative network
+latency. Confirm with `pytest FILE -o faulthandler_timeout=8`; the dumped stack
+lands in `httpx`/`socket.create_connection`, and the frame above it names the
+unstubbed seam.
+
+**The seams per command (stub ALL that apply, at their call-site module):**
+| Command | Extra live seams beyond the workflow factory |
+|---|---|
+| `screen accum TICKER` | `src.adapters.cli.plan_swing_optional_fetchers.auto_refresh_swing_data` |
+| `fetch market` | `stockbit_market_time.fetch_and_cache_market_status` / `get_display_market_status`; `fetch_market_context_inputs.refresh_market_context_inputs` (^VIX/EIDO/IDR=X); macro calendar |
+| `today` | uses `--offline` + patches `DailyBriefingUseCase` (correct model to copy) |
+
+**Correct pattern — the default is zero network; the real path is opt-in and loud:**
+```python
+@pytest.fixture(autouse=True)
+def _no_explicit_ticker_auto_refresh(request, monkeypatch):
+    if request.node.get_closest_marker("uses_live_refresh"):  # explicit opt-out
+        return
+    monkeypatch.setattr(
+        "src.adapters.cli.plan_swing_optional_fetchers.auto_refresh_swing_data",
+        lambda **kwargs: [],
+    )
+```
+Patch at the **call-site module** — these commands do local `from … import` inside
+the function, so the name is bound there at call time. Give the stub a
+**discoverable opt-out marker** (registered in `pyproject.toml`), never a silent
+global autouse in a distant conftest — a future refresh test must fail loudly,
+not mysteriously no-op.
+
+**Architectural read:** needing to stub N seams for one command is the
+`adapter-thinness` smell — the side-effect orchestration belongs in one
+application use case the test can replace wholesale, not scattered `_refresh_*`
+helpers in the adapter.
+
+---
+
 ## Quick Reference — Component → Pitfall
 
 | Component / scenario | Read section |
@@ -1055,3 +1112,6 @@ rationale=response.assessment.rationale + tuple(new_items)    # ✓
 | Inline `from ... import X` inside method body (workaround for circular import) | §21 |
 | `TypeError: can only concatenate tuple (not "str") to tuple` | §22 |
 | Appending a string to `rationale: tuple[str, ...]` | §22 |
+| CLI `runner.invoke(app, …)` test slow / "hangs" / times out | §23 |
+| Writing a `screen accum` / `fetch market` / `today` CLI test | §23 |
+| Mocked the use case but the invoke still does real Stockbit/Yahoo I/O | §23 |
