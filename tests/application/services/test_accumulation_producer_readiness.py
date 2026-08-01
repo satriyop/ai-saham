@@ -1571,8 +1571,47 @@ def test_schema9_without_binding_is_legacy_raw_only_even_with_snapshots() -> Non
     assert cohort.snapshot.active_set_verified is True
     assert cohort.observation_validation.has_current_population_authority is False
     assert cohort.observation_validation.legacy_observation_count == 2
+    assert cohort.observation_validation.has_contract_corruption is False
     assert cohort.producer_status is ProducerReadinessStatus.LEGACY_RAW_ONLY
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+
+
+def test_mixed_schema9_and_schema10_cohort_is_blocked_not_ready() -> None:
+    """Cohorts never mix: schema-9 + schema-10 coexistence is fail-closed.
+
+    Adversarial shape: 2 valid current schema-10 rows + 1 valid schema-9 legacy
+    row + verified active snapshots + AVAILABLE H10. Must not become READY
+    merely because has_current_population_authority is true from the current
+    subset.
+    """
+    current = [
+        _observation(day=1, action="WATCH", readiness=None),
+        _observation(day=2, ticker="BBRI", action="ENTER", readiness="INCOMPLETE"),
+    ]
+    legacy = _legacy_observation(day=3, ticker="BBCA")
+    assert current[0].decision_payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+    assert legacy.decision_payload["schema_version"] == LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION
+    obs = [*current, legacy]
+    labels = [_label(current[0])]
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=labels,
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    ov = cohort.observation_validation
+    assert ov.has_current_population_authority is True
+    assert ov.legacy_observation_count == 1
+    assert ov.valid_observation_count == 2
+    assert ov.has_contract_corruption is True
+    assert any("mixed_schema_cohort" in r for r in ov.invalid_reasons)
+    assert cohort.snapshot.active_set_verified is True
+    assert cohort.labels_by_horizon["H10"].available == 1
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    assert cohort.producer_status is not ProducerReadinessStatus.LEGACY_RAW_ONLY
+    assert cohort.producer_status is not ProducerReadinessStatus.COLLECTING
 
 
 def test_schema10_missing_population_binding_is_blocked_not_ready() -> None:

@@ -218,16 +218,18 @@ def classify_producer_status(
     Rules (exact):
     - LEGACY_RAW_ONLY: observations exist under absent/unknown/historical binding
       (including schema-9 without population_binding) without snapshot corruption
-      and without observation/label corruption.
+      and without observation/label corruption. Pure schema-9 only — never when
+      mixed with schema-10 current-authority rows.
     - BLOCKED_POLICY: active binding claimed but set partial/mixed/malformed/
       invalid/mismatched, any snapshot corruption, observation contract/
-      provenance/digest/population corruption, or label digest corruption.
+      provenance/digest/population corruption, mixed schema-9+schema-10 cohort,
+      or label digest corruption.
     - COLLECTING: exact active snapshots verify, current population authority
       present, observations+labels validate, but <2 sessions or zero AVAILABLE
       primary H10 labels.
     - CHALLENGE_INPUT_READY: exact active snapshots verify, current population
       authority present, observations+labels validate, ≥2 sessions, and ≥1
-      AVAILABLE price_path.accum_10d.v1 label.
+      AVAILABLE price_path.accum_10d.v1 label. Homogeneous current cohort only.
     """
     current_authority = (
         observation_validation.has_current_population_authority
@@ -867,6 +869,15 @@ def validate_observation_cohort(
             valid += 1
             current_authority_count += 1
 
+    # Cohorts never mix schema-9 historical and schema-10 current authority.
+    # Coexistence is authority-bearing corruption even when each row is valid
+    # in isolation — READY must not follow from "any current row exists".
+    mixed_schema_cohort = legacy_count > 0 and current_authority_count > 0
+    if mixed_schema_cohort:
+        reasons.append(
+            f"mixed_schema_cohort:legacy={legacy_count},current={current_authority_count}"
+        )
+
     # Readiness session depth uses current-authority sessions only when present;
     # otherwise report legacy diagnostic sessions (LEGACY_RAW_ONLY path).
     report_sessions = current_session_dates if current_authority_count > 0 else legacy_session_dates
@@ -878,9 +889,10 @@ def validate_observation_cohort(
         invalid_observation_count=invalid,
         invalid_reasons=tuple(reasons[:50]),
         session_dates=tuple(sorted(report_sessions)),
-        # Only current-authority corruption (or digest/identity failures) block.
-        # Pure legacy schema-9 rows are not contract corruption.
-        has_contract_corruption=invalid > 0,
+        # Current-authority corruption, digest/identity failures, or mixed
+        # schema-9 + schema-10 coexistence block. Pure legacy schema-9 alone
+        # is not contract corruption.
+        has_contract_corruption=invalid > 0 or mixed_schema_cohort,
         has_current_population_authority=current_authority_count > 0,
         legacy_observation_count=legacy_count,
     )
