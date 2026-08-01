@@ -10,11 +10,10 @@ from datetime import datetime
 from typing import Sequence
 
 from src.application.services.accumulation_policy_snapshot_payloads import (
-    ACCUM_SCORE_SEMANTIC_CONTRACT_ID,
-    HARD_FILTERS_SEMANTIC_CONTRACT_ID,
-    RISK_HARD_GATES_SEMANTIC_CONTRACT_ID,
-    SIGNAL_SEMANTIC_CONTRACT_ID,
     build_all_accumulation_policy_payloads,
+)
+from src.application.services.accumulation_production_policy_descriptors import (
+    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2,
 )
 from src.application.services.accumulation_screen_hard_filter_policy import (
     AccumulationScreenHardFilterPolicy,
@@ -31,14 +30,6 @@ from src.domain.ports.learning_artifact_repositories import (
 from src.domain.rules.risk_gate import RiskGate
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
-    PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
-    PRODUCTION_POLICY_ID_HARD_FILTERS,
-    PRODUCTION_POLICY_ID_RISK_HARD_GATES,
-    PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION,
-    PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
-    PRODUCTION_POLICY_ID_SIGNAL_FLAGS,
-    PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE,
-    PRODUCTION_POLICY_VERSION_V1,
     AssessmentPurpose,
     LearningContractError,
     LearningContractId,
@@ -48,26 +39,6 @@ from src.domain.value_objects.learning_artifacts import (
 from src.domain.value_objects.signal_observation_contracts import (
     ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
 )
-
-_DECISION_TYPE_BY_POLICY: dict[str, str] = {
-    PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS: "score",
-    PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS: "score",
-    PRODUCTION_POLICY_ID_SIGNAL_FLAGS: "score",
-    PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION: "score",
-    PRODUCTION_POLICY_ID_RISK_HARD_GATES: "gate",
-    PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE: "score",
-    PRODUCTION_POLICY_ID_HARD_FILTERS: "gate",
-}
-
-_SEMANTIC_CONTRACT_BY_POLICY: dict[str, str] = {
-    PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS: ACCUM_SCORE_SEMANTIC_CONTRACT_ID,
-    PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS: SIGNAL_SEMANTIC_CONTRACT_ID,
-    PRODUCTION_POLICY_ID_SIGNAL_FLAGS: SIGNAL_SEMANTIC_CONTRACT_ID,
-    PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION: SIGNAL_SEMANTIC_CONTRACT_ID,
-    PRODUCTION_POLICY_ID_RISK_HARD_GATES: RISK_HARD_GATES_SEMANTIC_CONTRACT_ID,
-    PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE: SIGNAL_SEMANTIC_CONTRACT_ID,
-    PRODUCTION_POLICY_ID_HARD_FILTERS: HARD_FILTERS_SEMANTIC_CONTRACT_ID,
-}
 
 
 @dataclass(frozen=True)
@@ -151,6 +122,7 @@ class EnsureAccumulationPolicySnapshotsUseCase:
         learning_observation_contract_id = LearningContractId.ACCUMULATION_OBSERVATION.value
         snapshots: list[ProductionPolicySnapshot] = []
         for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS:
+            descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2[policy_id]
             snapshots.append(
                 ProductionPolicySnapshot.create(
                     contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
@@ -159,9 +131,9 @@ class EnsureAccumulationPolicySnapshotsUseCase:
                     producer_observation_contract=ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
                     compatibility_id=compatibility_id,
                     policy_id=policy_id,
-                    policy_version=PRODUCTION_POLICY_VERSION_V1,
-                    decision_type=_DECISION_TYPE_BY_POLICY[policy_id],
-                    semantic_engine_contract_id=_SEMANTIC_CONTRACT_BY_POLICY[policy_id],
+                    policy_version=descriptor.policy_version,
+                    decision_type=descriptor.decision_type,
+                    semantic_engine_contract_id=descriptor.semantic_engine_contract_id,
                     material_config_hash=material_hash,
                     canonical_payload=payloads[policy_id],
                     source_revision=request.source_revision,

@@ -16,10 +16,14 @@ from src.application.use_case.database_learning_lifecycle_use_case import (
     EvaluateLearningCohortUseCase,
     GetLearningStatusUseCase,
 )
+from src.application.use_case.get_accumulation_producer_readiness_use_case import (
+    GetAccumulationProducerReadinessUseCase,
+)
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import AssessmentPurpose
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+    SQLiteLearningArtifactReadRepository,
     SQLiteLearningArtifactRepository,
 )
 
@@ -30,6 +34,15 @@ def repository(
     cfg = load_app_config()
     resolved = db_path or Path(cfg.storage.db_path)
     return resolved, SQLiteLearningArtifactRepository(resolved)
+
+
+def read_only_repository(
+    db_path: Path | None,
+) -> tuple[Path, SQLiteLearningArtifactReadRepository]:
+    """Status/read paths: never create DB files or run schema ensure."""
+    cfg = load_app_config()
+    resolved = db_path or Path(cfg.storage.db_path)
+    return resolved, SQLiteLearningArtifactReadRepository(resolved)
 
 
 def list_compatibility_ids(
@@ -138,6 +151,23 @@ def status_cohort(
     db_path: Path | None,
     fmt: str,
 ) -> None:
+    if purpose is AssessmentPurpose.ACCUMULATION_DISCOVERY:
+        try:
+            _, read_repo = read_only_repository(db_path)
+        except FileNotFoundError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        report = GetAccumulationProducerReadinessUseCase(
+            observations=read_repo,
+            labels=read_repo,
+            policy_snapshots=read_repo,
+        ).execute(purpose)
+        payload = report.to_dict()
+        if fmt != "json":
+            _echo_producer_readiness_table(payload)
+            return
+        echo(payload, fmt)
+        return
+
     _, repo = repository(db_path)
     status = GetLearningStatusUseCase(
         observations=repo,
@@ -156,3 +186,38 @@ def status_cohort(
         },
         fmt,
     )
+
+
+def _echo_producer_readiness_table(payload: dict) -> None:
+    """Human-readable table for accumulation producer readiness."""
+    typer.echo(f"artifact_type: {payload.get('artifact_type')}")
+    typer.echo(f"purpose: {payload.get('purpose')}")
+    typer.echo(
+        f"active_snapshot_binding_contract: {payload.get('active_snapshot_binding_contract')}"
+    )
+    typer.echo(f"observation_count: {payload.get('observation_count')}")
+    typer.echo(f"cohort_count: {payload.get('cohort_count')}")
+    typer.echo("")
+    for cohort in payload.get("cohorts") or []:
+        typer.echo(f"--- cohort {cohort.get('compatibility_id')} ---")
+        for key in (
+            "producer_status",
+            "observation_contract",
+            "observation_count",
+            "session_count",
+            "economic_date_min",
+            "economic_date_max",
+            "snapshot_binding_contract",
+            "snapshot_verified_count",
+            "snapshot_required_count",
+            "snapshot_missing_policy_ids",
+            "snapshot_extra_policy_ids",
+            "snapshot_invalid_policy_ids",
+            "labels_by_horizon",
+            "action_distribution",
+            "setup_readiness_present",
+            "setup_readiness_missing",
+            "setup_readiness_state_distribution",
+        ):
+            typer.echo(f"{key}: {cohort.get(key)}")
+        typer.echo("")

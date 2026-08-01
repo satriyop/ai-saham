@@ -135,3 +135,69 @@ def test_validation_status_values_are_strict() -> None:
     assert ValidationStatus("PASS") is ValidationStatus.PASS
     with pytest.raises(ValueError):
         ValidationStatus("ELIGIBLE")
+
+
+def test_observation_identity_recompute_detects_forged_id() -> None:
+    from dataclasses import replace
+
+    from src.domain.value_objects.learning_artifacts import (
+        recompute_observation_id,
+        validate_observation_identity,
+    )
+
+    obs = _observation()
+    validate_observation_identity(obs)
+    forged = replace(obs, observation_id="0" * 64)
+    with pytest.raises(LearningContractError, match="observation_id"):
+        validate_observation_identity(forged)
+    assert recompute_observation_id(obs) == obs.observation_id
+
+
+def test_label_identity_recompute_detects_forged_id() -> None:
+    from dataclasses import replace
+
+    from src.domain.value_objects.learning_artifacts import (
+        recompute_label_id,
+        validate_label_identity,
+    )
+
+    label = LearningOutcomeLabel.create(
+        contract_id=LearningContractId.ACCUM_10D_LABEL,
+        observation_id=_observation().observation_id,
+        outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
+        availability=LabelAvailability.AVAILABLE,
+        outcome="SUCCESS",
+        metrics={},
+        fingerprint="fp",
+        labeled_at=NOW,
+    )
+    validate_label_identity(label)
+    forged = replace(label, label_id="0" * 64)
+    with pytest.raises(LearningContractError, match="label_id"):
+        validate_label_identity(forged)
+    assert recompute_label_id(label) == label.label_id
+
+
+def test_stamp_universe_membership_id_is_locked_population_authority() -> None:
+    """Write-path membership digest is the ACCUM population authority contract."""
+    from src.domain.value_objects.learning_artifacts import (
+        ACCUM_POPULATION_AUTHORITY_CONTRACT,
+        artifact_digest,
+        is_accum_population_universe_id,
+        stamp_universe_membership_id,
+    )
+
+    assert ACCUM_POPULATION_AUTHORITY_CONTRACT == "capture_universe_membership_digest.v1"
+    tickers = ["TLKM", "BBCA", "BBRI"]
+    stamped = stamp_universe_membership_id(tickers)
+    # Same inputs → same population identity (sorted membership).
+    assert stamped == stamp_universe_membership_id(["BBCA", "BBRI", "TLKM"])
+    assert stamped == artifact_digest({"tickers": sorted(tickers)})
+    assert is_accum_population_universe_id(stamped)
+    assert type(stamped) is str
+    assert len(stamped) == 64
+    # Inventable free text is never accepted as authority.
+    for free in ("made-up-population", "another-population", "lq45@pit", "idx30"):
+        assert not is_accum_population_universe_id(free)
+    # No string/float coercion into authority.
+    assert not is_accum_population_universe_id("")  # type: ignore[arg-type]

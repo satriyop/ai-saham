@@ -17,8 +17,8 @@ from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     LearningContractId,
-    artifact_digest,
     stable_learning_id,
+    stamp_universe_membership_id,
 )
 from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityId,
@@ -141,7 +141,7 @@ def test_persist_skips_existing_observation_without_rebuild(
     session = _session()
     session.decision_at = datetime(2026, 7, 16, 16, 0, tzinfo=IDX_TIMEZONE)
     universe = ["BBCA"]
-    universe_id = artifact_digest({"tickers": sorted(universe)})
+    universe_id = stamp_universe_membership_id(universe)
     window_id = "BBCA:2026-07-16"
     obs_id = stable_learning_id(
         LearningContractId.ACCUMULATION_OBSERVATION,

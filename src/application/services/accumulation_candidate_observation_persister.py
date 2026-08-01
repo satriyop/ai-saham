@@ -21,10 +21,14 @@ from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     LearningContractId,
     LearningObservation,
-    artifact_digest,
     stable_learning_id,
+    stamp_universe_membership_id,
 )
 from src.domain.value_objects.risk_gate_audit import build_risk_assessment_capture_dict
+from src.domain.value_objects.signal_observation_contracts import (
+    ACCUMULATION_DISCOVERY_HORIZON_CONTRACT,
+    ACCUMULATION_DISCOVERY_POLICY_CONTRACT,
+)
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY_CONTRACT,
 )
@@ -122,7 +126,8 @@ class AccumulationCandidateObservationPersister:
         # Config hash from canonical window request (material config identity).
         canon_req = window_results[canonical_window][0]
         config_hash = compute_accumulation_config_hash(canon_req)
-        universe_id = artifact_digest({"tickers": sorted(universe_tickers)})
+        # Locked population authority: capture membership digest (not free-form labels).
+        universe_id = stamp_universe_membership_id(universe_tickers)
         market_context = getattr(canon_req, "market_context", None)
         shared_mce = (
             market_context.to_dict()
@@ -139,8 +144,8 @@ class AccumulationCandidateObservationPersister:
                 LearningContractId.ACCUMULATION_OBSERVATION,
                 {
                     "purpose": AssessmentPurpose.ACCUMULATION_DISCOVERY,
-                    "policy_contract": "accumulation_discovery.policy.v1",
-                    "horizon_contract": "accum_10d",
+                    "policy_contract": ACCUMULATION_DISCOVERY_POLICY_CONTRACT,
+                    "horizon_contract": ACCUMULATION_DISCOVERY_HORIZON_CONTRACT,
                     "compatibility_id": str(semantic_compatibility_id),
                     "cutoff_at": effective_session.decision_at,
                     "universe_id": universe_id,
@@ -201,8 +206,8 @@ class AccumulationCandidateObservationPersister:
             )
             observation = LearningObservation.create(
                 purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
-                policy_contract="accumulation_discovery.policy.v1",
-                horizon_contract="accum_10d",
+                policy_contract=ACCUMULATION_DISCOVERY_POLICY_CONTRACT,
+                horizon_contract=ACCUMULATION_DISCOVERY_HORIZON_CONTRACT,
                 compatibility_id=str(semantic_compatibility_id),
                 cutoff_at=effective_session.decision_at,
                 universe_id=universe_id,

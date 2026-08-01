@@ -38,29 +38,27 @@ def test_cron_uses_database_owned_pre_open_lifecycle_only() -> None:
 
 
 def test_cron_activates_accumulation_capture_and_labels() -> None:
+    """Single fail-closed wrapper replaces split 19:15 capture + 19:45 labels."""
     assert any(
-        line.startswith("15 19 * * 1-5 ")
-        and "saham research accum capture" in line
-        and "--universe lq45" in line
+        line.startswith("15 19 * * 1-5 ") and "cron_accum_challenge_corpus.sh" in line
         for line in ACTIVE_CRON_LINES
     )
-    assert any(
-        line.startswith("45 19 * * 1-5 ")
-        and "saham research accum labels" in line
-        and "--all-label-contracts" in line
-        for line in ACTIVE_CRON_LINES
-    )
-    # Must not hard-pin one cohort; multi-cohort labeling is CLI default.
+    # Must not schedule bare capture/labels as separate active cron lines.
     for line in ACTIVE_CRON_LINES:
-        if "research accum labels" in line:
-            assert "--compatibility-id" not in line
-    # Active lines must not be commented; old route name must be gone
-    for line in ACTIVE_CRON_LINES:
-        if "research accum" in line:
+        if "research accum capture" in line or "research accum labels" in line:
+            assert "cron_accum_challenge_corpus" in line
+        if "research accum" in line or "cron_accum_challenge_corpus" in line:
             assert not line.lstrip().startswith("#")
             assert "research accumulation" not in line
             assert "tactical_3d" not in line
             assert "swing_10d" not in line
+    # Wrapper itself must keep multi-cohort labeling (no hard-pinned cohort).
+    wrapper = (
+        Path(__file__).resolve().parents[3] / "scripts" / "cron_accum_challenge_corpus.sh"
+    ).read_text()
+    assert "--universe lq45" in wrapper
+    assert "--all-label-contracts" in wrapper
+    assert "--compatibility-id" not in wrapper
 
 
 def test_cron_does_not_require_dotenv_to_activate_project() -> None:

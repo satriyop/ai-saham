@@ -50,7 +50,7 @@ Full mirror of this contract: [`ml-saham/BOUNDARY.md`](../ml-saham/BOUNDARY.md) 
 |------|--------|
 | Capture / backfill observations | ai-saham |
 | Labels `accum_3d` / `accum_10d` / `accum_20d` (cron OK) | ai-saham |
-| `status` (counts) | ai-saham |
+| `status` (per-cohort producer readiness) | ai-saham |
 | Policy / factor evaluation (IC, folds, WIN·LOSE) | **ml-saham only** |
 
 ### Pre-open (unchanged by this decision)
@@ -154,7 +154,9 @@ Horizons **3 / 10 / 20** (primary **10**) align by number.
 # Corpus (this repo) — required
 saham research accum backfill|capture
 saham research accum labels --all-label-contracts
-saham research accum status
+saham research accum status   # per-cohort LEGACY_RAW_ONLY|BLOCKED_POLICY|COLLECTING|CHALLENGE_INPUT_READY
+# Nightly (after EOD refresh): scripts/cron_accum_challenge_corpus.sh
+#   capture --universe lq45 → labels --all-label-contracts → status (fail-closed)
 
 # Do NOT rely on:
 # saham research accum evaluate

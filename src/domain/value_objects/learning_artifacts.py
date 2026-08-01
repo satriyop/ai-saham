@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
@@ -11,6 +13,12 @@ from types import MappingProxyType
 from typing import Any, ClassVar, Mapping
 
 LEARNING_SCHEMA_VERSION = 1
+
+# Locked ACCUM population authority (write-path membership digest; not free-form
+# labels and not a PIT universe warehouse). See stamp_universe_membership_id.
+# Choice (c): already-canonical capture artifact — artifact_digest of sorted tickers.
+ACCUM_POPULATION_AUTHORITY_CONTRACT = "capture_universe_membership_digest.v1"
+_UNIVERSE_MEMBERSHIP_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 class LearningContractError(ValueError):
@@ -172,6 +180,37 @@ def artifact_digest(payload: Mapping[str, Any]) -> str:
     """Hash an artifact's complete immutable content."""
 
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
+
+
+def stamp_universe_membership_id(tickers: Sequence[str]) -> str:
+    """Stamp ACCUM observation ``universe_id`` from capture universe membership.
+
+    Locked population authority for accumulation discovery observations:
+
+    - **Contract:** ``capture_universe_membership_digest.v1``
+    - **Form:** ``artifact_digest({"tickers": sorted(universe_tickers)})``
+      as written by ``AccumulationCandidateObservationPersister``
+    - **Operational universe policy:** LQ45 only for challenge corpus growth
+      (recorded membership source is separate; historical index constituency
+      warehouse remains parked)
+
+    Free-form labels (``made-up-population``, ``lq45@pit``, etc.) are **not**
+    population authority even when self-consistent with ``observation_id``.
+    """
+
+    return artifact_digest({"tickers": sorted(tickers)})
+
+
+def is_accum_population_universe_id(universe_id: str) -> bool:
+    """True when ``universe_id`` matches the locked ACCUM membership-digest stamp.
+
+    Shape-only gate: 64 lowercase hex chars (sha256 of sorted ticker membership).
+    Does not reconstruct historical LQ45 constituency (parked warehouse).
+    """
+
+    if not isinstance(universe_id, str):
+        return False
+    return _UNIVERSE_MEMBERSHIP_DIGEST_RE.fullmatch(universe_id) is not None
 
 
 def _require_non_empty(name: str, value: str) -> None:
@@ -344,6 +383,25 @@ class LearningTrackSnapshot:
         )
 
 
+def validate_label_availability_outcome(
+    availability: LabelAvailability,
+    outcome: str | None,
+) -> None:
+    """Enforce availability↔outcome invariant (create and read/reopen gates).
+
+    - ``AVAILABLE`` requires a non-``None`` outcome
+    - ``UNAVAILABLE`` must not carry an outcome
+
+    Creation-time checks alone are insufficient: readiness must revalidate after
+    load/reconstruction so a rehashed AVAILABLE+None label cannot count as H10.
+    """
+
+    if availability is LabelAvailability.AVAILABLE and outcome is None:
+        raise LearningContractError("available label requires an outcome")
+    if availability is LabelAvailability.UNAVAILABLE and outcome is not None:
+        raise LearningContractError("unavailable label cannot carry an outcome")
+
+
 @dataclass(frozen=True)
 class LearningOutcomeLabel:
     # Identity is (observation_id, contract). labeled_at records when the cron
@@ -384,10 +442,7 @@ class LearningOutcomeLabel:
             raise LearningContractError("contract_id is not a label contract")
         _require_non_empty("observation_id", observation_id)
         _require_non_empty("fingerprint", fingerprint)
-        if availability is LabelAvailability.AVAILABLE and outcome is None:
-            raise LearningContractError("available label requires an outcome")
-        if availability is LabelAvailability.UNAVAILABLE and outcome is not None:
-            raise LearningContractError("unavailable label cannot carry an outcome")
+        validate_label_availability_outcome(availability, outcome)
         identity = {"observation_id": observation_id, "contract_id": contract_id}
         label_id = stable_learning_id(contract_id, identity)
         draft = cls(
@@ -410,6 +465,53 @@ class LearningOutcomeLabel:
                     _artifact_payload(draft, id_field="label_id", digest_field="artifact_digest")
                 ),
             }
+        )
+
+
+def recompute_observation_id(observation: LearningObservation) -> str:
+    """Recompute observation_id from its seven relational identity dimensions."""
+
+    identity = {
+        "purpose": observation.purpose,
+        "policy_contract": observation.policy_contract,
+        "horizon_contract": observation.horizon_contract,
+        "compatibility_id": observation.compatibility_id,
+        "cutoff_at": observation.cutoff_at,
+        "universe_id": observation.universe_id,
+        "window_id": observation.window_id,
+    }
+    return stable_learning_id(observation.contract_id, identity)
+
+
+def validate_observation_identity(observation: LearningObservation) -> None:
+    """Reject an observation whose id does not match its typed identity."""
+
+    expected = recompute_observation_id(observation)
+    if observation.observation_id != expected:
+        raise LearningContractError(
+            "observation_id does not match recomputed identity "
+            f"(stored={observation.observation_id!r}, expected={expected!r})"
+        )
+
+
+def recompute_label_id(label: LearningOutcomeLabel) -> str:
+    """Recompute label_id from (observation_id, contract_id)."""
+
+    identity = {
+        "observation_id": label.observation_id,
+        "contract_id": label.contract_id,
+    }
+    return stable_learning_id(label.contract_id, identity)
+
+
+def validate_label_identity(label: LearningOutcomeLabel) -> None:
+    """Reject a label whose id does not match its typed identity."""
+
+    expected = recompute_label_id(label)
+    if label.label_id != expected:
+        raise LearningContractError(
+            "label_id does not match recomputed identity "
+            f"(stored={label.label_id!r}, expected={expected!r})"
         )
 
 

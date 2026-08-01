@@ -1024,3 +1024,79 @@ class SQLiteLearningArtifactRepository:
                 (purpose.value, compatibility_id),
             ).fetchall()
         return tuple(_load_json(row, _policy_snapshot_from_dict) for row in rows)
+
+
+def connect_learning_database_readonly(db_path: Path) -> sqlite3.Connection:
+    """Open an existing learning DB read-only. Never creates files or schema."""
+
+    path = Path(db_path).expanduser()
+    if not path.is_file():
+        raise FileNotFoundError(f"learning database does not exist: {path}")
+    # URI mode=ro fails closed if the file is missing and never creates it.
+    connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA query_only = ON")
+    return connection
+
+
+class SQLiteLearningArtifactReadRepository:
+    """Read-only learning projections for status / research (no schema ensure).
+
+    Constructor refuses missing DB paths and never calls ensure_learning_schema.
+    Write methods are intentionally absent.
+    """
+
+    def __init__(self, db_path: str | Path) -> None:
+        self._db_path = Path(db_path).expanduser()
+        if not self._db_path.is_file():
+            raise FileNotFoundError(
+                f"learning database does not exist (status is read-only): {self._db_path}"
+            )
+
+    def _connect(self) -> sqlite3.Connection:
+        return connect_learning_database_readonly(self._db_path)
+
+    def list_observations(
+        self, purpose: AssessmentPurpose, *, compatibility_id: str | None = None
+    ) -> Sequence[LearningObservation]:
+        sql = "SELECT artifact_json FROM learning_observations WHERE purpose = ?"
+        values: list[str] = [purpose.value]
+        if compatibility_id is not None:
+            sql += " AND compatibility_id = ?"
+            values.append(compatibility_id)
+        sql += " ORDER BY cutoff_at, observation_id"
+        with self._connect() as connection:
+            rows = connection.execute(sql, values).fetchall()
+        return tuple(_load_json(row, _observation_from_dict) for row in rows)
+
+    def list_labels(self, observation_ids: Sequence[str]) -> Sequence[LearningOutcomeLabel]:
+        if not observation_ids:
+            return ()
+        placeholders = ",".join("?" for _ in observation_ids)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT artifact_json FROM learning_outcome_labels
+                WHERE observation_id IN ({placeholders})
+                ORDER BY observation_id, contract_id
+                """,  # noqa: S608
+                tuple(observation_ids),
+            ).fetchall()
+        return tuple(_load_json(row, _label_from_dict) for row in rows)
+
+    def list_policy_snapshots(
+        self,
+        *,
+        purpose: AssessmentPurpose,
+        compatibility_id: str,
+    ) -> Sequence[ProductionPolicySnapshot]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT artifact_json FROM learning_policy_snapshots
+                WHERE purpose = ? AND compatibility_id = ?
+                ORDER BY policy_id
+                """,
+                (purpose.value, compatibility_id),
+            ).fetchall()
+        return tuple(_load_json(row, _policy_snapshot_from_dict) for row in rows)

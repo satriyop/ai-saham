@@ -59,10 +59,25 @@ log      →  paper notebook only
 | **09:36** | `saham research pre-open labels` | Cron |
 | **09:37** | `saham research pre-open evaluate` | Cron |
 | **18:30** | `saham fetch market --universe lq45` | Cron (swing/accum candles) |
-| **19:15** | `saham research accum capture` | Cron (accum X) |
-| **19:45** | `saham research accum labels` | Cron (accum y when horizon allows) |
+| **19:15** | `scripts/cron_accum_challenge_corpus.sh` | Cron: capture (lq45) → labels → status (fail-closed) |
 
 Install/refresh cron: `./install_cron.sh` (replaces the tagged saham block).
+
+### Accum challenge corpus recovery
+
+If the 19:15 wrapper fails mid-chain:
+
+1. Inspect `$LOG_DIR/accumulation-challenge-corpus.log` (or the shell exit status).
+2. Re-run `scripts/cron_accum_challenge_corpus.sh` for the same economic session
+   (`ACCUM_CORPUS_SESSION=YYYY-MM-DD` if not today). Capture and labels are
+   idempotent; status is read-only.
+3. Or run manually in order:
+   `saham research accum capture --universe lq45 --session YYYY-MM-DD --format json`
+   → `saham research accum labels --all-label-contracts --format json`
+   → `saham research accum status --format json`.
+4. Do **not** attach snapshots to legacy cohorts or rewrite observations.
+5. `COLLECTING` on status is a successful producer state (need more sessions/H10
+   labels), not a command failure.
 
 ---
 
