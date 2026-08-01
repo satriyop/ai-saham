@@ -118,10 +118,11 @@ def accumulation_labels(
     market = SQLiteMarketRepository(resolved)
     # Immutable Stockbit-attested calendar snapshots already persisted for the cohort.
     # Never re-range a growing IHSG candle cache for label identity.
-    calendar_store = SQLiteTradingSessionCalendarSnapshotRepository(resolved)
-    snapshots = tuple(calendar_store.list_snapshots())
-    # Authority conflict is not an ordinary skip — fail the command (and cron).
+    # ensure_schema may raise on pre-migration natural-key dual rows; selector
+    # assert catches live dual-session conflicts when peers somehow coexist.
     try:
+        calendar_store = SQLiteTradingSessionCalendarSnapshotRepository(resolved)
+        snapshots = tuple(calendar_store.list_snapshots())
         assert_no_calendar_source_conflicts(snapshots)
     except LearningContractError as exc:
         typer.echo(f"calendar source conflict: {exc}", err=True)
@@ -261,17 +262,29 @@ def accumulation_sync_session_calendar(
     Production path for trading_session_calendar_snapshots. Cron runs this
     between capture and labels.
 
-    Ordering: open learning repo → resolve auto coverage (no-op without Stockbit)
-    → authenticate → write snapshot. Auto no-op must not require login or create tables.
+    Ordering:
+    1. Parse/validate explicit --start/--end (or optional --end for --auto)
+       before any database open so invalid args create nothing.
+    2. --auto: open learning repo → resolve coverage; no-op returns without
+       Stockbit auth or snapshot-table creation.
+    3. Authenticate Stockbit → construct strict source + snapshot writer → sync.
     """
     from datetime import date as date_cls
 
-    # 1) Learning repo only (may create learning schema via write repo; not snapshot table).
-    resolved, repo = repository(db_path)
+    from src.infrastructure.config.app_config import load_app_config
 
-    # 2) Resolve coverage before Stockbit auth / snapshot writer construction.
+    # 1) Syntax / range validation before any DB open (manual path).
     if auto:
-        end_date = date_cls.fromisoformat(end) if end else datetime.now(IDX_TIMEZONE).date()
+        if end is not None:
+            try:
+                end_date = date_cls.fromisoformat(end)
+            except ValueError as exc:
+                typer.echo(f"invalid date: {exc}", err=True)
+                raise typer.Exit(1) from exc
+        else:
+            end_date = datetime.now(IDX_TIMEZONE).date()
+        # Learning repo needed only to resolve auto coverage (not snapshot table).
+        resolved, repo = repository(db_path)
         try:
             coverage = ResolveTradingSessionCalendarSyncCoverageUseCase(
                 observations=repo,
@@ -303,8 +316,14 @@ def accumulation_sync_session_calendar(
         if cov_start > cov_end:
             typer.echo("coverage_start must not be after coverage_end", err=True)
             raise typer.Exit(1)
+        # Manual path does not need the learning write repo; resolve path only.
+        resolved = (
+            Path(db_path).expanduser()
+            if db_path is not None
+            else Path(load_app_config().storage.db_path).expanduser()
+        )
 
-    # 3) Authenticate Stockbit only when a real sync will run.
+    # 2) Authenticate Stockbit only when a real sync will run.
     stockbit_config = load_stockbit_provider_config()
     session = _stockbit_session.get_stockbit_session(stockbit_config)
     if not session or not session.authenticated:

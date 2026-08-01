@@ -201,8 +201,8 @@ def test_auto_no_op_without_stockbit_auth(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_invalid_end_date_exits_nonzero(tmp_path: Path) -> None:
-    db = tmp_path / "x.db"
-    SQLiteLearningArtifactRepository(db)
+    db = tmp_path / "does-not-exist-yet.db"
+    assert not db.exists()
     result = runner.invoke(
         app,
         [
@@ -218,10 +218,32 @@ def test_invalid_end_date_exits_nonzero(tmp_path: Path) -> None:
         ],
     )
     assert result.exit_code != 0
+    assert not db.exists(), "invalid manual args must not create the database"
 
 
-def test_cli_sync_labels_status_chain(tmp_path: Path, monkeypatch) -> None:
-    db = tmp_path / "chain.db"
+def test_invalid_start_after_end_creates_no_db(tmp_path: Path) -> None:
+    db = tmp_path / "bad-range.db"
+    assert not db.exists()
+    result = runner.invoke(
+        app,
+        [
+            "research",
+            "accum",
+            "sync-session-calendar",
+            "--start",
+            "2026-08-01",
+            "--end",
+            "2026-07-01",
+            "--db",
+            str(db),
+        ],
+    )
+    assert result.exit_code != 0
+    assert not db.exists()
+
+
+def _seed_chain_corpus(db: Path) -> None:
+    """Shared setup for sync → labels → status CLI verticals."""
     repo = SQLiteLearningArtifactRepository(db)
     o1 = _observation(1, "BBCA")
     o2 = _observation(2, "BBRI")
@@ -229,7 +251,6 @@ def test_cli_sync_labels_status_chain(tmp_path: Path, monkeypatch) -> None:
         repo.add_observation(o)
     _seed_policy(repo)
 
-    # Market candles for label generation.
     market = SQLiteMarketRepository(db)
     days = [date.fromisoformat(d) for d in _weekdays(date(2026, 7, 1), date(2026, 8, 31))]
     candles = []
@@ -247,7 +268,6 @@ def test_cli_sync_labels_status_chain(tmp_path: Path, monkeypatch) -> None:
                 )
             )
     market.save_candles(candles)
-    # Label generator requires corporate-action calendar coverage marker.
     from src.domain.value_objects.corporate_action_calendar import CorporateActionType
     from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
         SQLiteCorporateActionCalendarRepository,
@@ -261,6 +281,10 @@ def test_cli_sync_labels_status_chain(tmp_path: Path, monkeypatch) -> None:
         source="stockbit",
     )
 
+
+def test_cli_sync_labels_status_chain(tmp_path: Path, monkeypatch) -> None:
+    db = tmp_path / "chain.db"
+    _seed_chain_corpus(db)
     _patch_stockbit_ok(monkeypatch)
 
     sync = runner.invoke(
@@ -312,20 +336,70 @@ def test_cli_sync_labels_status_chain(tmp_path: Path, monkeypatch) -> None:
     assert after.st_size == before.st_size
     assert after.st_mtime_ns == before.st_mtime_ns
     status_payload = json.loads(status.output)
-    # READY or COLLECTING depending on session depth; must not crash.
     assert status_payload["artifact_type"] == "accumulation_producer_readiness"
-    cohort = status_payload["cohorts"][0]
-    assert cohort["producer_status"] in {
-        "CHALLENGE_INPUT_READY",
-        "COLLECTING",
-        "BLOCKED_POLICY",
-    }
-    # Labels bound to synced snapshot.
+    # Vertical with full H10 candles + snapshot must be READY — not a soft set.
+    assert status_payload["cohorts"][0]["producer_status"] == "CHALLENGE_INPUT_READY"
     stored = SQLiteTradingSessionCalendarSnapshotRepository(db).get_snapshot(snapshot_id)
     assert stored is not None
 
 
+def test_cli_auto_sync_labels_status_chain(tmp_path: Path, monkeypatch) -> None:
+    """Cron path uses --auto; must reach CHALLENGE_INPUT_READY end-to-end."""
+    db = tmp_path / "auto-chain.db"
+    _seed_chain_corpus(db)
+    _patch_stockbit_ok(monkeypatch)
+
+    sync = runner.invoke(
+        app,
+        [
+            "research",
+            "accum",
+            "sync-session-calendar",
+            "--auto",
+            "--end",
+            "2026-08-31",
+            "--db",
+            str(db),
+            "--format",
+            "json",
+        ],
+    )
+    assert sync.exit_code == 0, sync.output
+    sync_payload = json.loads(sync.output)
+    assert sync_payload["no_op"] is False
+    assert sync_payload["inserted"] is True
+
+    labels = runner.invoke(
+        app,
+        [
+            "research",
+            "accum",
+            "labels",
+            "--label-contract",
+            "price_path.accum_10d.v1",
+            "--db",
+            str(db),
+            "--format",
+            "json",
+        ],
+    )
+    assert labels.exit_code == 0, labels.output
+    assert json.loads(labels.output)["inserted_count"] >= 1
+
+    status = runner.invoke(
+        app,
+        ["research", "accum", "status", "--db", str(db), "--format", "json"],
+    )
+    assert status.exit_code == 0, status.output
+    assert json.loads(status.output)["cohorts"][0]["producer_status"] == "CHALLENGE_INPUT_READY"
+
+
 def test_labels_exit_nonzero_on_calendar_source_conflict(tmp_path: Path) -> None:
+    """Pre-migration dual natural-key rows fail schema open / labels (not ordinary skip)."""
+    import pytest
+
+    from src.domain.value_objects.learning_artifacts import LearningContractError
+
     db = tmp_path / "conflict.db"
     repo = SQLiteLearningArtifactRepository(db)
     repo.add_observation(_observation(1, "BBCA"))
@@ -341,9 +415,6 @@ def test_labels_exit_nonzero_on_calendar_source_conflict(tmp_path: Path) -> None
         source_revision="same-rev",
         captured_at=NOW,
     )
-    # Bypass natural-key guard by direct SQL for adversarial pre-seed (simulates
-    # historical dual-write). Use second insert through create with same key —
-    # store must reject; so seed second row via raw SQL for conflict detection at labels.
     store.add_snapshot(a)
     b = TradingSessionCalendarSnapshot.create(
         coverage_start=date(2026, 7, 1),
@@ -352,17 +423,13 @@ def test_labels_exit_nonzero_on_calendar_source_conflict(tmp_path: Path) -> None
         source_revision="same-rev",
         captured_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
     )
-    # Expect write path to reject conflict.
-    import pytest
-
-    from src.domain.value_objects.learning_artifacts import LearningContractError
-
     with pytest.raises(LearningContractError, match="source conflict"):
         store.add_snapshot(b)
 
-    # Inject conflicting peer manually (bypass write guard) for labels CLI test.
+    # Drop unique index and inject divergent peer (pre-migration corruption shape).
     payload = b.to_dict()
     with sqlite3.connect(str(db)) as conn:
+        conn.execute("DROP INDEX IF EXISTS uq_trading_session_calendar_authority")
         conn.execute(
             """
             INSERT INTO trading_session_calendar_snapshots (
@@ -387,6 +454,10 @@ def test_labels_exit_nonzero_on_calendar_source_conflict(tmp_path: Path) -> None
         )
         conn.commit()
 
+    # Write-repo open must refuse to migrate over dual authority rows.
+    with pytest.raises(LearningContractError, match="migration integrity"):
+        SQLiteTradingSessionCalendarSnapshotRepository(db)
+
     result = runner.invoke(
         app,
         [
@@ -402,10 +473,8 @@ def test_labels_exit_nonzero_on_calendar_source_conflict(tmp_path: Path) -> None
         ],
     )
     assert result.exit_code != 0
-    assert (
-        "calendar source conflict" in (result.output + (result.stderr or "")).lower()
-        or result.exit_code == 1
-    )
+    combined = (result.output + (result.stderr or "")).lower()
+    assert "calendar source conflict" in combined or "migration integrity" in combined
 
 
 def test_status_blocked_on_corrupt_snapshot_json(tmp_path: Path) -> None:
