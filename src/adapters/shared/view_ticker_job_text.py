@@ -340,71 +340,48 @@ def format_ticker_financials_job(
     *,
     fetch_hint: str | None = None,
 ) -> TickerJobText:
-    """Format one or more ViewTickerFinancialsResult (income/balance/cashflow)."""
+    """Format income/balance/cashflow results · structured three-card desk."""
+    from src.adapters.shared.ticker_fin_desk_model import build_ticker_fin_desk_model
+
     ticker_u = str(ticker).upper()
     hint = fetch_hint or f"saham fetch financials {ticker_u}"
-    if not results:
+    desk = build_ticker_fin_desk_model(ticker_u, results, fetch_hint=hint)
+    if desk.empty and not results:
         return TickerJobText(
             job="fin",
             ticker=ticker_u,
-            title=f"View · ticker · {ticker_u} · financials",
+            title=desk.title,
             body=f"not cached · no financial statements\nHint: {hint}",
             empty=True,
             fetch_hint=hint,
             cli_verb="view ticker financials",
+            desk=desk,
         )
 
+    # CLI-parity body from same desk cards
     lines: list[str] = [f"Financials · {ticker_u} · local cache", ""]
-    any_ok = False
-    for result in results:
-        statement = str(getattr(result, "statement", "income") or "income")
-        period_type = str(getattr(result, "period_type", "quarter") or "quarter")
-        status = str(getattr(result, "status", "empty") or "empty")
-        periods = list(getattr(result, "periods", ()) or ())
-        lines.append(f"── {statement.title()} · {period_type} ──")
-        if status != "ok" or not periods:
-            msg = getattr(result, "message", None) or "No periods cached"
-            lines.append(f"  {msg}")
-            lines.append("")
-            continue
-        any_ok = True
-        src = getattr(result, "source", None) or "—"
-        lines.append(f"  source={src} · {len(periods)} periods")
-        # Compact rows: period + key metrics by kind
-        for p in periods[:8]:
-            pe = getattr(p, "period_end", None)
-            pe_s = pe.isoformat() if pe is not None and hasattr(pe, "isoformat") else str(pe or "—")
-            if statement == "income":
-                lines.append(
-                    f"  {pe_s}  rev {_fmt_fin_idr(getattr(p, 'total_revenue', None))}  "
-                    f"ni {_fmt_fin_idr(getattr(p, 'net_income', None))}  "
-                    f"eps {_fmt_eps(getattr(p, 'eps_basic', None))}"
-                )
-            elif statement == "balance":
-                lines.append(
-                    f"  {pe_s}  assets {_fmt_fin_idr(getattr(p, 'total_assets', None))}  "
-                    f"equity {_fmt_fin_idr(getattr(p, 'stockholders_equity', None))}  "
-                    f"debt {_fmt_fin_idr(getattr(p, 'total_debt', None))}"
-                )
-            else:
-                lines.append(
-                    f"  {pe_s}  op {_fmt_fin_idr(getattr(p, 'operating_cash_flow', None))}  "
-                    f"fcf {_fmt_fin_idr(getattr(p, 'free_cash_flow', None))}  "
-                    f"capex {_fmt_fin_idr(getattr(p, 'capital_expenditure', None))}"
-                )
+    for c in desk.cards:
+        lines.append(f"── {c.title} · {c.period_label} ──")
+        if c.status != "ok":
+            lines.append(f"  {c.empty_hint or 'not cached'}")
+        else:
+            for m in c.rows:
+                lines.append(f"  {m.label:8} {m.value}")
+            for h in c.history:
+                lines.append(f"  {h}")
         lines.append("")
-
-    if not any_ok:
+    if desk.empty:
         lines.append(f"Hint: {hint}")
     lines.append("CLI · saham view ticker financials  ·  local cache · browse only")
     return TickerJobText(
         job="fin",
         ticker=ticker_u,
-        title=f"View · ticker · {ticker_u} · financials",
+        title=desk.title,
         body="\n".join(lines),
-        empty=not any_ok,
+        empty=desk.empty,
         fetch_hint=hint,
         cli_verb="view ticker financials",
+        desk=desk,
     )
 
 

@@ -14,6 +14,7 @@ from textual.widgets import Static
 
 from src.adapters.shared.ticker_brokers_desk_model import TickerBrokersDeskModel
 from src.adapters.shared.ticker_dist_desk_model import DistSideRow, TickerDistDeskModel
+from src.adapters.shared.ticker_fin_desk_model import TickerFinDeskModel
 from src.adapters.shared.ticker_flow_desk_model import TickerFlowDeskModel
 from src.adapters.shared.ticker_foreign_desk_model import TickerForeignDeskModel
 from src.adapters.tui.ticker_desk_model import (
@@ -473,6 +474,46 @@ class TickerDesk(Vertical):
         height: auto;
     }
 
+    /* Fin three cards — income | balance | cashflow */
+    TickerDesk #td-fin-trio {
+        display: none;
+    }
+
+    TickerDesk .td-fin-trio {
+        height: auto;
+        margin-top: 0;
+    }
+
+    TickerDesk .td-fin-card {
+        width: 1fr;
+        height: auto;
+        background: #101010;
+        border: solid #1c1c1c;
+        border-left: solid #7aa2c4;
+        padding: 0 1 1 1;
+        margin-right: 1;
+    }
+
+    TickerDesk .td-fin-card.balance {
+        border-left: solid #a89cc9;
+    }
+
+    TickerDesk .td-fin-card.cashflow {
+        border-left: solid #6fbf8a;
+        margin-right: 0;
+    }
+
+    TickerDesk .td-fin-card-head {
+        color: #6b6b6b;
+        text-style: bold;
+        height: auto;
+    }
+
+    TickerDesk .td-fin-card-body {
+        color: #a0a0a0;
+        height: auto;
+    }
+
     """
 
     def __init__(self, *, id: str | None = None) -> None:
@@ -488,6 +529,7 @@ class TickerDesk(Vertical):
             | TickerForeignDeskModel
             | TickerDistDeskModel
             | TickerBrokersDeskModel
+            | TickerFinDeskModel
             | None
         ) = None
 
@@ -533,6 +575,27 @@ class TickerDesk(Vertical):
                             id="td-dist-sell-head",
                         )
                         yield Static("", classes="td-dist-col-body", id="td-dist-sell-body")
+                # Fin three cards (hidden unless job=fin)
+                with Horizontal(classes="td-fin-trio", id="td-fin-trio"):
+                    for kind, title in (
+                        ("income", "INCOME"),
+                        ("balance", "BALANCE"),
+                        ("cashflow", "CASHFLOW"),
+                    ):
+                        with Vertical(
+                            classes=f"td-fin-card {kind}",
+                            id=f"td-fin-{kind}",
+                        ):
+                            yield Static(
+                                title,
+                                classes="td-fin-card-head",
+                                id=f"td-fin-{kind}-head",
+                            )
+                            yield Static(
+                                "",
+                                classes="td-fin-card-body",
+                                id=f"td-fin-{kind}-body",
+                            )
                 yield Static("", classes="td-flow-story", id="td-flow-story")
             yield Static("", classes="td-sec-body", id="td-job-body")
 
@@ -658,6 +721,7 @@ class TickerDesk(Vertical):
             | TickerForeignDeskModel
             | TickerDistDeskModel
             | TickerBrokersDeskModel
+            | TickerFinDeskModel
             | None
         ) = None,
     ) -> None:
@@ -1036,8 +1100,9 @@ class TickerDesk(Vertical):
         brokers_ok = (
             isinstance(self._job_desk, TickerBrokersDeskModel) and self._active_job == "brokers"
         )
+        fin_ok = isinstance(self._job_desk, TickerFinDeskModel) and self._active_job == "fin"
 
-        if flow_ok or foreign_ok or dist_ok or brokers_ok:
+        if flow_ok or foreign_ok or dist_ok or brokers_ok or fin_ok:
             if shell_el is not None:
                 shell_el.display = True
             try:
@@ -1053,9 +1118,12 @@ class TickerDesk(Vertical):
             elif dist_ok:
                 assert isinstance(self._job_desk, TickerDistDeskModel)
                 self._paint_dist_desk(self._job_desk)
-            else:
+            elif brokers_ok:
                 assert isinstance(self._job_desk, TickerBrokersDeskModel)
                 self._paint_brokers_desk(self._job_desk)
+            else:
+                assert isinstance(self._job_desk, TickerFinDeskModel)
+                self._paint_fin_desk(self._job_desk)
             return
 
         if shell_el is not None:
@@ -1074,6 +1142,7 @@ class TickerDesk(Vertical):
             | TickerForeignDeskModel
             | TickerDistDeskModel
             | TickerBrokersDeskModel
+            | TickerFinDeskModel
         ),
     ) -> None:
         """Shared hero + 4-pulse chrome for structured job desks."""
@@ -1104,21 +1173,32 @@ class TickerDesk(Vertical):
         story = (desk.story or "").replace("\n", " · ")
         self.query_one("#td-flow-story", Static).update(f"[#555555]{story}[/]" if story else "")
 
-    def _set_dist_dual_visible(self, visible: bool) -> None:
-        """Show dual-heat columns for dist; hide for flow/foreign."""
+    def _set_job_body_mode(self, mode: str) -> None:
+        """Toggle job body chrome: days | dist | fin (mutually exclusive)."""
+        show_days = mode == "days"
+        show_dist = mode == "dist"
+        show_fin = mode == "fin"
         try:
-            self.query_one("#td-dist-dual", Horizontal).display = visible
+            self.query_one("#td-dist-dual", Horizontal).display = show_dist
         except Exception:
             pass
         try:
-            self.query_one("#td-flow-days-head", Static).display = not visible
-            self.query_one("#td-flow-days", Static).display = not visible
+            self.query_one("#td-fin-trio", Horizontal).display = show_fin
+        except Exception:
+            pass
+        try:
+            self.query_one("#td-flow-days-head", Static).display = show_days
+            self.query_one("#td-flow-days", Static).display = show_days
         except Exception:
             pass
 
+    def _set_dist_dual_visible(self, visible: bool) -> None:
+        """Compat: dist dual on → hide days/fin."""
+        self._set_job_body_mode("dist" if visible else "days")
+
     def _paint_flow_desk(self, desk: TickerFlowDeskModel) -> None:
         """Design lock: hero · 4 pulses · sessions table · real nets only."""
-        self._set_dist_dual_visible(False)
+        self._set_job_body_mode("days")
         self._paint_job_hero_pulses(desk)
 
         if desk.empty or not desk.days:
@@ -1150,7 +1230,7 @@ class TickerDesk(Vertical):
 
     def _paint_foreign_desk(self, desk: TickerForeignDeskModel) -> None:
         """Design lock: hero · 5d/20d/days/source · daily points (net · lot · avg)."""
-        self._set_dist_dual_visible(False)
+        self._set_job_body_mode("days")
         self._paint_job_hero_pulses(desk)
 
         if desk.empty or not desk.days:
@@ -1182,7 +1262,7 @@ class TickerDesk(Vertical):
 
     def _paint_dist_desk(self, desk: TickerDistDeskModel) -> None:
         """Design lock: hero · pulses · true dual-column heat · F/L pills · horizontal CP bars."""
-        self._set_dist_dual_visible(True)
+        self._set_job_body_mode("dist")
         self._paint_job_hero_pulses(desk)
 
         mint = "#6fbf8a"
@@ -1259,7 +1339,7 @@ class TickerDesk(Vertical):
 
     def _paint_brokers_desk(self, desk: TickerBrokersDeskModel) -> None:
         """On-ticker stock desks radar · Net3/5/7/10/20 · no hero essay noise."""
-        self._set_dist_dual_visible(False)
+        self._set_job_body_mode("days")
         self._paint_job_hero_pulses(desk)
 
         if desk.empty or not desk.rows:
@@ -1303,6 +1383,25 @@ class TickerDesk(Vertical):
                 f"[#a0a0a0]{r.streak:>3}[/] [#c8c8c8]{r.delta1:>7}[/]{partial}"
             )
         self.query_one("#td-flow-days", Static).update("\n".join(lines))
+
+    def _paint_fin_desk(self, desk: TickerFinDeskModel) -> None:
+        """Design lock: FINANCIALS hero · three cards Income / Balance / Cashflow."""
+        self._set_job_body_mode("fin")
+        self._paint_job_hero_pulses(desk)
+
+        for card in desk.cards:
+            kind = card.kind
+            head = self.query_one(f"#td-fin-{kind}-head", Static)
+            body = self.query_one(f"#td-fin-{kind}-body", Static)
+            if card.status == "ok":
+                head.update(f"[#d8d8d8]{card.title}[/]  [#555555]{card.period_label}[/]")
+                lines = [f"[#555555]{m.label:8}[/] [#e8e8e8]{m.value}[/]" for m in card.rows]
+                for h in card.history:
+                    lines.append(f"[#6b6b6b]{h}[/]")
+                body.update("\n".join(lines) if lines else "[#555555]—[/]")
+            else:
+                head.update(f"[#555555]{card.title}[/]")
+                body.update(f"[#555555]{card.empty_hint or 'not cached'}[/]")
 
     def _paint_job_and_chips_only(self) -> None:
         """When model not yet painted, still show job body + chips."""
