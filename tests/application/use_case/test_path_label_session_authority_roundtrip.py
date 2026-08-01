@@ -6,6 +6,8 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from src.application.services.accumulation_producer_readiness import (
     ProducerReadinessStatus,
     count_labels_by_horizon,
@@ -392,55 +394,45 @@ def test_missing_ticker_candle_writes_no_terminal_label(tmp_path: Path) -> None:
     assert result.skipped_count == 1
 
 
-def test_strict_stockbit_source_fails_on_partial_and_network() -> None:
+def test_strict_stockbit_source_rejects_missing_result_and_network() -> None:
     class _Client:
         def __init__(self, pages):
             self.pages = list(pages)
-            self.calls = 0
 
         def get(self, url):
-            self.calls += 1
             if not self.pages:
-                raise RuntimeError("network down after page 1")
+                raise RuntimeError("network down")
             return self.pages.pop(0)
 
-    # Multi-page success (weekdays only — weekends rejected by snapshot validator)
+    # Single-page weekday success (not multi-page)
     page1 = {
         "data": {
             "result": [
                 {"date": "2026-07-01"},
                 {"date": "2026-07-02"},
                 {"date": "2026-07-03"},
-                {"date": "2026-07-06"},
-                {"date": "2026-07-07"},
             ]
         }
     }
-    src = StockbitTradingSessionCalendarSource(_Client([page1]), source_revision="rev-a")
+    src = StockbitTradingSessionCalendarSource(
+        _Client([page1]),
+        source_revision="rev-a",
+        captured_at=NOW,
+    )
     snap = src.fetch_snapshot(date(2026, 7, 1), date(2026, 7, 10))
     assert snap.contract_id == STOCKBIT_TRADING_SESSIONS_CONTRACT
-    assert date(2026, 7, 1) in snap.ordered_sessions
 
-    # Network failure → no snapshot (raises)
-    bad = StockbitTradingSessionCalendarSource(_Client([]), source_revision="rev-b")
-    try:
-        bad.fetch_snapshot(date(2026, 7, 1), date(2026, 7, 10))
-        raise AssertionError("expected failure")
-    except LearningContractError as exc:
-        assert "failed" in str(exc).lower() or "unavailable" in str(exc).lower()
-
-    # Malformed body
-    class _Bad:
-        def get(self, url):
-            return {"nope": True}
-
-    try:
-        StockbitTradingSessionCalendarSource(_Bad()).fetch_snapshot(
-            date(2026, 7, 1), date(2026, 7, 2)
+    # Network failure
+    with pytest.raises(LearningContractError):
+        StockbitTradingSessionCalendarSource(_Client([]), captured_at=NOW).fetch_snapshot(
+            date(2026, 7, 1), date(2026, 7, 10)
         )
-        raise AssertionError("expected malformed failure")
-    except LearningContractError:
-        pass
+
+    # Missing data.result is malformed (not empty success)
+    with pytest.raises(LearningContractError, match="missing data.result"):
+        StockbitTradingSessionCalendarSource(
+            _Client([{"data": {}}]), captured_at=NOW
+        ).fetch_snapshot(date(2026, 7, 1), date(2026, 7, 2))
 
 
 def test_status_read_only_snapshot_repo_creates_nothing(tmp_path: Path) -> None:

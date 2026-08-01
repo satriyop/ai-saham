@@ -393,6 +393,7 @@ silently disappear from review.
 | `LearningOutcomeLabel` | `label_id`, `contract_id`, `observation_id` | `artifact_digest`, `fingerprint` | `schema_version`, `outcome_basis`, `availability`, `outcome`, `metrics` | `labeled_at` is operational and intentionally digest-excluded | none |
 | `ProductionPolicySnapshot` | `snapshot_id`, `contract_id`, `purpose`, both observation contract IDs, `compatibility_id`, `policy_id` | `payload_digest`, `material_config_hash`, `canonical_payload` | `schema_version`, `policy_version`, `decision_type`, `semantic_engine_contract_id` | `source_revision`, `created_at` are provenance and intentionally identity-excluded, but remain required and well-formed | none |
 | `CohortProducerReadiness` | `compatibility_id`, `observation_contract` | nested validation reports and verified snapshot set | `producer_status`, authoritative session/label minimums | date ranges, distributions, presence/missing counts | none |
+| `TradingSessionCalendarSnapshot` | `snapshot_id`, `contract_id`, `source`, `benchmark`, coverage bounds, `ordered_sessions`, `source_revision` | `payload_digest`, recomputed snapshot ID, normalized-column equality vs `artifact_json` | exact Stockbit contract/source/IHSG benchmark; complete strict acquisition | `captured_at` (required, timezone-aware; excluded from content digest) | none |
 
 **Mandatory implementation rule:** the population decision is Option A exactly
 as locked above. Do not substitute B/C, a new warehouse, shape-only hash
@@ -498,7 +499,7 @@ an exact blocker is recorded.
       label/Action/readiness readiness without computing ML verdicts.
 - [x] Snapshot-bound capture/backfill and labels grow one active compatible LQ45 cohort
       across independent sessions without rewriting legacy data.
-      (code path + cron ready; live multi-session growth is ops, still COLLECTING)
+      (code path + cron includes sync-session-calendar; live multi-session growth is ops)
 - [ ] Operational completion records a companion ml report with at least two
       valid post-embargo OOS folds; code merge alone is not operational DONE.
 - [x] P2 records the configured-but-unwired breadth finding and creates no v3,
