@@ -336,6 +336,13 @@ class CockpitApp(App[None]):
         except Exception:
             pass
         self.query_one("#evidence-strip", Static).display = False
+        # Src-badge: hide immediately so empty border never flashes
+        try:
+            badge = self.query_one("#board-source-badge", Static)
+            badge.add_class("hide")
+            badge.display = False
+        except Exception:
+            pass
         self._refresh_local_cache_health()
         self._refresh_chrome()
         # Live cockpit: open on local accumulation board (not a design manifesto).
@@ -362,7 +369,10 @@ class CockpitApp(App[None]):
         return f"● {self._mode}"
 
     def _paint_board_source_badge(self) -> None:
-        """Mock ``src-badge`` above the accum board (snapshot|live). Hidden elsewhere."""
+        """Mock ``src-badge`` above the accum board (snapshot|live). Hidden elsewhere.
+
+        Empty/hidden must not leave a bordered hollow (ghost green box).
+        """
         from src.adapters.tui.chrome_cues import (
             accum_source_badge_kind,
             accum_source_badge_text,
@@ -371,19 +381,27 @@ class CockpitApp(App[None]):
         badge = self.query_one("#board-source-badge", Static)
         badge.remove_class("snap")
         badge.remove_class("live")
-        if self._stage != "accum":
+
+        def _hide() -> None:
             badge.update("")
+            badge.add_class("hide")
             badge.display = False
+
+        if self._stage != "accum":
+            _hide()
             return
-        text = accum_source_badge_text(
-            board_source=self._board_source,
-            recomputing=self._recomputing,
-        )
+        text = (
+            accum_source_badge_text(
+                board_source=self._board_source,
+                recomputing=self._recomputing,
+            )
+            or ""
+        ).strip()
         kind = accum_source_badge_kind(board_source=self._board_source)
         if not text or kind == "hide":
-            badge.update("")
-            badge.display = False
+            _hide()
             return
+        badge.remove_class("hide")
         badge.update(text)
         badge.display = True
         badge.add_class(kind)

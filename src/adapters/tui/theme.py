@@ -108,14 +108,27 @@ Screen {
 }
 
 /* Boards: OpenCode radar, peach selection wash */
+/* src-badge: never paint an empty bordered box (ghost green hollow) */
 #board-source-badge {
     height: 1;
     width: auto;
+    max-width: 100%;
     margin: 0 0 1 0;
     padding: 0 1;
     color: #6b6b6b;
     background: #141414;
     border: solid #1c1c1c;
+}
+
+#board-source-badge.hide {
+    display: none !important;
+    height: 0;
+    width: 0;
+    min-width: 0;
+    max-width: 0;
+    margin: 0;
+    padding: 0;
+    border: none !important;
 }
 
 #board-flag-row {
