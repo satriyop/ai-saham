@@ -541,23 +541,45 @@ contract after product-owner approval.
 ## 13. Completion Record
 
 ```text
-Completed date:
-Commits: (uncommitted — do not claim CODE_COMPLETE until merged)
-P0/P1/P3 code checkpoint status: IN_PROGRESS_CONTRACT_HARDENING (2026-08-01 review fixes)
+Completed date: (code path in progress; ops not complete)
+Commits (calendar authority / readiness hardening chain, main):
+  9642980c feat(accum): sync-session-calendar use case, CLI, and selector
+  ca9b53ff fix(cron): sync-session-calendar before labels
+  85d77b0c fix(calendar): fail closed on source conflicts; fix auto no-op order
+  109dcfb7 fix(calendar): enforce unique authority index and harden CLI verticals
+  c869bc0c fix(calendar): map sync migration conflicts to controlled CLI diagnostic
+P0/P1/P3 code checkpoint status: IN_PROGRESS_CONTRACT_HARDENING (2026-08-02)
   - P0: readiness + authoritative snapshot descriptors + observation contract validation
   - P0: status uses SQLiteLearningArtifactReadRepository (no schema ensure / no create)
   - P0: readiness authority is signal.setup_readiness only (no fingerprint fallback)
-  - P1: cron wrapper + shared producer contracts
+  - P0: path labels bind immutable TradingSessionCalendarSnapshot (Stockbit IHSG history v1)
+  - P1: cron wrapper + shared producer contracts; sync-session-calendar before labels
+  - P1: unique natural-key index + IntegrityError race reconciliation on snapshots
+  - P1: auto no-op before Stockbit auth; invalid manual dates create no DB
   - P3: root-cause note; no transport synthesis
   - ml-saham: promote require authoritative DB verify of production_snapshot_digest
-P1 operational status: AWAITING_DATA — active v2 cohort still 1 session (COLLECTING)
+P1 operational status: AWAITING_DATA — live DB has no trading_session_calendar_snapshots
+  table yet; accumulation cohorts remain BLOCKED_POLICY until ops sync runs
 P2 configured-but-unwired finding recorded: YES (no v3)
+Verification (2026-08-02, post-109dcfb7 review):
+  - Focused calendar/readiness tests: 43 passed
+  - Concurrency tests ×20: 120 passed
+  - Non-TUI suite: 5941 passed (3 pre-existing unrelated failures)
+  - Whole-repo ruff check + format --check: passed
+  - git diff --check: passed
+  - Worktree clean for this task scope
+  - Data audits: exit 0; manifest clean; source/reconciliation WARN (unrelated data)
+  - Code nearly complete for calendar authority path; corpus flow NOT ops-complete
 Review fixes closed:
   1. snapshot descriptors + common material_config_hash enforced
   2. observation purpose/contract/session_date validated; corruption → BLOCKED_POLICY
   3. ml-saham promote verifies digest against learning_policy_snapshots
   4. status read-only repository
   5. fingerprint fallback removed from readiness presence
+  6. calendar natural-key uniqueness (unique index + race recovery)
+  7. CLI vertical exact CHALLENGE_INPUT_READY including --auto
+  8. invalid manual sync args do not create a database
+  9. sync CLI controlled diagnostic for migration/source LearningContractError
 Second-pass hardening (2026-08-01):
   - observation + label artifact digests validated fail-closed before classification
   - session_date requires exact YYYY-MM-DD (no prefix slice)
@@ -575,5 +597,6 @@ Authority-matrix review (2026-08-01):
   - schema-11 population binding (schema-2 + attested tickers) is current-only; schema-9/10 rows remain non-current LEGACY_RAW_ONLY
   - every matrix check is a P0 blocker; H3/H10/H20 conflicts all block the cohort
   - CODE_COMPLETE is forbidden until every matrix cell is implemented and its mutation tests pass
-CODE_COMPLETE_AWAITING_DATA: only after commit/merge of this hardening
+CODE_COMPLETE_AWAITING_DATA: only after ops proves live snapshot sync + multi-session cohort
+  growth; do not claim CODE_COMPLETE from code merge alone while live status is BLOCKED_POLICY
 ```
