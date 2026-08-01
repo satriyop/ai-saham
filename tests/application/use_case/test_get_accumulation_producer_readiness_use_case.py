@@ -14,11 +14,13 @@ from src.application.services.accumulation_production_policy_descriptors import 
 from src.application.use_case.get_accumulation_producer_readiness_use_case import (
     GetAccumulationProducerReadinessUseCase,
 )
-from src.domain.services.trading_calendar import (
-    first_weekday_session_after,
-    nth_weekday_session_on_or_after,
+from src.domain.services.trading_session_calendar import (
+    IDX_TRADING_SESSIONS_CONTRACT,
+    PATH_LABEL_METRICS_SCHEMA_VERSION,
+    KnownTradingSessionCalendar,
+    session_calendar_digest,
+    session_calendar_revision,
 )
-from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
     AccumPopulationBinding,
@@ -153,13 +155,18 @@ def _observation(
 
 def _label(observation: LearningObservation) -> LearningOutcomeLabel:
     session = date.fromisoformat(str(observation.decision_payload["session_date"]))
-    start = first_weekday_session_after(session)
-    end = nth_weekday_session_on_or_after(start, 10)
+    expected = DEFAULT_SESSION_CALENDAR.first_n_sessions_after(session, 10)
+    assert expected is not None
     metrics = {
         "ticker": observation.decision_payload["ticker"],
         "signal_date": session.isoformat(),
-        "label_window_start": start.isoformat(),
-        "label_window_end": end.isoformat(),
+        "label_window_start": expected[0].isoformat(),
+        "label_window_end": expected[-1].isoformat(),
+        "label_window_sessions": [s.isoformat() for s in expected],
+        "session_calendar_contract": IDX_TRADING_SESSIONS_CONTRACT,
+        "session_calendar_revision": session_calendar_revision(DEFAULT_SESSION_CALENDAR),
+        "session_calendar_digest": session_calendar_digest(DEFAULT_SESSION_CALENDAR),
+        "path_label_metrics_schema_version": PATH_LABEL_METRICS_SCHEMA_VERSION,
         "entry_reference_price": 100.0,
         "close_return_pct": 3.5,
         "max_forward_return_pct": 5.0,

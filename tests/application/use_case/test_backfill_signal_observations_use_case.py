@@ -157,6 +157,7 @@ def _make_use_case(
     membership_resolver,
     pit_window_sessions: int = 10,
     record: RecordingRecordUseCase | None = None,
+    named_universe_tickers: list[str] | None = None,
 ) -> tuple[BackfillSignalObservationsUseCase, RecordingRecordUseCase]:
     record = record or RecordingRecordUseCase()
     uc = BackfillSignalObservationsUseCase(
@@ -166,7 +167,9 @@ def _make_use_case(
         observation_identity=_identity(),
         membership_resolver=membership_resolver,
         pit_window_sessions=pit_window_sessions,
-        named_universe_tickers=["ASII", "BBCA", "BBRI", "BMRI", "TLKM"],
+        # Synthetic membership in tests must remain a subset of this roster.
+        named_universe_tickers=named_universe_tickers
+        or ["A", "B", "ASII", "BBCA", "BBRI", "BMRI", "MISS", "OK", "TLKM"],
         producer_source_revision="ai-saham@test+git:deadbeef",
         evaluate_market_context=None,
         session_resolver=MagicMock(

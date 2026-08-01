@@ -30,7 +30,13 @@ from src.domain.services.trading_calendar import (
     inclusive_weekday_sessions,
     nth_weekday_session_on_or_after,
 )
-from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
+from src.domain.services.trading_session_calendar import (
+    IDX_TRADING_SESSIONS_CONTRACT,
+    PATH_LABEL_METRICS_SCHEMA_VERSION,
+    KnownTradingSessionCalendar,
+    session_calendar_digest,
+    session_calendar_revision,
+)
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
@@ -280,26 +286,46 @@ def _available_metrics(
     entry_price: float = 100.0,
     label_window_start: str | None = None,
     label_window_end: str | None = None,
+    session_calendar: KnownTradingSessionCalendar | None = None,
 ) -> dict:
-    """Build AVAILABLE path metrics with an exact N weekday-session window.
+    """Build AVAILABLE path metrics with first-N sessions and calendar identity.
 
-    Default endpoints are the first weekday after ``signal_date`` through the
-    ``horizon_days``-th inclusive weekday session (not bare calendar-day spans).
+    Default windows use the default test session calendar (weekday-complete).
     """
+    cal = session_calendar or DEFAULT_SESSION_CALENDAR
+    signal = date.fromisoformat(signal_date)
+    expected = cal.first_n_sessions_after(signal, horizon_days)
     if label_window_start is None or label_window_end is None:
-        signal = date.fromisoformat(signal_date)
-        start = first_weekday_session_after(signal)
-        end = nth_weekday_session_on_or_after(start, horizon_days)
-        start_s = start.isoformat()
-        end_s = end.isoformat()
+        assert expected is not None, f"no first-{horizon_days} sessions after {signal_date}"
+        start_s = expected[0].isoformat()
+        end_s = expected[-1].isoformat()
+        sessions = [s.isoformat() for s in expected]
     else:
         start_s = label_window_start
         end_s = label_window_end
+        if (
+            expected is not None
+            and start_s == expected[0].isoformat()
+            and end_s == expected[-1].isoformat()
+        ):
+            sessions = [s.isoformat() for s in expected]
+        else:
+            # Adversarial/custom endpoints: materialize inclusive weekday list when possible.
+            start_d = date.fromisoformat(start_s)
+            end_d = date.fromisoformat(end_s)
+            sessions = [s.isoformat() for s in cal.sessions if start_d <= s <= end_d]
+            if not sessions:
+                sessions = [start_s, end_s]
     return {
         "ticker": ticker.upper(),
         "signal_date": signal_date,
         "label_window_start": start_s,
         "label_window_end": end_s,
+        "label_window_sessions": sessions,
+        "session_calendar_contract": IDX_TRADING_SESSIONS_CONTRACT,
+        "session_calendar_revision": session_calendar_revision(cal),
+        "session_calendar_digest": session_calendar_digest(cal),
+        "path_label_metrics_schema_version": PATH_LABEL_METRICS_SCHEMA_VERSION,
         "entry_reference_price": entry_price,
         "close_return_pct": 3.5,
         "max_forward_return_pct": 5.0,
@@ -2444,6 +2470,7 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
         horizon_days=10,
         label_window_start="2026-07-02",
         label_window_end=nth_weekday_session_on_or_after(date(2026, 7, 2), 10).isoformat(),
+        session_calendar=holiday_cal,
     )
     # Prove weekday length would have accepted this forged span.
     assert (
@@ -2470,6 +2497,7 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
         horizon_days=10,
         label_window_start="2026-07-20",
         label_window_end="2026-07-31",
+        session_calendar=holiday_cal,
     )
     assert (
         inclusive_weekday_sessions(
@@ -2504,12 +2532,9 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
         horizon_days=10,
         label_window_start=honest[0].isoformat(),
         label_window_end=honest[-1].isoformat(),
+        session_calendar=holiday_cal,
     )
     good = _label(obs[0], metrics=honest_metrics)
-    good_b = _label(obs[1], outcome="SUCCESS")  # default weekday window under holiday_cal?
-    # Second obs signal 2026-07-02 — not a session on holiday calendar; rebuild
-    # with a session that exists (2026-07-03) for a clean second row, or only
-    # require one AVAILABLE H10 on obs[0] with session depth from both obs.
     # READY needs ≥2 sessions + ≥1 AVAILABLE H10; obs validation uses payload dates.
     counts_c = count_labels_by_horizon(
         observation_ids=[o.observation_id for o in obs],
@@ -2517,7 +2542,7 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
         observations_by_id={o.observation_id: o for o in obs},
         session_calendar=holiday_cal,
     )
-    assert counts_c.counts_by_horizon["H10"].available == 1
+    assert counts_c.counts_by_horizon["H10"].available == 1, counts_c.invalid_reasons
     assert counts_c.invalid_label_count == 0
     cohort_c = project_cohort_readiness(
         compatibility_id=COMPAT,
@@ -2529,7 +2554,6 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
     )
     assert cohort_c.labels_by_horizon["H10"].available == 1
     assert cohort_c.producer_status is ProducerReadinessStatus.CHALLENGE_INPUT_READY
-    del good_b  # not needed for READY threshold
 
     # Missing calendar fails closed (never weekday approx).
     no_cal = _count_labels_by_horizon_impl(

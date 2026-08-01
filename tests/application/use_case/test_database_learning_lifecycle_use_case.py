@@ -11,6 +11,7 @@ from src.application.use_case.database_learning_lifecycle_use_case import (
     GeneratePreOpenOutcomeLabelsUseCase,
 )
 from src.domain.entities.candle import Candle
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     EvaluationReadiness,
@@ -24,6 +25,34 @@ from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
 )
 
 NOW = datetime(2026, 7, 27, 1, 0, tzinfo=timezone.utc)
+
+
+def _weekday_sessions(start: date, end: date) -> tuple[date, ...]:
+    out: list[date] = []
+    current = start
+    while current <= end:
+        if current.weekday() < 5:
+            out.append(current)
+        current += timedelta(days=1)
+    return tuple(out)
+
+
+def _test_session_calendar() -> KnownTradingSessionCalendar:
+    return KnownTradingSessionCalendar(
+        sessions=_weekday_sessions(date(2026, 6, 1), date(2026, 9, 30)),
+        coverage_start=date(2026, 6, 1),
+        coverage_end=date(2026, 9, 30),
+    )
+
+
+def _path_label_uc(*, observations, labels, market_data, corporate_actions, calendar=None):
+    return GenerateAccumulationPricePathLabelsUseCase(
+        observations=observations,
+        labels=labels,
+        market_data=market_data,
+        corporate_actions=corporate_actions,
+        session_calendar=calendar if calendar is not None else _test_session_calendar(),
+    )
 
 
 def _observation(*, day: int, compatibility_id: str = "compat-1") -> LearningObservation:
@@ -398,17 +427,21 @@ def _accum_observation(
 
 
 def _forward_candles(ticker: str, signal_day: date, count: int) -> list[Candle]:
+    """Candles on the first ``count`` market sessions after ``signal_day``."""
+    cal = _test_session_calendar()
+    sessions = cal.first_n_sessions_after(signal_day, count)
+    assert sessions is not None
     return [
         Candle(
             ticker=ticker,
-            date=signal_day + timedelta(days=index),
+            date=session,
             open=Decimal("100"),
             high=Decimal("102"),
             low=Decimal("99"),
             close=Decimal("101"),
             volume=100,
         )
-        for index in range(1, count + 1)
+        for session in sessions
     ]
 
 
@@ -438,7 +471,7 @@ def test_accumulation_price_path_skips_when_corporate_action_coverage_missing(
         def get_events_for_ticker(self, *args, **kwargs):
             raise AssertionError("coverage gate must fail before event query")
 
-    result = GenerateAccumulationPricePathLabelsUseCase(
+    result = _path_label_uc(
         observations=repository,
         labels=repository,
         market_data=Market(),
@@ -474,7 +507,7 @@ def test_accumulation_price_path_uses_candidate_current_price_as_entry(
         def get_candles(self, ticker, start_date=None, end_date=None):
             return _forward_candles(ticker, date(2026, 7, 27), 20)
 
-    result = GenerateAccumulationPricePathLabelsUseCase(
+    result = _path_label_uc(
         observations=repository,
         labels=repository,
         market_data=Market(),
@@ -507,7 +540,7 @@ def test_accumulation_price_path_skips_incomplete_forward_window(
         def get_candles(self, ticker, start_date=None, end_date=None):
             return _forward_candles(ticker, date(2026, 7, 27), 5)
 
-    result = GenerateAccumulationPricePathLabelsUseCase(
+    result = _path_label_uc(
         observations=repository,
         labels=repository,
         market_data=Market(),
@@ -534,7 +567,7 @@ def test_accumulation_price_path_skips_incomplete_forward_window(
         def get_candles(self, ticker, start_date=None, end_date=None):
             return _forward_candles(ticker, date(2026, 7, 27), 20)
 
-    later = GenerateAccumulationPricePathLabelsUseCase(
+    later = _path_label_uc(
         observations=repository,
         labels=repository,
         market_data=FullMarket(),
@@ -561,7 +594,7 @@ def test_accumulation_price_path_skips_missing_current_price(
         def get_candles(self, ticker, start_date=None, end_date=None):
             return _forward_candles(ticker, date(2026, 7, 27), 20)
 
-    result = GenerateAccumulationPricePathLabelsUseCase(
+    result = _path_label_uc(
         observations=repository,
         labels=repository,
         market_data=Market(),
@@ -608,7 +641,7 @@ def test_accumulation_price_path_ignores_legacy_entry_price_alias(
         def get_candles(self, ticker, start_date=None, end_date=None):
             return _forward_candles(ticker, date(2026, 7, 27), 20)
 
-    result = GenerateAccumulationPricePathLabelsUseCase(
+    result = _path_label_uc(
         observations=repository,
         labels=repository,
         market_data=Market(),
