@@ -1,7 +1,7 @@
 """Shared Chip bar container (design bible: Shared Chip bar contract).
 
-Plain Tab focus chain via child FlagChip(s). No row labels. Density meta
-is optional status text after chips — not a chip.
+Plain Tab focus chain via child FlagChip(s). No row labels.
+Density state = ``[d] detail`` chip ``is-on`` only — no brief/detail meta text.
 
 Layer: Adapter (Textual widget)
 """
@@ -12,7 +12,6 @@ from collections.abc import Iterable, Sequence
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal
-from textual.widgets import Static
 
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
@@ -58,11 +57,10 @@ class ChipBar(Horizontal):
         background: #0b0b0b;
     }
     ChipBar .chip-meta {
-        width: auto;
-        height: 3;
-        color: #6b6b6b;
-        padding: 0 0 0 1;
-        content-align: left middle;
+        /* Legacy hook — density status text is forbidden (display off) */
+        display: none;
+        width: 0;
+        height: 0;
     }
     """
 
@@ -82,12 +80,15 @@ class ChipBar(Horizontal):
 
         Prefer parent ``compose`` yielding ``ChipBar`` then children, or pass
         ``chips`` / ``include_detail`` for a self-contained bar.
+
+        ``meta_id`` / ``meta_text`` are accepted for call-site compatibility but
+        **not painted** — density state is chip ``is-on`` only (design lock).
         """
         super().__init__(id=id, classes=classes)
         self._chips_spec: tuple[tuple[str, str], ...] = tuple(chips or ())
         self._chip_id_prefix = chip_id_prefix
         self._meta_id = meta_id
-        self._meta_text = meta_text
+        self._meta_text = meta_text  # ignored for density (no brief/detail meta)
         self._include_detail = include_detail
         self._detail_id = detail_id or f"{chip_id_prefix}-detail"
 
@@ -95,9 +96,8 @@ class ChipBar(Horizontal):
         for key, label in self._chips_spec:
             yield FlagChip(key, label, id=f"{self._chip_id_prefix}-{key}")
         if self._include_detail:
-            yield FlagChip("detail", "detail · d", id=self._detail_id)
-        if self._meta_id is not None:
-            yield Static(self._meta_text, id=self._meta_id, classes="chip-meta")
+            # Design lock: [d] detail · is-on = detail · no brief meta
+            yield FlagChip("detail", "[d] detail", id=self._detail_id)
 
     def chip(self, key: str) -> FlagChip | None:
         """Lookup chip by flag_key (scans children)."""
@@ -107,12 +107,8 @@ class ChipBar(Horizontal):
         return None
 
     def set_meta(self, text: str) -> None:
-        if not self._meta_id:
-            return
-        try:
-            self.query_one(f"#{self._meta_id}", Static).update(text)
-        except Exception:
-            pass
+        """No-op: density/job meta text removed (chip is-on is the state)."""
+        return
 
     def paint_states(
         self,

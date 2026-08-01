@@ -1402,27 +1402,28 @@ class CockpitApp(App[None]):
             if self._ticker_job:
                 return
             self._ticker_detail_open = not bool(getattr(self, "_ticker_detail_open", False))
-            density = "detail" if self._ticker_detail_open else "brief"
-            self._meta = density + (" · from desk" if self._view_from_desk else "")
+            # Density = [d] is-on only — no brief/detail meta noise
+            self._meta = "from desk" if self._view_from_desk else "local cache"
             self._refresh_chrome()
-            self.notify(f"Ticker · {density}", timeout=1.2)
+            on = "on" if self._ticker_detail_open else "off"
+            self.notify(f"Ticker · detail {on}", timeout=1.2)
             return
         if self._status_note in {"judge", "re-judging"}:
             self._judge_detail_open = not bool(getattr(self, "_judge_detail_open", False))
-            density = "detail" if self._judge_detail_open else "brief"
-            self._meta = f"{density} · d · j re-judge"
+            self._meta = "j re-judge · local"
             self._refresh_chrome()
-            self.notify(f"Judge · {density}", timeout=1.2)
+            on = "on" if self._judge_detail_open else "off"
+            self.notify(f"Judge · detail {on}", timeout=1.2)
             return
         if self._status_note == "inspect" and (
             self._board_kind == "preopen" or self._detail_return_stage == "preopen"
         ):
             # Pre-open: d still expands optional panels (no density chip on bar)
             self._preopen_detail_open = not bool(getattr(self, "_preopen_detail_open", False))
-            mode = "detail" if self._preopen_detail_open else "brief"
-            self._meta = f"{mode} · d toggle"
+            self._meta = "d toggle · local"
             self._refresh_chrome()
-            self.notify(f"Pre-open · {mode}", timeout=1.2)
+            on = "on" if self._preopen_detail_open else "off"
+            self.notify(f"Pre-open · detail {on}", timeout=1.2)
             return
 
     def action_ticker_job(self, job: str) -> None:
@@ -1519,10 +1520,7 @@ class CockpitApp(App[None]):
         self._ticker_job_text = None
         self._stage = "detail"
         self._status_note = "view ticker"
-        density = "detail" if self._ticker_detail_open else "brief"
-        self._meta = (
-            f"{density} · from desk" if self._view_from_desk else f"{density} · local cache"
-        )
+        self._meta = "from desk" if self._view_from_desk else "local cache"
         self._board_title = f"View · ticker · {stock}"
         try:
             desk = self.query_one("#ticker-desk")
@@ -2389,16 +2387,16 @@ class CockpitApp(App[None]):
             self._judge_limited = limited
             self._board_title = f"Judge · {ticker}"
             if limited:
-                self._meta = "brief · limited judge · j re-judge or r live · d detail"
+                self._meta = "limited judge · j re-judge or r live"
             else:
-                self._meta = "brief · d detail · j re-judge"
+                self._meta = "j re-judge · local"
             self._status_note = "judge"
             self._judge_detail_open = False
         elif self._is_preopen_row(row):
             self._judge_limited = False
             self._preopen_detail_open = False
             self._board_title = f"Screen · pre-open · {ticker}"
-            self._meta = "inspect · d detail"
+            self._meta = "inspect · local"
             self._status_note = "inspect"
         else:
             self._judge_limited = False
@@ -2546,7 +2544,7 @@ class CockpitApp(App[None]):
             self._broker_page = None
         self._stage = "loading"
         self._board_title = f"View · ticker · {ticker}"
-        self._meta = "brief · local cache"
+        self._meta = "local cache"
         self._status_note = "view ticker"
         self._ticker_detail_open = False  # brief default (same dual as Judge)
         self._ticker_job = None
@@ -3101,16 +3099,16 @@ class CockpitApp(App[None]):
 
         model = replace(model, body=body.strip())
         self._ticker_desk_model = model
-        self._ticker_detail_open = False  # brief default · d → detail
+        self._ticker_detail_open = False  # brief default · d → detail is-on
         self._detail_text = model.as_text()
         self._stage = "detail"
         self._board_title = f"View · ticker · {ticker}"
-        # Density meta: brief (default) / detail — same dual as Judge
+        # Density state = [d] is-on only — no brief/detail meta text
         if self._view_from_desk:
-            self._meta = "brief · from desk"
+            self._meta = "from desk"
             self._broker_page = None  # not a desk page; trail via _view_from_desk
         else:
-            self._meta = "brief · local cache"
+            self._meta = "local cache"
         self._status_note = "view ticker"
         self._focus_ticker = ticker
         self._refresh_chrome()

@@ -38,7 +38,9 @@ def test_broker_home_product_labels_no_deep_noise():
     assert dict(BROKER_HOME_CHIPS)["m"] == "top 5"
 
 
-def test_chip_bar_compose_jobs_then_density_meta():
+def test_chip_bar_compose_jobs_then_density_no_meta():
+    """Density last as [d] detail; no brief/detail meta status text."""
+
     async def scenario() -> None:
         class _A(App):
             def compose(self) -> ComposeResult:
@@ -48,7 +50,7 @@ def test_chip_bar_compose_jobs_then_density_meta():
                     chip_id_prefix="td-flag",
                     include_detail=True,
                     detail_id="td-flag-detail",
-                    meta_id="td-density-meta",
+                    meta_id="td-density-meta",  # accepted, not painted
                     meta_text="brief",
                 )
 
@@ -62,11 +64,14 @@ def test_chip_bar_compose_jobs_then_density_meta():
             assert keys[:-1] == ["brokers", "flow", "foreign", "dist", "fin"]
             for c in chips:
                 assert c.can_focus is True
+            detail = app.query_one("#td-flag-detail", FlagChip)
+            label = str(getattr(detail, "_label", "") or detail.content or "")
+            assert "[d] detail" in label or "[d]" in label
             bar.paint_states(on_keys=("detail",))
-            assert "is-on" in app.query_one("#td-flag-detail", FlagChip).classes
-            bar.set_meta("detail")
-            meta = app.query_one("#td-density-meta")
-            assert "detail" in str(meta.content)
+            assert "is-on" in detail.classes
+            # No density meta widget (noise removed)
+            assert not any(getattr(c, "id", None) == "td-density-meta" for c in bar.children)
+            bar.set_meta("detail")  # no-op
 
     asyncio.run(scenario())
 

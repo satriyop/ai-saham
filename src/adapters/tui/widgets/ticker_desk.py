@@ -452,8 +452,6 @@ class TickerDesk(Vertical):
             chip_id_prefix="td-flag",
             include_detail=True,
             detail_id="td-flag-detail",
-            meta_id="td-density-meta",
-            meta_text="brief",
         )
 
         # Job sub-stage (structured flow desk + flat body fallback)
@@ -671,7 +669,7 @@ class TickerDesk(Vertical):
         if self._detail_all:
             open_flags |= self._available_panels(model)
         detail_open = self._detail_all or bool(open_flags)
-        density = "detail" if self._detail_all else "brief"
+        # Density state = [d] is-on only — never restate brief/detail in crumb
         if self._active_job:
             self.query_one("#td-crumb", Static).update(
                 f"View · ticker · [bold #e8e8e8]{model.ticker}[/]   "
@@ -680,7 +678,7 @@ class TickerDesk(Vertical):
         else:
             self.query_one("#td-crumb", Static).update(
                 f"View · ticker · [bold #e8e8e8]{model.ticker}[/]   "
-                f"[#555555]{density} · local cache · browse[/]"
+                f"[#555555]local cache · browse[/]"
             )
         job_mode = bool(self._active_job and (self._job_body or self._job_desk is not None))
         self._set_show_panels_visible(not job_mode)
@@ -926,10 +924,6 @@ class TickerDesk(Vertical):
         try:
             bar = self.query_one("#td-flags", ChipBar)
             bar.paint_states(on_keys=on_keys)
-            if self._active_job:
-                bar.set_meta(self._active_job)
-            else:
-                bar.set_meta("detail" if self._detail_all else "brief")
         except Exception:
             try:
                 self.query_one("#td-flag-detail", FlagChip).set_chip_state(

@@ -281,13 +281,11 @@ class JudgeDesk(Vertical):
             yield Static("", classes="phase-arrow", id="jd-phase-arrow")
             yield Static("", classes="phase-detail", id="jd-phase-detail")
             yield Static("", classes="phase-foot", id="jd-phase-foot")
-        # Chip bar · density only · no row label (bible §1–2)
+        # Chip bar · density only · [d] is-on · no brief/detail meta (bible §1–2)
         yield ChipBar(
             id="jd-flags",
             include_detail=True,
             detail_id="jd-flag-detail",
-            meta_id="jd-density-meta",
-            meta_text="brief",
             chip_id_prefix="jd-flag",
         )
         with Vertical(classes="decision-block", id="jd-decision"):
@@ -358,10 +356,10 @@ class JudgeDesk(Vertical):
             open_flags=self._open_flags,
         )
 
-        density = "detail" if self._detail_all else "brief"
+        # Density = [d] is-on only — do not restate brief/detail in sub
         self.query_one("#jd-title", Static).update(f"Judge · {model.ticker}")
         self.query_one("#jd-sub", Static).update(
-            f"Screen · accumulation · #{model.rank}/{model.total} by Signal · {density}"
+            f"Screen · accumulation · #{model.rank}/{model.total} by Signal"
             + (f"\nBoard  {model.board_summary}" if model.board_summary else "")
         )
         limited = self.query_one("#jd-limited", Static)
@@ -436,7 +434,7 @@ class JudgeDesk(Vertical):
             foot_el.update("")
             foot_el.display = False
 
-        # Density control only (brief ↔ detail)
+        # Density control only ([d] detail is-on toggle)
         detail_chip = self.query_one("#jd-flag-detail", FlagChip)
         detail_chip.display = True
         detail_chip.set_chip_state(
@@ -444,8 +442,6 @@ class JudgeDesk(Vertical):
             expanded=self._detail_all,
             warn=False,
         )
-        dens_meta = self.query_one("#jd-density-meta", Static)
-        dens_meta.update("detail" if self._detail_all else "brief")
 
         # Decision stack in detail mode when data exists
         decision_block = self.query_one("#jd-decision", Vertical)

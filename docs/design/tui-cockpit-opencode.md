@@ -126,11 +126,12 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 | Rule | Spec |
 |------|------|
 | Placement | One horizontal row under the stage section label (or under mast if no separate title) |
-| Contents | Chips only · optional **meta** text after chips (`brief` / `detail`) — meta is status, not a chip |
+| Contents | Chips only · **no density status text** after the bar |
 | Row labels | **Forbidden** in product UI: `Deep`, `Hub`, `Density`, `List`, `Detail`, `Flags` |
 | Chip label | **`[k] word`** — see Keycap-in-chip (below) |
 | Order | **Jobs / options first** (left → right) · **density last** when present |
 | Missing data | Chip **dim** (still focusable) or omit — honest; never invent content |
+| Density state | **`[d] detail` chip `is-on` = detail** · default (not on) = brief — **no** `brief` / `detail` meta label |
 
 ### Keycap-in-chip (locked)
 
@@ -143,10 +144,20 @@ Every chip that has a **power letter** paints that letter **on the chip**, not o
 | Weight | **Bold** on the keycap token `[k]` only · label normal weight |
 | Color | **Brass** (`#d4b06a` / design token `--brass`) on the keycap · label mute/ash |
 | Space | One space after `]`: `[f] flow` |
-| Density | **`[d] detail`** — not `detail · d` |
+| Density | **`[d] detail`** only — not `detail · d` · **never** a second word `brief` on the bar |
 | No power key | Option chips without a letter stay **label-only** (pre-open `why` · `auction+` · `warn`) — no fake `[—]` |
 | is-on | Chip fills **peach**; keycap stays bold — use dark ink on peach so `[k]` remains readable (not brass-on-peach mud) |
 | Dim | Keycap + label both dim · still honest |
+
+**Density is a toggle, not a status essay:**
+
+| State | Paint | Operator reads |
+|-------|--------|----------------|
+| Brief (default) | `[d] detail` **not** `is-on` | “press d / chip for more” |
+| Detail | `[d] detail` **`is-on`** (peach) | “detail is on · d to leave” |
+
+**Reject:** meta/status after chips: `brief` · `detail` · `brief \| detail`. Noise — state is the chip.  
+**Reject:** crumb or as-of lines that restate `brief ·` / `detail ·` for density (use `local cache` honesty only).
 
 **Brass = navigation language (TUI-wide):**
 
@@ -225,11 +236,11 @@ Power keys are **stage-local** (only while that stage owns input).
 
 | Chip (paint) | Kind | Power | Effect |
 |--------------|------|-------|--------|
-| **`[d] detail`** | density | `d` | brief ↔ detail |
+| **`[d] detail`** | density | `d` | toggle detail on/off (`is-on` = detail) |
 
-- Meta after bar: `brief` \| `detail`.  
+- **No** meta `brief`/`detail` after the bar.  
 - **No** multi-chip wall. Limited = **banner** only · not a chip.  
-- Nav: click · Tab · Enter/Space · `d` (keycap teaches the letter).
+- Nav: click · Tab · Enter/Space · `d` (keycap + `is-on` teach state).
 
 ### Ticker show (`v t`)
 
@@ -240,14 +251,14 @@ Power keys are **stage-local** (only while that stage owns input).
 | **`[o] foreign`** | job | **`o`** | `view ticker foreign-history` |
 | **`[x] dist`** | job | **`x`** | `view ticker distribution` |
 | **`[n] fin`** | job | **`n`** | `view ticker financials` |
-| **`[d] detail`** | density | **`d`** | brief ↔ detail on **show** body |
+| **`[d] detail`** | density | **`d`** | toggle detail on **show** body (`is-on` = detail) |
 
 - Word **`flow`** kept (CLI verb); keycap **`[f]`** is the scan target.  
 - Job → sub-stage titled with CLI job name · bar remains · switch via chip or letter · `esc` → show.  
 - **`d` only when show body is visible** (not while a job table is front). Prefer: `esc` first, then `d`.  
 - Also: `p` plan · `esc` trail.  
 - Nav: click · Tab · Enter/Space · **`b f o x n d`** (letters match keycaps).  
-- Optional footer cue (same brass kbd): `jobs [b][f][o][x][n] · dens [d] · esc`.
+- **No** density meta text. Optional footer keys only: brass `b f o x n d · esc` (no “brief” word).
 
 ### Pre-open inspect
 
@@ -312,12 +323,12 @@ Accum (source badge only) · Broker list / stock desks (honesty in meta) · Plan
 
 ### Default: brief (consistent with Judge)
 
-- Open density = **brief**.  
+- Open density = **brief** (implementer word — **not** painted as bar meta).  
 - Panel set: `BRIEF_PANEL_KEYS` via  
   `src/application/services/ticker_dashboard_layout.py` · `panel_keys_for_mode(brief=True)`.  
 - CLI: brief ≈ `saham view ticker show TICKER --brief`.  
-- **`d` / `[d] detail`** → detail = `FULL_PANEL_ORDER` / full show without `--brief`.  
-- Meta: **`brief`** (default) · **`detail`** · local cache. Never “full”.  
+- **`d` / `[d] detail`** `is-on` → detail = `FULL_PANEL_ORDER` / full show without `--brief`.  
+- Honesty line: **`local cache` only** — never restate density as `brief ·` / `detail ·` / `full`.  
 - Paint may re-group hierarchy around panel keys (multi-surface keys stay).
 
 ### Panel inventory (authority = layout module)
@@ -483,9 +494,9 @@ Not a 3-row mini top table. Chip **brokers** / `b` opens the **same rich radar a
 ### Judge (nested · screen-shaped)
 - **Brief (default):** Action · Gate · Signal · Accum · Authority% · Family · Why · phase timeline · primary cards  
 - **Detail (`d`):** + decision stack · phase ledger · secondary / diagnostic cards (fixed order; omit if no data)  
-- Chip bar: **`[d] detail`** only · meta brief|detail  
+- Chip bar: **`[d] detail`** only · **`is-on` = detail** · **no** brief/detail meta text  
 - CLI: without / with `--detail`  
-- **Limited:** banner + meta · `j` / `r` — not a chip  
+- **Limited:** banner only · `j` / `r` — not a chip · not density meta
 
 ### Accum
 - Cols 1:1 `BOARD_COLUMN_LABELS`  

@@ -2173,11 +2173,9 @@
       margin: 0 0 10px;
       align-items: center;
     }
-    /* meta = density status only — not a row label (Deep/Hub/Density forbidden) */
+    /* Density state = [d] is-on only — no brief/detail meta text (noise) */
     .flag-row .flag-meta {
-      font-size: 11px;
-      color: var(--text-mute);
-      margin-left: 4px;
+      display: none !important;
     }
     .flag-chip {
       font-family: var(--font-mono);
@@ -2554,7 +2552,6 @@
             <!-- Chip bar · density only · plain Tab · no row label -->
             <div class="flag-row" id="judgeFlags" data-flag-group="judge" role="toolbar" aria-label="Judge chips">
               <button type="button" class="flag-chip" data-flag="detail" id="judgeDetailAll" title="[d] detail"><span class="chip-key">[d]</span><span class="chip-lab">detail</span></button>
-              <span class="flag-meta" id="judgeDensityMeta">brief</span>
             </div>
 
             <!-- Primary cards always (brief) -->
@@ -2593,7 +2590,7 @@
             </div>
 
             <div class="footer-note">
-              <span><span class="kbd">d</span> brief ↔ detail (CLI --detail)</span>
+              <span><span class="kbd">d</span> detail on/off</span>
               <span><span class="kbd">j</span> re-judge local</span>
               <span><span class="kbd">r</span> live board</span>
               <span><span class="kbd">p</span> plan</span>
@@ -2839,7 +2836,6 @@
    <button type="button" class="flag-chip" data-deep="dist" title="[x] dist · view ticker distribution"><span class="chip-key">[x]</span><span class="chip-lab">dist</span></button>
    <button type="button" class="flag-chip" data-deep="fin" title="[n] fin · view ticker financials"><span class="chip-key">[n]</span><span class="chip-lab">fin</span></button>
    <button type="button" class="flag-chip" data-flag="detail" id="tickerDetailAll" title="[d] detail"><span class="chip-key">[d]</span><span class="chip-lab">detail</span></button>
-   <span class="flag-meta" id="tickerDensityMeta">brief</span>
  </div>
 
  <div id="tickerFullPanels" data-mode="full" data-hierarchy="price-hero">
@@ -2856,7 +2852,7 @@
  </div>
  <div class="asof">
  <strong>as of 2026-07-29</strong>
- brief · local cache
+ local cache
  </div>
  </div>
 
@@ -4743,10 +4739,8 @@
           $("statusScreen").textContent = `view ticker ${job.title}`;
         } else {
           $("viewTitle").textContent = `View · ticker · ${t}`;
-          // Brief default · d = detail (same dual as Judge)
-          $("viewMeta").innerHTML = state.tickerDetailOpen
-            ? `<span class="dot">·</span> detail · local cache`
-            : `<span class="dot">·</span> brief · local cache`;
+          // Density = [d] is-on only — no brief/detail meta noise
+          $("viewMeta").innerHTML = `<span class="dot">·</span> local cache`;
           $("statusScreen").textContent = "view ticker";
         }
  $("statusRows").textContent = t;
@@ -5330,8 +5324,7 @@
       state.judgeDetailOpen = !!open;
       const allBtn = $("judgeDetailAll");
       if (allBtn) allBtn.classList.toggle("is-on", state.judgeDetailOpen);
-      const meta = $("judgeDensityMeta");
-      if (meta) meta.textContent = state.judgeDetailOpen ? "detail" : "brief";
+      // Density state = [d] is-on only — no brief/detail meta text
       const body = $("judgeDetailBody");
       if (body) body.style.display = state.judgeDetailOpen ? "block" : "none";
     }
@@ -5354,26 +5347,18 @@
       const body = $("tickerDepthBody");
       // Brief default: body closed; detail opens FULL_PANEL_ORDER remainder
       if (body) body.classList.toggle("is-open", state.tickerDetailOpen);
-      const meta = $("tickerDensityMeta");
-      if (meta) meta.textContent = state.tickerDetailOpen ? "detail" : "brief";
       const asof = document.querySelector("#tickerFullPanels .asof");
       if (asof) {
-        asof.innerHTML = state.tickerDetailOpen
-          ? "<strong>as of 2026-07-29</strong> detail · local cache"
-          : "<strong>as of 2026-07-29</strong> brief · local cache";
+        asof.innerHTML = "<strong>as of 2026-07-29</strong> local cache";
       }
       if (state.frame === "detail") updateChrome();
     }
 
     function toggleTickerDetail() {
-      // d / [d] detail — same pattern as Judge
+      // d / [d] detail is-on toggle — same pattern as Judge
       if (state.tickerDeep) closeTickerDeep(false);
       setTickerDetailOpen(!state.tickerDetailOpen);
-      toast(
-        state.tickerDetailOpen
-          ? "Ticker detail · full show"
-          : "Ticker brief · default"
-      );
+      toast(state.tickerDetailOpen ? "Ticker detail on" : "Ticker detail off");
     }
 
     function showTickerJobDesk(job) {
@@ -5434,8 +5419,6 @@
       document.querySelectorAll("#tickerJobFlags .flag-chip[data-deep]").forEach((b) => {
         b.classList.toggle("is-on", b.dataset.deep === job);
       });
-      const meta = $("tickerDensityMeta");
-      if (meta) meta.textContent = spec.title;
       updateChrome();
       toast(`${spec.cli} ${t}`);
     }
@@ -5454,10 +5437,8 @@
       document.querySelectorAll("#tickerJobFlags .flag-chip[data-deep]").forEach((b) => {
         b.classList.remove("is-on");
       });
-      const meta = $("tickerDensityMeta");
-      if (meta) meta.textContent = state.tickerDetailOpen ? "detail" : "brief";
       if (state.frame === "detail") updateChrome();
-      if (announce) toast(state.tickerDetailOpen ? "Ticker detail" : "Ticker brief");
+      if (announce) toast("Ticker show");
     }
 
     function wireTickerJobChips() {
