@@ -20,10 +20,12 @@ from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import (
     AccumPopulationBinding,
     AssessmentPurpose,
+    LearningContractError,
     LearningContractId,
     LearningObservation,
     stable_learning_id,
     stamp_universe_membership_id,
+    validate_accum_population_binding,
 )
 from src.domain.value_objects.risk_gate_audit import build_risk_assessment_capture_dict
 from src.domain.value_objects.signal_observation_contracts import (
@@ -132,18 +134,8 @@ class AccumulationCandidateObservationPersister:
                 f"got {type(population_binding).__name__}"
             )
 
-        # ticker -> window -> OC
-        by_ticker: dict[str, dict[int, Any]] = {}
-        for window, (_req, candidates) in window_results.items():
-            for oc in candidates:
-                ticker = oc.candidate.ticker.upper()
-                by_ticker.setdefault(ticker, {})[int(window)] = oc
-
-        captured_at = datetime.now(IDX_TIMEZONE)
-        # Config hash from canonical window request (material config identity).
-        canon_req = window_results[canonical_window][0]
-        config_hash = compute_accumulation_config_hash(canon_req)
-        # Locked population authority: capture membership digest + typed binding.
+        # Locked population authority before any candidate processing or insert.
+        # Unsupported names (e.g. idx30) must not poison schema-10 challenge corpus.
         universe_id = stamp_universe_membership_id(universe_tickers)
         if binding_obj.membership_digest != universe_id:
             raise ValueError(
@@ -156,6 +148,26 @@ class AccumulationCandidateObservationPersister:
                 f"(binding={binding_obj.membership_session!r}, "
                 f"snapshot={snapshot_date.isoformat()!r})"
             )
+        try:
+            validate_accum_population_binding(
+                binding_obj,
+                outer_universe_id=universe_id,
+                economic_session=snapshot_date,
+            )
+        except LearningContractError as exc:
+            raise ValueError(f"population_binding rejected before persist: {exc}") from exc
+
+        # ticker -> window -> OC
+        by_ticker: dict[str, dict[int, Any]] = {}
+        for window, (_req, candidates) in window_results.items():
+            for oc in candidates:
+                ticker = oc.candidate.ticker.upper()
+                by_ticker.setdefault(ticker, {})[int(window)] = oc
+
+        captured_at = datetime.now(IDX_TIMEZONE)
+        # Config hash from canonical window request (material config identity).
+        canon_req = window_results[canonical_window][0]
+        config_hash = compute_accumulation_config_hash(canon_req)
         market_context = getattr(canon_req, "market_context", None)
         shared_mce = (
             market_context.to_dict()

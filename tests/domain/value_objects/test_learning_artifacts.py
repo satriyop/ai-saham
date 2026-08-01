@@ -182,12 +182,17 @@ def test_stamp_universe_membership_id_is_locked_population_authority() -> None:
     """Write-path membership digest is the ACCUM population authority contract."""
     from src.domain.value_objects.learning_artifacts import (
         ACCUM_POPULATION_AUTHORITY_CONTRACT,
+        LEGACY_ACCUM_POPULATION_AUTHORITY_CONTRACT,
         artifact_digest,
         is_accum_population_universe_id,
         stamp_universe_membership_id,
     )
 
-    assert ACCUM_POPULATION_AUTHORITY_CONTRACT == "capture_universe_membership_digest.v1"
+    assert (
+        ACCUM_POPULATION_AUTHORITY_CONTRACT
+        == "population.accum.lq45_current_roster_pit_tradable.v1"
+    )
+    assert LEGACY_ACCUM_POPULATION_AUTHORITY_CONTRACT == "capture_universe_membership_digest.v1"
     tickers = ["TLKM", "BBCA", "BBRI"]
     stamped = stamp_universe_membership_id(tickers)
     # Same inputs → same population identity (sorted membership).
@@ -201,3 +206,39 @@ def test_stamp_universe_membership_id_is_locked_population_authority() -> None:
         assert not is_accum_population_universe_id(free)
     # No string/float coercion into authority.
     assert not is_accum_population_universe_id("")  # type: ignore[arg-type]
+
+
+def test_accum_population_binding_create_rejects_unsupported_population_name() -> None:
+    """Production binding create fails closed for non-lq45 names (e.g. idx30)."""
+    from src.domain.value_objects.learning_artifacts import (
+        ACCUM_POPULATION_AUTHORITY_CONTRACT,
+        ACCUM_POPULATION_NAME,
+        AccumPopulationBinding,
+        validate_accum_population_binding,
+    )
+
+    with pytest.raises(LearningContractError, match="unsupported population_name=.idx30"):
+        AccumPopulationBinding.create(
+            membership_tickers=["BBCA", "BBRI"],
+            named_universe_tickers=["BBCA", "BBRI", "TLKM"],
+            membership_session="2026-07-01",
+            pit_tradable_lookback_sessions=10,
+            producer_source_revision="ai-saham@test",
+            population_name="idx30",
+        )
+
+    binding = AccumPopulationBinding.create(
+        membership_tickers=["BBCA", "BBRI"],
+        named_universe_tickers=["BBCA", "BBRI", "TLKM"],
+        membership_session="2026-07-01",
+        pit_tradable_lookback_sessions=10,
+        producer_source_revision="ai-saham@test",
+        population_name=ACCUM_POPULATION_NAME,
+    )
+    assert binding.population_name == "lq45"
+    assert binding.contract_id == ACCUM_POPULATION_AUTHORITY_CONTRACT
+    validate_accum_population_binding(
+        binding,
+        outer_universe_id=binding.membership_digest,
+        economic_session="2026-07-01",
+    )

@@ -384,3 +384,25 @@ class TestPitWindowValidation:
                 named_universe_tickers=["BBCA"],
                 producer_source_revision="ai-saham@test",
             )
+
+    def test_unsupported_population_name_rejected_at_construction(self):
+        """--universe idx30 must fail before any session loop/persist."""
+        with pytest.raises(ValueError, match="unsupported population_name=.idx30"):
+            BackfillSignalObservationsUseCase(
+                record_observations_use_case=MagicMock(),
+                screen_request_builder=MagicMock(),
+                market_data_repository=FakeMarketRepository({}),
+                observation_identity=_identity(),
+                membership_resolver=lambda d: ("BBCA",),
+                pit_window_sessions=10,
+                named_universe_tickers=["BBCA", "BBRI"],
+                producer_source_revision="ai-saham@test",
+                population_name="idx30",
+            )
+
+    def test_lq45_population_name_accepted_at_construction(self):
+        uc, _ = _make_use_case(
+            market=FakeMarketRepository({}),
+            membership_resolver=lambda d: ("BBCA",),
+        )
+        assert uc is not None

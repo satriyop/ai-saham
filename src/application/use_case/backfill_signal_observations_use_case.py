@@ -27,7 +27,10 @@ from src.application.use_case.record_accumulation_observations_use_case import (
 )
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
-from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
+from src.domain.value_objects.learning_artifacts import (
+    ACCUM_POPULATION_NAME,
+    AccumPopulationBinding,
+)
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
@@ -223,6 +226,14 @@ class BackfillSignalObservationsUseCase:
         )
         if not named:
             raise ValueError("named_universe_tickers must be non-empty for population binding")
+        # Challenge-corpus backfill/capture only persists lq45 authority.
+        # Reject unsupported --universe names before any session loop/write.
+        if population_name != ACCUM_POPULATION_NAME:
+            raise ValueError(
+                f"unsupported population_name={population_name!r}; "
+                f"accumulation challenge corpus requires "
+                f"population_name={ACCUM_POPULATION_NAME!r}"
+            )
         self._record = record_observations_use_case
         self._request_builder = screen_request_builder
         self._market = market_data_repository

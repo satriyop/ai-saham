@@ -285,6 +285,17 @@ class AccumPopulationBinding:
         _require_non_empty("population_name", population_name)
         _require_non_empty("benchmark_symbol", benchmark_symbol)
         _require_non_empty("tradable_membership_contract", tradable_membership_contract)
+        # Production write authority is locked to the challenge-corpus population.
+        # Unsupported names (e.g. idx30) must fail before schema-10 persist — not
+        # only later at readiness. from_mapping remains permissive for read-side
+        # historical/adversarial rows.
+        if population_name != ACCUM_POPULATION_NAME:
+            raise LearningContractError(
+                f"unsupported population_name={population_name!r}; "
+                f"challenge-corpus production binding requires "
+                f"population_name={ACCUM_POPULATION_NAME!r} "
+                f"(contract={ACCUM_POPULATION_AUTHORITY_CONTRACT})"
+            )
         membership = tuple(
             sorted({str(t).strip().upper() for t in membership_tickers if str(t).strip()})
         )

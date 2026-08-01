@@ -193,3 +193,31 @@ def test_persist_skips_existing_observation_without_rebuild(
     assert saved == 0
     assert repo.saved == []
     assert obs_id in repo.get_calls
+
+
+def test_persist_rejects_unsupported_population_name_before_insert() -> None:
+    """idx30 (or any non-lq45) binding must not write schema-10 observations.
+
+    Adversarial path: inject via replace after create would reject, simulating
+    a bypass of AccumPopulationBinding.create.
+    """
+    from dataclasses import replace
+
+    from src.domain.value_objects.learning_artifacts import ACCUM_POPULATION_NAME
+
+    repo = _SpyRepo()
+    persister = _persister(repo)
+    base = _test_population_binding(tickers=["BBCA"])
+    assert base.population_name == ACCUM_POPULATION_NAME
+    adversarial = replace(base, population_name="idx30")
+    assert adversarial.population_name == "idx30"
+    with pytest.raises(ValueError, match="population_binding rejected before persist"):
+        _call(persister, population_binding=adversarial, universe_tickers=["BBCA"])
+    assert repo.saved == []
+    assert repo.get_calls == []
+
+    # lq45 binding clears the population gate; incomplete OC mocks fail later
+    # without writing rows and without a population_name rejection.
+    with pytest.raises(AttributeError):
+        _call(persister, population_binding=base, universe_tickers=["BBCA"])
+    assert repo.saved == []
