@@ -13,12 +13,14 @@ ACTIVE_CRON_LINES = tuple(line for line in INSTALL.splitlines() if line and line
 def test_wrapper_uses_fail_closed_shell_and_ordered_chain() -> None:
     assert "set -euo pipefail" in WRAPPER
     capture_at = WRAPPER.index("research accum capture")
+    sync_at = WRAPPER.index("research accum sync-session-calendar")
     labels_at = WRAPPER.index("research accum labels")
     status_at = WRAPPER.index("research accum status")
-    assert capture_at < labels_at < status_at
+    assert capture_at < sync_at < labels_at < status_at
     assert "--universe lq45" in WRAPPER
     assert "--all-label-contracts" in WRAPPER
-    # Completion marker only after the three steps (appears last).
+    assert "--auto" in WRAPPER
+    # Completion marker only after the full chain (appears last).
     assert WRAPPER.rindex("COMPLETION_OK") > status_at
 
 
@@ -27,6 +29,12 @@ def test_wrapper_does_not_emit_completion_before_status() -> None:
     before_status, after_status = WRAPPER.split("research accum status", 1)
     assert "COMPLETION_OK" not in before_status
     assert "COMPLETION_OK" in after_status
+
+
+def test_wrapper_syncs_calendar_before_labels() -> None:
+    sync_at = WRAPPER.index("sync-session-calendar")
+    labels_at = WRAPPER.index("research accum labels")
+    assert sync_at < labels_at
 
 
 def test_wrapper_documents_recovery_and_collecting_as_success() -> None:
