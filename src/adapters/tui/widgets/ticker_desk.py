@@ -380,15 +380,15 @@ class TickerDesk(Vertical):
                 yield Static("", id="td-asof")
                 yield Static("", id="td-fresh")
 
-        # Mock fresh-grid (Price · Flow · Bandar · …)
+        # Freshness: slots for real pills only (no Sent; unused hidden on paint)
         with Vertical(classes="td-fresh-sec", id="td-fresh-sec"):
             yield Static("FRESHNESS", classes="td-fresh-head", id="td-fresh-head")
             with Vertical(classes="td-fresh-grid", id="td-fresh-grid"):
-                # 2 rows × 5 pills = 10 mock slots
-                for row in range(2):
+                # Up to FRESH_GRID_SLOTS statics (3×4); paint shows only real pills
+                for row in range(3):
                     with Horizontal(classes="td-fresh-row", id=f"td-fresh-row-{row}"):
-                        for col in range(5):
-                            idx = row * 5 + col
+                        for col in range(4):
+                            idx = row * 4 + col
                             yield Static(
                                 "",
                                 id=f"td-fp-{idx}",
@@ -499,14 +499,37 @@ class TickerDesk(Vertical):
         }
 
     def _paint_fresh_grid(self, pills: tuple[TickerFreshPill, ...]) -> None:
-        """Paint mock fresh-grid pills (ok / stale / miss)."""
+        """Paint **real** freshness pills only — no Sent, no fake empty tiles."""
+        sec = self.query_one("#td-fresh-sec", Vertical)
+        if not pills:
+            # Honest empty: one line, not a grid of invented misses
+            sec.display = True
+            self.query_one("#td-fresh-head", Static).update("FRESHNESS")
+            for idx in range(FRESH_GRID_SLOTS):
+                try:
+                    el = self.query_one(f"#td-fp-{idx}", Static)
+                    el.display = idx == 0
+                    if idx == 0:
+                        for kind in ("ok", "stale", "miss", "unknown"):
+                            el.remove_class(kind)
+                        el.add_class("miss")
+                        el.update("[#555555]freshness[/]  [#3a3a3a]not cached[/]")
+                except Exception:
+                    pass
+            return
+        sec.display = True
+        self.query_one("#td-fresh-head", Static).update("FRESHNESS")
         for idx in range(FRESH_GRID_SLOTS):
-            el = self.query_one(f"#td-fp-{idx}", Static)
+            try:
+                el = self.query_one(f"#td-fp-{idx}", Static)
+            except Exception:
+                continue
             for kind in ("ok", "stale", "miss", "unknown"):
                 el.remove_class(kind)
             if idx < len(pills):
                 pill = pills[idx]
                 kind = pill.css_kind
+                el.display = True
                 el.add_class(kind)
                 val_col = {
                     "ok": "#6fbf8a",
@@ -516,7 +539,7 @@ class TickerDesk(Vertical):
                 }.get(kind, "#6b6b6b")
                 el.update(f"[#555555]{pill.label}[/]  [{val_col}]{pill.value}[/]")
             else:
-                el.add_class("miss")
+                el.display = False
                 el.update("")
 
     def paint(

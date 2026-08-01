@@ -321,7 +321,7 @@ def _empty_metrics() -> tuple[TickerMetric, ...]:
     )
 
 
-# Mock fresh-grid order (docs/design/tui-cockpit-opencode.html detailView)
+# Fresh-grid order (bible: no Sent — cryptic Sentiment forbidden)
 FRESH_GRID_LABELS: tuple[str, ...] = (
     "Price",
     "Flow",
@@ -332,9 +332,9 @@ FRESH_GRID_LABELS: tuple[str, ...] = (
     "Own",
     "IEV",
     "Insider",
-    "Sent",
 )
-FRESH_GRID_SLOTS: int = len(FRESH_GRID_LABELS)
+# Widget precomposes this many slots; paint hides unused (real pills only).
+FRESH_GRID_SLOTS: int = 12
 
 
 def _normalize_fresh_status(raw: Any) -> tuple[str, str]:
@@ -351,64 +351,70 @@ def _normalize_fresh_status(raw: Any) -> tuple[str, str]:
     return "unknown", st_s[:8] or "—"
 
 
+def _short_fresh_label(label: str) -> str | None:
+    """Map dashboard label → grid short name, or None to drop (e.g. Sent)."""
+    low = label.lower().strip()
+    if not low:
+        return None
+    # Never paint Sent / cryptic sentiment as a freshness cell
+    if low in {"sent", "sentiment", "news", "news_sentiment"} or "sentiment" in low:
+        return None
+    if low in {"price", "close", "candle"}:
+        return "Price"
+    if low in {"flow", "foreign", "foreign_flow"}:
+        return "Flow"
+    if low in {"bandar", "broker"}:
+        return "Bandar"
+    if low in {"earn", "earnings"}:
+        return "Earn"
+    if low in {"fund", "fundamentals", "fundamental"}:
+        return "Fund"
+    if low in {"analyst", "analysts"}:
+        return "Analyst"
+    if low in {"own", "ownership"}:
+        return "Own"
+    if low in {"iev", "preopen"}:
+        return "IEV"
+    if low in {"insider", "insiders"}:
+        return "Insider"
+    for known in FRESH_GRID_LABELS:
+        if known.lower() in low or low in known.lower():
+            return known
+    # Unknown real series: keep truncated label (still real, not Sent)
+    return label[:12] if label else None
+
+
 def _freshness_pills(items: Any) -> list[TickerFreshPill]:
-    """Build ordered mock fresh-grid pills from dashboard freshness rows."""
+    """Build freshness pills from **real** dashboard rows only.
+
+    - No ``Sent`` slot.
+    - Do not invent miss tiles for every known label when data is absent.
+    - Order: known FRESH_GRID_LABELS first (when present), then other real keys.
+    """
     by_label: dict[str, TickerFreshPill] = {}
     for item in list(items or ()):
-        label = str(getattr(item, "label", None) or getattr(item, "key", None) or "?").strip()
+        label = str(getattr(item, "label", None) or getattr(item, "key", None) or "").strip()
         if not label:
             continue
-        # Shorten long labels toward mock set
-        short = label
-        for known in FRESH_GRID_LABELS:
-            if known.lower() in label.lower() or label.lower() in known.lower():
-                short = known
-                break
-        # Common aliases
-        low = label.lower()
-        if low in {"price", "close", "candle"}:
-            short = "Price"
-        elif low in {"flow", "foreign", "foreign_flow"}:
-            short = "Flow"
-        elif low in {"bandar", "broker"}:
-            short = "Bandar"
-        elif low in {"earn", "earnings"}:
-            short = "Earn"
-        elif low in {"fund", "fundamentals", "fundamental"}:
-            short = "Fund"
-        elif low in {"analyst", "analysts"}:
-            short = "Analyst"
-        elif low in {"own", "ownership"}:
-            short = "Own"
-        elif low in {"iev", "preopen"}:
-            short = "IEV"
-        elif low in {"insider", "insiders"}:
-            short = "Insider"
-        elif low in {"sent", "sentiment"}:
-            short = "Sent"
+        short = _short_fresh_label(label)
+        if short is None:
+            continue
         status, value = _normalize_fresh_status(getattr(item, "status", None))
         key = short.lower().replace(" ", "_")
         by_label[short] = TickerFreshPill(key=key, label=short, status=status, value=value)
+
+    if not by_label:
+        return []
 
     out: list[TickerFreshPill] = []
     for lab in FRESH_GRID_LABELS:
         if lab in by_label:
             out.append(by_label[lab])
-        else:
-            out.append(
-                TickerFreshPill(
-                    key=lab.lower(),
-                    label=lab,
-                    status="miss",
-                    value="—",
-                )
-            )
-    # Append any unknown extras beyond the 10 mock slots (capped)
     known = set(FRESH_GRID_LABELS)
-    extras = [p for p in by_label.values() if p.label not in known]
-    for p in extras[:2]:
-        out.append(p)
-    return out[: FRESH_GRID_SLOTS + 2]
+    for lab, pill in by_label.items():
+        if lab not in known:
+            out.append(pill)
+    return out
 
 
 def _pulse_flow(dashboard: Any) -> PulseCard:
