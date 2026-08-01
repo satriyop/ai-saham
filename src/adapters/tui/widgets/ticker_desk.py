@@ -12,6 +12,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
+from src.adapters.shared.ticker_dist_desk_model import DistSideRow, TickerDistDeskModel
 from src.adapters.shared.ticker_flow_desk_model import TickerFlowDeskModel
 from src.adapters.shared.ticker_foreign_desk_model import TickerForeignDeskModel
 from src.adapters.tui.ticker_desk_model import (
@@ -440,7 +441,9 @@ class TickerDesk(Vertical):
         self._active_job: str | None = None
         self._job_title: str = ""
         self._job_body: str = ""
-        self._job_desk: TickerFlowDeskModel | TickerForeignDeskModel | None = None
+        self._job_desk: (
+            TickerFlowDeskModel | TickerForeignDeskModel | TickerDistDeskModel | None
+        ) = None
 
     def compose(self) -> ComposeResult:
         yield Static("", classes="td-crumb", id="td-crumb")
@@ -588,7 +591,7 @@ class TickerDesk(Vertical):
         *,
         title: str = "",
         body: str = "",
-        desk: TickerFlowDeskModel | TickerForeignDeskModel | None = None,
+        desk: TickerFlowDeskModel | TickerForeignDeskModel | TickerDistDeskModel | None = None,
     ) -> None:
         """Show/hide job body under chip bar (browse-only CLI sibling)."""
         self._active_job = job
@@ -961,8 +964,9 @@ class TickerDesk(Vertical):
         foreign_ok = (
             isinstance(self._job_desk, TickerForeignDeskModel) and self._active_job == "foreign"
         )
+        dist_ok = isinstance(self._job_desk, TickerDistDeskModel) and self._active_job == "dist"
 
-        if flow_ok or foreign_ok:
+        if flow_ok or foreign_ok or dist_ok:
             if shell_el is not None:
                 shell_el.display = True
             try:
@@ -972,9 +976,12 @@ class TickerDesk(Vertical):
             if flow_ok:
                 assert isinstance(self._job_desk, TickerFlowDeskModel)
                 self._paint_flow_desk(self._job_desk)
-            else:
+            elif foreign_ok:
                 assert isinstance(self._job_desk, TickerForeignDeskModel)
                 self._paint_foreign_desk(self._job_desk)
+            else:
+                assert isinstance(self._job_desk, TickerDistDeskModel)
+                self._paint_dist_desk(self._job_desk)
             return
 
         if shell_el is not None:
@@ -986,7 +993,10 @@ class TickerDesk(Vertical):
         except Exception:
             pass
 
-    def _paint_job_hero_pulses(self, desk: TickerFlowDeskModel | TickerForeignDeskModel) -> None:
+    def _paint_job_hero_pulses(
+        self,
+        desk: TickerFlowDeskModel | TickerForeignDeskModel | TickerDistDeskModel,
+    ) -> None:
         """Shared hero + 4-pulse chrome for structured job desks."""
         self.query_one("#td-flow-lab", Static).update(desk.hero_lab)
         big = self.query_one("#td-flow-big", Static)
@@ -1075,6 +1085,70 @@ class TickerDesk(Vertical):
                 f"[{tone}]{d.net_s:>10}[/]  [#c8c8c8]{d.lot_s:>10}[/]  "
                 f"[#c8c8c8]{d.avg_s:>8}[/]"
             )
+        self.query_one("#td-flow-days", Static).update("\n".join(lines))
+
+    def _paint_dist_desk(self, desk: TickerDistDeskModel) -> None:
+        """Design lock: hero · pulses · dual heat buyers/sellers · F/L tags · share bars."""
+        self._paint_job_hero_pulses(desk)
+
+        if desk.empty and not desk.buyers and not desk.sellers:
+            self.query_one("#td-flow-days-head", Static).update("DUAL HEAT · COUNTERPARTIES")
+            self.query_one("#td-flow-days", Static).update(
+                f"[#555555]no distribution · {desk.fetch_hint}[/]"
+            )
+            return
+
+        self.query_one("#td-flow-days-head", Static).update(
+            "DUAL HEAT · TOP BUYERS / TOP SELLERS · F=Foreign L=Local"
+        )
+        mint = "#6fbf8a"
+        coral = "#c97a72"
+        lines: list[str] = []
+
+        def _side_block(
+            title: str,
+            sides: tuple[DistSideRow, ...],
+            *,
+            arrow: str,
+            head_color: str,
+        ) -> None:
+            lines.append(f"[{head_color}]{title}[/]")
+            if not sides:
+                lines.append("[#555555]  — empty side[/]")
+                lines.append("")
+                return
+            for s in sides:
+                tag_c = {"F": "#7aa2c4", "L": "#a0a0a0", "G": "#d4b06a"}.get(s.type_tag, "#a0a0a0")
+                lines.append(
+                    f"  [#e8e8e8]{s.rank}[/] [bold #d8d8d8]{s.code}[/]"
+                    f"[{tag_c}]\\[{s.type_tag}][/]  [{head_color}]{s.amount_s}[/]"
+                )
+                for cp in s.cps:
+                    bar = bar_glyphs(cp.bar_pct, width=8, hollow=False)
+                    pad = max(0, 8 - len(bar))
+                    bar_s = f"[{head_color}]{bar}[/]{' ' * pad}" if bar else f"{'':8}"
+                    ctag_c = {"F": "#7aa2c4", "L": "#a0a0a0", "G": "#d4b06a"}.get(
+                        cp.type_tag, "#a0a0a0"
+                    )
+                    lines.append(
+                        f"    [#555555]{arrow}[/] [#c8c8c8]{cp.code}[/]"
+                        f"[{ctag_c}]\\[{cp.type_tag}][/]  "
+                        f"[#c8c8c8]{cp.amount_s}[/]  [#7a7a7a]{cp.pct}%[/]  {bar_s}"
+                    )
+            lines.append("")
+
+        _side_block(
+            "TOP BUYERS · bought FROM →",
+            desk.buyers,
+            arrow="←",
+            head_color=mint,
+        )
+        _side_block(
+            "TOP SELLERS · sold TO →",
+            desk.sellers,
+            arrow="→",
+            head_color=coral,
+        )
         self.query_one("#td-flow-days", Static).update("\n".join(lines))
 
     def _paint_job_and_chips_only(self) -> None:

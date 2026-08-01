@@ -484,6 +484,7 @@ class _TickerJobLoader:
                     result.ticker,
                     result.snapshot,
                     as_of=result.as_of,
+                    source=result.source,
                     fetch_hint=result.fetch_hint,
                 )
 

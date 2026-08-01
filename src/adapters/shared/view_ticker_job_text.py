@@ -203,66 +203,71 @@ def format_ticker_distribution_job(
     snapshot: Any | None,
     *,
     as_of: Any = None,
+    source: str | None = None,
     fetch_hint: str | None = None,
 ) -> TickerJobText:
-    """Format BrokerDistributionSnapshot (cross-broker counterparties)."""
+    """Format BrokerDistributionSnapshot (cross-broker counterparties).
+
+    Body text stays multi-surface; ``desk`` carries structured dist job UI.
+    """
+    from src.adapters.shared.ticker_dist_desk_model import build_ticker_dist_desk_model
+
     ticker_u = str(ticker).upper()
     hint = fetch_hint or f"saham fetch market {ticker_u}"
-    if snapshot is None:
+    desk = build_ticker_dist_desk_model(
+        ticker_u,
+        snapshot,
+        as_of=as_of,
+        source=source,
+        fetch_hint=hint,
+    )
+    if desk.empty and snapshot is None:
         return TickerJobText(
             job="dist",
             ticker=ticker_u,
-            title=f"View · ticker · {ticker_u} · distribution",
+            title=desk.title,
             body=f"not cached · broker distribution empty\nHint: {hint}",
             empty=True,
             fetch_hint=hint,
             cli_verb="view ticker distribution",
+            desk=desk,
         )
 
-    d = as_of or getattr(snapshot, "date", None)
-    d_s = d.isoformat() if d is not None and hasattr(d, "isoformat") else str(d or "—")
+    # CLI-parity body from same desk facts (F/L tags, never A)
     lines: list[str] = [
-        f"Broker distribution · {ticker_u} · {d_s}",
+        f"Broker distribution · {ticker_u} · {desk.as_of}",
     ]
-    if getattr(snapshot, "foreign_buying_from_domestic", False):
-        lines.append("★ Foreign accumulating from domestic")
-    elif getattr(snapshot, "net_foreign_buyer_dominance", False):
-        lines.append("● Foreign brokers dominate buy side")
+    if desk.slogan:
+        lines.append(desk.slogan)
     lines.append("")
-
-    def _side(entries: Sequence[Any], label: str, arrow: str) -> None:
-        if not entries:
-            return
-        lines.append(label)
+    if desk.buyers:
+        lines.append("TOP BUYERS  (bought FROM →)")
         lines.append("─" * 48)
-        for entry in list(entries)[:5]:
-            code = str(getattr(entry, "broker_code", "—"))
-            btype = str(getattr(entry, "broker_type", "") or "")
-            amt = int(getattr(entry, "amount_idr", 0) or 0)
-            lines.append(f"  {_broker_tag(code, btype):12}  {_fmt_idr_amount(amt):>10}")
-            for cp in list(getattr(entry, "counterparties", ()) or ())[:4]:
-                cp_code = str(getattr(cp, "broker_code", "—"))
-                cp_type = str(getattr(cp, "broker_type", "") or "")
-                cp_amt = int(getattr(cp, "amount_idr", 0) or 0)
-                pct = (cp_amt / amt * 100) if amt else 0.0
-                lines.append(
-                    f"    {arrow} {_broker_tag(cp_code, cp_type):12}  "
-                    f"{_fmt_idr_amount(cp_amt):>10}  ({pct:.0f}%)"
-                )
+        for s in desk.buyers:
+            lines.append(f"  {s.code}[{s.type_tag}]  {s.amount_s:>10}")
+            for cp in s.cps:
+                lines.append(f"    ← {cp.code}[{cp.type_tag}]  {cp.amount_s:>10}  ({cp.pct}%)")
         lines.append("")
-
-    _side(getattr(snapshot, "top_buyers", ()) or (), "TOP BUYERS  (bought FROM →)", "←")
-    _side(getattr(snapshot, "top_sellers", ()) or (), "TOP SELLERS (sold TO →)", "→")
+    if desk.sellers:
+        lines.append("TOP SELLERS (sold TO →)")
+        lines.append("─" * 48)
+        for s in desk.sellers:
+            lines.append(f"  {s.code}[{s.type_tag}]  {s.amount_s:>10}")
+            for cp in s.cps:
+                lines.append(f"    → {cp.code}[{cp.type_tag}]  {cp.amount_s:>10}  ({cp.pct}%)")
+        lines.append("")
+    if desk.empty:
+        lines.append(f"Hint: {hint}")
     lines.append("CLI · saham view ticker distribution  ·  local cache · browse only")
-    empty = not (getattr(snapshot, "top_buyers", None) or getattr(snapshot, "top_sellers", None))
     return TickerJobText(
         job="dist",
         ticker=ticker_u,
-        title=f"View · ticker · {ticker_u} · distribution",
+        title=desk.title,
         body="\n".join(lines),
-        empty=empty,
+        empty=desk.empty,
         fetch_hint=hint,
         cli_verb="view ticker distribution",
+        desk=desk,
     )
 
 
