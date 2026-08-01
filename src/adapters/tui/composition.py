@@ -455,6 +455,9 @@ class _TickerJobLoader:
                     total_net=result.total_net_value,
                     buy_days=result.buy_days,
                     sell_days=result.sell_days,
+                    window_days=result.days,
+                    source=result.source,
+                    as_of=result.as_of,
                     fetch_hint=result.fetch_hint,
                 )
 

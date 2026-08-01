@@ -12,6 +12,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
+from src.adapters.shared.ticker_flow_desk_model import TickerFlowDeskModel
 from src.adapters.tui.ticker_desk_model import (
     FRESH_GRID_SLOTS,
     TickerDeskModel,
@@ -357,6 +358,77 @@ class TickerDesk(Vertical):
         height: auto;
     }
 
+    /* Flow job desk (design hero · pulses · sessions) */
+    TickerDesk .td-job-shell {
+        border-left: solid #c9a68a;
+    }
+
+    TickerDesk .td-flow-desk {
+        height: auto;
+        margin-top: 0;
+    }
+
+    TickerDesk .td-flow-lab {
+        color: #6b6b6b;
+        text-style: bold;
+        height: auto;
+    }
+
+    TickerDesk .td-flow-big {
+        color: #e8e8e8;
+        text-style: bold;
+        height: auto;
+        margin: 0 0 0 0;
+    }
+
+    TickerDesk .td-flow-big.pos { color: #6fbf8a; }
+    TickerDesk .td-flow-big.neg { color: #c97a72; }
+
+    TickerDesk .td-flow-sub {
+        color: #555555;
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    TickerDesk .td-flow-pulses {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    TickerDesk .td-flow-pulse {
+        width: 1fr;
+        background: #101010;
+        border: solid #1c1c1c;
+        padding: 0 1;
+        margin-right: 1;
+        height: auto;
+    }
+
+    TickerDesk .td-flow-pk {
+        color: #555555;
+        height: auto;
+    }
+
+    TickerDesk .td-flow-pv {
+        color: #e8e8e8;
+        text-style: bold;
+        height: auto;
+    }
+
+    TickerDesk .td-flow-pv.pos { color: #6fbf8a; }
+    TickerDesk .td-flow-pv.neg { color: #c97a72; }
+
+    TickerDesk .td-flow-days {
+        color: #a0a0a0;
+        height: auto;
+    }
+
+    TickerDesk .td-flow-story {
+        color: #555555;
+        height: auto;
+        margin-top: 1;
+    }
+
     """
 
     def __init__(self, *, id: str | None = None) -> None:
@@ -367,6 +439,7 @@ class TickerDesk(Vertical):
         self._active_job: str | None = None
         self._job_title: str = ""
         self._job_body: str = ""
+        self._job_desk: TickerFlowDeskModel | None = None
 
     def compose(self) -> ComposeResult:
         yield Static("", classes="td-crumb", id="td-crumb")
@@ -382,9 +455,21 @@ class TickerDesk(Vertical):
             meta_text="brief",
         )
 
-        # Job sub-stage body (CLI sibling · chips stay mounted)
-        with Vertical(classes="td-section", id="td-job-sec"):
+        # Job sub-stage (structured flow desk + flat body fallback)
+        with Vertical(classes="td-section td-job-shell", id="td-job-sec"):
             yield Static("", classes="td-sec-head", id="td-job-head")
+            with Vertical(classes="td-flow-desk", id="td-flow-desk"):
+                yield Static("", classes="td-flow-lab", id="td-flow-lab")
+                yield Static("", classes="td-flow-big", id="td-flow-big")
+                yield Static("", classes="td-flow-sub", id="td-flow-sub")
+                with Horizontal(classes="td-flow-pulses", id="td-flow-pulses"):
+                    for i in range(4):
+                        with Vertical(classes="td-flow-pulse", id=f"td-flow-p-{i}"):
+                            yield Static("", classes="td-flow-pk", id=f"td-flow-pk-{i}")
+                            yield Static("", classes="td-flow-pv", id=f"td-flow-pv-{i}")
+                yield Static("SESSIONS", classes="td-sec-head", id="td-flow-days-head")
+                yield Static("", classes="td-flow-days", id="td-flow-days")
+                yield Static("", classes="td-flow-story", id="td-flow-story")
             yield Static("", classes="td-sec-body", id="td-job-body")
 
         with Horizontal(classes="td-identity", id="td-identity"):
@@ -504,11 +589,13 @@ class TickerDesk(Vertical):
         *,
         title: str = "",
         body: str = "",
+        desk: TickerFlowDeskModel | None = None,
     ) -> None:
         """Show/hide job body under chip bar (browse-only CLI sibling)."""
         self._active_job = job
         self._job_title = title or ""
         self._job_body = body or ""
+        self._job_desk = desk if job else None
         if self._model is not None:
             self.paint(self._model, detail_open=self._detail_all, sync_from_detail=False)
         else:
@@ -594,7 +681,7 @@ class TickerDesk(Vertical):
                 f"View · ticker · [bold #e8e8e8]{model.ticker}[/]   "
                 f"[#555555]{density} · local cache · browse[/]"
             )
-        job_mode = bool(self._active_job and self._job_body)
+        job_mode = bool(self._active_job and (self._job_body or self._job_desk is not None))
         self._set_show_panels_visible(not job_mode)
         if job_mode:
             job_sec = self.query_one("#td-job-sec", Vertical)
@@ -602,9 +689,11 @@ class TickerDesk(Vertical):
             self.query_one("#td-job-head", Static).update(
                 (self._job_title or self._active_job or "job").upper()
             )
-            self.query_one("#td-job-body", Static).update(self._job_body)
+            self._paint_job_body()
             self._paint_chip_bar()
             foot = "esc show · chips switch job · b f o x n · browse only"
+            if isinstance(self._job_desk, TickerFlowDeskModel) and self._job_desk.footer:
+                foot = self._job_desk.footer
             self.query_one("#td-footer", Static).update(
                 f"[#555555]{foot}[/]\n[#d4b06a]{model.authority}[/]"
             )
@@ -865,16 +954,98 @@ class TickerDesk(Vertical):
             except Exception:
                 pass
 
+    def _paint_job_body(self) -> None:
+        """Paint structured flow desk when present; else flat body (loading / other jobs)."""
+        flow_desk_el = None
+        try:
+            flow_desk_el = self.query_one("#td-flow-desk", Vertical)
+        except Exception:
+            flow_desk_el = None
+
+        if isinstance(self._job_desk, TickerFlowDeskModel) and self._active_job == "flow":
+            if flow_desk_el is not None:
+                flow_desk_el.display = True
+            try:
+                self.query_one("#td-job-body", Static).display = False
+            except Exception:
+                pass
+            self._paint_flow_desk(self._job_desk)
+            return
+
+        if flow_desk_el is not None:
+            flow_desk_el.display = False
+        try:
+            body_el = self.query_one("#td-job-body", Static)
+            body_el.display = True
+            body_el.update(self._job_body or "")
+        except Exception:
+            pass
+
+    def _paint_flow_desk(self, desk: TickerFlowDeskModel) -> None:
+        """Design lock: hero · 4 pulses · sessions table · real nets only."""
+        self.query_one("#td-flow-lab", Static).update(desk.hero_lab)
+        big = self.query_one("#td-flow-big", Static)
+        for c in ("pos", "neg"):
+            big.remove_class(c)
+        if desk.hero_tone in {"pos", "neg"}:
+            big.add_class(desk.hero_tone)
+        big.update(desk.hero_big)
+        self.query_one("#td-flow-sub", Static).update(desk.hero_sub)
+
+        for i in range(4):
+            pk = self.query_one(f"#td-flow-pk-{i}", Static)
+            pv = self.query_one(f"#td-flow-pv-{i}", Static)
+            for c in ("pos", "neg"):
+                pv.remove_class(c)
+            if i < len(desk.pulses):
+                p = desk.pulses[i]
+                pk.update(p.label.upper())
+                if p.tone in {"pos", "neg"}:
+                    pv.add_class(p.tone)
+                pv.update(p.value)
+            else:
+                pk.update("")
+                pv.update("")
+
+        if desk.empty or not desk.days:
+            self.query_one("#td-flow-days-head", Static).update("SESSIONS")
+            self.query_one("#td-flow-days", Static).update(
+                f"[#555555]no sessions · {desk.fetch_hint}[/]"
+            )
+        else:
+            self.query_one("#td-flow-days-head", Static).update(
+                f"SESSIONS · {len(desk.days)} · NEWEST FIRST"
+            )
+            head = (
+                f"[#555555]{'Date':10}[/]  {'':10}  [#555555]{'Net':>10}[/]  "
+                f"[#555555]{'Ratio':>7}[/]  [#555555]{'Buyer':>6}[/]  [#555555]{'Seller':>6}[/]"
+            )
+            lines = [head]
+            for d in desk.days:
+                tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#a0a0a0")
+                bar = bar_glyphs(d.bar_pct, width=10, hollow=False)
+                pad = max(0, 10 - len(bar))
+                bar_s = f"[{tone}]{bar}[/]{' ' * pad}" if bar else f"{'':10}"
+                lines.append(
+                    f"[#d8d8d8]{d.date_s:10}[/]  {bar_s}  [{tone}]{d.net_s:>10}[/]  "
+                    f"[#7a7a7a]{d.ratio_s:>7}[/]  [#c8c8c8]{d.buyer:>6}[/]  "
+                    f"[#c8c8c8]{d.seller:>6}[/]"
+                )
+            self.query_one("#td-flow-days", Static).update("\n".join(lines))
+
+        story = (desk.story or "").replace("\n", " · ")
+        self.query_one("#td-flow-story", Static).update(f"[#555555]{story}[/]" if story else "")
+
     def _paint_job_and_chips_only(self) -> None:
         """When model not yet painted, still show job body + chips."""
         try:
             job_sec = self.query_one("#td-job-sec", Vertical)
-            if self._active_job and self._job_body:
+            if self._active_job and (self._job_body or self._job_desk is not None):
                 job_sec.display = True
                 self.query_one("#td-job-head", Static).update(
                     (self._job_title or self._active_job or "job").upper()
                 )
-                self.query_one("#td-job-body", Static).update(self._job_body)
+                self._paint_job_body()
                 self._set_show_panels_visible(False)
             else:
                 job_sec.display = False

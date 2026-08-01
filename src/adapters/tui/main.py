@@ -750,7 +750,12 @@ class CockpitApp(App[None]):
                 from src.adapters.shared.view_ticker_job_text import TickerJobText
 
                 if isinstance(job_text, TickerJobText):
-                    ticker_desk.set_job_view(job, title=job_text.title, body=job_text.body)
+                    ticker_desk.set_job_view(
+                        job,
+                        title=job_text.title,
+                        body=job_text.body,
+                        desk=getattr(job_text, "desk", None),
+                    )
             return
 
         if is_broker_home and broker_desk is not None:
@@ -1559,7 +1564,12 @@ class CockpitApp(App[None]):
         try:
             desk = self.query_one("#ticker-desk")
             if hasattr(desk, "set_job_view"):
-                desk.set_job_view(job, title=payload.title, body=payload.body)  # type: ignore[attr-defined]
+                desk.set_job_view(  # type: ignore[attr-defined]
+                    job,
+                    title=payload.title,
+                    body=payload.body,
+                    desk=getattr(payload, "desk", None),
+                )
             elif hasattr(desk, "set_active_job"):
                 desk.set_active_job(job)  # type: ignore[attr-defined]
         except Exception:

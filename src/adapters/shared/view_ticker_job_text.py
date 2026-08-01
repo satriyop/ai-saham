@@ -27,6 +27,8 @@ class TickerJobText:
     empty: bool
     fetch_hint: str
     cli_verb: str
+    # Optional structured desk model for TUI (flow first; other jobs later)
+    desk: Any = None
 
     def as_text(self) -> str:
         return f"{self.title}\n\n{self.body}".strip()
@@ -47,72 +49,67 @@ def format_ticker_flow_job(
     total_net: Decimal | None = None,
     buy_days: int | None = None,
     sell_days: int | None = None,
+    window_days: int | None = None,
+    source: str | None = None,
+    as_of: Any = None,
     fetch_hint: str | None = None,
 ) -> TickerJobText:
-    """Format ViewTickerFlowResult summaries (foreign flow / broker_summaries)."""
+    """Format ViewTickerFlowResult summaries (foreign flow / broker_summaries).
+
+    Body text stays multi-surface; ``desk`` carries structured flow job UI.
+    """
+    from src.adapters.shared.ticker_flow_desk_model import build_ticker_flow_desk_model
+
     ticker_u = str(ticker).upper()
     hint = fetch_hint or f"saham fetch market {ticker_u}"
-    if not summaries:
+    desk = build_ticker_flow_desk_model(
+        ticker_u,
+        summaries,
+        total_net=total_net,
+        buy_days=buy_days,
+        sell_days=sell_days,
+        window_days=(
+            window_days if window_days is not None else (len(list(summaries or ())) or None)
+        ),
+        source=source,
+        as_of=as_of,
+        fetch_hint=hint,
+    )
+    if desk.empty:
         return TickerJobText(
             job="flow",
             ticker=ticker_u,
-            title=f"View · ticker · {ticker_u} · flow",
+            title=desk.title,
             body=f"not cached · foreign flow summary empty\nHint: {hint}",
             empty=True,
             fetch_hint=hint,
             cli_verb="view ticker flow",
+            desk=desk,
         )
 
-    rows = list(summaries)
-    total = total_net
-    if total is None:
-        total = sum((getattr(s, "foreign_net_value", Decimal("0")) for s in rows), Decimal("0"))
-    buys = buy_days
-    if buys is None:
-        buys = sum(1 for s in rows if getattr(s, "is_foreign_accumulating", False))
-    sells = sell_days if sell_days is not None else len(rows) - int(buys)
-
-    consecutive = 0
-    for s in reversed(rows):
-        if getattr(s, "is_foreign_accumulating", False):
-            consecutive += 1
-        else:
-            break
-
+    # CLI-parity body (same facts as desk; table newest-first for scan)
     lines: list[str] = [
-        f"Foreign flow · {ticker_u} · last {len(rows)} sessions",
-        f"Total net  {_fmt_signed(total)}  ·  buy/sell days {buys}/{sells}  ·  "
-        f"consec buy {consecutive}",
+        f"Foreign flow · {ticker_u} · last {len(desk.days)} sessions",
+        f"Total net  {desk.hero_big}  ·  "
+        f"buy/sell days {desk.pulses[0].value}/{desk.pulses[1].value}  ·  "
+        f"consec buy {desk.pulses[2].value}",
         "",
         f"{'Date':12}  {'Net':>12}  {'Ratio':>8}  {'Buyer':>6}  {'Seller':>6}",
         "─" * 52,
     ]
-    for s in rows:
-        flow = getattr(s, "foreign_net_value", Decimal("0"))
-        ratio = getattr(s, "foreign_flow_ratio", Decimal("0"))
-        try:
-            ratio_f = float(ratio)
-        except (TypeError, ValueError):
-            ratio_f = 0.0
-        buyers = getattr(s, "top_buyers", ()) or ()
-        sellers = getattr(s, "top_sellers", ()) or ()
-        top_b = getattr(buyers[0], "broker_code", "-") if buyers else "-"
-        top_s = getattr(sellers[0], "broker_code", "-") if sellers else "-"
-        d = getattr(s, "date", None)
-        d_s = d.isoformat() if d is not None and hasattr(d, "isoformat") else str(d or "—")
-        lines.append(
-            f"{d_s:12}  {_fmt_signed(flow):>12}  {ratio_f:7.1f}%  {str(top_b):>6}  {str(top_s):>6}"
-        )
+    for d in desk.days:
+        lines.append(f"{d.date_s:12}  {d.net_s:>12}  {d.ratio_s:>8}  {d.buyer:>6}  {d.seller:>6}")
     lines.append("")
     lines.append("CLI · saham view ticker flow  ·  local cache · browse only")
     return TickerJobText(
         job="flow",
         ticker=ticker_u,
-        title=f"View · ticker · {ticker_u} · flow",
+        title=desk.title,
         body="\n".join(lines),
         empty=False,
         fetch_hint=hint,
         cli_verb="view ticker flow",
+        desk=desk,
     )
 
 
