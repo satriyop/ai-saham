@@ -41,6 +41,79 @@ _TICKER_PANEL_FLAGS = (
 )
 _TICKER_JOB_KEYS = frozenset(k for k, _ in TICKER_JOB_CHIPS)
 
+# Depth card line labels (design cockpit cli-panel · dim k / bright v)
+_DEPTH_LABELS = (
+    "Target",
+    "Range",
+    "Top Holder",
+    "Institutional",
+    "Individual",
+    "Total Shares",
+    "Report Date",
+    "Sector",
+    "Regime",
+    "Peers up 5d",
+    "Rel strength",
+    "Web",
+    "Email",
+    "About",
+    "Name",
+    "Board",
+    "IPO",
+    "IPO price",
+    "Listed",
+    "Pattern",
+    "Edge",
+    "Window",
+    "Note",
+    "Summary",
+    "Updated",
+    "Fetched",
+)
+
+
+def _paint_depth_fact_line(ln: str) -> str:
+    """OpenCode card line: mute label · fog value · mint/coral for signed/BUY/SELL."""
+    s = (ln or "").strip()
+    if not s:
+        return ""
+    # Table / mono rows (candles, IEV, insider): keep monospaced fog
+    if s.startswith("Date ") or "  " not in s[:20] and any(ch.isdigit() for ch in s[:12]):
+        # still allow BUY/SELL tint
+        if " BUY" in f" {s}" or s.endswith(" BUY") or " BUY " in s:
+            return f"[#6fbf8a]{s}[/]"
+        if " SELL" in f" {s}" or s.endswith(" SELL") or " SELL " in s:
+            return f"[#c97a72]{s}[/]"
+        return f"[#c8c8c8]{s}[/]"
+
+    lab = None
+    rest = s
+    for prefix in _DEPTH_LABELS:
+        if s.startswith(prefix) and (len(s) == len(prefix) or s[len(prefix)] in " \t"):
+            lab = prefix
+            rest = s[len(prefix) :].strip()
+            break
+    if lab is None and "  " in s:
+        lab, _, rest = s.partition("  ")
+        lab, rest = lab.strip(), rest.strip()
+
+    # Consensus / signed tone on values
+    tone = "#e8e8e8"
+    u = rest.upper() if rest else s.upper()
+    if any(t in u for t in ("→ BUY", " BUY", "+")) and "SELL" not in u:
+        if "→" in rest or rest.upper().endswith("BUY") or "BUY" in u:
+            tone = "#6fbf8a"
+        elif rest.startswith("+") or " +" in rest:
+            tone = "#6fbf8a"
+    if any(t in u for t in ("SELL", "−", " -")) or rest.startswith("-") or rest.startswith("−"):
+        if "BUY" not in u:
+            tone = "#c97a72"
+    if "→ BUY" in s or s.rstrip().endswith("BUY"):
+        tone = "#6fbf8a"
+    if lab:
+        return f"[#555555]{lab:14}[/] [{tone}]{rest}[/]"
+    return f"[{tone}]{s}[/]"
+
 
 class TickerDesk(Vertical):
     """Visual ticker instrument — OpenCode price mast."""
@@ -1039,47 +1112,42 @@ class TickerDesk(Vertical):
                 "[#555555]no secondary inventory[/]"
             )
 
-        # Detail = full CLI show (FULL_PANEL_ORDER) — not thin inventory lines.
-        # Body is format_ticker_dashboard_text (same panels as `saham view ticker show`).
+        # Detail = OpenCode cli-stack cards (design cockpit), not CLI Rich dump.
+        # One card per FULL_PANEL_ORDER remainder key · full fact lines · honest empty.
         head = self.query_one("#td-more-head", Static)
         depth_open = self._detail_all or bool(open_flags)
         more_sec = self.query_one("#td-more-sec", Vertical)
         more_body = self.query_one("#td-more-body", Static)
-        # Per-key depth slots are legacy thin summaries — keep mounted, hide always.
-        for key in _TICKER_PANEL_FLAGS:
-            try:
-                self.query_one(f"#td-depth-{key}", Vertical).display = False
-            except Exception:
-                pass
+        more_body.display = False
+        more_body.update("")
+        by_panel = {p.key: p for p in model.detail_panels}
         if depth_open:
             more_sec.display = True
-            head.update("DETAIL · full show · CLI panel parity · d · local cache")
-            full = (model.body or "").strip()
-            if full:
-                more_body.display = True
-                more_body.update(full)
-            else:
-                # Fallback: concatenate model detail lines without truncation
-                by_panel = {p.key: p for p in model.detail_panels}
-                chunks: list[str] = []
-                for key in _TICKER_PANEL_FLAGS:
-                    p = by_panel.get(key)
-                    if p is None:
-                        continue
-                    chunks.append(f"{p.title.upper()}  ·  {p.status}")
-                    chunks.extend(f"  {ln}" for ln in (p.lines or ()))
-                    chunks.append("")
-                more_body.display = True
-                more_body.update(
-                    "\n".join(chunks).rstrip()
-                    if chunks
-                    else "[#555555]full panel text not loaded · re-open ticker[/]"
-                )
+            head.update("DETAIL · panel stack · d · local cache")
+            for key in _TICKER_PANEL_FLAGS:
+                panel_el = self.query_one(f"#td-depth-{key}", Vertical)
+                p = by_panel.get(key)
+                panel_el.display = True
+                title = (p.title if p else key.replace("_", " ")).upper()
+                self.query_one(f"#td-depth-t-{key}", Static).update(f"[#c9a68a]{title}[/]")
+                body_el = self.query_one(f"#td-depth-b-{key}", Static)
+                if p is None or p.status == "missing" or not p.lines:
+                    hint = (
+                        (p.lines[0] if p and p.lines else "not cached")
+                        if p is not None
+                        else "not cached"
+                    )
+                    body_el.update(f"[#555555]{hint}[/]")
+                    continue
+                body_el.update("\n".join(_paint_depth_fact_line(ln) for ln in p.lines if ln))
         else:
-            # Brief default: mast only — hide full show wall
+            # Brief default: mast only — hide depth stack
             more_sec.display = False
-            more_body.display = False
-            more_body.update("")
+            for key in _TICKER_PANEL_FLAGS:
+                try:
+                    self.query_one(f"#td-depth-{key}", Vertical).display = False
+                except Exception:
+                    pass
 
         self._paint_chip_bar()
 

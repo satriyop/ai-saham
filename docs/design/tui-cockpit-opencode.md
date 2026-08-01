@@ -533,21 +533,21 @@ Accum (source badge only) · Broker list (honesty in meta) · Plan · Paper · H
 - Panel set: `BRIEF_PANEL_KEYS` via  
   `src/application/services/ticker_dashboard_layout.py` · `panel_keys_for_mode(brief=True)`.  
 - CLI: brief ≈ `saham view ticker show TICKER --brief`.  
-- **`d` / `[d] detail`** `is-on` → detail = **full CLI show** (`FULL_PANEL_ORDER` · same panels as `saham view ticker show` without `--brief`).  
-- **Reject:** thin “inventory status” stubs (present/missing + 4–8 scalar lines) as the detail surface.  
-- TUI may keep price mast above; **body under detail must be full multi-surface panel text** (`format_ticker_dashboard_text` / CLI panel composition).  
+- **`d` / `[d] detail`** `is-on` → detail = **OpenCode panel stack** (cockpit `#tickerDepthBody` / `.cli-stack`).  
+- **Reject:** monospaced CLI Rich dump · box-drawing paste · thin present/missing inventory stubs.  
+- Brief keeps price mast hierarchy; **detail adds one elevated card per remainder panel** with full fact lines / mini-table rows (same *facts* as CLI full show, cockpit *chrome*).  
 - Honesty line: **`local cache` only** — never restate density as `brief ·` / `detail ·` / `full`.
 
 ### Panel inventory (authority = layout module)
 
 | Mode | Keys (order preserved from `FULL_PANEL_ORDER`) |
 |------|--------------------------------------------------|
-| **Brief** (default) | identity · freshness · valuation · price_structure · earnings · bandar · foreign_flow |
-| **Detail** (`d`) | **Entire** `FULL_PANEL_ORDER` as CLI-equivalent panel text (identity through candles) under the mast — not remainder stubs only |
+| **Brief** (default) | identity · freshness · valuation · price_structure · earnings · bandar · foreign_flow → **mast / pulse hierarchy** |
+| **Detail** (`d`) | remainder **cards**: analyst · ownership · sector_macro · corp_actions · insider · seasonality · iev · sentiment · profile · candles |
 
-- `sector_macro` = diagnostic (ADR-053) · included in full dump.  
-- **sentiment** panel = in full dump · honest empty when not cached.  
-- TUI paint authority for detail body: `format_ticker_dashboard_text` (ADR-045 multi-surface).
+- Each card: elevated panel · brass title · dim labels · mint/coral signed values · honest empty.  
+- `sector_macro` = diagnostic (ADR-053).  
+- Fact authority: dashboard DTO / same use case as CLI — **presentation is cockpit cards, not CLI dump**.
 
 ### Freshness grid — no cryptic labels
 

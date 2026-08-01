@@ -1,4 +1,4 @@
-"""Ticker detail density must surface full CLI show text — not thin inventory lines."""
+"""Ticker detail = OpenCode panel stack with full facts — not CLI dump, not stubs."""
 
 from __future__ import annotations
 
@@ -11,11 +11,10 @@ from textual.app import App, ComposeResult
 from textual.widgets import Static
 
 from src.adapters.tui.ticker_desk_model import build_ticker_desk_model_from_dashboard
-from src.adapters.tui.widgets.ticker_desk import TickerDesk
+from src.adapters.tui.widgets.ticker_desk import TickerDesk, _paint_depth_fact_line
 
 
 def _rich_dashboard() -> SimpleNamespace:
-    """Minimal full-mode dashboard with multi-line CLI-style body attached via builder."""
     return SimpleNamespace(
         ticker="BBCA",
         latest_close=Decimal("6325"),
@@ -59,20 +58,40 @@ def _rich_dashboard() -> SimpleNamespace:
             fetched_at=date(2026, 7, 31),
         ),
         ownership=SimpleNamespace(
-            top_holder_name="DWIMURIA",
+            top_holder_name="DWIMURIA INVESTAMA ANDALAN",
             top_holder_pct=Decimal("54.9"),
             institution_pct=Decimal("31.9"),
-            individual_pct=None,
-            total_shares_formatted="—",
-            report_date=None,
+            individual_pct=Decimal("6.9"),
+            total_shares_formatted="123.28B",
+            report_date="2026-03-31",
         ),
         sector_macro_context_evidence=None,
-        corp_actions=(),
-        insider_txns=(),
+        corp_actions=(
+            SimpleNamespace(event_type="dividend", ex_date="2026-06-17", detail="Rp 20"),
+            SimpleNamespace(event_type="dividend", ex_date="2026-03-30", detail="Rp 281"),
+        ),
+        insider_txns=(
+            SimpleNamespace(
+                transaction_date="2026-03-25",
+                name="A. Widodo",
+                role="DIR",
+                action_type="BUY",
+                shares=240569,
+                price=6982,
+            ),
+        ),
         seasonality=None,
-        iev_rows=(),
+        iev_rows=(
+            SimpleNamespace(date=date(2026, 7, 31), iep=6425, iev=24900, ncp="✓"),
+            SimpleNamespace(date=date(2026, 7, 30), iep=6325, iev=21729, ncp="—"),
+        ),
         sentiment_logs=(),
-        profile=SimpleNamespace(website="www.bca.co.id", description="Bank umum"),
+        profile=SimpleNamespace(
+            website="www.bca.co.id",
+            description="PT Bank Central Asia Tbk commercial banking.",
+            ipo_date="2000-05-31",
+            ipo_price=1400,
+        ),
         candles=(
             SimpleNamespace(
                 date=date(2026, 7, 31),
@@ -81,6 +100,14 @@ def _rich_dashboard() -> SimpleNamespace:
                 low=6325,
                 close=6325,
                 volume=153_200_000,
+            ),
+            SimpleNamespace(
+                date=date(2026, 7, 30),
+                open=6325,
+                high=6450,
+                low=6250,
+                close=6450,
+                volume=152_700_000,
             ),
         ),
         panel_keys=(),
@@ -91,23 +118,33 @@ def _rich_dashboard() -> SimpleNamespace:
     )
 
 
-def test_detail_paint_surfaces_full_cli_body_not_thin_inventory():
-    full_cli = """
-╭───────────────────────────── Analyst Consensus ──────────────────────────────╮
-│   35B · 2H · 0S  →  BUY                                                      │
-│   Target  Rp8,228 avg  (+30.1%)                                              │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─────────────────────────────── Recent Candles ───────────────────────────────╮
-│ Date         Open  High   Low Close  Volume                                  │
-│ 2026-07-31  6,425 6,450 6,325 6,325 153.2 M                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-  Run `saham fetch market BBCA` to refresh stale or missing data.
-""".strip()
+def test_depth_fact_line_is_cockpit_not_raw_dump():
+    line = _paint_depth_fact_line("Target  Rp8,228 avg (+30.1%)")
+    assert "Target" in line
+    assert "#555555" in line  # dim label
+    assert "8,228" in line
 
-    model = build_ticker_desk_model_from_dashboard(_rich_dashboard(), body=full_cli)
-    assert "Analyst Consensus" in model.body
-    assert "Recent Candles" in model.body
-    assert "6,425" in model.body
+
+def test_detail_model_has_full_fact_rows_not_stub_only():
+    model = build_ticker_desk_model_from_dashboard(_rich_dashboard())
+    by = {p.key: p for p in model.detail_panels}
+    assert by["analyst"].status == "present"
+    assert any("Target" in ln for ln in by["analyst"].lines)
+    assert any("DWIMURIA" in ln for ln in by["ownership"].lines)
+    assert any("Individual" in ln for ln in by["ownership"].lines)
+    assert len(by["corp_actions"].lines) >= 2
+    assert any("BUY" in ln for ln in by["insider"].lines)
+    assert any("6425" in ln or "6,425" in ln for ln in by["iev"].lines)
+    assert any("www.bca.co.id" in ln for ln in by["profile"].lines)
+    # Candles: real OHLC rows, not only a bar count stub
+    assert any("Open" in ln or "6,425" in ln or "6425" in ln for ln in by["candles"].lines)
+    assert sum(1 for ln in by["candles"].lines if ln[:4].isdigit() or "-" in ln[:10]) >= 1
+
+
+def test_detail_paint_uses_card_stack_not_cli_box_dump():
+    # Deliberately put box-drawing dump in body — paint must ignore it
+    fake_cli_dump = "╭──── Analyst ────╮\n│ dump only │\n╰────────────────╯"
+    model = build_ticker_desk_model_from_dashboard(_rich_dashboard(), body=fake_cli_dump)
 
     async def scenario() -> None:
         class _A(App):
@@ -115,29 +152,34 @@ def test_detail_paint_surfaces_full_cli_body_not_thin_inventory():
                 yield TickerDesk(id="ticker-desk")
 
         app = _A()
-        async with app.run_test(size=(120, 50)) as pilot:
+        async with app.run_test(size=(120, 60)) as pilot:
             await pilot.pause(0.05)
             td = app.query_one("#ticker-desk", TickerDesk)
-            # Brief: full dump hidden
-            td.paint(model, detail_open=False)
-            await pilot.pause(0.05)
-            more = app.query_one("#td-more-sec")
-            assert more.display is False
-
-            # Detail: full CLI body must appear (not present/missing stubs only)
             td.paint(model, detail_open=True)
-            await pilot.pause(0.05)
+            await pilot.pause(0.08)
+            more = app.query_one("#td-more-sec")
             assert more.display is True
-            body = app.query_one("#td-more-body", Static)
-            assert body.display is True
-            plain = body.render().plain if hasattr(body.render(), "plain") else str(body.render())
-            assert "Analyst Consensus" in plain
-            assert "Recent Candles" in plain
-            assert "6,425" in plain
-            assert "full show" in app.query_one("#td-more-head", Static).render().plain.lower() or (
-                "CLI" in app.query_one("#td-more-head", Static).render().plain
+            # Structured cards visible
+            analyst = app.query_one("#td-depth-analyst")
+            assert analyst.display is True
+            title = app.query_one("#td-depth-t-analyst", Static).render()
+            title_plain = title.plain if hasattr(title, "plain") else str(title)
+            assert "ANALYST" in title_plain.upper()
+            body = app.query_one("#td-depth-b-analyst", Static).render()
+            body_plain = body.plain if hasattr(body, "plain") else str(body)
+            assert "Target" in body_plain or "BUY" in body_plain
+            # Must NOT paint CLI box dump as the detail surface
+            dump_el = app.query_one("#td-more-body", Static)
+            dump_plain = (
+                dump_el.render().plain
+                if hasattr(dump_el.render(), "plain")
+                else str(dump_el.render())
             )
-            # Must not be the old thin inventory-only surface
-            assert "present/missing" not in plain.lower()
+            assert "╭" not in dump_plain
+            assert "dump only" not in dump_plain
+            # Candles card has OHLC facts
+            cbody = app.query_one("#td-depth-b-candles", Static).render()
+            cplain = cbody.plain if hasattr(cbody, "plain") else str(cbody)
+            assert "6325" in cplain or "6,325" in cplain or "Open" in cplain
 
     asyncio.run(scenario())

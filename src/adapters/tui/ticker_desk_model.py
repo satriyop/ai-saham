@@ -745,9 +745,9 @@ def _detail_panels(dashboard: Any) -> list[TickerDetailPanel]:
     if c_n > 0:
         rows: list[str] = [
             f"{c_n} bars in local cache",
-            "Date         O      H      L      C     Vol",
+            "Date        Open     High      Low    Close     Volume",
         ]
-        for bar in c_list[-5:]:
+        for bar in c_list[-8:]:
             d = getattr(bar, "date", None) or getattr(bar, "trade_date", None) or "—"
             o = getattr(bar, "open", None)
             h = getattr(bar, "high", None)
@@ -756,11 +756,11 @@ def _detail_panels(dashboard: Any) -> list[TickerDetailPanel]:
             v = getattr(bar, "volume", None)
             try:
                 rows.append(
-                    f"{str(d)[:10]}  {float(o):,.0f}  {float(h):,.0f}  "
-                    f"{float(lo):,.0f}  {float(cl):,.0f}  {float(v):,.0f}"
+                    f"{str(d)[:10]:10}  {float(o):>7,.0f}  {float(h):>7,.0f}  "
+                    f"{float(lo):>7,.0f}  {float(cl):>7,.0f}  {float(v):>10,.0f}"
                 )
             except (TypeError, ValueError):
-                rows.append(f"{str(d)[:10]}  {o}  {h}  {lo}  {cl}  {v}")
+                rows.append(f"{str(d)[:10]:10}  {o}  {h}  {lo}  {cl}  {v}")
         candle_lines = tuple(rows)
     add("candles", "Candles", c_n > 0, candle_lines)
 
@@ -820,8 +820,8 @@ def _lines_analyst(ac: Any) -> tuple[str, ...]:
         meta.append(f"Fetched {d() if callable(d) else (d or fetched)}")
     if meta:
         lines.append(" · ".join(str(m) for m in meta))
-    # Fallback: object present but no known fields
-    return tuple(lines[:6])
+    # Full consensus facts — no artificial thin cap
+    return tuple(lines)
 
 
 def _lines_ownership(sh: Any) -> tuple[str, ...]:
@@ -856,7 +856,7 @@ def _lines_ownership(sh: Any) -> tuple[str, ...]:
     rd = getattr(sh, "report_date", None)
     if rd:
         lines.append(f"Report Date  {rd}")
-    return tuple(lines[:6])
+    return tuple(lines)
 
 
 def _lines_sector(sec: Any) -> tuple[str, ...]:
@@ -869,45 +869,56 @@ def _lines_sector(sec: Any) -> tuple[str, ...]:
         ("regime", "Regime"),
         ("label", "Label"),
         ("peers_up_5d", "Peers up 5d"),
+        ("peers_up", "Peers up 5d"),
         ("rel_strength", "Rel strength"),
+        ("relative_strength_pct", "Rel strength"),
+        ("note", "Note"),
     ):
         v = getattr(sec, attr, None)
         if v is not None and str(v).strip():
-            lines.append(f"{lab}  {v}")
+            line = f"{lab}  {v}"
+            if line not in lines:
+                lines.append(line)
     if not lines:
-        lines.append("diagnostic · local only")
-    return tuple(lines[:5])
+        lines.append("diagnostic · local only · ADR-053")
+    else:
+        lines.append("ADR-053 · diagnostic · full browse")
+    return tuple(lines)
 
 
 def _lines_corp(events: list[Any]) -> tuple[str, ...]:
-    lines: list[str] = []
-    for e in events[:4]:
+    lines: list[str] = ["Date        Type       Detail"]
+    for e in events[:12]:
         et = str(getattr(e, "event_type", "") or "event").replace("_", " ")
-        ex = getattr(e, "ex_date", None) or "—"
-        detail = str(getattr(e, "detail", "") or "").strip() or "—"
-        lines.append(f"{ex}  {et}  {detail}"[:72])
-    if not lines and events:
-        lines.append(f"{len(events)} events")
+        ex = getattr(e, "ex_date", None) or getattr(e, "date", None) or "—"
+        detail = str(getattr(e, "detail", "") or getattr(e, "description", "") or "").strip() or "—"
+        lines.append(f"{str(ex)[:10]:10}  {et[:10]:10}  {detail}"[:96])
+    if len(lines) == 1:
+        if events:
+            return (f"{len(events)} events",)
+        return ()
     return tuple(lines)
 
 
 def _lines_insider(txns: list[Any]) -> tuple[str, ...]:
-    lines: list[str] = []
-    for t in txns[:4]:
-        d = getattr(t, "transaction_date", None) or "—"
+    lines: list[str] = ["Date        Name              Role     Action  Shares      Price"]
+    for t in txns[:12]:
+        d = getattr(t, "transaction_date", None) or getattr(t, "date", None) or "—"
         name = str(getattr(t, "name", "") or "—")[:16]
         role = str(getattr(t, "role", "") or "")[:8]
-        action = str(getattr(t, "action_type", "") or "—")
+        action = str(getattr(t, "action_type", "") or getattr(t, "action", "") or "—")
         shares = getattr(t, "shares", None)
         price = getattr(t, "price", None)
         sh = f"{int(shares):,}" if isinstance(shares, (int, float)) else "—"
         try:
-            pr = f"Rp{float(price):,.0f}" if price else ""
+            pr = f"Rp{float(price):,.0f}" if price else "—"
         except (TypeError, ValueError):
-            pr = ""
-        lines.append(f"{d}  {name}  {role}  {action}  {sh}  {pr}".strip()[:72])
-    if not lines and txns:
-        lines.append(f"{len(txns)} transactions")
+            pr = "—"
+        lines.append(f"{str(d)[:10]:10}  {name:16}  {role:8}  {action:5}  {sh:>10}  {pr}")
+    if len(lines) == 1:
+        if txns:
+            return (f"{len(txns)} transactions",)
+        return ()
     return tuple(lines)
 
 
@@ -937,28 +948,32 @@ def _lines_seasonality(s: Any) -> tuple[str, ...]:
 
 
 def _lines_iev(rows: list[Any]) -> tuple[str, ...]:
-    lines: list[str] = []
-    for r in rows[:4]:
+    lines: list[str] = ["Date        IEP       IEV        NCP"]
+    for r in rows[:12]:
         d = getattr(r, "date", None) or getattr(r, "session_date", None) or "—"
         iep = getattr(r, "iep", None) or getattr(r, "price", None)
         iev = getattr(r, "iev", None)
         ncp = getattr(r, "ncp", None) or getattr(r, "iev_intensity", None)
-        parts = [str(d)]
-        if iep is not None:
-            parts.append(f"IEP {iep}")
-        if iev is not None:
-            parts.append(f"IEV {iev}")
-        if ncp is not None:
-            parts.append(f"NCP {ncp}")
-        lines.append("  ".join(parts)[:72])
-    if not lines and rows:
-        lines.append(f"{len(rows)} IEV rows")
+        try:
+            iep_s = f"{float(iep):,.0f}" if iep is not None else "—"
+        except (TypeError, ValueError):
+            iep_s = str(iep or "—")
+        try:
+            iev_s = f"{float(iev):,.0f}" if iev is not None else "—"
+        except (TypeError, ValueError):
+            iev_s = str(iev or "—")
+        ncp_s = str(ncp if ncp is not None else "—")
+        lines.append(f"{str(d)[:10]:10}  {iep_s:>8}  {iev_s:>9}  {ncp_s}")
+    if len(lines) == 1:
+        if rows:
+            return (f"{len(rows)} IEV rows",)
+        return ()
     return tuple(lines)
 
 
 def _lines_sentiment(logs: list[Any]) -> tuple[str, ...]:
-    lines: list[str] = []
-    for log in logs[:4]:
+    lines: list[str] = ["Date        Sentiment   Catalyst      Score"]
+    for log in logs[:12]:
         d = getattr(log, "date", None) or "—"
         sent = getattr(log, "sentiment", None)
         if hasattr(sent, "value"):
@@ -967,17 +982,16 @@ def _lines_sentiment(logs: list[Any]) -> tuple[str, ...]:
         if hasattr(cat, "value"):
             cat = cat.value
         score = getattr(log, "score", None)
-        parts = [str(d), str(sent or "—")]
-        if cat:
-            parts.append(str(cat).replace("_", " "))
-        if score is not None:
-            try:
-                parts.append(f"{float(score):.2f}")
-            except (TypeError, ValueError):
-                parts.append(str(score))
-        lines.append("  ".join(parts)[:72])
-    if not lines and logs:
-        lines.append(f"{len(logs)} sentiment rows")
+        try:
+            sc = f"{float(score):.2f}" if score is not None else "—"
+        except (TypeError, ValueError):
+            sc = str(score or "—")
+        cat_s = str(cat or "—").replace("_", " ")[:12]
+        lines.append(f"{str(d)[:10]:10}  {str(sent or '—'):10}  {cat_s:12}  {sc}")
+    if len(lines) == 1:
+        if logs:
+            return (f"{len(logs)} sentiment rows",)
+        return ()
     return tuple(lines)
 
 
