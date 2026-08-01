@@ -149,8 +149,8 @@ def test_judge_detail_toggle_and_ticker_d_dispatch():
             assert app.query_one("#jd-phase").display is True
             assert app.query_one("#jd-decision").display is False
             dchip = app.query_one("#jd-flag-detail")
-            dlab = str(getattr(dchip, "_label", "") or getattr(dchip, "content", "") or "")
-            assert "[d] detail" in dlab or "[d]" in dlab
+            assert getattr(dchip, "power_key", None) == "d"
+            assert getattr(dchip, "_word", "") == "detail"
             assert "is-on" not in app.query_one("#jd-flag-detail").classes
             app.action_toggle_detail()
             await pilot.pause(0.15)

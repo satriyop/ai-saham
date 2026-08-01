@@ -65,8 +65,12 @@ def test_chip_bar_compose_jobs_then_density_no_meta():
             for c in chips:
                 assert c.can_focus is True
             detail = app.query_one("#td-flag-detail", FlagChip)
-            label = str(getattr(detail, "_label", "") or detail.content or "")
-            assert "[d] detail" in label or "[d]" in label
+            assert detail.power_key == "d"
+            assert detail._word == "detail"
+            by_key = {c.flag_key: c for c in chips}
+            assert by_key["brokers"].power_key == "b"
+            assert by_key["foreign"].power_key == "o"
+            assert by_key["fin"].power_key == "n"
             bar.paint_states(on_keys=("detail",))
             assert "is-on" in detail.classes
             # No density meta widget (noise removed)

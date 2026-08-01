@@ -2,6 +2,7 @@
 
 Plain Tab focus chain via child FlagChip(s). No row labels.
 Density state = ``[d] detail`` chip ``is-on`` only — no brief/detail meta text.
+Job chips paint bold brass ``[k]`` keycaps (power letters).
 
 Layer: Adapter (Textual widget)
 """
@@ -16,6 +17,7 @@ from textual.containers import Horizontal
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
 # Ticker show job chips · power b f o x n · density d last (bible §2).
+# (flag_key, product_word)
 TICKER_JOB_CHIPS: tuple[tuple[str, str], ...] = (
     ("brokers", "brokers"),
     ("flow", "flow"),
@@ -30,7 +32,9 @@ TICKER_JOB_POWER_KEYS: dict[str, str] = {
     "x": "dist",
     "n": "fin",
 }
-# Broker home job chips · power t f c h m
+# flag_key → power letter (inverse of TICKER_JOB_POWER_KEYS)
+TICKER_JOB_FLAG_POWER: dict[str, str] = {v: k for k, v in TICKER_JOB_POWER_KEYS.items()}
+# Broker home job chips · power t f c h m · (flag_key == power letter)
 BROKER_HOME_CHIPS: tuple[tuple[str, str], ...] = (
     ("t", "buy/sell"),
     ("f", "flow"),
@@ -40,11 +44,27 @@ BROKER_HOME_CHIPS: tuple[tuple[str, str], ...] = (
 )
 
 
+def power_key_for_flag(flag_key: str) -> str | None:
+    """Resolve power letter for a chip flag_key (ticker / broker / density)."""
+    k = (flag_key or "").strip()
+    if not k:
+        return None
+    if k == "detail":
+        return "d"
+    if k in TICKER_JOB_FLAG_POWER:
+        return TICKER_JOB_FLAG_POWER[k]
+    # Broker home: flag_key is the letter
+    if len(k) == 1 and k.isalpha():
+        return k.lower()
+    return None
+
+
 class ChipBar(Horizontal):
-    """Horizontal chip toolbar — children are FlagChip (+ optional meta Static).
+    """Horizontal chip toolbar — children are FlagChip.
 
     Navigation: mouse click · Tab/Shift+Tab (plain) · Enter/Space on focused chip.
-    Power letters live in stage/app handlers (not inside this widget).
+    Power letters live in stage/app handlers (not inside this widget); chips paint
+    the same letters as brass ``[k]`` keycaps.
     """
 
     DEFAULT_CSS = """
@@ -93,11 +113,21 @@ class ChipBar(Horizontal):
         self._detail_id = detail_id or f"{chip_id_prefix}-detail"
 
     def compose(self) -> ComposeResult:
-        for key, label in self._chips_spec:
-            yield FlagChip(key, label, id=f"{self._chip_id_prefix}-{key}")
+        for flag_key, word in self._chips_spec:
+            yield FlagChip(
+                flag_key,
+                word,
+                power_key=power_key_for_flag(flag_key),
+                id=f"{self._chip_id_prefix}-{flag_key}",
+            )
         if self._include_detail:
             # Design lock: [d] detail · is-on = detail · no brief meta
-            yield FlagChip("detail", "[d] detail", id=self._detail_id)
+            yield FlagChip(
+                "detail",
+                "detail",
+                power_key="d",
+                id=self._detail_id,
+            )
 
     def chip(self, key: str) -> FlagChip | None:
         """Lookup chip by flag_key (scans children)."""
