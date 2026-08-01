@@ -4,6 +4,12 @@ Unlike StockbitHistoricalProvider (tolerant market-data fallback that may return
 partial pages after errors), this source fails closed: every page must succeed
 and the complete range must validate before a snapshot is produced. Writes nothing.
 
+Pagination (no total metadata in Stockbit historical summary responses):
+- page with fewer than 50 rows → complete
+- page with exactly 50 rows → fetch next page
+- next page with explicit result=[] → complete
+- missing/malformed body or network failure → fail
+
 Layer: Infrastructure
 """
 
@@ -19,6 +25,7 @@ from src.domain.value_objects.trading_session_calendar_snapshot import (
     TRADING_SESSION_CALENDAR_BENCHMARK_IHSG,
     TRADING_SESSION_CALENDAR_SOURCE_STOCKBIT,
     TradingSessionCalendarSnapshot,
+    validate_active_stockbit_calendar_snapshot,
 )
 from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 
@@ -41,11 +48,13 @@ class StockbitTradingSessionCalendarSource:
         stockbit_config: StockbitConfig | None = None,
         source_revision: str = _DEFAULT_SOURCE_REVISION,
         benchmark: str = TRADING_SESSION_CALENDAR_BENCHMARK_IHSG,
+        captured_at: datetime | None = None,
     ) -> None:
         self._api_client = api_client
         self._stockbit_config = stockbit_config or load_stockbit_config()
         self._source_revision = source_revision
         self._benchmark = benchmark
+        self._captured_at = captured_at
 
     def fetch_snapshot(
         self,
@@ -56,6 +65,10 @@ class StockbitTradingSessionCalendarSource:
             raise LearningContractError("coverage_start must not be after coverage_end")
         if self._api_client is None:
             raise LearningContractError("Stockbit API client unavailable for calendar snapshot")
+        if self._benchmark != TRADING_SESSION_CALENDAR_BENCHMARK_IHSG:
+            raise LearningContractError(
+                f"strict calendar source only supports IHSG, got {self._benchmark!r}"
+            )
 
         base_url = self._stockbit_config.historical_summary_url.format(ticker=self._benchmark)
         session_dates: list[date] = []
@@ -80,41 +93,42 @@ class StockbitTradingSessionCalendarSource:
                 )
             rows = _extract_rows(body)
             if not rows:
-                if page == 1:
-                    # Empty complete range is valid (no sessions in window).
-                    break
-                raise LearningContractError(
-                    f"strict Stockbit calendar page {page} returned no rows mid-pagination"
-                )
+                # Explicit empty result: complete for page 1 (empty range) or
+                # after a full page (exact-50 termination).
+                break
             for row in rows:
                 session_dates.append(_parse_session_date(row, page=page))
             if len(rows) < _PAGE_LIMIT:
                 break
             page += 1
 
-        # Reject duplicates / out of range / weekends via create validators.
-        unique_sorted = tuple(sorted(set(session_dates)))
-        return TradingSessionCalendarSnapshot.create(
+        if len(session_dates) != len(set(session_dates)):
+            raise LearningContractError("Stockbit calendar contains duplicate session dates")
+        ordered = tuple(sorted(session_dates))
+        captured = self._captured_at or datetime.now(timezone.utc)
+        snapshot = TradingSessionCalendarSnapshot.create(
             coverage_start=coverage_start,
             coverage_end=coverage_end,
-            ordered_sessions=unique_sorted,
+            ordered_sessions=ordered,
             source_revision=self._source_revision,
-            captured_at=datetime.now(timezone.utc),
+            captured_at=captured,
             contract_id=STOCKBIT_TRADING_SESSIONS_CONTRACT,
             source=TRADING_SESSION_CALENDAR_SOURCE_STOCKBIT,
-            benchmark=self._benchmark,
+            benchmark=TRADING_SESSION_CALENDAR_BENCHMARK_IHSG,
         )
+        validate_active_stockbit_calendar_snapshot(snapshot)
+        return snapshot
 
 
 def _extract_rows(body: dict[str, Any]) -> list[dict[str, Any]]:
     data = body.get("data")
     if not isinstance(data, dict):
         raise LearningContractError("strict Stockbit calendar: data is not an object")
-    rows = data.get("result")
-    if rows is None:
-        return []
+    if "result" not in data:
+        raise LearningContractError("Stockbit response missing data.result")
+    rows = data["result"]
     if not isinstance(rows, list):
-        raise LearningContractError("strict Stockbit calendar: result is not a list")
+        raise LearningContractError("Stockbit data.result must be a list")
     out: list[dict[str, Any]] = []
     for i, row in enumerate(rows):
         if not isinstance(row, dict):
@@ -128,7 +142,6 @@ def _parse_session_date(row: dict[str, Any], *, page: int) -> date:
     if raw is None:
         raise LearningContractError(f"strict Stockbit calendar page {page}: row missing date")
     try:
-        # Accept YYYY-MM-DD or epoch-like strings used by other parsers.
         text = str(raw).strip()
         if "T" in text:
             text = text.split("T", 1)[0]
