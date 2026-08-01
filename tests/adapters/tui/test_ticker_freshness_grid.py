@@ -43,3 +43,15 @@ def test_freshness_pills_order_follows_known_grid():
     pills = _freshness_pills(items)
     assert [p.label for p in pills] == ["Price", "Bandar", "Insider"]
     assert pills[1].status == "miss"
+
+
+def test_horizon_bar_glyphs_no_hollow_wallpaper():
+    """Ticker horizons: filled blocks only — no grey ░ fake fill."""
+    from src.adapters.tui.ticker_desk_model import bar_glyphs
+
+    assert bar_glyphs(0, width=8, hollow=False) == ""
+    solid = bar_glyphs(50, width=8, hollow=False)
+    assert "░" not in solid
+    assert "█" in solid
+    hollow = bar_glyphs(50, width=8, hollow=True)
+    assert "░" in hollow

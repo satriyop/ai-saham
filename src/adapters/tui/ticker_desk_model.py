@@ -1063,7 +1063,15 @@ def _bar_from_abs(v: float, scale: float) -> int:
         return 20
 
 
-def bar_glyphs(pct: int, *, width: int = 10) -> str:
-    """Monospace bar for horizon / earnings (density only, not a chart claim)."""
-    n = max(0, min(width, int(round(width * max(0, min(100, pct)) / 100.0))))
-    return "█" * n + "░" * (width - n)
+def bar_glyphs(pct: int, *, width: int = 10, hollow: bool = True) -> str:
+    """Monospace density bar (scalar sugar only — not a chart claim).
+
+    ``hollow=False``: filled blocks only (ticker horizons) — no grey ░ wallpaper.
+    ``hollow=True``: filled + light residual (earnings rows).
+    """
+    if pct is None or int(pct) <= 0:
+        return ""
+    n = max(1, min(width, int(round(width * max(0, min(100, int(pct))) / 100.0))))
+    if hollow:
+        return "█" * n + "░" * (width - n)
+    return "█" * n

@@ -159,32 +159,38 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-price-row {
-        height: auto;
+        height: 3;
+        width: 100%;
         margin: 1 0 0 0;
+        align: left middle;
     }
 
     TickerDesk .td-currency {
         width: auto;
+        height: 3;
         color: #6b6b6b;
         padding-right: 1;
-        content-align: left bottom;
+        content-align: left middle;
     }
 
     TickerDesk .td-price {
         width: auto;
+        height: 3;
         text-style: bold;
         color: #e8e8e8;
         padding-right: 2;
+        content-align: left middle;
     }
 
     TickerDesk .td-chg {
         width: auto;
+        height: 3;
         text-style: bold;
         color: #7a7a7a;
         background: #121212;
         border: solid #2a2a2a;
         padding: 0 1;
-        content-align: left middle;
+        content-align: center middle;
     }
 
     TickerDesk .td-chg.pos {
@@ -199,14 +205,6 @@ class TickerDesk(Vertical):
         border: solid #3a2220;
     }
 
-    TickerDesk .td-tape {
-        color: #555555;
-        height: auto;
-        margin-top: 1;
-        border-top: solid #1c1c1c;
-        padding-top: 0;
-    }
-
     TickerDesk .td-mast-right {
         width: 2fr;
         height: auto;
@@ -217,6 +215,7 @@ class TickerDesk(Vertical):
     TickerDesk .td-hz-line {
         height: auto;
         color: #a0a0a0;
+        margin-bottom: 0;
     }
 
     /* Ribbon */
@@ -402,7 +401,6 @@ class TickerDesk(Vertical):
                     yield Static("Rp", classes="td-currency")
                     yield Static("—", classes="td-price", id="td-price")
                     yield Static("", classes="td-chg", id="td-chg")
-                yield Static("", classes="td-tape", id="td-tape")
             with Vertical(classes="td-mast-right", id="td-mast-right"):
                 for i in range(4):
                     yield Static("", classes="td-hz-line", id=f"td-hz-{i}")
@@ -612,33 +610,47 @@ class TickerDesk(Vertical):
         )
         self._paint_fresh_grid(model.freshness)
 
-        # Mast
+        # Mast — real last + chg only (no decorative tape / fake sparkline)
         self.query_one("#td-price", Static).update(model.price or "—")
         chg = self.query_one("#td-chg", Static)
         for c in ("pos", "neg"):
             chg.remove_class(c)
-        if model.change_1d:
+        chg_txt = (model.change_1d or "").strip()
+        if chg_txt and chg_txt not in {"—", "-", "–"}:
             if model.change_tone in {"pos", "neg"}:
                 chg.add_class(model.change_tone)
-            chg.update(f" {model.change_1d} ")
+            # Real 1d change; badge sits on same baseline as price
+            label = chg_txt if "1d" in chg_txt.lower() else f"{chg_txt} 1d"
+            chg.update(f" {label} ")
+            chg.display = True
         else:
             chg.update("")
-        # Decorative tape (density only)
-        self.query_one("#td-tape", Static).update("▌▌▌  ▌▌  ▌▌▌▌  ▌  ▌▌▌  ▌▌")
+            chg.display = False
 
         for i in range(4):
             el = self.query_one(f"#td-hz-{i}", Static)
             if i < len(model.horizons):
                 hz = model.horizons[i]
-                bar = bar_glyphs(hz.bar_pct, width=8)
                 color = {
                     "pos": "#6fbf8a",
                     "neg": "#c97a72",
-                    "neutral": "#7a7a7a",
-                }.get(hz.tone, "#7a7a7a")
-                el.update(f"[#555555]{hz.label:3}[/] {bar} [{color}]{hz.value}[/]")
+                    "neutral": "#a0a0a0",
+                }.get(hz.tone, "#a0a0a0")
+                val = (hz.value or "—").strip() or "—"
+                if val in {"—", "-", "–"}:
+                    # Honest empty horizon — no grey wallpaper bar
+                    el.update(f"[#555555]{hz.label:3}[/]  [#555555]—[/]")
+                else:
+                    # Filled bar only (tone-colored); no hollow ░ fake fill
+                    bar = bar_glyphs(hz.bar_pct, width=8, hollow=False)
+                    if bar:
+                        el.update(f"[#555555]{hz.label:3}[/] [{color}]{bar}[/]  [{color}]{val}[/]")
+                    else:
+                        el.update(f"[#555555]{hz.label:3}[/]  [{color}]{val}[/]")
+                el.display = True
             else:
                 el.update("")
+                el.display = False
 
         for i in range(6):
             if i < len(model.metrics):
