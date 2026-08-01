@@ -233,3 +233,21 @@ def test_ticker_frame_is_price_hero_hierarchy_not_flat_cli_only():
         or "density ≠ chart" in html
         or "density bars" in html.lower()
     )
+
+
+def test_scalar_bar_contract_flow_foreign_require_pct():
+    """Bar rows on flow/foreign must show clear % (same honesty as dist share %)."""
+    html = _html()
+    md = MD.read_text(encoding="utf-8")
+    assert "Scalar bar contract" in md
+    assert "of max" in md.lower() or "of-max" in md.lower()
+    # Flow + foreign section heads name the of-max basis
+    assert "of max |net| in window" in html
+    # Explicit mute % cells on flow/foreign day rows (not bar-only tracks)
+    assert 'class="pct"' in html
+    assert ">100%</span>" in html or ">42%</span>" in html
+    # Dist remains the share% canonical example
+    assert 'class="pct"' in html
+    assert "31%" in html
+    # Anti-pattern notes live in design authority
+    assert "bar + %" in html.lower() or "bar + clear %" in html.lower()

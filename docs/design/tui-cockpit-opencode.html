@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-chip-keycap-brass</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-fin-subchip-y</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -1651,14 +1651,21 @@
     }
 
 
+ /* Scalar bar contract: track fill always pairs with mute % (of max or share) */
  .flow-day {
  display: grid;
- grid-template-columns: 48px 1fr auto;
+ grid-template-columns: 72px 1fr 3.25em auto;
  gap: 10px;
  align-items: center;
  font-size: 12px;
  padding: 4px 0;
  font-variant-numeric: tabular-nums;
+ }
+ .flow-day.foreign {
+ grid-template-columns: 88px 1fr 3.25em 72px 5.5em 5.5em 4em;
+ }
+ .flow-day.flow-full {
+ grid-template-columns: 72px 1fr 3.25em 5.5em 4em 2.5em 2.5em;
  }
  .flow-day .d { color: var(--text-mute); }
  .flow-day .track {
@@ -1674,9 +1681,42 @@
  }
  .flow-day .track > i.pos { background: var(--green); }
  .flow-day .track > i.neg { background: var(--red); }
+ .flow-day .pct {
+ color: var(--text-mute);
+ font-size: 11px;
+ text-align: right;
+ min-width: 3em;
+ }
+ .flow-day .src { color: var(--text-mute); }
+ .flow-day .lot,
+ .flow-day .avg { color: var(--text); text-align: right; font-weight: 500; }
+ .flow-day .ratio { color: var(--text-mute); text-align: right; }
+ .flow-day .who { color: var(--text); font-weight: 500; text-align: center; }
  .flow-day .v { font-weight: 500; min-width: 4.5em; text-align: right; }
  .flow-day .v.pos { color: var(--green); }
  .flow-day .v.neg { color: var(--red); }
+ .flow-day-head {
+ display: grid;
+ gap: 10px;
+ align-items: center;
+ font-size: 10.5px;
+ color: var(--text-mute);
+ padding: 0 0 4px;
+ border-bottom: 1px solid var(--border-soft);
+ margin-bottom: 2px;
+ font-variant-numeric: tabular-nums;
+ letter-spacing: 0.02em;
+ }
+ .flow-day-head.flow-full {
+ grid-template-columns: 72px 1fr 3.25em 5.5em 4em 2.5em 2.5em;
+ }
+ .flow-day-head.foreign {
+ grid-template-columns: 88px 1fr 3.25em 72px 5.5em 5.5em 4em;
+ }
+ .flow-day-head span { text-align: right; }
+ .flow-day-head span:first-child,
+ .flow-day-head .h-date { text-align: left; }
+ .flow-day-head .h-bar { text-align: left; }
 
  /* Ticker job desk shell (flow · foreign · dist · fin) — not CLI dump */
  .tj-desk { display: none; margin-bottom: 12px; }
@@ -2457,7 +2497,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 01-chip-keycap-brass</span>
+      <span class="rev" id="buildStamp">mock · 01-fin-subchip-y</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -2828,13 +2868,15 @@
  <div class="stage-block is-hidden" id="detailView" style="display:none">
 <div class="section-label">View · ticker · <span id="detailTicker">BBCA</span></div>
 
- <!-- Chip bar · brass [k] keycaps · jobs + density last · power b f o x n d · plain Tab -->
+ <!-- Chip bar · jobs + density · [y] fin sub-chip only while fin is-on (hidden otherwise, not dim) -->
  <div class="flag-row" data-flag-group="ticker" id="tickerJobFlags" style="margin-bottom:12px" role="toolbar" aria-label="Ticker chips">
    <button type="button" class="flag-chip" data-deep="brokers" title="[b] brokers · view ticker top-brokers"><span class="chip-key">[b]</span><span class="chip-lab">brokers</span></button>
    <button type="button" class="flag-chip" data-deep="flow" title="[f] flow · view ticker flow"><span class="chip-key">[f]</span><span class="chip-lab">flow</span></button>
    <button type="button" class="flag-chip" data-deep="foreign" title="[o] foreign · view ticker foreign-history"><span class="chip-key">[o]</span><span class="chip-lab">foreign</span></button>
    <button type="button" class="flag-chip" data-deep="dist" title="[x] dist · view ticker distribution"><span class="chip-key">[x]</span><span class="chip-lab">dist</span></button>
    <button type="button" class="flag-chip" data-deep="fin" title="[n] fin · view ticker financials"><span class="chip-key">[n]</span><span class="chip-lab">fin</span></button>
+   <!-- fin sub-chip: display:none until fin job front (syncFinPeriodChipArmed) -->
+   <button type="button" class="flag-chip is-hidden" data-toggle="fin-period" id="tickerFinPeriod" title="[y] period · fin context only" aria-hidden="true" hidden style="display:none"><span class="chip-key">[y]</span><span class="chip-lab" id="tickerFinPeriodLab">quarterly</span></button>
    <button type="button" class="flag-chip" data-flag="detail" id="tickerDetailAll" title="[d] detail"><span class="chip-key">[d]</span><span class="chip-lab">detail</span></button>
  </div>
 
@@ -3162,20 +3204,17 @@
                   <div class="tj-pulse"><div class="k">Consec buy</div><div class="v">0</div></div>
                   <div class="tj-pulse"><div class="k">Latest</div><div class="v neg">−27.8B</div></div>
                 </div>
-                <div class="section-label tight">Sessions</div>
-                <div class="flow-day"><span class="d">07-29</span><span class="track"><i class="neg" style="width:42%"></i></span><span class="v neg">−27.8B</span></div>
-                <div class="flow-day"><span class="d">07-28</span><span class="track"><i class="neg" style="width:78%"></i></span><span class="v neg">−62.1B</span></div>
-                <div class="flow-day"><span class="d">07-25</span><span class="track"><i class="pos" style="width:22%"></i></span><span class="v pos">+12.4B</span></div>
-                <div class="flow-day"><span class="d">07-24</span><span class="track"><i class="neg" style="width:55%"></i></span><span class="v neg">−41.0B</span></div>
-                <div class="flow-day"><span class="d">07-23</span><span class="track"><i class="neg" style="width:88%"></i></span><span class="v neg">−91.2B</span></div>
-                <table class="mini-tbl" style="margin-top:10px">
-                  <thead><tr><th>Date</th><th class="num">Net</th><th class="num">Ratio</th><th>Buyer</th><th>Seller</th></tr></thead>
-                  <tbody>
-                    <tr><td>2026-07-29</td><td class="num neg">−27.8B</td><td class="num dim">5.0%</td><td>YP</td><td>AK</td></tr>
-                    <tr><td>2026-07-28</td><td class="num neg">−62.1B</td><td class="num dim">12.1%</td><td>CC</td><td>AK</td></tr>
-                    <tr><td>2026-07-25</td><td class="num pos">+12.4B</td><td class="num dim">3.2%</td><td>YP</td><td>XL</td></tr>
-                  </tbody>
-                </table>
+                <div class="section-label tight">Sessions · of max |net| in window
+                  <span style="font-weight:400;color:var(--text-faint);margin-left:8px">bar + % required · Ratio ≠ of-max</span>
+                </div>
+                <div class="flow-day-head flow-full">
+                  <span class="h-date">Date</span><span class="h-bar">bar</span><span>%</span><span>Net</span><span>Ratio</span><span>Buy</span><span>Sell</span>
+                </div>
+                <div class="flow-day flow-full"><span class="d">07-29</span><span class="track"><i class="neg" style="width:30%"></i></span><span class="pct">30%</span><span class="v neg">−27.8B</span><span class="ratio">5.0%</span><span class="who">YP</span><span class="who">AK</span></div>
+                <div class="flow-day flow-full"><span class="d">07-28</span><span class="track"><i class="neg" style="width:68%"></i></span><span class="pct">68%</span><span class="v neg">−62.1B</span><span class="ratio">12.1%</span><span class="who">CC</span><span class="who">AK</span></div>
+                <div class="flow-day flow-full"><span class="d">07-25</span><span class="track"><i class="pos" style="width:14%"></i></span><span class="pct">14%</span><span class="v pos">+12.4B</span><span class="ratio">3.2%</span><span class="who">YP</span><span class="who">XL</span></div>
+                <div class="flow-day flow-full"><span class="d">07-24</span><span class="track"><i class="neg" style="width:45%"></i></span><span class="pct">45%</span><span class="v neg">−41.0B</span><span class="ratio">8.4%</span><span class="who">CC</span><span class="who">YP</span></div>
+                <div class="flow-day flow-full"><span class="d">07-23</span><span class="track"><i class="neg" style="width:100%"></i></span><span class="pct">100%</span><span class="v neg">−91.2B</span><span class="ratio">15.2%</span><span class="who">AK</span><span class="who">YP</span></div>
               </div>
 
               <!-- FOREIGN -->
@@ -3200,16 +3239,21 @@
                   <div class="tj-pulse"><div class="k">Days</div><div class="v">30</div></div>
                   <div class="tj-pulse"><div class="k">Source</div><div class="v">stockbit</div></div>
                 </div>
-                <div class="section-label tight">Daily points</div>
-                <table class="mini-tbl">
-                  <thead><tr><th>Date</th><th>Source</th><th class="num">Net</th><th class="num">Lot</th><th class="num">Avg</th></tr></thead>
-                  <tbody>
-                    <tr><td>2026-07-29</td><td class="dim">stockbit</td><td class="num neg">−27.8B</td><td class="num dim">−1,000</td><td class="num dim">6,275</td></tr>
-                    <tr><td>2026-07-28</td><td class="dim">stockbit</td><td class="num neg">−62.1B</td><td class="num dim">−2,140</td><td class="num dim">6,225</td></tr>
-                    <tr><td>2026-07-25</td><td class="dim">stockbit</td><td class="num pos">+12.4B</td><td class="num dim">+480</td><td class="num dim">6,250</td></tr>
-                    <tr><td>2026-07-24</td><td class="dim">stockbit</td><td class="num neg">−41.0B</td><td class="num dim">−1,520</td><td class="num dim">6,200</td></tr>
-                  </tbody>
-                </table>
+                <div class="section-label tight">Daily points · of max |net| in window
+                  <span style="font-weight:400;color:var(--text-faint);margin-left:8px">bar + clear % · same contract as flow</span>
+                </div>
+                <div class="flow-day-head foreign">
+                  <span class="h-date">Date</span><span class="h-bar">bar</span><span>%</span><span style="text-align:left">Source</span><span>Net</span><span>Lot</span><span>Avg</span>
+                </div>
+                <div class="flow-day foreign"><span class="d">2026-07-31</span><span class="track"><i class="pos" style="width:100%"></i></span><span class="pct">100%</span><span class="src">stockbit</span><span class="v pos">+8.32B</span><span class="lot">47,613</span><span class="avg">1,735</span></div>
+                <div class="flow-day foreign"><span class="d">2026-07-30</span><span class="track"><i class="pos" style="width:42%"></i></span><span class="pct">42%</span><span class="src">stockbit</span><span class="v pos">+3.50B</span><span class="lot">20,502</span><span class="avg">1,707</span></div>
+                <div class="flow-day foreign"><span class="d">2026-07-29</span><span class="track"><i class="pos" style="width:50%"></i></span><span class="pct">50%</span><span class="src">stockbit</span><span class="v pos">+4.13B</span><span class="lot">24,270</span><span class="avg">1,699</span></div>
+                <div class="flow-day foreign"><span class="d">2026-07-28</span><span class="track"><i class="pos" style="width:42%"></i></span><span class="pct">42%</span><span class="src">stockbit</span><span class="v pos">+3.49B</span><span class="lot">20,649</span><span class="avg">1,694</span></div>
+                <div class="flow-day foreign"><span class="d">2026-07-23</span><span class="track"><i class="neg" style="width:83%"></i></span><span class="pct">83%</span><span class="src">stockbit</span><span class="v neg">−6.89B</span><span class="lot">−40,664</span><span class="avg">1,696</span></div>
+                <div class="flow-day foreign"><span class="d">2026-07-22</span><span class="track"><i class="neg" style="width:69%"></i></span><span class="pct">69%</span><span class="src">stockbit</span><span class="v neg">−5.72B</span><span class="lot">−33,704</span><span class="avg">1,701</span></div>
+                <div class="flow-day foreign"><span class="d">2026-07-21</span><span class="track"><i class="neg" style="width:95%"></i></span><span class="pct">95%</span><span class="src">stockbit</span><span class="v neg">−7.87B</span><span class="lot">−45,665</span><span class="avg">1,721</span></div>
+                <div class="flow-day foreign"><span class="d">2026-07-08</span><span class="track"><i class="neg" style="width:88%"></i></span><span class="pct">88%</span><span class="src">stockbit</span><span class="v neg">−7.35B</span><span class="lot">−42,616</span><span class="avg">1,726</span></div>
+                <div class="flow-day foreign"><span class="d">2026-07-07</span><span class="track"><i class="pos" style="width:16%"></i></span><span class="pct">16%</span><span class="src">stockbit</span><span class="v pos">+1.33B</span><span class="lot">7,535</span><span class="avg">1,758</span></div>
               </div>
 
               <!-- DIST · dual heat + F/L type badges (Foreign = F, Local = L · never A) -->
@@ -3347,30 +3391,31 @@
                 </div>
               </div>
 
-              <!-- FIN -->
+              <!-- FIN · period grain binary toggle [y] on chip bar (flip label · not universal t) -->
               <div class="tj-desk" id="tjDeskFin" data-job="fin">
                 <div class="tj-hero">
                   <div>
                     <div class="lab">Financials</div>
-                    <div class="big" style="font-size:1.35rem">Q1 2026</div>
-                    <div class="sub">quarter · source=yahoo · local cache · not full statements</div>
+                    <div class="big" style="font-size:1.35rem" id="tjFinHeroBig">Q1 2026</div>
+                    <div class="sub" id="tjFinHeroSub">quarter · source=yahoo · local cache · not full statements</div>
                   </div>
                   <div>
                     <div class="side-lab">Scan</div>
                     <div class="sub" style="color:var(--text-dim);margin:0">
                       Three cards always.<br />
-                      Empty card = honest missing kind.
+                      Empty card = honest missing kind.<br />
+                      <span class="kbd">y</span> quarterly ↔ annual
                     </div>
                   </div>
                 </div>
                 <div class="tj-fin-cards">
                   <div class="tj-fin-card">
                     <h4>Income</h4>
-                    <div class="row"><span>Revenue</span><b>28.4T</b></div>
-                    <div class="row"><span>Net income</span><b>14.7T</b></div>
-                    <div class="row"><span>EPS basic</span><b>119.1</b></div>
-                    <div class="row dim" style="margin-top:6px;font-size:11px;color:var(--text-mute)"><span>Q4 2025</span><span>rev 27.9T · eps 114.7</span></div>
-                    <div class="row dim" style="font-size:11px;color:var(--text-mute)"><span>Q3 2025</span><span>rev 26.8T · eps 111.4</span></div>
+                    <div class="row"><span>Revenue</span><b id="tjFinRev">28.4T</b></div>
+                    <div class="row"><span>Net income</span><b id="tjFinNi">14.7T</b></div>
+                    <div class="row"><span>EPS basic</span><b id="tjFinEps">119.1</b></div>
+                    <div class="row dim" style="margin-top:6px;font-size:11px;color:var(--text-mute)" id="tjFinPrior1"><span>Q4 2025</span><span>rev 27.9T · eps 114.7</span></div>
+                    <div class="row dim" style="font-size:11px;color:var(--text-mute)" id="tjFinPrior2"><span>Q3 2025</span><span>rev 26.8T · eps 111.4</span></div>
                   </div>
                   <div class="tj-fin-card">
                     <h4>Balance</h4>
@@ -3535,7 +3580,9 @@
 
               <div class="footer-note">
                 <span><span class="kbd">esc</span> show</span>
-                <span><span class="kbd">f</span><span class="kbd">o</span><span class="kbd">x</span><span class="kbd">n</span> jobs</span>
+                <span><span class="kbd">b</span><span class="kbd">f</span><span class="kbd">o</span><span class="kbd">x</span><span class="kbd">n</span> jobs</span>
+                <span><span class="kbd">y</span> period (fin)</span>
+                <span><span class="kbd">p</span> plan</span>
                 <span class="dim" id="tickerJobCli">CLI · saham view ticker flow BBCA</span>
               </div>
             </div>
@@ -4010,6 +4057,7 @@
       judgeDetailOpen: false, // d · CLI --detail analog
       tickerDetailOpen: false, // brief default · d = detail (same dual as Judge)
       tickerDeep: null, // null | brokers | flow | foreign | dist | fin
+      finPeriod: "quarterly", // binary toggle y · quarterly (default) | annual · fin job only
  paletteOpen: false,
  confirmOpen: false,
  filtered: [...COMMANDS],
@@ -5216,11 +5264,17 @@
 
       if (state.frame === "detail") {
         const tk = e.key.toLowerCase();
-        // power letters · jobs work on show or job sub-stage; d only on show
+        // power letters · jobs work on show or job sub-stage; d only on show; y only on fin
         if (tk === "d") {
           if (state.tickerDeep) return; // density only when show visible
           e.preventDefault();
           toggleTickerDetail();
+          return;
+        }
+        if (tk === "y") {
+          if (state.tickerDeep !== "fin") return; // period grain · fin job only
+          e.preventDefault();
+          toggleFinPeriod();
           return;
         }
         if (tk === "p") { e.preventDefault(); showFrame("plan"); return; }
@@ -5361,6 +5415,71 @@
       toast(state.tickerDetailOpen ? "Ticker detail on" : "Ticker detail off");
     }
 
+    // Fin period grain · binary toggle [y] · flip label · not p (plan) · not q (quit) · not t
+    function setFinPeriod(period, announce) {
+      const next = period === "annual" ? "annual" : "quarterly";
+      state.finPeriod = next;
+      const btn = $("tickerFinPeriod");
+      const lab = $("tickerFinPeriodLab");
+      if (lab) lab.textContent = next;
+      if (btn) {
+        btn.classList.toggle("is-on", next === "annual");
+        btn.title =
+          next === "annual"
+            ? "[y] annual · press y for quarterly · fin only"
+            : "[y] quarterly · press y for annual · fin only";
+      }
+      const big = $("tjFinHeroBig");
+      const sub = $("tjFinHeroSub");
+      const rev = $("tjFinRev");
+      const ni = $("tjFinNi");
+      const eps = $("tjFinEps");
+      const p1 = $("tjFinPrior1");
+      const p2 = $("tjFinPrior2");
+      if (next === "annual") {
+        if (big) big.textContent = "FY 2025";
+        if (sub) sub.textContent = "annual · source=yahoo · local cache · not full statements";
+        if (rev) rev.textContent = "110.1T";
+        if (ni) ni.textContent = "56.2T";
+        if (eps) eps.textContent = "456.0";
+        if (p1) p1.innerHTML = "<span>FY 2024</span><span>rev 102.4T · eps 421.0</span>";
+        if (p2) p2.innerHTML = "<span>FY 2023</span><span>rev 94.1T · eps 388.2</span>";
+      } else {
+        if (big) big.textContent = "Q1 2026";
+        if (sub) sub.textContent = "quarter · source=yahoo · local cache · not full statements";
+        if (rev) rev.textContent = "28.4T";
+        if (ni) ni.textContent = "14.7T";
+        if (eps) eps.textContent = "119.1";
+        if (p1) p1.innerHTML = "<span>Q4 2025</span><span>rev 27.9T · eps 114.7</span>";
+        if (p2) p2.innerHTML = "<span>Q3 2025</span><span>rev 26.8T · eps 111.4</span>";
+      }
+      if (announce) {
+        toast(
+          next === "annual"
+            ? "Fin period · annual · CLI --period annual"
+            : "Fin period · quarterly · CLI --period quarterly"
+        );
+      }
+    }
+
+    function toggleFinPeriod() {
+      if (state.tickerDeep !== "fin") return;
+      setFinPeriod(state.finPeriod === "annual" ? "quarterly" : "annual", true);
+    }
+
+    function syncFinPeriodChipArmed() {
+      // Fin sub-chip: painted only while [n] fin is-on — never dim-on-bar for other jobs
+      const btn = $("tickerFinPeriod");
+      if (!btn) return;
+      const armed = state.frame === "detail" && state.tickerDeep === "fin";
+      btn.hidden = !armed;
+      btn.style.display = armed ? "" : "none";
+      btn.classList.toggle("is-hidden", !armed);
+      btn.setAttribute("aria-hidden", armed ? "false" : "true");
+      btn.tabIndex = armed ? 0 : -1;
+      if (armed) setFinPeriod(state.finPeriod, false);
+    }
+
     function showTickerJobDesk(job) {
       document.querySelectorAll("#tickerDeepStage .tj-desk").forEach((el) => {
         el.classList.toggle("is-on", el.dataset.job === job);
@@ -5419,6 +5538,7 @@
       document.querySelectorAll("#tickerJobFlags .flag-chip[data-deep]").forEach((b) => {
         b.classList.toggle("is-on", b.dataset.deep === job);
       });
+      syncFinPeriodChipArmed();
       updateChrome();
       toast(`${spec.cli} ${t}`);
     }
@@ -5437,6 +5557,7 @@
       document.querySelectorAll("#tickerJobFlags .flag-chip[data-deep]").forEach((b) => {
         b.classList.remove("is-on");
       });
+      syncFinPeriodChipArmed();
       if (state.frame === "detail") updateChrome();
       if (announce) toast("Ticker show");
     }
@@ -5447,6 +5568,11 @@
         btn.dataset.wired = "1";
         btn.addEventListener("click", () => setTickerDeep(btn.dataset.deep));
       });
+      const periodBtn = $("tickerFinPeriod");
+      if (periodBtn && !periodBtn.dataset.wired) {
+        periodBtn.dataset.wired = "1";
+        periodBtn.addEventListener("click", () => toggleFinPeriod());
+      }
     }
 
     function wireFlagGroups() {
