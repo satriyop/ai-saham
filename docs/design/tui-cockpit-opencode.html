@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-chipbar</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-ticker-jobs</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -1644,6 +1644,159 @@
  .flow-day .v.pos { color: var(--green); }
  .flow-day .v.neg { color: var(--red); }
 
+ /* Ticker job desk shell (flow · foreign · dist · fin) — not CLI dump */
+ .tj-desk { display: none; margin-bottom: 12px; }
+ .tj-desk.is-on { display: block; }
+ .tj-hero {
+   display: grid;
+   grid-template-columns: 1.4fr 1fr;
+   gap: 14px;
+   margin-bottom: 12px;
+   padding: 14px;
+   border: 1px solid var(--border);
+   border-radius: var(--radius);
+   background: var(--bg-elevated);
+   border-left: 3px solid var(--sel-bg);
+ }
+ @media (max-width: 800px) {
+   .tj-hero { grid-template-columns: 1fr; }
+ }
+ .tj-hero .lab {
+   font-size: 11px;
+   letter-spacing: 0.08em;
+   text-transform: uppercase;
+   color: var(--sel-dim);
+   font-weight: 600;
+   margin-bottom: 6px;
+ }
+ .tj-hero .big {
+   font-size: 1.75rem;
+   font-weight: 600;
+   letter-spacing: 0.01em;
+   color: var(--text);
+   line-height: 1.15;
+ }
+ .tj-hero .big.pos { color: var(--green); }
+ .tj-hero .big.neg { color: var(--red); }
+ .tj-hero .sub {
+   margin-top: 6px;
+   font-size: 12px;
+   color: var(--text-mute);
+   line-height: 1.4;
+ }
+ .tj-hero .side-lab {
+   font-size: 10px;
+   letter-spacing: 0.08em;
+   text-transform: uppercase;
+   color: var(--text-mute);
+   margin-bottom: 6px;
+ }
+ .tj-pulses {
+   display: grid;
+   grid-template-columns: repeat(4, 1fr);
+   gap: 8px;
+   margin-bottom: 12px;
+ }
+ @media (max-width: 700px) {
+   .tj-pulses { grid-template-columns: repeat(2, 1fr); }
+ }
+ .tj-pulse {
+   background: var(--bg-elevated);
+   border: 1px solid var(--border);
+   border-radius: var(--radius);
+   padding: 8px 10px;
+ }
+ .tj-pulse .k {
+   font-size: 10px;
+   letter-spacing: 0.06em;
+   text-transform: uppercase;
+   color: var(--text-mute);
+ }
+ .tj-pulse .v {
+   margin-top: 4px;
+   font-size: 14px;
+   font-weight: 600;
+   color: var(--text);
+   font-variant-numeric: tabular-nums;
+ }
+ .tj-pulse .v.pos { color: var(--green); }
+ .tj-pulse .v.neg { color: var(--red); }
+ .tj-dual {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 12px;
+   margin-bottom: 12px;
+ }
+ @media (max-width: 700px) {
+   .tj-dual { grid-template-columns: 1fr; }
+ }
+ .tj-dual .col {
+   background: var(--bg-elevated);
+   border: 1px solid var(--border);
+   border-radius: var(--radius);
+   padding: 10px 12px;
+ }
+ .tj-dual .col h4 {
+   margin: 0 0 8px;
+   font-size: 11px;
+   letter-spacing: 0.06em;
+   text-transform: uppercase;
+   color: var(--text-mute);
+   font-weight: 600;
+ }
+ .tj-dual .side {
+   margin-bottom: 8px;
+   font-variant-numeric: tabular-nums;
+ }
+ .tj-dual .side .head {
+   display: flex;
+   justify-content: space-between;
+   font-weight: 600;
+   color: var(--text);
+   margin-bottom: 2px;
+ }
+ .tj-dual .side .head.buy { color: var(--green); }
+ .tj-dual .side .head.sell { color: var(--red); }
+ .tj-dual .cp {
+   font-size: 12px;
+   color: var(--text-dim);
+   padding-left: 10px;
+   margin: 1px 0;
+ }
+ .tj-fin-cards {
+   display: grid;
+   grid-template-columns: repeat(3, 1fr);
+   gap: 10px;
+   margin-bottom: 12px;
+ }
+ @media (max-width: 800px) {
+   .tj-fin-cards { grid-template-columns: 1fr; }
+ }
+ .tj-fin-card {
+   background: var(--bg-elevated);
+   border: 1px solid var(--border);
+   border-radius: var(--radius);
+   padding: 10px 12px;
+   border-left: 2px solid #3a4252;
+ }
+ .tj-fin-card h4 {
+   margin: 0 0 8px;
+   font-size: 11px;
+   letter-spacing: 0.06em;
+   text-transform: uppercase;
+   color: var(--text-mute);
+ }
+ .tj-fin-card .row {
+   display: flex;
+   justify-content: space-between;
+   font-size: 12px;
+   padding: 3px 0;
+   font-variant-numeric: tabular-nums;
+   color: var(--text-dim);
+ }
+ .tj-fin-card .row b { color: var(--text); font-weight: 600; }
+ .tj-fin-card .empty { color: var(--text-mute); font-size: 12px; }
+
  .net-hero {
  display: grid;
  grid-template-columns: 1.4fr 1fr;
@@ -2163,7 +2316,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 01-chipbar</span>
+      <span class="rev" id="buildStamp">mock · 01-ticker-jobs</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -2842,16 +2995,200 @@
               </div><!-- /tickerDepthBody -->
             </div><!-- /tickerFullPanels -->
 
-            <!-- Job sub-stage (CLI view ticker top-brokers|flow|…) · esc → show -->
+            <!-- Job desks · shared shell · flow/foreign/dist/fin (brokers → desks list trail) -->
             <div id="tickerDeepStage" class="is-hidden" style="display:none" data-deep-stage>
-              <div class="section-label tight" id="tickerDeepTitle">View · ticker · BBCA · top-brokers</div>
-              <div class="cli-panel" style="margin-bottom:12px">
-                <div class="body" id="tickerDeepBody">
-                  <div class="line dim">local cache · design mock</div>
+              <div class="section-label" id="tickerDeepTitle">View · ticker · BBCA · flow
+                <span style="font-size:11px;color:var(--text-mute);font-weight:400;margin-left:8px" id="tickerJobMeta">flow · local cache</span>
+              </div>
+
+              <!-- FLOW -->
+              <div class="tj-desk is-on" id="tjDeskFlow" data-job="flow">
+                <div class="tj-hero">
+                  <div>
+                    <div class="lab">Foreign flow · 10d</div>
+                    <div class="big neg">−344.0B</div>
+                    <div class="sub">last 10 sessions · broker_summaries · as of 2026-07-29 · local cache</div>
+                  </div>
+                  <div>
+                    <div class="side-lab">Story</div>
+                    <div class="sub" style="color:var(--text-dim);margin:0">
+                      Window net foreign on this stock.<br />
+                      Not the point series (use <b>foreign</b>).
+                    </div>
+                  </div>
+                </div>
+                <div class="tj-pulses">
+                  <div class="tj-pulse"><div class="k">Buy days</div><div class="v">1</div></div>
+                  <div class="tj-pulse"><div class="k">Sell days</div><div class="v">4</div></div>
+                  <div class="tj-pulse"><div class="k">Consec buy</div><div class="v">0</div></div>
+                  <div class="tj-pulse"><div class="k">Latest</div><div class="v neg">−27.8B</div></div>
+                </div>
+                <div class="section-label tight">Sessions</div>
+                <div class="flow-day"><span class="d">07-29</span><span class="track"><i class="neg" style="width:42%"></i></span><span class="v neg">−27.8B</span></div>
+                <div class="flow-day"><span class="d">07-28</span><span class="track"><i class="neg" style="width:78%"></i></span><span class="v neg">−62.1B</span></div>
+                <div class="flow-day"><span class="d">07-25</span><span class="track"><i class="pos" style="width:22%"></i></span><span class="v pos">+12.4B</span></div>
+                <div class="flow-day"><span class="d">07-24</span><span class="track"><i class="neg" style="width:55%"></i></span><span class="v neg">−41.0B</span></div>
+                <div class="flow-day"><span class="d">07-23</span><span class="track"><i class="neg" style="width:88%"></i></span><span class="v neg">−91.2B</span></div>
+                <table class="mini-tbl" style="margin-top:10px">
+                  <thead><tr><th>Date</th><th class="num">Net</th><th class="num">Ratio</th><th>Buyer</th><th>Seller</th></tr></thead>
+                  <tbody>
+                    <tr><td>2026-07-29</td><td class="num neg">−27.8B</td><td class="num dim">5.0%</td><td>YP</td><td>AK</td></tr>
+                    <tr><td>2026-07-28</td><td class="num neg">−62.1B</td><td class="num dim">12.1%</td><td>CC</td><td>AK</td></tr>
+                    <tr><td>2026-07-25</td><td class="num pos">+12.4B</td><td class="num dim">3.2%</td><td>YP</td><td>XL</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- FOREIGN -->
+              <div class="tj-desk" id="tjDeskForeign" data-job="foreign">
+                <div class="tj-hero">
+                  <div>
+                    <div class="lab">Foreign history</div>
+                    <div class="big neg">−27.8B</div>
+                    <div class="sub">latest day · source=stockbit · last 30 days · foreign net only</div>
+                  </div>
+                  <div>
+                    <div class="side-lab">vs flow</div>
+                    <div class="sub" style="color:var(--text-dim);margin:0">
+                      Point series (net · lot · avg).<br />
+                      Not session summary + top desks.
+                    </div>
+                  </div>
+                </div>
+                <div class="tj-pulses">
+                  <div class="tj-pulse"><div class="k">5d net</div><div class="v neg">−344B</div></div>
+                  <div class="tj-pulse"><div class="k">20d net</div><div class="v neg">−1.32T</div></div>
+                  <div class="tj-pulse"><div class="k">Days</div><div class="v">30</div></div>
+                  <div class="tj-pulse"><div class="k">Source</div><div class="v">stockbit</div></div>
+                </div>
+                <div class="section-label tight">Daily points</div>
+                <table class="mini-tbl">
+                  <thead><tr><th>Date</th><th>Source</th><th class="num">Net</th><th class="num">Lot</th><th class="num">Avg</th></tr></thead>
+                  <tbody>
+                    <tr><td>2026-07-29</td><td class="dim">stockbit</td><td class="num neg">−27.8B</td><td class="num dim">−1,000</td><td class="num dim">6,275</td></tr>
+                    <tr><td>2026-07-28</td><td class="dim">stockbit</td><td class="num neg">−62.1B</td><td class="num dim">−2,140</td><td class="num dim">6,225</td></tr>
+                    <tr><td>2026-07-25</td><td class="dim">stockbit</td><td class="num pos">+12.4B</td><td class="num dim">+480</td><td class="num dim">6,250</td></tr>
+                    <tr><td>2026-07-24</td><td class="dim">stockbit</td><td class="num neg">−41.0B</td><td class="num dim">−1,520</td><td class="num dim">6,200</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- DIST -->
+              <div class="tj-desk" id="tjDeskDist" data-job="dist">
+                <div class="tj-hero">
+                  <div>
+                    <div class="lab">Distribution</div>
+                    <div class="big pos" style="font-size:1.15rem">★ Foreign buying from domestic</div>
+                    <div class="sub">as of 2026-07-29 · counterparty matrix · local cache</div>
+                  </div>
+                  <div>
+                    <div class="side-lab">Honesty</div>
+                    <div class="sub" style="color:var(--text-dim);margin:0">
+                      Slogan only when true.<br />
+                      Cap top 5 sides · top 4 CPs.
+                    </div>
+                  </div>
+                </div>
+                <div class="tj-dual">
+                  <div class="col">
+                    <h4>Top buyers (from →)</h4>
+                    <div class="side">
+                      <div class="head buy"><span>YP[A]</span><span>128.4B</span></div>
+                      <div class="cp">← XL[L]  40.1B (31%)</div>
+                      <div class="cp">← CC[L]  22.0B (17%)</div>
+                      <div class="cp">← MS[L]  18.4B (14%)</div>
+                    </div>
+                    <div class="side">
+                      <div class="head buy"><span>AK[A]</span><span>86.2B</span></div>
+                      <div class="cp">← YU[A]  30.1B (35%)</div>
+                      <div class="cp">← XL[L]  12.2B (14%)</div>
+                    </div>
+                  </div>
+                  <div class="col">
+                    <h4>Top sellers (to →)</h4>
+                    <div class="side">
+                      <div class="head sell"><span>CC[L]</span><span>41.0B</span></div>
+                      <div class="cp">→ YP[A]  18.2B (44%)</div>
+                      <div class="cp">→ AK[A]  10.1B (25%)</div>
+                    </div>
+                    <div class="side">
+                      <div class="head sell"><span>XL[L]</span><span>22.1B</span></div>
+                      <div class="cp">→ YP[A]  9.4B (43%)</div>
+                      <div class="cp">→ RX[A]  4.1B (19%)</div>
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              <!-- FIN -->
+              <div class="tj-desk" id="tjDeskFin" data-job="fin">
+                <div class="tj-hero">
+                  <div>
+                    <div class="lab">Financials</div>
+                    <div class="big" style="font-size:1.35rem">Q1 2026</div>
+                    <div class="sub">quarter · source=yahoo · local cache · not full statements</div>
+                  </div>
+                  <div>
+                    <div class="side-lab">Scan</div>
+                    <div class="sub" style="color:var(--text-dim);margin:0">
+                      Three cards always.<br />
+                      Empty card = honest missing kind.
+                    </div>
+                  </div>
+                </div>
+                <div class="tj-fin-cards">
+                  <div class="tj-fin-card">
+                    <h4>Income</h4>
+                    <div class="row"><span>Revenue</span><b>28.4T</b></div>
+                    <div class="row"><span>Net income</span><b>14.7T</b></div>
+                    <div class="row"><span>EPS basic</span><b>119.1</b></div>
+                    <div class="row dim" style="margin-top:6px;font-size:11px;color:var(--text-mute)"><span>Q4 2025</span><span>rev 27.9T · eps 114.7</span></div>
+                    <div class="row dim" style="font-size:11px;color:var(--text-mute)"><span>Q3 2025</span><span>rev 26.8T · eps 111.4</span></div>
+                  </div>
+                  <div class="tj-fin-card">
+                    <h4>Balance</h4>
+                    <div class="row"><span>Total assets</span><b>1.42T</b></div>
+                    <div class="row"><span>Equity</span><b>0.98T</b></div>
+                    <div class="row"><span>Total debt</span><b>0.12T</b></div>
+                  </div>
+                  <div class="tj-fin-card">
+                    <h4>Cashflow</h4>
+                    <div class="empty">not cached · income/balance ok<br />Hint: saham fetch financials BBCA</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- BROKERS note (real trail = stock desks radar) -->
+              <div class="tj-desk" id="tjDeskBrokers" data-job="brokers">
+                <div class="tj-hero">
+                  <div>
+                    <div class="lab">Brokers · list trail</div>
+                    <div class="big" style="font-size:1.2rem">View · desks · BBCA</div>
+                    <div class="sub">top-brokers → stock desk radar · Enter desk home · esc show</div>
+                  </div>
+                  <div>
+                    <div class="side-lab">Product</div>
+                    <div class="sub" style="color:var(--text-dim);margin:0">
+                      Exception: leaves on-ticker shell<br />
+                      for list chrome (same as TUI today).
+                    </div>
+                  </div>
+                </div>
+                <p style="margin:0 0 10px;font-size:12px;color:var(--text-mute)">Sample tops · click product path opens full radar.</p>
+                <table class="mini-tbl">
+                  <thead><tr><th>#</th><th>Code</th><th>Type</th><th class="num">Net buy</th><th class="num">Share</th></tr></thead>
+                  <tbody>
+                    <tr><td class="dim">1</td><td>YP</td><td class="dim">F</td><td class="num pos">+128.4B</td><td class="num dim">12.1%</td></tr>
+                    <tr><td class="dim">2</td><td>AK</td><td class="dim">F</td><td class="num pos">+86.2B</td><td class="num dim">8.1%</td></tr>
+                    <tr><td class="dim">3</td><td>CC</td><td class="dim">L</td><td class="num pos">+41.0B</td><td class="num dim">3.9%</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
               <div class="footer-note">
                 <span><span class="kbd">esc</span> show</span>
+                <span><span class="kbd">chips</span> switch job</span>
+                <span class="dim" id="tickerJobCli">CLI · saham view ticker flow BBCA</span>
               </div>
             </div>
 
@@ -3331,60 +3668,13 @@
  health: "empty",
  };
 
+    // Job desk panels are painted in HTML (#tjDeskFlow …). Spec drives chrome only.
     const TICKER_DEEP_JOBS = {
-      brokers: {
-        cli: "view ticker top-brokers",
-        title: "top-brokers",
-        body: [
-          ["#", "Code", "Type", "Net buy", "Share"],
-          ["1", "YP", "F", "+128.4B", "12.1%"],
-          ["2", "AK", "F", "+86.2B", "8.1%"],
-          ["3", "CC", "L", "+41.0B", "3.9%"],
-          ["4", "XL", "L", "−22.1B", "2.1%"],
-          ["5", "MS", "L", "−18.4B", "1.7%"],
-        ],
-      },
-      flow: {
-        cli: "view ticker flow",
-        title: "flow",
-        body: [
-          ["Window", "Net", "Buy days", "Sell days"],
-          ["1d", "−27.8B", "0", "1"],
-          ["5d", "−344B", "1", "4"],
-          ["20d", "−1.32T", "6", "14"],
-        ],
-      },
-      foreign: {
-        cli: "view ticker foreign-history",
-        title: "foreign-history",
-        body: [
-          ["Date", "Net", "Buy", "Sell"],
-          ["2026-07-29", "−27.8B", "41.2B", "69.0B"],
-          ["2026-07-28", "−62.1B", "38.0B", "100.1B"],
-          ["2026-07-25", "+12.4B", "55.2B", "42.8B"],
-        ],
-      },
-      dist: {
-        cli: "view ticker distribution",
-        title: "distribution",
-        body: [
-          ["Side", "Broker", "Type", "Lot"],
-          ["Buy", "YP", "F", "1.2M"],
-          ["Buy", "AK", "F", "0.9M"],
-          ["Sell", "CC", "L", "0.7M"],
-          ["Sell", "XL", "L", "0.5M"],
-        ],
-      },
-      fin: {
-        cli: "view ticker financials",
-        title: "financials",
-        body: [
-          ["Period", "Revenue", "Net income", "EPS"],
-          ["Q1 2026", "28.4T", "14.7T", "119.1"],
-          ["Q4 2025", "27.9T", "14.1T", "114.7"],
-          ["Q3 2025", "26.8T", "13.7T", "111.4"],
-        ],
-      },
+      brokers: { cli: "view ticker top-brokers", title: "top-brokers", panel: "tjDeskBrokers" },
+      flow: { cli: "view ticker flow", title: "flow", panel: "tjDeskFlow" },
+      foreign: { cli: "view ticker foreign-history", title: "foreign-history", panel: "tjDeskForeign" },
+      dist: { cli: "view ticker distribution", title: "distribution", panel: "tjDeskDist" },
+      fin: { cli: "view ticker financials", title: "financials", panel: "tjDeskFin" },
     };
 
  const $ = (id) => document.getElementById(id);
@@ -4730,35 +5020,10 @@
       );
     }
 
-    function renderTickerDeepBody(job) {
-      const spec = TICKER_DEEP_JOBS[job];
-      const el = $("tickerDeepBody");
-      if (!el || !spec) return;
-      const rows = spec.body || [];
-      if (!rows.length) {
-        el.innerHTML = '<div class="empty-slot">not cached</div>';
-        return;
-      }
-      const head = rows[0];
-      const data = rows.slice(1);
-      let html = '<table class="mini-tbl"><thead><tr>';
-      head.forEach((h, i) => {
-        html += `<th${i > 0 ? ' class="num"' : ""}>${h}</th>`;
+    function showTickerJobDesk(job) {
+      document.querySelectorAll("#tickerDeepStage .tj-desk").forEach((el) => {
+        el.classList.toggle("is-on", el.dataset.job === job);
       });
-      html += "</tr></thead><tbody>";
-      data.forEach((r) => {
-        html += "<tr>";
-        r.forEach((c, i) => {
-          const neg = String(c).includes("−") || String(c).startsWith("-");
-          const pos = String(c).includes("+");
-          const cls = i === 0 ? "" : ` class="num${neg ? " neg" : pos ? " pos" : ""}"`;
-          html += `<td${cls}>${c}</td>`;
-        });
-        html += "</tr>";
-      });
-      html += "</tbody></table>";
-      html += `<div class="line dim" style="margin-top:8px">CLI · saham ${spec.cli} ${focusTicker().t || "BBCA"} · local cache</div>`;
-      el.innerHTML = html;
     }
 
     function setTickerDeep(job) {
@@ -4784,8 +5049,14 @@
         stage.classList.remove("is-hidden");
       }
       const title = $("tickerDeepTitle");
-      if (title) title.textContent = `View · ticker · ${t} · ${spec.title}`;
-      renderTickerDeepBody(job);
+      if (title) {
+        title.innerHTML =
+          `View · ticker · ${t} · ${spec.title}` +
+          `<span style="font-size:11px;color:var(--text-mute);font-weight:400;margin-left:8px" id="tickerJobMeta">${spec.title} · local cache</span>`;
+      }
+      const cli = $("tickerJobCli");
+      if (cli) cli.textContent = `CLI · saham ${spec.cli} ${t}`;
+      showTickerJobDesk(job);
       document.querySelectorAll("#tickerJobFlags .flag-chip[data-deep]").forEach((b) => {
         b.classList.toggle("is-on", b.dataset.deep === job);
       });

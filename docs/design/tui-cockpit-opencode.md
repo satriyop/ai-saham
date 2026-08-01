@@ -291,10 +291,118 @@ Accum (source badge only) · Broker list / stock desks (honesty in meta) · Plan
 
 | Piece | Spec |
 |-------|------|
-| Title | `View · ticker · BBCA · top-brokers` (CLI job name) |
-| Body | Table / series from that CLI job · empty honest |
+| Title | `View · ticker · BBCA · flow` (CLI job name) |
+| Body | **Job desk** (below) — not monospaced CLI dump |
 | Trail | `esc` → show · chips / letters switch job |
 | Meta | `local cache` · never Action |
+
+---
+
+## 3. Ticker job desks (design lock · 2026-08-01)
+
+**Authority:** mock `.app` in `tui-cockpit-opencode.html` · multi-surface use cases unchanged.  
+**Exception:** **brokers** leaves ticker for **stock desks radar** (`View · desks · TICKER`) — list chrome.  
+**flow · foreign · dist · fin** stay **on-ticker** under the same chip bar.
+
+### Shared shell (all four on-ticker jobs)
+
+```text
+View · ticker · BBCA · {job}          {job} · local cache
+[ brokers ][ flow* ][ foreign ][ dist ][ fin ][ detail · d ]
+
+┌─ HERO (elevated · peach left accent) ──────────────────┐
+│  LAB (uppercase job story)                              │
+│  BIG primary fact (signed net / latest / slogan)        │
+│  sub: window · source · honesty                         │
+└─────────────────────────────────────────────────────────┘
+┌ pulse ┐ ┌ pulse ┐ ┌ pulse ┐ ┌ pulse ┐   (3–4 scalars)
+SECTION · table or dual heat
+footer: esc show · chips switch · CLI verb · browse only
+```
+
+| Layer | Spec |
+|-------|------|
+| Chip bar | Same as show · active job `is-on` · `d` does not apply on job body |
+| Hero | One story · mint/coral for signed values |
+| Pulses | Metric cards (`oc-metrics` / `oc-metric`) — not essays |
+| Body | Table or dual column · density bars only as scalar sugar |
+| Empty | Honest empty + fetch hint in hero sub or body |
+| Loading | In-place body only · never unmask accum board |
+| Reject | Flat monospaced dump as product UI · charts · Action invent |
+
+### `flow` · `view ticker flow`
+
+| Block | Content |
+|-------|---------|
+| Hero lab | `FOREIGN FLOW · 10d` |
+| Hero big | Window total foreign net (signed) |
+| Hero sub | `last N sessions · broker_summaries · as of DATE` |
+| Pulses | Buy days · Sell days · Consec buy · Latest net |
+| Body | Day table: `Date · Net · Ratio · Top buyer · Top seller` |
+| Sugar | Optional bar on Net column (flow-day tracks) |
+
+### `foreign` · `view ticker foreign-history`
+
+| Block | Content |
+|-------|---------|
+| Hero lab | `FOREIGN HISTORY` |
+| Hero big | Latest day foreign net (signed) |
+| Hero sub | `source={stockbit\|idx} · last N days · foreign net only` |
+| Pulses | 5d net · 20d net (from series) · # days · source |
+| Body | `Date · Source · Net · Lot · Avg price` |
+
+**Not the same job as flow:** summaries + top desks vs point series.
+
+### `dist` · `view ticker distribution`
+
+| Block | Content |
+|-------|---------|
+| Hero lab | `DISTRIBUTION` |
+| Hero big / slogan | Only if true: `★ Foreign buying from domestic` or `● Foreign dominate buys` — else omit slogan |
+| Hero sub | `as of DATE · counterparty · local cache` |
+| Pulses | optional omit or: buy sides · sell sides · as of |
+| Body | **Dual heat columns** (broker home dual pattern): |
+
+```text
+TOP BUYERS (from →)          TOP SELLERS (to →)
+YP[A]  128.4B                CC[L]   41.0B
+  ← XL[L]  40.1B (31%)         → AK[A]  12.2B (30%)
+```
+
+Cap top 5 sides · top 4 counterparties.
+
+### `fin` · `view ticker financials`
+
+| Block | Content |
+|-------|---------|
+| Hero lab | `FINANCIALS` |
+| Hero big | Latest income period label (e.g. `Q1 2026`) |
+| Hero sub | `quarter · source=yahoo · local cache` |
+| Body | **Three cards** (always show; honest empty per kind): |
+
+| Card | Default metrics (compact rows) |
+|------|--------------------------------|
+| Income | Revenue · NI · EPS |
+| Balance | Assets · Equity · Debt |
+| Cashflow | Op CF · FCF · CapEx |
+
+No full spreadsheet. Expand-to-wide columns is optional later — not show brief/detail dual.
+
+### `brokers` (exception · list trail)
+
+| Piece | Spec |
+|-------|------|
+| Title | `View · desks · BBCA` |
+| Body | Desk radar DataTable (existing stock desks) |
+| Meta | top brokers · thin NetX honesty · Enter home |
+| Trail | `esc` → ticker show |
+
+### TUI implement order (after design accept)
+
+1. Shared `TickerJobDesk` shell (hero + pulses + body slot)  
+2. **flow** desk (highest daily use)  
+3. **foreign** · **dist** · **fin**  
+4. Keep loaders / use cases; replace monospaced paint only  
 
 ---
 
@@ -334,7 +442,9 @@ Accum (source badge only) · Broker list / stock desks (honesty in meta) · Plan
 - Chip bar jobs: **brokers · flow · foreign · dist · fin** + **detail · d**  
 - Power: **`b f o x n d`** · `p` plan · `esc` trail  
 - Price mast: last · local close · chg **baseline-aligned**  
-- **TUI:** after design lock · use shared ChipBar  
+- **Job desks:** shared hero · pulses · body (§3) — not monospaced dump  
+  - brokers → stock desks list · flow / foreign / dist / fin → on-ticker job desk  
+- **TUI:** shared ChipBar · then TickerJobDesk widgets after design accept  
 
 ### Broker (`v b` · desk-centric)
 - Radar / stock desks: **no chip bar** · title `View · desks · TICKER` or `View · broker list` · meta honesty for thin NetX
