@@ -30,13 +30,7 @@ from src.domain.services.trading_calendar import (
     inclusive_weekday_sessions,
     nth_weekday_session_on_or_after,
 )
-from src.domain.services.trading_session_calendar import (
-    IDX_TRADING_SESSIONS_CONTRACT,
-    PATH_LABEL_METRICS_SCHEMA_VERSION,
-    KnownTradingSessionCalendar,
-    session_calendar_digest,
-    session_calendar_revision,
-)
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
@@ -59,6 +53,12 @@ from src.domain.value_objects.learning_artifacts import (
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
+from src.domain.value_objects.trading_session_calendar_snapshot import (
+    PATH_LABEL_METRICS_SCHEMA_VERSION,
+    STOCKBIT_TRADING_SESSIONS_CONTRACT,
+    TradingSessionCalendarSnapshot,
+    label_window_digest,
 )
 
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
@@ -92,15 +92,37 @@ DEFAULT_SESSION_CALENDAR = KnownTradingSessionCalendar(
 )
 
 
+def _default_snapshot() -> TradingSessionCalendarSnapshot:
+    from datetime import datetime, timezone
+
+    return TradingSessionCalendarSnapshot.create(
+        coverage_start=DEFAULT_SESSION_CALENDAR.coverage_start,
+        coverage_end=DEFAULT_SESSION_CALENDAR.coverage_end,
+        ordered_sessions=DEFAULT_SESSION_CALENDAR.sessions,
+        source_revision="stockbit.test.v1",
+        captured_at=datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc),
+        contract_id=STOCKBIT_TRADING_SESSIONS_CONTRACT,
+    )
+
+
+DEFAULT_CALENDAR_SNAPSHOT = _default_snapshot()
+
+
+def _snapshot_lookup(snapshot_id: str):
+    if snapshot_id == DEFAULT_CALENDAR_SNAPSHOT.snapshot_id:
+        return DEFAULT_CALENDAR_SNAPSHOT
+    return None
+
+
 def project_cohort_readiness(**kwargs):
-    """Test wrapper: inject default session calendar unless overridden."""
-    kwargs.setdefault("session_calendar", DEFAULT_SESSION_CALENDAR)
+    """Test wrapper: inject default snapshot lookup unless overridden."""
+    kwargs.setdefault("session_snapshot_lookup", _snapshot_lookup)
     return _project_cohort_readiness_impl(**kwargs)
 
 
 def count_labels_by_horizon(**kwargs):
-    """Test wrapper: inject default session calendar unless overridden."""
-    kwargs.setdefault("session_calendar", DEFAULT_SESSION_CALENDAR)
+    """Test wrapper: inject default snapshot lookup unless overridden."""
+    kwargs.setdefault("session_snapshot_lookup", _snapshot_lookup)
     return _count_labels_by_horizon_impl(**kwargs)
 
 
@@ -286,19 +308,18 @@ def _available_metrics(
     entry_price: float = 100.0,
     label_window_start: str | None = None,
     label_window_end: str | None = None,
-    session_calendar: KnownTradingSessionCalendar | None = None,
+    session_snapshot: TradingSessionCalendarSnapshot | None = None,
+    label_contract: LearningContractId = LearningContractId.ACCUM_10D_LABEL,
 ) -> dict:
-    """Build AVAILABLE path metrics with first-N sessions and calendar identity.
-
-    Default windows use the default test session calendar (weekday-complete).
-    """
-    cal = session_calendar or DEFAULT_SESSION_CALENDAR
+    """Build AVAILABLE path metrics bound to an immutable calendar snapshot."""
+    snap = session_snapshot or DEFAULT_CALENDAR_SNAPSHOT
     signal = date.fromisoformat(signal_date)
-    expected = cal.first_n_sessions_after(signal, horizon_days)
+    expected = snap.first_n_sessions_after(signal, horizon_days)
     if label_window_start is None or label_window_end is None:
         assert expected is not None, f"no first-{horizon_days} sessions after {signal_date}"
         start_s = expected[0].isoformat()
         end_s = expected[-1].isoformat()
+        session_dates = expected
         sessions = [s.isoformat() for s in expected]
     else:
         start_s = label_window_start
@@ -308,23 +329,32 @@ def _available_metrics(
             and start_s == expected[0].isoformat()
             and end_s == expected[-1].isoformat()
         ):
+            session_dates = expected
             sessions = [s.isoformat() for s in expected]
         else:
-            # Adversarial/custom endpoints: materialize inclusive weekday list when possible.
             start_d = date.fromisoformat(start_s)
             end_d = date.fromisoformat(end_s)
-            sessions = [s.isoformat() for s in cal.sessions if start_d <= s <= end_d]
-            if not sessions:
-                sessions = [start_s, end_s]
+            session_dates = tuple(s for s in snap.ordered_sessions if start_d <= s <= end_d)
+            sessions = [s.isoformat() for s in session_dates] or [start_s, end_s]
+            if not session_dates:
+                session_dates = (start_d, end_d)
+    declared = tuple(date.fromisoformat(s) for s in sessions)
+    window_digest = label_window_digest(
+        calendar_snapshot_id=snap.snapshot_id,
+        label_contract_id=label_contract.value,
+        signal_date=signal,
+        sessions=declared,
+    )
     return {
         "ticker": ticker.upper(),
         "signal_date": signal_date,
         "label_window_start": start_s,
         "label_window_end": end_s,
         "label_window_sessions": sessions,
-        "session_calendar_contract": IDX_TRADING_SESSIONS_CONTRACT,
-        "session_calendar_revision": session_calendar_revision(cal),
-        "session_calendar_digest": session_calendar_digest(cal),
+        "calendar_snapshot_id": snap.snapshot_id,
+        "calendar_contract_id": snap.contract_id,
+        "calendar_source_revision": snap.source_revision,
+        "label_window_digest": window_digest,
         "path_label_metrics_schema_version": PATH_LABEL_METRICS_SCHEMA_VERSION,
         "entry_reference_price": entry_price,
         "close_return_pct": 3.5,
@@ -362,7 +392,12 @@ def _label(
                 LearningContractId.ACCUM_10D_LABEL: 10,
                 LearningContractId.ACCUM_20D_LABEL: 20,
             }.get(contract, 10)
-            metrics = _available_metrics(ticker=ticker, signal_date=sd, horizon_days=horizon)
+            metrics = _available_metrics(
+                ticker=ticker,
+                signal_date=sd,
+                horizon_days=horizon,
+                label_contract=contract,
+            )
     else:
         observation_id = observation
         if fingerprint is None:
@@ -2381,6 +2416,7 @@ def test_exact_n_session_windows_accepted_for_h3_h10_h20() -> None:
             ticker="BBCA",
             signal_date="2026-07-01",
             horizon_days=horizon,
+            label_contract=contract,
         )
         start = date.fromisoformat(metrics["label_window_start"])
         end = date.fromisoformat(metrics["label_window_end"])
@@ -2444,16 +2480,24 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
 
     Case C — honest holiday-aware first-N window is accepted.
     """
-    # Proven sessions omit 2026-07-02 (Thursday holiday).
+    # Proven sessions omit 2026-07-02 (Thursday holiday) inside an immutable snapshot.
+    from datetime import datetime, timezone
+
     holiday = date(2026, 7, 2)
     sessions = tuple(s for s in DEFAULT_SESSION_CALENDAR.sessions if s != holiday)
-    holiday_cal = KnownTradingSessionCalendar(
-        sessions=sessions,
+    holiday_snap = TradingSessionCalendarSnapshot.create(
         coverage_start=DEFAULT_SESSION_CALENDAR.coverage_start,
         coverage_end=DEFAULT_SESSION_CALENDAR.coverage_end,
+        ordered_sessions=sessions,
+        source_revision="stockbit.test.holiday",
+        captured_at=datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc),
     )
+
+    def holiday_lookup(snapshot_id: str):
+        return holiday_snap if snapshot_id == holiday_snap.snapshot_id else None
+
     signal = date(2026, 7, 1)
-    honest = holiday_cal.first_n_sessions_after(signal, 10)
+    honest = holiday_snap.first_n_sessions_after(signal, 10)
     assert honest is not None
     assert honest[0] == date(2026, 7, 3)  # skips holiday Thursday
     assert first_weekday_session_after(signal) == date(2026, 7, 2)  # weekday approx wrong
@@ -2463,16 +2507,14 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
         _observation(day=2, ticker="BBRI", action="ENTER", readiness="INCOMPLETE"),
     ]
 
-    # Case A: weekday-approx window (starts on holiday) fails under holiday calendar.
     forged_holiday_start = _available_metrics(
         ticker="BBCA",
         signal_date=signal.isoformat(),
         horizon_days=10,
         label_window_start="2026-07-02",
         label_window_end=nth_weekday_session_on_or_after(date(2026, 7, 2), 10).isoformat(),
-        session_calendar=holiday_cal,
+        session_snapshot=holiday_snap,
     )
-    # Prove weekday length would have accepted this forged span.
     assert (
         inclusive_weekday_sessions(
             date.fromisoformat(forged_holiday_start["label_window_start"]),
@@ -2485,19 +2527,18 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
         observation_ids=[o.observation_id for o in obs],
         labels=[bad_holiday],
         observations_by_id={o.observation_id: o for o in obs},
-        session_calendar=holiday_cal,
+        session_snapshot_lookup=holiday_lookup,
     )
     assert counts_a.counts_by_horizon["H10"].available == 0
-    assert any("label_window_not_first_n_sessions" in r for r in counts_a.invalid_reasons)
+    assert any("label_window_not_first_n" in r for r in counts_a.invalid_reasons)
 
-    # Case B: shifted exact-length weekday window after the real first-N span.
     shifted = _available_metrics(
         ticker="BBCA",
         signal_date=signal.isoformat(),
         horizon_days=10,
         label_window_start="2026-07-20",
         label_window_end="2026-07-31",
-        session_calendar=holiday_cal,
+        session_snapshot=holiday_snap,
     )
     assert (
         inclusive_weekday_sessions(
@@ -2511,36 +2552,34 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
         observation_ids=[o.observation_id for o in obs],
         labels=[bad_shift],
         observations_by_id={o.observation_id: o for o in obs},
-        session_calendar=holiday_cal,
+        session_snapshot_lookup=holiday_lookup,
     )
     assert counts_b.counts_by_horizon["H10"].available == 0
-    assert any("label_window_not_first_n_sessions" in r for r in counts_b.invalid_reasons)
+    assert any("label_window_not_first_n" in r for r in counts_b.invalid_reasons)
     cohort_b = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=obs,
         labels=[bad_shift],
         snapshots=_full_v2_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
-        session_calendar=holiday_cal,
+        session_snapshot_lookup=holiday_lookup,
     )
     assert cohort_b.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
 
-    # Case C: honest first-N after holiday is READY.
     honest_metrics = _available_metrics(
         ticker="BBCA",
         signal_date=signal.isoformat(),
         horizon_days=10,
         label_window_start=honest[0].isoformat(),
         label_window_end=honest[-1].isoformat(),
-        session_calendar=holiday_cal,
+        session_snapshot=holiday_snap,
     )
     good = _label(obs[0], metrics=honest_metrics)
-    # READY needs ≥2 sessions + ≥1 AVAILABLE H10; obs validation uses payload dates.
     counts_c = count_labels_by_horizon(
         observation_ids=[o.observation_id for o in obs],
         labels=[good],
         observations_by_id={o.observation_id: o for o in obs},
-        session_calendar=holiday_cal,
+        session_snapshot_lookup=holiday_lookup,
     )
     assert counts_c.counts_by_horizon["H10"].available == 1, counts_c.invalid_reasons
     assert counts_c.invalid_label_count == 0
@@ -2550,17 +2589,42 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
         labels=[good],
         snapshots=_full_v2_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
-        session_calendar=holiday_cal,
+        session_snapshot_lookup=holiday_lookup,
     )
     assert cohort_c.labels_by_horizon["H10"].available == 1
     assert cohort_c.producer_status is ProducerReadinessStatus.CHALLENGE_INPUT_READY
 
-    # Missing calendar fails closed (never weekday approx).
+    # Missing snapshot lookup fails closed.
     no_cal = _count_labels_by_horizon_impl(
         observation_ids=[o.observation_id for o in obs],
         labels=[good],
         observations_by_id={o.observation_id: o for o in obs},
-        session_calendar=None,
+        session_snapshot_lookup=None,
     )
     assert no_cal.counts_by_horizon["H10"].available == 0
-    assert any("label_window_session_calendar_unproven" in r for r in no_cal.invalid_reasons)
+    assert any("calendar_snapshot_lookup_unproven" in r for r in no_cal.invalid_reasons)
+
+    # Invented revision after rehash still blocks (exact revision check).
+    from dataclasses import replace
+
+    tampered = replace(
+        good,
+        metrics={**dict(good.metrics), "calendar_source_revision": "invented"},
+    )
+    # Rehash artifact so only revision surface is wrong.
+    from src.domain.value_objects.learning_artifacts import _artifact_payload, artifact_digest
+
+    rehashed = replace(
+        tampered,
+        artifact_digest=artifact_digest(
+            _artifact_payload(tampered, id_field="label_id", digest_field="artifact_digest")
+        ),
+    )
+    counts_rev = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[rehashed],
+        observations_by_id={o.observation_id: o for o in obs},
+        session_snapshot_lookup=holiday_lookup,
+    )
+    assert counts_rev.counts_by_horizon["H10"].available == 0
+    assert any("calendar_source_revision_mismatch" in r for r in counts_rev.invalid_reasons)

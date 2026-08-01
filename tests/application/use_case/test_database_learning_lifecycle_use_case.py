@@ -11,7 +11,6 @@ from src.application.use_case.database_learning_lifecycle_use_case import (
     GeneratePreOpenOutcomeLabelsUseCase,
 )
 from src.domain.entities.candle import Candle
-from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     EvaluationReadiness,
@@ -19,6 +18,9 @@ from src.domain.value_objects.learning_artifacts import (
     LearningContractId,
     LearningObservation,
     LearningTrackSnapshot,
+)
+from src.domain.value_objects.trading_session_calendar_snapshot import (
+    TradingSessionCalendarSnapshot,
 )
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
     SQLiteLearningArtifactRepository,
@@ -37,21 +39,23 @@ def _weekday_sessions(start: date, end: date) -> tuple[date, ...]:
     return tuple(out)
 
 
-def _test_session_calendar() -> KnownTradingSessionCalendar:
-    return KnownTradingSessionCalendar(
-        sessions=_weekday_sessions(date(2026, 6, 1), date(2026, 9, 30)),
+def _test_session_snapshot() -> TradingSessionCalendarSnapshot:
+    return TradingSessionCalendarSnapshot.create(
         coverage_start=date(2026, 6, 1),
         coverage_end=date(2026, 9, 30),
+        ordered_sessions=_weekday_sessions(date(2026, 6, 1), date(2026, 9, 30)),
+        source_revision="stockbit.test.v1",
+        captured_at=NOW,
     )
 
 
-def _path_label_uc(*, observations, labels, market_data, corporate_actions, calendar=None):
+def _path_label_uc(*, observations, labels, market_data, corporate_actions, snapshot=None):
     return GenerateAccumulationPricePathLabelsUseCase(
         observations=observations,
         labels=labels,
         market_data=market_data,
         corporate_actions=corporate_actions,
-        session_calendar=calendar if calendar is not None else _test_session_calendar(),
+        session_snapshot=snapshot if snapshot is not None else _test_session_snapshot(),
     )
 
 
@@ -428,8 +432,8 @@ def _accum_observation(
 
 def _forward_candles(ticker: str, signal_day: date, count: int) -> list[Candle]:
     """Candles on the first ``count`` market sessions after ``signal_day``."""
-    cal = _test_session_calendar()
-    sessions = cal.first_n_sessions_after(signal_day, count)
+    snap = _test_session_snapshot()
+    sessions = snap.first_n_sessions_after(signal_day, count)
     assert sessions is not None
     return [
         Candle(

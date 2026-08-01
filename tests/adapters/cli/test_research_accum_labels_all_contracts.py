@@ -53,6 +53,15 @@ def test_all_label_contracts_runs_each_accum_path_contract(monkeypatch) -> None:
         lambda path: object(),
     )
 
+    class _EmptySnapStore:
+        def list_snapshots(self):
+            return ()
+
+    monkeypatch.setattr(
+        "src.adapters.cli.research_accum_evaluate_commands.SQLiteTradingSessionCalendarSnapshotRepository",
+        lambda path: _EmptySnapStore(),
+    )
+
     result = runner.invoke(
         app,
         ["research", "accum", "labels", "--all-label-contracts", "--format", "json"],
@@ -121,6 +130,15 @@ def test_labels_all_compatibility_cohorts_independently(monkeypatch) -> None:
     monkeypatch.setattr(
         "src.adapters.cli.research_accum_evaluate_commands.SQLiteCorporateActionCalendarRepository",
         lambda path: object(),
+    )
+
+    class _EmptySnapStore:
+        def list_snapshots(self):
+            return ()
+
+    monkeypatch.setattr(
+        "src.adapters.cli.research_accum_evaluate_commands.SQLiteTradingSessionCalendarSnapshotRepository",
+        lambda path: _EmptySnapStore(),
     )
 
     result = runner.invoke(

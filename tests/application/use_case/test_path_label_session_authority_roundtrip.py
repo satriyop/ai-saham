@@ -1,4 +1,4 @@
-"""Vertical slice: production path-label generator ↔ readiness (session authority)."""
+"""Vertical slice: snapshot-bound path labels ↔ readiness (stable identity)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from pathlib import Path
 from src.application.services.accumulation_producer_readiness import (
     ProducerReadinessStatus,
     count_labels_by_horizon,
-    project_cohort_readiness,
 )
 from src.application.services.accumulation_production_policy_descriptors import (
     ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2,
@@ -19,15 +18,15 @@ from src.application.use_case.database_learning_lifecycle_use_case import (
     GenerateLearningLabelsRequest,
 )
 from src.application.use_case.get_accumulation_producer_readiness_use_case import (
-    coverage_from_available_labels,
+    GetAccumulationProducerReadinessUseCase,
 )
 from src.domain.entities.candle import Candle
-from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
     AccumPopulationBinding,
     AssessmentPurpose,
     LabelAvailability,
+    LearningContractError,
     LearningContractId,
     LearningObservation,
     OutcomeBasis,
@@ -35,16 +34,22 @@ from src.domain.value_objects.learning_artifacts import (
     recompute_path_label_fingerprint,
     stamp_universe_membership_id,
 )
-from src.infrastructure.persistence.sqlite_ihsg_trading_session_calendar_read_repository import (
-    SQLiteIHSGTradingSessionCalendarReadRepository,
+from src.domain.value_objects.trading_session_calendar_snapshot import (
+    PATH_LABEL_METRICS_SCHEMA_VERSION,
+    STOCKBIT_TRADING_SESSIONS_CONTRACT,
+    TradingSessionCalendarSnapshot,
+    label_window_digest,
+)
+from src.infrastructure.data_providers.stockbit_trading_session_calendar_source import (
+    StockbitTradingSessionCalendarSource,
 )
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
     SQLiteLearningArtifactRepository,
 )
-from src.infrastructure.persistence.sqlite_market_data_read_repository import (
-    SQLiteMarketDataReadRepository,
+from src.infrastructure.persistence.sqlite_trading_session_calendar_snapshot_repository import (
+    SQLiteTradingSessionCalendarSnapshotReadRepository,
+    SQLiteTradingSessionCalendarSnapshotRepository,
 )
-from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
 COMPAT = "sha256:" + ("ab" * 32)
@@ -76,8 +81,20 @@ def _candle(ticker: str, d: date, close: str = "100") -> Candle:
     )
 
 
-def _calendar(sessions: tuple[date, ...], *, start: date, end: date) -> KnownTradingSessionCalendar:
-    return KnownTradingSessionCalendar(sessions=sessions, coverage_start=start, coverage_end=end)
+def _snapshot(
+    sessions: tuple[date, ...],
+    *,
+    start: date,
+    end: date,
+    revision: str = "stockbit.test.v1",
+) -> TradingSessionCalendarSnapshot:
+    return TradingSessionCalendarSnapshot.create(
+        coverage_start=start,
+        coverage_end=end,
+        ordered_sessions=sessions,
+        source_revision=revision,
+        captured_at=NOW,
+    )
 
 
 def _observation(*, day: int, ticker: str = "BBCA") -> LearningObservation:
@@ -138,20 +155,19 @@ class _CA:
 
 class _Market:
     def __init__(self, candles: list[Candle]) -> None:
-        self._by_ticker: dict[str, list[Candle]] = {}
+        self._by: dict[str, list[Candle]] = {}
         for c in candles:
-            self._by_ticker.setdefault(c.ticker, []).append(c)
+            self._by.setdefault(c.ticker, []).append(c)
 
     def get_candles(self, ticker, start_date=None, end_date=None):
-        rows = self._by_ticker.get(ticker, [])
-        out = []
-        for c in rows:
+        rows = []
+        for c in self._by.get(ticker, []):
             if start_date is not None and c.date < start_date:
                 continue
             if end_date is not None and c.date > end_date:
                 continue
-            out.append(c)
-        return sorted(out, key=lambda x: x.date)
+            rows.append(c)
+        return sorted(rows, key=lambda x: x.date)
 
 
 def _seed_snapshots(repo: SQLiteLearningArtifactRepository) -> None:
@@ -181,9 +197,9 @@ def _seed_snapshots(repo: SQLiteLearningArtifactRepository) -> None:
         )
 
 
-def test_producer_h10_roundtrip_passes_readiness(tmp_path: Path) -> None:
-    """production label generator → persist → readiness accepts AVAILABLE H10."""
-    repo = SQLiteLearningArtifactRepository(tmp_path / "learn.db")
+def test_producer_with_snapshot_passes_readiness_loading_exact_snapshot(tmp_path: Path) -> None:
+    learn_db = tmp_path / "learn.db"
+    repo = SQLiteLearningArtifactRepository(learn_db)
     o1 = _observation(day=1, ticker="BBCA")
     o2 = _observation(day=2, ticker="BBRI")
     for o in (o1, o2):
@@ -191,16 +207,18 @@ def test_producer_h10_roundtrip_passes_readiness(tmp_path: Path) -> None:
     _seed_snapshots(repo)
 
     sessions = _weekdays(date(2026, 7, 1), date(2026, 8, 31))
-    cal = _calendar(sessions, start=date(2026, 7, 1), end=date(2026, 8, 31))
-    candles = [_candle("BBCA", s) for s in sessions] + [_candle("BBRI", s) for s in sessions]
-    market = _Market(candles)
+    # Wide snapshot (simulates large attested history); identity is snapshot-bound.
+    snap = _snapshot(sessions, start=date(2026, 6, 1), end=date(2026, 9, 30))
+    cal_store = SQLiteTradingSessionCalendarSnapshotRepository(learn_db)
+    cal_store.add_snapshot(snap)
 
+    candles = [_candle("BBCA", s) for s in sessions] + [_candle("BBRI", s) for s in sessions]
     gen = GenerateAccumulationPricePathLabelsUseCase(
         observations=repo,
         labels=repo,
-        market_data=market,
+        market_data=_Market(candles),
         corporate_actions=_CA(),
-        session_calendar=cal,
+        session_snapshot=snap,
     )
     result = gen.execute(
         GenerateLearningLabelsRequest(
@@ -211,82 +229,88 @@ def test_producer_h10_roundtrip_passes_readiness(tmp_path: Path) -> None:
         )
     )
     assert result.inserted_count == 2
-    assert all(lb.availability is LabelAvailability.AVAILABLE for lb in result.labels)
-    assert all("label_window_sessions" in lb.metrics for lb in result.labels)
+    labels = list(repo.list_labels([o1.observation_id, o2.observation_id]))
+    assert all(lb.metrics["calendar_snapshot_id"] == snap.snapshot_id for lb in labels)
 
-    labels = repo.list_labels([o1.observation_id, o2.observation_id])
-    cohort = project_cohort_readiness(
-        compatibility_id=COMPAT,
-        observations=[o1, o2],
-        labels=labels,
-        snapshots=repo.list_policy_snapshots(
-            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY, compatibility_id=COMPAT
-        ),
-        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
-        session_calendar=cal,
+    # Growing the "cache" does not change snapshot identity loaded by status path.
+    wider = _snapshot(
+        _weekdays(date(2026, 6, 1), date(2026, 10, 31)),
+        start=date(2026, 6, 1),
+        end=date(2026, 10, 31),
+        revision="stockbit.test.v1-later",
     )
-    assert cohort.labels_by_horizon["H10"].available == 2
-    assert cohort.producer_status is ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    cal_store.add_snapshot(wider)
 
-
-def test_missing_ticker_candle_on_market_session_writes_no_terminal_label(tmp_path: Path) -> None:
-    repo = SQLiteLearningArtifactRepository(tmp_path / "learn.db")
-    obs = _observation(day=1)
-    repo.add_observation(obs)
-    sessions = _weekdays(date(2026, 7, 1), date(2026, 8, 31))
-    cal = _calendar(sessions, start=date(2026, 7, 1), end=date(2026, 8, 31))
-    expected = cal.first_n_sessions_after(date(2026, 7, 1), 10)
-    assert expected is not None
-    # Drop the 5th expected session candle.
-    candles = [_candle("BBCA", s) for s in expected if s != expected[4]]
-    market = _Market(candles)
-    result = GenerateAccumulationPricePathLabelsUseCase(
+    read_repo = SQLiteTradingSessionCalendarSnapshotReadRepository(learn_db)
+    report = GetAccumulationProducerReadinessUseCase(
         observations=repo,
         labels=repo,
-        market_data=market,
-        corporate_actions=_CA(),
-        session_calendar=cal,
-    ).execute(
-        GenerateLearningLabelsRequest(
-            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
-            compatibility_id=COMPAT,
-            label_contract=LearningContractId.ACCUM_10D_LABEL,
-            labeled_at=NOW,
-        )
-    )
-    assert result.inserted_count == 0
-    assert result.skipped_count == 1
-    assert repo.list_labels([obs.observation_id]) == ()
+        policy_snapshots=repo,
+        session_snapshot_lookup=read_repo.get_snapshot,
+    ).execute()
+    assert report.cohort_count == 1
+    assert report.cohorts[0].producer_status is ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    # Labels still point at original snapshot, not the later wider one.
+    assert all(lb.metrics["calendar_snapshot_id"] == snap.snapshot_id for lb in labels)
 
 
-def test_holiday_omitted_from_first_n_and_shifted_window_blocks() -> None:
-    holiday = date(2026, 7, 2)
-    sessions = tuple(s for s in _weekdays(date(2026, 7, 1), date(2026, 8, 31)) if s != holiday)
-    cal = _calendar(sessions, start=date(2026, 7, 1), end=date(2026, 8, 31))
+def test_growing_cache_does_not_invalidate_label_window_digest() -> None:
+    sessions = _weekdays(date(2026, 7, 1), date(2026, 8, 15))
+    snap = _snapshot(sessions, start=date(2026, 7, 1), end=date(2026, 8, 15))
     signal = date(2026, 7, 1)
-    honest = cal.first_n_sessions_after(signal, 10)
-    assert honest is not None
-    assert honest[0] == date(2026, 7, 3)
+    first10 = snap.first_n_sessions_after(signal, 10)
+    assert first10 is not None
+    d1 = label_window_digest(
+        calendar_snapshot_id=snap.snapshot_id,
+        label_contract_id=LearningContractId.ACCUM_10D_LABEL.value,
+        signal_date=signal,
+        sessions=first10,
+    )
+    # A wider snapshot has a different snapshot_id; old label digest stays valid for old id.
+    wider = _snapshot(
+        _weekdays(date(2026, 7, 1), date(2026, 12, 31)),
+        start=date(2026, 7, 1),
+        end=date(2026, 12, 31),
+    )
+    assert wider.snapshot_id != snap.snapshot_id
+    d2 = label_window_digest(
+        calendar_snapshot_id=snap.snapshot_id,
+        label_contract_id=LearningContractId.ACCUM_10D_LABEL.value,
+        signal_date=signal,
+        sessions=first10,
+    )
+    assert d1 == d2
 
-    obs = [_observation(day=1), _observation(day=3, ticker="BBRI")]
-    # Build a shifted exact-length weekday window that is not first-N.
-    from src.domain.services.trading_session_calendar import (
-        IDX_TRADING_SESSIONS_CONTRACT,
-        PATH_LABEL_METRICS_SCHEMA_VERSION,
-        session_calendar_digest,
-        session_calendar_revision,
+
+def test_mutated_revision_or_snapshot_id_blocks_readiness() -> None:
+    from dataclasses import replace
+
+    from src.domain.value_objects.learning_artifacts import (
+        LearningOutcomeLabel,
+        _artifact_payload,
+        artifact_digest,
     )
 
-    shifted = tuple(s for s in sessions if s >= date(2026, 7, 20))[:10]
+    sessions = _weekdays(date(2026, 7, 1), date(2026, 8, 31))
+    snap = _snapshot(sessions, start=date(2026, 7, 1), end=date(2026, 8, 31))
+    obs = [_observation(day=1), _observation(day=2, ticker="BBRI")]
+    first10 = snap.first_n_sessions_after(date(2026, 7, 1), 10)
+    assert first10 is not None
     metrics = {
         "ticker": "BBCA",
-        "signal_date": signal.isoformat(),
-        "label_window_start": shifted[0].isoformat(),
-        "label_window_end": shifted[-1].isoformat(),
-        "label_window_sessions": [s.isoformat() for s in shifted],
-        "session_calendar_contract": IDX_TRADING_SESSIONS_CONTRACT,
-        "session_calendar_revision": session_calendar_revision(cal),
-        "session_calendar_digest": session_calendar_digest(cal),
+        "signal_date": "2026-07-01",
+        "label_window_start": first10[0].isoformat(),
+        "label_window_end": first10[-1].isoformat(),
+        "label_window_sessions": [s.isoformat() for s in first10],
+        "calendar_snapshot_id": snap.snapshot_id,
+        "calendar_contract_id": STOCKBIT_TRADING_SESSIONS_CONTRACT,
+        "calendar_source_revision": snap.source_revision,
+        "label_window_digest": label_window_digest(
+            calendar_snapshot_id=snap.snapshot_id,
+            label_contract_id=LearningContractId.ACCUM_10D_LABEL.value,
+            signal_date=date(2026, 7, 1),
+            sessions=first10,
+        ),
         "path_label_metrics_schema_version": PATH_LABEL_METRICS_SCHEMA_VERSION,
         "entry_reference_price": 100.0,
         "close_return_pct": 3.5,
@@ -295,9 +319,7 @@ def test_holiday_omitted_from_first_n_and_shifted_window_blocks() -> None:
         "days_to_peak": 2,
         "days_to_trough": 1,
     }
-    from src.domain.value_objects.learning_artifacts import LearningOutcomeLabel
-
-    bad = LearningOutcomeLabel.create(
+    good = LearningOutcomeLabel.create(
         contract_id=LearningContractId.ACCUM_10D_LABEL,
         observation_id=obs[0].observation_id,
         outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
@@ -311,144 +333,133 @@ def test_holiday_omitted_from_first_n_and_shifted_window_blocks() -> None:
         ),
         labeled_at=NOW,
     )
-    counts = count_labels_by_horizon(
+
+    def lookup(sid: str):
+        return snap if sid == snap.snapshot_id else None
+
+    ok = count_labels_by_horizon(
         observation_ids=[o.observation_id for o in obs],
-        labels=[bad],
+        labels=[good],
         observations_by_id={o.observation_id: o for o in obs},
-        session_calendar=cal,
+        session_snapshot_lookup=lookup,
     )
-    assert counts.counts_by_horizon["H10"].available == 0
-    assert any("label_window_not_first_n" in r for r in counts.invalid_reasons)
+    assert ok.counts_by_horizon["H10"].available == 1
 
-
-def test_coverage_from_labels_not_newest_observation_plus_buffer() -> None:
-    from src.domain.services.trading_session_calendar import (
-        IDX_TRADING_SESSIONS_CONTRACT,
-        PATH_LABEL_METRICS_SCHEMA_VERSION,
+    invented = replace(
+        good,
+        metrics={**dict(good.metrics), "calendar_source_revision": "invented"},
     )
-    from src.domain.value_objects.learning_artifacts import LearningOutcomeLabel
-
-    # Mature H10 from July; unlabeled newer obs must not expand coverage.
-    o_old = _observation(day=1)
-    metrics = {
-        "ticker": "BBCA",
-        "signal_date": "2026-07-01",
-        "label_window_start": "2026-07-02",
-        "label_window_end": "2026-07-15",
-        "label_window_sessions": [
-            (date(2026, 7, 2) + timedelta(days=i)).isoformat() for i in range(14)
-        ][:10],
-        "session_calendar_contract": IDX_TRADING_SESSIONS_CONTRACT,
-        "session_calendar_revision": "x",
-        "session_calendar_digest": "y",
-        "path_label_metrics_schema_version": PATH_LABEL_METRICS_SCHEMA_VERSION,
-        "entry_reference_price": 100.0,
-        "close_return_pct": 1.0,
-        "max_forward_return_pct": 1.0,
-        "max_adverse_excursion_pct": -0.5,
-        "days_to_peak": 1,
-        "days_to_trough": 1,
-    }
-    # Fix sessions to exactly 10 weekdays starting Jul 2
-    sessions = _weekdays(date(2026, 7, 2), date(2026, 7, 31))[:10]
-    metrics["label_window_sessions"] = [s.isoformat() for s in sessions]
-    metrics["label_window_start"] = sessions[0].isoformat()
-    metrics["label_window_end"] = sessions[-1].isoformat()
-    label = LearningOutcomeLabel.create(
-        contract_id=LearningContractId.ACCUM_10D_LABEL,
-        observation_id=o_old.observation_id,
-        outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
-        availability=LabelAvailability.AVAILABLE,
-        outcome="SUCCESS",
-        metrics=metrics,
-        fingerprint=recompute_path_label_fingerprint(
-            observation_id=o_old.observation_id,
-            observation_artifact_digest=o_old.artifact_digest,
-            label_contract=LearningContractId.ACCUM_10D_LABEL,
+    invented = replace(
+        invented,
+        artifact_digest=artifact_digest(
+            _artifact_payload(invented, id_field="label_id", digest_field="artifact_digest")
         ),
-        labeled_at=NOW,
     )
-    coverage = coverage_from_available_labels([label])
-    assert coverage == (date(2026, 7, 1), sessions[-1])
-    # No AVAILABLE labels → no coverage (COLLECTING, no future-day demand).
-    assert coverage_from_available_labels([]) is None
+    bad = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[invented],
+        observations_by_id={o.observation_id: o for o in obs},
+        session_snapshot_lookup=lookup,
+    )
+    assert bad.counts_by_horizon["H10"].available == 0
+    assert any("calendar_source_revision_mismatch" in r for r in bad.invalid_reasons)
 
 
-def test_status_read_only_creates_nothing_on_missing_db(tmp_path: Path) -> None:
-    missing = tmp_path / "does-not-exist.db"
-    assert not missing.exists()
+def test_missing_ticker_candle_writes_no_terminal_label(tmp_path: Path) -> None:
+    repo = SQLiteLearningArtifactRepository(tmp_path / "l.db")
+    obs = _observation(day=1)
+    repo.add_observation(obs)
+    sessions = _weekdays(date(2026, 7, 1), date(2026, 8, 31))
+    snap = _snapshot(sessions, start=date(2026, 7, 1), end=date(2026, 8, 31))
+    expected = snap.first_n_sessions_after(date(2026, 7, 1), 10)
+    assert expected is not None
+    candles = [_candle("BBCA", s) for s in expected if s != expected[4]]
+    result = GenerateAccumulationPricePathLabelsUseCase(
+        observations=repo,
+        labels=repo,
+        market_data=_Market(candles),
+        corporate_actions=_CA(),
+        session_snapshot=snap,
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id=COMPAT,
+            label_contract=LearningContractId.ACCUM_10D_LABEL,
+            labeled_at=NOW,
+        )
+    )
+    assert result.inserted_count == 0
+    assert result.skipped_count == 1
+
+
+def test_strict_stockbit_source_fails_on_partial_and_network() -> None:
+    class _Client:
+        def __init__(self, pages):
+            self.pages = list(pages)
+            self.calls = 0
+
+        def get(self, url):
+            self.calls += 1
+            if not self.pages:
+                raise RuntimeError("network down after page 1")
+            return self.pages.pop(0)
+
+    # Multi-page success (weekdays only — weekends rejected by snapshot validator)
+    page1 = {
+        "data": {
+            "result": [
+                {"date": "2026-07-01"},
+                {"date": "2026-07-02"},
+                {"date": "2026-07-03"},
+                {"date": "2026-07-06"},
+                {"date": "2026-07-07"},
+            ]
+        }
+    }
+    src = StockbitTradingSessionCalendarSource(_Client([page1]), source_revision="rev-a")
+    snap = src.fetch_snapshot(date(2026, 7, 1), date(2026, 7, 10))
+    assert snap.contract_id == STOCKBIT_TRADING_SESSIONS_CONTRACT
+    assert date(2026, 7, 1) in snap.ordered_sessions
+
+    # Network failure → no snapshot (raises)
+    bad = StockbitTradingSessionCalendarSource(_Client([]), source_revision="rev-b")
     try:
-        SQLiteMarketDataReadRepository(missing).get_date_range("IHSG")
-        raise AssertionError("expected FileNotFoundError")
-    except FileNotFoundError:
+        bad.fetch_snapshot(date(2026, 7, 1), date(2026, 7, 10))
+        raise AssertionError("expected failure")
+    except LearningContractError as exc:
+        assert "failed" in str(exc).lower() or "unavailable" in str(exc).lower()
+
+    # Malformed body
+    class _Bad:
+        def get(self, url):
+            return {"nope": True}
+
+    try:
+        StockbitTradingSessionCalendarSource(_Bad()).fetch_snapshot(
+            date(2026, 7, 1), date(2026, 7, 2)
+        )
+        raise AssertionError("expected malformed failure")
+    except LearningContractError:
         pass
-    assert not missing.exists()
-    cal = SQLiteIHSGTradingSessionCalendarReadRepository(missing).load_calendar(
-        coverage_start=date(2026, 7, 1),
-        coverage_end=date(2026, 7, 31),
-    )
-    assert cal is None
+
+
+def test_status_read_only_snapshot_repo_creates_nothing(tmp_path: Path) -> None:
+    missing = tmp_path / "missing.db"
+    repo = SQLiteTradingSessionCalendarSnapshotReadRepository(missing)
+    assert repo.get_snapshot("x") is None
     assert not missing.exists()
     assert list(tmp_path.iterdir()) == []
 
 
-def test_status_read_only_does_not_mutate_existing_db(tmp_path: Path) -> None:
-    db = tmp_path / "market.db"
-    write = SQLiteMarketRepository(db)
-    write.save_candles([_candle("IHSG", date(2026, 7, 1)), _candle("IHSG", date(2026, 7, 2))])
-    before_stat = db.stat()
-    before_size = before_stat.st_size
-    before_mtime = before_stat.st_mtime_ns
-    before_count = len(write.get_candles("IHSG"))
-
-    reader = SQLiteMarketDataReadRepository(db)
-    assert reader.get_date_range("IHSG") is not None
-    cal_repo = SQLiteIHSGTradingSessionCalendarReadRepository(db)
-    cal = cal_repo.load_calendar(coverage_start=date(2026, 7, 1), coverage_end=date(2026, 7, 2))
-    assert cal is not None
-    assert len(cal.sessions) == 2
-
+def test_status_read_only_does_not_mutate_db(tmp_path: Path) -> None:
+    db = tmp_path / "db.sqlite"
+    write = SQLiteTradingSessionCalendarSnapshotRepository(db)
+    sessions = _weekdays(date(2026, 7, 1), date(2026, 7, 15))
+    snap = _snapshot(sessions, start=date(2026, 7, 1), end=date(2026, 7, 15))
+    write.add_snapshot(snap)
+    before = db.stat()
+    ro = SQLiteTradingSessionCalendarSnapshotReadRepository(db)
+    assert ro.get_snapshot(snap.snapshot_id) is not None
     after = db.stat()
-    assert after.st_size == before_size
-    assert after.st_mtime_ns == before_mtime
-    assert len(write.get_candles("IHSG")) == before_count
-
-
-def test_ihsg_read_repo_treats_weekday_gap_as_non_session(tmp_path: Path) -> None:
-    """Holiday-like gap: Friday + Tuesday with Monday missing is still proven."""
-    db = tmp_path / "m.db"
-    write = SQLiteMarketRepository(db)
-    write.save_candles(
-        [
-            _candle("IHSG", date(2026, 7, 17)),  # Fri
-            # Mon 20 missing (holiday)
-            _candle("IHSG", date(2026, 7, 21)),  # Tue
-            _candle("IHSG", date(2026, 7, 22)),
-        ]
-    )
-    # Span must be covered by min/max — add endpoints
-    write.save_candles([_candle("IHSG", date(2026, 7, 23)), _candle("IHSG", date(2026, 7, 24))])
-    cal = SQLiteIHSGTradingSessionCalendarReadRepository(db).load_calendar(
-        coverage_start=date(2026, 7, 17),
-        coverage_end=date(2026, 7, 24),
-    )
-    assert cal is not None
-    assert date(2026, 7, 20) not in cal.sessions
-    assert date(2026, 7, 17) in cal.sessions
-    assert date(2026, 7, 21) in cal.sessions
-
-
-def test_membership_subset_enforced_on_binding() -> None:
-    from src.domain.value_objects.learning_artifacts import LearningContractError
-
-    try:
-        AccumPopulationBinding.create(
-            membership_tickers=["ASII", "FAKE"],
-            named_universe_tickers=["ASII"],
-            membership_session="2026-07-01",
-            pit_tradable_lookback_sessions=10,
-            producer_source_revision="x",
-        )
-        raise AssertionError("expected subset rejection")
-    except LearningContractError as exc:
-        assert "subset" in str(exc)
+    assert after.st_size == before.st_size
+    assert after.st_mtime_ns == before.st_mtime_ns

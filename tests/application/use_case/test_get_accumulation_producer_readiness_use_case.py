@@ -14,13 +14,7 @@ from src.application.services.accumulation_production_policy_descriptors import 
 from src.application.use_case.get_accumulation_producer_readiness_use_case import (
     GetAccumulationProducerReadinessUseCase,
 )
-from src.domain.services.trading_session_calendar import (
-    IDX_TRADING_SESSIONS_CONTRACT,
-    PATH_LABEL_METRICS_SCHEMA_VERSION,
-    KnownTradingSessionCalendar,
-    session_calendar_digest,
-    session_calendar_revision,
-)
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
     AccumPopulationBinding,
@@ -37,6 +31,12 @@ from src.domain.value_objects.learning_artifacts import (
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
+from src.domain.value_objects.trading_session_calendar_snapshot import (
+    PATH_LABEL_METRICS_SCHEMA_VERSION,
+    STOCKBIT_TRADING_SESSIONS_CONTRACT,
+    TradingSessionCalendarSnapshot,
+    label_window_digest,
 )
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
     SQLiteLearningArtifactRepository,
@@ -68,6 +68,19 @@ DEFAULT_SESSION_CALENDAR = KnownTradingSessionCalendar(
     coverage_start=date(2026, 6, 1),
     coverage_end=date(2026, 9, 30),
 )
+DEFAULT_CALENDAR_SNAPSHOT = TradingSessionCalendarSnapshot.create(
+    coverage_start=date(2026, 6, 1),
+    coverage_end=date(2026, 9, 30),
+    ordered_sessions=DEFAULT_SESSION_CALENDAR.sessions,
+    source_revision="stockbit.test.v1",
+    captured_at=NOW,
+)
+
+
+def _snapshot_lookup(snapshot_id: str):
+    if snapshot_id == DEFAULT_CALENDAR_SNAPSHOT.snapshot_id:
+        return DEFAULT_CALENDAR_SNAPSHOT
+    return None
 
 
 def _payload(
@@ -155,7 +168,7 @@ def _observation(
 
 def _label(observation: LearningObservation) -> LearningOutcomeLabel:
     session = date.fromisoformat(str(observation.decision_payload["session_date"]))
-    expected = DEFAULT_SESSION_CALENDAR.first_n_sessions_after(session, 10)
+    expected = DEFAULT_CALENDAR_SNAPSHOT.first_n_sessions_after(session, 10)
     assert expected is not None
     metrics = {
         "ticker": observation.decision_payload["ticker"],
@@ -163,9 +176,15 @@ def _label(observation: LearningObservation) -> LearningOutcomeLabel:
         "label_window_start": expected[0].isoformat(),
         "label_window_end": expected[-1].isoformat(),
         "label_window_sessions": [s.isoformat() for s in expected],
-        "session_calendar_contract": IDX_TRADING_SESSIONS_CONTRACT,
-        "session_calendar_revision": session_calendar_revision(DEFAULT_SESSION_CALENDAR),
-        "session_calendar_digest": session_calendar_digest(DEFAULT_SESSION_CALENDAR),
+        "calendar_snapshot_id": DEFAULT_CALENDAR_SNAPSHOT.snapshot_id,
+        "calendar_contract_id": STOCKBIT_TRADING_SESSIONS_CONTRACT,
+        "calendar_source_revision": DEFAULT_CALENDAR_SNAPSHOT.source_revision,
+        "label_window_digest": label_window_digest(
+            calendar_snapshot_id=DEFAULT_CALENDAR_SNAPSHOT.snapshot_id,
+            label_contract_id=LearningContractId.ACCUM_10D_LABEL.value,
+            signal_date=session,
+            sessions=expected,
+        ),
         "path_label_metrics_schema_version": PATH_LABEL_METRICS_SCHEMA_VERSION,
         "entry_reference_price": 100.0,
         "close_return_pct": 3.5,
@@ -292,7 +311,7 @@ def test_use_case_reports_legacy_and_ready_cohorts_without_writes(tmp_path) -> N
         observations=spy,
         labels=spy,
         policy_snapshots=spy,
-        session_calendar=DEFAULT_SESSION_CALENDAR,
+        session_snapshot_lookup=_snapshot_lookup,
     ).execute()
 
     assert spy.write_calls == []
@@ -332,7 +351,7 @@ def test_use_case_no_implicit_cohort_pooling(tmp_path) -> None:
         observations=repo,
         labels=repo,
         policy_snapshots=repo,
-        session_calendar=DEFAULT_SESSION_CALENDAR,
+        session_snapshot_lookup=_snapshot_lookup,
     ).execute()
     by_id = {c.compatibility_id: c for c in report.cohorts}
     assert by_id[COMPAT_A].observation_count == 1
