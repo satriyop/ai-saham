@@ -293,7 +293,12 @@ class TickerDesk(Vertical):
         margin-top: 0;
     }
 
-    /* Earnings */
+    /* Earnings + secondary side-by-side */
+    TickerDesk .td-earn-row {
+        height: auto;
+        margin-bottom: 1;
+    }
+
     TickerDesk .td-section {
         background: #141414;
         border: solid #1c1c1c;
@@ -301,6 +306,18 @@ class TickerDesk(Vertical):
         padding: 1 1;
         margin-bottom: 1;
         height: auto;
+    }
+
+    TickerDesk .td-earn-panel {
+        width: 3fr;
+        margin-right: 1;
+        margin-bottom: 0;
+    }
+
+    TickerDesk .td-secondary-panel {
+        width: 2fr;
+        margin-bottom: 0;
+        border-left: solid #4a5568;
     }
 
     TickerDesk .td-sec-head {
@@ -314,8 +331,13 @@ class TickerDesk(Vertical):
         height: auto;
     }
 
+    TickerDesk .td-secondary {
+        color: #a0a0a0;
+        height: auto;
+    }
+
     TickerDesk .td-sec-body {
-        color: #7a7a7a;
+        color: #c8c8c8;
         height: auto;
     }
 
@@ -324,11 +346,6 @@ class TickerDesk(Vertical):
         height: auto;
         border-top: solid #1c1c1c;
         padding-top: 1;
-    }
-
-    TickerDesk .td-sec-body {
-        color: #c8c8c8;
-        height: auto;
     }
 
     TickerDesk .td-depth-panel {
@@ -420,13 +437,21 @@ class TickerDesk(Vertical):
                     yield Static("", classes="td-pulse-sub", id=f"td-pulse-s-{key}")
                     yield Static("", classes="td-pulse-body", id=f"td-pulse-b-{key}")
 
-        with Vertical(classes="td-section", id="td-earn-sec"):
-            yield Static(
-                "EARNINGS · LAST 4Q          EPS · YOY",
-                classes="td-sec-head",
-                id="td-earn-head",
-            )
-            yield Static("", classes="td-earn", id="td-earn-body")
+        with Horizontal(classes="td-earn-row", id="td-earn-row"):
+            with Vertical(classes="td-section td-earn-panel", id="td-earn-sec"):
+                yield Static(
+                    "EARNINGS · LAST 4Q · EPS · YOY",
+                    classes="td-sec-head",
+                    id="td-earn-head",
+                )
+                yield Static("", classes="td-earn", id="td-earn-body")
+            with Vertical(classes="td-section td-secondary-panel", id="td-secondary-sec"):
+                yield Static(
+                    "SECONDARY · LOCAL PANELS",
+                    classes="td-sec-head",
+                    id="td-secondary-head",
+                )
+                yield Static("", classes="td-secondary", id="td-secondary-body")
 
         with Vertical(classes="td-section", id="td-more-sec"):
             yield Static(
@@ -691,20 +716,66 @@ class TickerDesk(Vertical):
             body_lines = [f"[#555555]{k:8}[/] {v}" for k, v in card.rows[:4]]
             self.query_one(f"#td-pulse-b-{key}", Static).update("\n".join(body_lines))
 
-        # Earnings
+        # Earnings — real EPS · YoY%; solid bar = relative |EPS| (no hollow ░)
+        earn_sec = self.query_one("#td-earn-sec", Vertical)
+        earn_sec.display = True
         if model.earnings:
-            earn_lines = []
+            head = (
+                f"[#555555]{'Period':8}[/]  {'':12}  [#555555]{'EPS':>7}[/]  "
+                f"[#555555]{'YoY':>10}[/]"
+            )
+            earn_lines = [head]
+            any_extreme = False
             for e in model.earnings[:4]:
-                bar = bar_glyphs(e.bar_pct, width=10)
-                yc = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(e.yoy_tone, "#7a7a7a")
+                bar = bar_glyphs(e.bar_pct, width=12, hollow=False)
+                # Tone bar by YoY; warn = amber (extreme / non-comparable base)
+                if e.yoy_tone == "pos":
+                    bc = "#6fbf8a"
+                elif e.yoy_tone == "neg":
+                    bc = "#c97a72"
+                elif e.yoy_tone == "warn":
+                    bc = "#d4b06a"
+                else:
+                    bc = "#6b6b6b"
+                pad = max(0, 12 - len(bar))
+                bar_s = f"[{bc}]{bar}[/]{' ' * pad}" if bar else f"{'':12}"
+                yc = {
+                    "pos": "#6fbf8a",
+                    "neg": "#c97a72",
+                    "warn": "#d4b06a",
+                }.get(e.yoy_tone, "#7a7a7a")
+                if getattr(e, "yoy_extreme", False):
+                    any_extreme = True
                 earn_lines.append(
-                    f"[#d8d8d8]{e.period:10}[/] {bar}  [#e8e8e8]{e.eps:>7}[/]  [{yc}]{e.yoy}[/]"
+                    f"[#d8d8d8]{e.period:8}[/]  {bar_s}  [#e8e8e8]{e.eps:>7}[/]  "
+                    f"[{yc}]{e.yoy:>10}[/]"
                 )
+            if any_extreme:
+                earn_lines.append(
+                    "[#555555]* YoY uses reported prior-year EPS — extreme % often "
+                    "split / restatement, not pure growth[/]"
+                )
+            self.query_one("#td-earn-head", Static).update("EARNINGS · LAST 4Q · EPS · YOY")
             self.query_one("#td-earn-body", Static).update("\n".join(earn_lines))
-            self.query_one("#td-earn-sec", Vertical).display = True
         else:
+            self.query_one("#td-earn-head", Static).update("EARNINGS · LAST 4Q")
             self.query_one("#td-earn-body", Static).update(
                 "[#555555]no earnings rows in local cache[/]"
+            )
+
+        # Secondary — presence-only inventory (design hierarchy · not CLI dump)
+        sec = self.query_one("#td-secondary-sec", Vertical)
+        sec.display = True
+        if model.secondary:
+            sec_lines = [
+                f"[#555555]{str(k):12}[/]  [#c8c8c8]{v}[/]" for k, v in model.secondary[:8]
+            ]
+            self.query_one("#td-secondary-head", Static).update("SECONDARY · LOCAL PANELS")
+            self.query_one("#td-secondary-body", Static).update("\n".join(sec_lines))
+        else:
+            self.query_one("#td-secondary-head", Static).update("SECONDARY")
+            self.query_one("#td-secondary-body", Static).update(
+                "[#555555]no secondary inventory[/]"
             )
 
         # Detail inventory (BRIEF collapses; detail · d expands)
@@ -784,7 +855,9 @@ class TickerDesk(Vertical):
             "td-mast",
             "td-ribbon",
             "td-trio",
+            "td-earn-row",
             "td-earn-sec",
+            "td-secondary-sec",
             "td-more-sec",
         ):
             try:

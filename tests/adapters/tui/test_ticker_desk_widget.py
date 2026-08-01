@@ -145,12 +145,13 @@ def test_model_design_hierarchy_not_cli_primary():
     assert "6,275" in model.price
     assert model.change_tone == "pos"
     assert any(m.label == "PE TTM" and "13" in m.value for m in model.metrics)
-    # Mock fresh-grid pills (ok / miss / stale hierarchy)
-    assert len(model.freshness) >= 10
+    # Real freshness only — no Sent / no padded miss tiles for missing series
+    assert len(model.freshness) >= 4
     by_lab = {p.label: p for p in model.freshness}
     assert by_lab["Price"].status == "ok" and by_lab["Price"].value == "ok"
     assert by_lab["Flow"].status == "ok"
     assert by_lab["Analyst"].status == "ok"
+    assert "Sent" not in by_lab
     assert "Freshness" in model.as_text() or "Price:ok" in model.as_text()
     keys = {p.key for p in model.pulses}
     assert keys == {"flow", "struct", "bandar"}

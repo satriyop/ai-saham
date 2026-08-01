@@ -67,8 +67,9 @@ class EarnRow:
     period: str
     eps: str
     yoy: str
-    yoy_tone: str = "neutral"
+    yoy_tone: str = "neutral"  # pos | neg | neutral | warn (extreme / non-comparable base)
     bar_pct: int = 50
+    yoy_extreme: bool = False  # |YoY| ≥ 200% — often split / restatement base
 
 
 @dataclass(frozen=True)
@@ -545,10 +546,65 @@ def _pulse_bandar(snap: Any) -> PulseCard:
     )
 
 
+# |YoY| at/above this is still real math but often non-comparable (split / restatement).
+_EARNINGS_YOY_EXTREME_PCT = 200.0
+
+
+def _earnings_yoy_pct(record: Any) -> float | None:
+    """Prefer domain ``yoy_growth_pct``; else same-quarter prior year math.
+
+    ``eps_yoy_change`` is signed IDR delta vs prior year — never display as %.
+    """
+    try:
+        from src.domain.value_objects.earnings_record import EarningsRecord
+
+        if isinstance(record, EarningsRecord):
+            return record.yoy_growth_pct
+    except Exception:
+        pass
+    # Duck-typed property / attribute
+    if hasattr(record, "yoy_growth_pct"):
+        try:
+            v = record.yoy_growth_pct
+            if v is not None and not callable(v):
+                return float(v)
+        except (TypeError, ValueError):
+            pass
+    eps = getattr(record, "eps_actual", None)
+    prev = getattr(record, "eps_prev_year", None)
+    if eps is None or prev in (None, 0):
+        return None
+    try:
+        return (float(eps) - float(prev)) / abs(float(prev)) * 100.0
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _fmt_earnings_yoy(yoy_pct: float | None) -> tuple[str, str, bool]:
+    """Format YoY growth % for desk paint.
+
+    Returns ``(label, tone, extreme)``. Extreme = |pct| ≥ 200 — keep the real
+    number, mark ``*``, tone warn (not green/red cheer for non-comparable bases).
+    """
+    if yoy_pct is None:
+        return "—", "neutral", False
+    try:
+        v = float(yoy_pct)
+    except (TypeError, ValueError):
+        return "—", "neutral", False
+    extreme = abs(v) >= _EARNINGS_YOY_EXTREME_PCT
+    if extreme:
+        # Integer for huge moves; * = prior-year base may be non-comparable
+        return f"{v:+.0f}%*", "warn", True
+    yoy_s, tone = _fmt_pct(v)
+    return yoy_s, tone, False
+
+
 def _earnings_rows(records: Any) -> list[EarnRow]:
+    """Last 4 quarters: period · EPS · YoY% · bar = relative |EPS| (not fake)."""
     rows: list[EarnRow] = []
     items = list(records or [])
-    # newest first if sortable
+    # Dedupe (year, quarter) — cache may store multiple fetch snapshots
     try:
         items = sorted(
             items,
@@ -557,44 +613,43 @@ def _earnings_rows(records: Any) -> list[EarnRow]:
         )
     except Exception:
         pass
+    seen_period: set[tuple[int, int]] = set()
+    deduped: list[Any] = []
+    for r in items:
+        key = (int(getattr(r, "year", 0) or 0), int(getattr(r, "quarter", 0) or 0))
+        if key in seen_period and key != (0, 0):
+            continue
+        seen_period.add(key)
+        deduped.append(r)
+    window = deduped[:4]
     eps_vals: list[float] = []
-    for r in items[:4]:
+    for r in window:
         eps = getattr(r, "eps_actual", None)
         try:
             if eps is not None:
-                eps_vals.append(float(eps))
+                eps_vals.append(abs(float(eps)))
         except (TypeError, ValueError):
             pass
     max_eps = max(eps_vals) if eps_vals else 0.0
-    for r in items[:4]:
-        y = getattr(r, "year", "?")
-        q = getattr(r, "quarter", "?")
-        period = f"Q{q} {y}"
+    for r in window:
+        # Prefer domain period_label when present
+        period = str(getattr(r, "period_label", None) or "").strip()
+        if not period:
+            y = getattr(r, "year", "?")
+            q = getattr(r, "quarter", "?")
+            period = f"Q{q} {y}"
         eps = getattr(r, "eps_actual", None)
         eps_s = _fmt_num(eps) if eps is not None else "—"
-        yoy_s, yoy_tone = "—", "neutral"
-        # YoY as % if we have prev year eps
-        prev = getattr(r, "eps_prev_year", None)
-        yoy_chg = getattr(r, "eps_yoy_change", None)
-        if prev not in (None, 0) and eps is not None:
-            try:
-                pct = (float(eps) - float(prev)) / abs(float(prev)) * 100.0
-                yoy_s, yoy_tone = _fmt_pct(pct)
-            except (TypeError, ValueError, ZeroDivisionError):
-                pass
-        elif yoy_chg is not None and prev not in (None, 0):
-            try:
-                pct = float(yoy_chg) / abs(float(prev)) * 100.0
-                yoy_s, yoy_tone = _fmt_pct(pct)
-            except (TypeError, ValueError, ZeroDivisionError):
-                yoy_s = str(yoy_chg)
-        bar = 40
+        yoy_pct = _earnings_yoy_pct(r)
+        yoy_s, yoy_tone, yoy_extreme = _fmt_earnings_yoy(yoy_pct)
+        bar = 0
         try:
             if eps is not None and max_eps > 0:
-                bar = max(8, min(100, int(float(eps) / max_eps * 100)))
+                # Relative to largest |EPS| in the window — real magnitude sugar
+                bar = max(1, min(100, int(round(abs(float(eps)) / max_eps * 100))))
         except (TypeError, ValueError):
-            pass
-        rows.append(EarnRow(period, eps_s, yoy_s, yoy_tone, bar))
+            bar = 0
+        rows.append(EarnRow(period, eps_s, yoy_s, yoy_tone, bar, yoy_extreme))
     return rows
 
 
@@ -1066,8 +1121,8 @@ def _bar_from_abs(v: float, scale: float) -> int:
 def bar_glyphs(pct: int, *, width: int = 10, hollow: bool = True) -> str:
     """Monospace density bar (scalar sugar only — not a chart claim).
 
-    ``hollow=False``: filled blocks only (ticker horizons) — no grey ░ wallpaper.
-    ``hollow=True``: filled + light residual (earnings rows).
+    ``hollow=False``: filled blocks only (horizons · earnings) — no grey ░ wallpaper.
+    ``hollow=True``: filled + light residual (legacy / optional).
     """
     if pct is None or int(pct) <= 0:
         return ""
