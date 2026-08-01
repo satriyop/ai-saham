@@ -29,13 +29,13 @@ from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     LearningContractId,
 )
-from src.infrastructure.persistence.ihsg_candle_session_calendar import (
-    load_ihsg_candle_session_calendar,
-)
 from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
     SQLiteCorporateActionCalendarRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
+from src.infrastructure.persistence.sqlite_trading_session_calendar_snapshot_repository import (
+    SQLiteTradingSessionCalendarSnapshotRepository,
+)
 
 
 def accumulation_labels(
@@ -100,24 +100,23 @@ def accumulation_labels(
         compatibility_id,
     )
     market = SQLiteMarketRepository(resolved)
-    # Same IHSG-candle session authority as readiness (full cached IHSG span).
-    session_calendar = None
-    for ticker in ("IHSG", "^JKSE"):
-        span = market.get_date_range(ticker)
-        if span is not None:
-            session_calendar = load_ihsg_candle_session_calendar(
-                market,
-                coverage_start=span[0],
-                coverage_end=span[1],
-            )
-            if session_calendar is not None:
-                break
+    # Immutable Stockbit-attested calendar snapshots already persisted for the cohort.
+    # Never re-range a growing IHSG candle cache for label identity.
+    calendar_store = SQLiteTradingSessionCalendarSnapshotRepository(resolved)
+
+    def _resolve_snapshot(signal_date, horizon_days):
+        # Prefer any snapshot that can prove first-N after the signal.
+        for snap in calendar_store.list_snapshots():
+            if snap.first_n_sessions_after(signal_date, horizon_days) is not None:
+                return snap
+        return None
+
     use_case = GenerateAccumulationPricePathLabelsUseCase(
         observations=repo,
         labels=repo,
         market_data=market,
         corporate_actions=SQLiteCorporateActionCalendarRepository(resolved),
-        session_calendar=session_calendar,
+        session_snapshot_resolver=_resolve_snapshot,
     )
     labeled_at = datetime.now(IDX_TIMEZONE)
 

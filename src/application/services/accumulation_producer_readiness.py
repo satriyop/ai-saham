@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import Enum
@@ -21,12 +22,7 @@ from src.application.services.accumulation_production_policy_descriptors import 
 from src.application.services.lean_observation_identity import (
     POLICY_SNAPSHOT_BINDING_CONTRACT_V2,
 )
-from src.domain.services.trading_session_calendar import (
-    IDX_TRADING_SESSIONS_CONTRACT,
-    PATH_LABEL_METRICS_SCHEMA_VERSION,
-    KnownTradingSessionCalendar,
-    session_calendar_digest,
-)
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     ACCUM_POPULATION_AUTHORITY_CONTRACT,
     ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
@@ -60,6 +56,13 @@ from src.domain.value_objects.signal_observation_contracts import (
     ACCUMULATION_DISCOVERY_HORIZON_CONTRACT,
     ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
     ACCUMULATION_DISCOVERY_POLICY_CONTRACT,
+)
+from src.domain.value_objects.trading_session_calendar_snapshot import (
+    PATH_LABEL_METRICS_SCHEMA_VERSION,
+    STOCKBIT_TRADING_SESSIONS_CONTRACT,
+    TradingSessionCalendarSnapshot,
+    label_window_digest,
+    validate_trading_session_calendar_snapshot,
 )
 
 # Exact economic session date (ADR-056 payload). No prefix/slice acceptance.
@@ -131,9 +134,10 @@ _AVAILABLE_METRIC_KEYS: frozenset[str] = frozenset(
         "label_window_start",
         "label_window_end",
         "label_window_sessions",
-        "session_calendar_contract",
-        "session_calendar_revision",
-        "session_calendar_digest",
+        "calendar_snapshot_id",
+        "calendar_contract_id",
+        "calendar_source_revision",
+        "label_window_digest",
         "path_label_metrics_schema_version",
         "entry_reference_price",
         "close_return_pct",
@@ -1021,9 +1025,12 @@ def _path_label_semantic_reasons(
     label: LearningOutcomeLabel,
     *,
     observation: LearningObservation | None,
+    session_snapshot_lookup: Callable[[str], TradingSessionCalendarSnapshot | None] | None = None,
+    # Deprecated alias kept for call-site migration during tests.
     session_calendar: KnownTradingSessionCalendar | None = None,
 ) -> list[str]:
     """Full path-label semantic matrix (schema, outcome, fingerprint, metrics, window)."""
+
     reasons: list[str] = []
     if label.schema_version != LEARNING_SCHEMA_VERSION:
         reasons.append(
@@ -1088,8 +1095,8 @@ def _path_label_semantic_reasons(
                 entry: float | None = None
             else:
                 entry = float(raw_entry)
-            # Exact first N market sessions after signal — proven via
-            # KnownTradingSessionCalendar + persisted label_window_sessions.
+            # Exact first N market sessions after signal — proven via the
+            # immutable calendar snapshot bound on the label (never latest/cache).
             signal_date = parse_canonical_session_date(metrics.get("signal_date"))
             win_start = parse_canonical_session_date(metrics.get("label_window_start"))
             win_end = parse_canonical_session_date(metrics.get("label_window_end"))
@@ -1134,18 +1141,22 @@ def _path_label_semantic_reasons(
                         and (parsed_sessions[0] != win_start or parsed_sessions[-1] != win_end)
                     ):
                         reasons.append("metrics.label_window_sessions_endpoint_mismatch")
-            contract = metrics.get("session_calendar_contract")
-            if contract != IDX_TRADING_SESSIONS_CONTRACT:
+            snapshot_id = metrics.get("calendar_snapshot_id")
+            if not isinstance(snapshot_id, str) or not snapshot_id.strip():
+                reasons.append(f"metrics.calendar_snapshot_id_invalid:{snapshot_id!r}")
+                snapshot_id = None
+            contract_id = metrics.get("calendar_contract_id")
+            if contract_id != STOCKBIT_TRADING_SESSIONS_CONTRACT:
                 reasons.append(
-                    f"metrics.session_calendar_contract_invalid:{contract!r}"
-                    f"!=expected:{IDX_TRADING_SESSIONS_CONTRACT!r}"
+                    f"metrics.calendar_contract_id_invalid:{contract_id!r}"
+                    f"!=expected:{STOCKBIT_TRADING_SESSIONS_CONTRACT!r}"
                 )
-            revision = metrics.get("session_calendar_revision")
-            if not isinstance(revision, str) or not revision.strip():
-                reasons.append(f"metrics.session_calendar_revision_invalid:{revision!r}")
-            digest = metrics.get("session_calendar_digest")
-            if not isinstance(digest, str) or not digest.strip():
-                reasons.append(f"metrics.session_calendar_digest_invalid:{digest!r}")
+            stored_revision = metrics.get("calendar_source_revision")
+            if not isinstance(stored_revision, str) or not stored_revision.strip():
+                reasons.append(f"metrics.calendar_source_revision_invalid:{stored_revision!r}")
+            stored_window_digest = metrics.get("label_window_digest")
+            if not isinstance(stored_window_digest, str) or not stored_window_digest.strip():
+                reasons.append(f"metrics.label_window_digest_invalid:{stored_window_digest!r}")
             if win_start is not None and win_end is not None:
                 if win_start > win_end:
                     reasons.append("metrics.label_window_inverted")
@@ -1154,16 +1165,44 @@ def _path_label_semantic_reasons(
                         "metrics.label_window_not_after_signal:"
                         f"start={win_start.isoformat()},signal={signal_date.isoformat()}"
                     )
-                if session_calendar is None:
-                    reasons.append("metrics.label_window_session_calendar_unproven")
-                elif signal_date is not None:
-                    expected = session_calendar.first_n_sessions_after(signal_date, horizon_days)
-                    if expected is None:
-                        reasons.append(
-                            "metrics.label_window_sessions_unproven:"
-                            f"signal={signal_date.isoformat()},n={horizon_days}"
-                        )
+            # Load the exact snapshot bound on the label (never re-range the cache).
+            snapshot: TradingSessionCalendarSnapshot | None = None
+            if snapshot_id is not None:
+                if session_snapshot_lookup is None:
+                    reasons.append("metrics.calendar_snapshot_lookup_unproven")
+                else:
+                    snapshot = session_snapshot_lookup(snapshot_id)
+                    if snapshot is None:
+                        reasons.append(f"metrics.calendar_snapshot_missing:{snapshot_id!r}")
                     else:
+                        try:
+                            validate_trading_session_calendar_snapshot(snapshot)
+                        except LearningContractError as exc:
+                            reasons.append(f"metrics.calendar_snapshot_corrupt:{exc}")
+                            snapshot = None
+            if snapshot is not None and signal_date is not None:
+                if snapshot.contract_id != STOCKBIT_TRADING_SESSIONS_CONTRACT:
+                    reasons.append(
+                        f"metrics.calendar_snapshot_contract_invalid:{snapshot.contract_id!r}"
+                    )
+                if (
+                    isinstance(stored_revision, str)
+                    and stored_revision.strip()
+                    and stored_revision != snapshot.source_revision
+                ):
+                    reasons.append(
+                        "metrics.calendar_source_revision_mismatch:"
+                        f"stored={stored_revision!r},"
+                        f"snapshot={snapshot.source_revision!r}"
+                    )
+                expected = snapshot.first_n_sessions_after(signal_date, horizon_days)
+                if expected is None:
+                    reasons.append(
+                        "metrics.label_window_sessions_unproven:"
+                        f"signal={signal_date.isoformat()},n={horizon_days}"
+                    )
+                else:
+                    if win_start is not None and win_end is not None:
                         if win_start != expected[0] or win_end != expected[-1]:
                             reasons.append(
                                 "metrics.label_window_not_first_n_sessions:"
@@ -1171,14 +1210,25 @@ def _path_label_semantic_reasons(
                                 f"expected={expected[0].isoformat()}.."
                                 f"{expected[-1].isoformat()},n={horizon_days}"
                             )
-                        if parsed_sessions is not None and tuple(parsed_sessions) != expected:
-                            reasons.append("metrics.label_window_sessions_not_first_n")
-                        expected_digest = session_calendar_digest(session_calendar)
-                        if isinstance(digest, str) and digest != expected_digest:
-                            reasons.append(
-                                "metrics.session_calendar_digest_mismatch:"
-                                f"stored={digest!r},expected={expected_digest!r}"
-                            )
+                    if parsed_sessions is not None and tuple(parsed_sessions) != expected:
+                        reasons.append("metrics.label_window_sessions_not_first_n")
+                    expected_window_digest = label_window_digest(
+                        calendar_snapshot_id=snapshot.snapshot_id,
+                        label_contract_id=label.contract_id.value,
+                        signal_date=signal_date,
+                        sessions=expected,
+                    )
+                    if (
+                        isinstance(stored_window_digest, str)
+                        and stored_window_digest != expected_window_digest
+                    ):
+                        reasons.append(
+                            "metrics.label_window_digest_mismatch:"
+                            f"stored={stored_window_digest!r},"
+                            f"expected={expected_window_digest!r}"
+                        )
+            # Legacy session_calendar param no longer grants authority without snapshot.
+            del session_calendar
             if observation is not None:
                 obs_session = observation_session_date(observation)
                 if (
@@ -1253,6 +1303,7 @@ def count_labels_by_horizon(
     observation_ids: Sequence[str],
     labels: Sequence[LearningOutcomeLabel],
     observations_by_id: Mapping[str, LearningObservation] | None = None,
+    session_snapshot_lookup: Callable[[str], TradingSessionCalendarSnapshot | None] | None = None,
     session_calendar: KnownTradingSessionCalendar | None = None,
 ) -> LabelCohortValidation:
     """Count path labels after digest, identity, basis, and full semantic checks.
@@ -1269,9 +1320,10 @@ def count_labels_by_horizon(
     Incompatible label families (e.g. pre-open on an accumulation observation)
     fail closed rather than being silently ignored.
 
-    ``session_calendar`` is required to prove AVAILABLE path-label windows as the
-    first N sessions after the signal; absence fails closed (no weekday approx).
+    ``session_snapshot_lookup`` loads the exact immutable calendar snapshot
+    bound on each AVAILABLE label by ``calendar_snapshot_id``. Absence fails closed.
     """
+    del session_calendar  # no longer authoritative
     obs_set = set(observation_ids)
     obs_map = dict(observations_by_id or {})
     by_contract: dict[LearningContractId, list[LearningOutcomeLabel]] = {
@@ -1315,7 +1367,7 @@ def count_labels_by_horizon(
                 _path_label_semantic_reasons(
                     label,
                     observation=parent,
-                    session_calendar=session_calendar,
+                    session_snapshot_lookup=session_snapshot_lookup,
                 )
             )
 
@@ -1379,13 +1431,15 @@ def project_cohort_readiness(
     purpose_value: str,
     expected_learning_observation_contract_id: str = ACTIVE_LEARNING_OBSERVATION_CONTRACT,
     expected_producer_observation_contract: str = ACTIVE_PRODUCER_OBSERVATION_CONTRACT,
+    session_snapshot_lookup: Callable[[str], TradingSessionCalendarSnapshot | None] | None = None,
     session_calendar: KnownTradingSessionCalendar | None = None,
 ) -> CohortProducerReadiness:
     """Project one cohort's producer readiness from already-loaded artifacts.
 
-    ``session_calendar`` proves AVAILABLE path-label windows as the first N
-    market sessions after each signal. Without it, AVAILABLE windows fail closed.
+    ``session_snapshot_lookup`` loads each label's bound immutable calendar
+    snapshot by ID. Without it, AVAILABLE windows fail closed.
     """
+    del session_calendar
     obs_validation = validate_observation_cohort(
         observations,
         purpose_value=purpose_value,
@@ -1442,7 +1496,7 @@ def project_cohort_readiness(
         observation_ids=label_ids,
         labels=labels,
         observations_by_id=observations_by_id,
-        session_calendar=session_calendar,
+        session_snapshot_lookup=session_snapshot_lookup,
     )
     labels_by_horizon = label_validation.counts_by_horizon
     h10 = labels_by_horizon["H10"]

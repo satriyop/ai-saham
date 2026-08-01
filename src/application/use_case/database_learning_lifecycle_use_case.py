@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -13,13 +14,6 @@ from src.domain.ports.learning_artifact_repositories import (
     LearningObservationRepository,
     LearningOutcomeLabelRepository,
     LearningTrackSnapshotRepository,
-)
-from src.domain.services.trading_session_calendar import (
-    IDX_TRADING_SESSIONS_CONTRACT,
-    PATH_LABEL_METRICS_SCHEMA_VERSION,
-    KnownTradingSessionCalendar,
-    session_calendar_digest,
-    session_calendar_revision,
 )
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
@@ -33,6 +27,11 @@ from src.domain.value_objects.learning_artifacts import (
     LearningOutcomeLabel,
     OutcomeBasis,
     artifact_digest,
+)
+from src.domain.value_objects.trading_session_calendar_snapshot import (
+    PATH_LABEL_METRICS_SCHEMA_VERSION,
+    TradingSessionCalendarSnapshot,
+    label_window_digest,
 )
 
 
@@ -204,9 +203,10 @@ class GenerateAccumulationPricePathLabelsUseCase:
     coverage) skip without writing a row so a later run can insert the terminal
     label when data is ready.
 
-    Session axis: inject the same KnownTradingSessionCalendar authority used by
-    readiness. First N market sessions after signal; one ticker candle required
-    per exact session date — never skip a hole to a later ticker candle.
+    Session axis: bind each AVAILABLE window to an immutable
+    TradingSessionCalendarSnapshot (same identity readiness reloads by ID).
+    First N market sessions after signal; one ticker candle required per exact
+    session date — never skip a hole to a later ticker candle.
     """
 
     def __init__(
@@ -216,13 +216,17 @@ class GenerateAccumulationPricePathLabelsUseCase:
         labels: LearningOutcomeLabelRepository,
         market_data: LearningMarketDataRepository,
         corporate_actions: LearningCorporateActionCalendarRepository,
-        session_calendar: KnownTradingSessionCalendar | None = None,
+        session_snapshot: TradingSessionCalendarSnapshot | None = None,
+        session_snapshot_resolver: (
+            Callable[[date, int], TradingSessionCalendarSnapshot | None] | None
+        ) = None,
     ) -> None:
         self._observations = observations
         self._labels = labels
         self._market = market_data
         self._corporate_actions = corporate_actions
-        self._session_calendar = session_calendar
+        self._session_snapshot = session_snapshot
+        self._session_snapshot_resolver = session_snapshot_resolver
 
     def execute(self, request: GenerateLearningLabelsRequest) -> GenerateLearningLabelsResult:
         if request.purpose is not AssessmentPurpose.ACCUMULATION_DISCOVERY:
@@ -303,10 +307,11 @@ class GenerateAccumulationPricePathLabelsUseCase:
         if not coverage_available:
             # Provisional: corporate-action calendar may appear later.
             return None
-        if self._session_calendar is None:
-            # Provisional: market-session calendar required for first-N windows.
+        snapshot = self._resolve_session_snapshot(signal_date, horizon_days)
+        if snapshot is None:
+            # Provisional: no immutable calendar snapshot covers this horizon.
             return None
-        expected_sessions = self._session_calendar.first_n_sessions_after(signal_date, horizon_days)
+        expected_sessions = snapshot.first_n_sessions_after(signal_date, horizon_days)
         if expected_sessions is None:
             # Provisional: insufficient proven market sessions after signal.
             return None
@@ -348,15 +353,25 @@ class GenerateAccumulationPricePathLabelsUseCase:
         else:
             outcome = "NEUTRAL"
         session_isos = [session.isoformat() for session in expected_sessions]
+        contract_value = (
+            contract_id.value if isinstance(contract_id, LearningContractId) else str(contract_id)
+        )
+        window_digest = label_window_digest(
+            calendar_snapshot_id=snapshot.snapshot_id,
+            label_contract_id=contract_value,
+            signal_date=signal_date,
+            sessions=expected_sessions,
+        )
         metrics = {
             "ticker": ticker,
             "signal_date": signal_date.isoformat(),
             "label_window_start": expected_sessions[0].isoformat(),
             "label_window_end": expected_sessions[-1].isoformat(),
             "label_window_sessions": session_isos,
-            "session_calendar_contract": IDX_TRADING_SESSIONS_CONTRACT,
-            "session_calendar_revision": session_calendar_revision(self._session_calendar),
-            "session_calendar_digest": session_calendar_digest(self._session_calendar),
+            "calendar_snapshot_id": snapshot.snapshot_id,
+            "calendar_contract_id": snapshot.contract_id,
+            "calendar_source_revision": snapshot.source_revision,
+            "label_window_digest": window_digest,
             "path_label_metrics_schema_version": PATH_LABEL_METRICS_SCHEMA_VERSION,
             "entry_reference_price": float(entry),
             "close_return_pct": close_return,
@@ -375,6 +390,19 @@ class GenerateAccumulationPricePathLabelsUseCase:
             fingerprint=fingerprint,
             labeled_at=labeled_at,
         )
+
+    def _resolve_session_snapshot(
+        self,
+        signal_date: date,
+        horizon_days: int,
+    ) -> TradingSessionCalendarSnapshot | None:
+        if self._session_snapshot is not None:
+            if self._session_snapshot.first_n_sessions_after(signal_date, horizon_days) is None:
+                return None
+            return self._session_snapshot
+        if self._session_snapshot_resolver is not None:
+            return self._session_snapshot_resolver(signal_date, horizon_days)
+        return None
 
     def _has_mechanical_corporate_action(self, ticker: str, start: date, end: date) -> bool:
         from src.domain.value_objects.corporate_action_calendar import (
