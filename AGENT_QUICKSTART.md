@@ -357,6 +357,59 @@ Required structure:
    - When a typed wrapper binds values together, tests must prove downstream
      code preserves the wrapper until the named boundary instead of extracting
      one field early and silently discarding the rest.
+16. Include a task-specific authority matrix for readiness and promotion work.
+   - This is mandatory for any task that creates or changes readiness,
+     eligibility, baseline verification, challenge handoff, validation,
+     promotion, or artifact-reopen behavior.
+   - Do not replace the matrix with prose examples. Inventory every artifact
+     entering the decision and every field that can grant, deny, group, or
+     identify authority.
+   - Replace all placeholders with the exact current constants, enum values,
+     ID formulas, digest functions, owners, and failure states before delegating
+     or coding. An open-ended value such as "validate relevant metadata" is not
+     an acceptable contract.
+
+### Mandatory Readiness / Promotion Authority Matrix
+
+Every applicable task must contain and complete this matrix. Add rows when the
+workflow consumes more artifact types; do not delete a minimum row merely
+because the first implementation does not validate it yet.
+
+| Artifact / boundary | Authority owner and source | Exact identity dimensions | Integrity proof | Semantic contract checks | Missing state | Invalid / conflicting state | May contribute to readiness / promotion when |
+|---|---|---|---|---|---|---|---|
+| Observation / decision artifact | Exact production use case or canonical builder | Stable ID formula; schema and contract IDs; purpose; policy contract; horizon contract; compatibility/cohort ID; population/universe identity; window/session/cutoff dimensions | Recompute deterministic ID and immutable payload digest independently; verify stored columns agree with serialized identity | Exact artifact type; economic date/cutoff/PIT rules; required producer contract; no retired alias or fallback | State the typed missing representation and whether it is collecting, unavailable, or blocked | State the fail-closed status and operator diagnostic | Every required identity, integrity, semantic, provenance, and PIT check passes |
+| Outcome label / realized result | Named label producer and immutable repository | Stable label ID formula; observation ID; exact label contract and horizon | Recompute deterministic ID and digest; verify observation linkage and uniqueness/conflict rules | Exact outcome basis; availability/outcome invariant; horizon/benchmark/unit contract; no incompatible label family | State insufficient-horizon/unavailable behavior | Corrupt, conflicting, cross-observation, wrong-basis, or wrong-horizon labels fail closed and are never counted | The label is valid, belongs to a validated observation, and the named readiness rule permits that horizon/state |
+| Policy/config snapshot | Deterministic production policy resolver and snapshot writer | Snapshot ID formula; purpose; compatibility ID; policy ID/version; decision type; semantic engine contract; observation bindings | Recompute canonical payload digest and snapshot ID; verify the complete closed set and common material identity | Exact descriptor per policy; supported active contract only; historical sets remain historical | State legacy/absent/partial behavior | Mixed, extra, duplicate, malformed, digest-invalid, or semantically unsupported sets fail closed | The exact active closed set verifies as one coherent production identity |
+| Cohort / readiness projection | Named application use case | Explicit cohort/purpose/population identity; no implicit pooling or auto-selection | Consume only artifacts verified by the rows above; preserve invalid-artifact diagnostics | Lock precedence and minimum data rules; diagnostics never become authority | State collecting/insufficient-depth behavior | Any authority-bearing corruption uses the named blocked status | All authority rows pass and the exact minimum-data rule passes |
+| Export / reopen / promotion artifact | Named artifact writer plus authoritative production store | Artifact schema/ID; cohort; production snapshot; adapter; protocol; baseline/challenger; population; source revision | Verify artifact integrity and re-resolve immutable production identity from the authoritative read-only store; hash-shaped strings alone are not proof | Historical/static/diagnostic artifacts cannot acquire current production eligibility; no auto-promotion | State historical-display-only behavior | Missing DB authority, unsupported schema, or identity mismatch blocks reopening/promotion | Current authoritative identities verify and every protocol/promotion gate passes |
+| Repository / transport boundary | Named port and concrete adapter | Exact row keys and serialized identity fields | Define read-time validation location; prove read-only paths do not create, migrate, repair, or write | Deserialization is not verification; adapters do not invent policy, defaults, aliases, or fallback authority | State missing table/file/row behavior | Schema/query/serialization/contract errors propagate or become the named blocked state | The application receives the exact authoritative rows through the permitted read path |
+
+Matrix enforcement rules:
+
+- Classify every field on each consumed DTO as `IDENTITY`, `INTEGRITY`,
+  `SEMANTIC_CONTRACT`, `DIAGNOSTIC`, or `IRRELEVANT`. The task must justify
+  every `IRRELEVANT` field that could plausibly affect grouping, provenance,
+  authority, horizon, population, or outcome meaning.
+- Deterministic ID verification and payload-digest verification are separate
+  checks. A valid digest does not prove an ID when the ID is excluded from the
+  digest payload.
+- Only validated artifacts may enter counts, folds, readiness thresholds,
+  eligibility, or promotion. Corrupt artifacts may be reported diagnostically
+  but must never contribute authority-bearing values.
+- Valid test fixtures must come from the real production writer/canonical
+  builder or a shared contract fixture produced by it. Do not hand-copy
+  contract strings into a happy-path fixture when production code can provide
+  them.
+- Add mutation tests for every identity, integrity, and semantic-contract
+  dimension in the matrix, including cross-artifact linkage. Each mutation
+  must prove the exact blocked/missing behavior and prove the mutated artifact
+  contributes zero authority.
+- Reviewers must trace every field of every authority-bearing DTO and reconcile
+  the implementation and negative tests against the completed matrix. Replaying
+  only previously reported counterexamples is not sufficient review.
+- A task is not `READY`, code-complete, or promotion-eligible while any matrix
+  cell is unresolved, delegated to implementer judgment, or covered only by a
+  happy-path test.
 
 Use a `Do Not Interpret This As` section for high-risk work. Example:
 
@@ -400,10 +453,19 @@ Before coding, restate:
 7. Stop condition.
    - If the instruction is ambiguous or conflicts with current code, stop and
      ask instead of implementing a weaker interpretation.
+8. Completed authority matrix when applicable.
+   - For readiness/promotion work, restate the task's completed authority
+     matrix and reconcile it against the current DTO fields and production
+     builders before editing.
+   - If the task omits the matrix, leaves a cell unresolved, or conflicts with
+     executable identity/semantic contracts, stop and return the gap to the
+     task author. Do not infer the missing authority rule while coding.
 
 Before marking done:
 
 - [ ] The exact requested behavior is implemented, not only the general shape.
+- [ ] When applicable, every authority-matrix cell is implemented and every
+      identity/integrity/semantic dimension has an independent mutation test.
 - [ ] No unrelated files were touched.
 - [ ] Required output fields and error paths are covered by tests.
 - [ ] Unsupported combinations fail if the task says they must fail.
