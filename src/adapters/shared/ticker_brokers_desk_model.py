@@ -73,15 +73,23 @@ class TickerBrokersDeskModel:
             "",
             f"{self.hero_lab}  {self.hero_big}",
             "",
-            f"{'Code':5} {'Type':8} {'Role':4} {'Day':>8} "
-            f"{'N3':>8} {'N5':>8} {'N7':>8} {'N10':>8} {'N20':>8} "
+            # Design cockpit labels (Code · Type · Role · DayNet · Net3… · Stk · Δ1)
+            f"{'Code':5} {'Type':8} {'Role':4} {'DayNet':>8} "
+            f"{'Net3':>8} {'Net5':>8} {'Net7':>8} {'Net10':>8} {'Net20':>8} "
             f"{'Stk':>3} {'Δ1':>8}",
-            "─" * 72,
+            "─" * 80,
         ]
         for i, r in enumerate(self.rows):
             mark = "›" if i == self.selected_index else " "
+            role = (r.role or "—").strip().lower()
+            if role.startswith("buy"):
+                role_s = "buy"
+            elif role.startswith("sell"):
+                role_s = "sell"
+            else:
+                role_s = (r.role or "—")[:4]
             lines.append(
-                f"{mark}{r.code:4} {r.type_label[:8]:8} {r.role:4} "
+                f"{mark}{r.code:4} {r.type_label[:8]:8} {role_s:4} "
                 f"{r.day_net:>8} {r.net3:>8} {r.net5:>8} {r.net7:>8} "
                 f"{r.net10:>8} {r.net20:>8} {r.streak:>3} {r.delta1:>8}"
             )

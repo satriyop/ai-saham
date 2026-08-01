@@ -141,6 +141,18 @@ def test_broker_list_cells_contract_and_sign_tint():
     assert "+11.5B" in pos.plain
     assert "6.2B" in neg.plain
 
+    from src.adapters.tui.board_cell_markup import (
+        format_signed_flow_markup,
+        signed_flow_color,
+    )
+
+    # Static radar rows share the same mint/coral rule as DataTable cells
+    assert signed_flow_color("+11.5B") == "#6fbf8a"
+    assert signed_flow_color("−6.2B") == "#c97a72"
+    assert signed_flow_color("12.88B") == "#6fbf8a"
+    assert format_signed_flow_markup("+9.45B", width=8) == "[#6fbf8a]  +9.45B[/]"
+    assert format_signed_flow_markup("-1.61B", width=8) == "[#c97a72]  -1.61B[/]"
+
 
 def test_harga_mast_never_action():
     """Price mast product title is LAST · LOCAL CLOSE (not design jargon HARGA)."""

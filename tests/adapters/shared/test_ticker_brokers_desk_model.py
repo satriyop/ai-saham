@@ -70,7 +70,12 @@ def test_brokers_desk_has_full_net_ladder_and_quiet_hero():
     assert r0.net10 == "+5.0B"
     assert r0.net20 == "+6.0B"
     text = desk.as_text()
-    assert "N3" in text or "net3" in text.lower() or "+0.8B" in text
+    # Design cockpit headers (not compact Day/N3/R)
+    assert "DayNet" in text
+    assert "Net3" in text
+    assert "Net20" in text
+    assert "Role" in text
+    assert "sell" in text  # full role word, not "sel"
     assert "+6.0B" in text
     assert "Tracked brokers" not in text
 

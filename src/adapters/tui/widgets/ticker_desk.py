@@ -1338,7 +1338,13 @@ class TickerDesk(Vertical):
             pass
 
     def _paint_brokers_desk(self, desk: TickerBrokersDeskModel) -> None:
-        """On-ticker stock desks radar · Net3/5/7/10/20 · no hero essay noise."""
+        """On-ticker stock desks radar · design cockpit dense table parity.
+
+        Columns: Code · Type · Role · DayNet · Net3/5/7/10/20 · Stk · Δ1
+        Type words Foreign/Local · Role buy/sell · mint/coral signed nets.
+        """
+        from src.adapters.tui.board_cell_markup import format_signed_flow_markup
+
         self._set_job_body_mode("days")
         self._paint_job_hero_pulses(desk)
 
@@ -1349,38 +1355,48 @@ class TickerDesk(Vertical):
             )
             return
 
+        n = len(desk.rows)
         self.query_one("#td-flow-days-head", Static).update(
-            f"RADAR · {len(desk.rows)} · DayNet · Net3/5/7/10/20"
+            f"RADAR · {n} · DayNet · Net3/5/7/10/20"
         )
-        # Compact headers — full Net ladder (design / ticker-desks parity)
+        # Design cockpit headers (not compact Day/N3/R/St)
+        mute = "#555555"
         head = (
-            f"[#555555]{'':1}{'Code':4}[/] [#555555]{'Type':7}[/] [#555555]{'R':3}[/] "
-            f"[#555555]{'Day':>8}[/] "
-            f"[#555555]{'N3':>7}[/] [#555555]{'N5':>7}[/] [#555555]{'N7':>7}[/] "
-            f"[#555555]{'N10':>7}[/] [#555555]{'N20':>7}[/] "
-            f"[#555555]{'St':>3}[/] [#555555]{'Δ1':>7}[/]"
+            f"[{mute}]{'':1}{'Code':4}[/] "
+            f"[{mute}]{'Type':7}[/] "
+            f"[{mute}]{'Role':4}[/] "
+            f"[{mute}]{'DayNet':>8}[/] "
+            f"[{mute}]{'Net3':>8}[/] [{mute}]{'Net5':>8}[/] [{mute}]{'Net7':>8}[/] "
+            f"[{mute}]{'Net10':>8}[/] [{mute}]{'Net20':>8}[/] "
+            f"[{mute}]{'Stk':>3}[/] [{mute}]{'Δ1':>8}[/]"
         )
         lines = [head]
         sel = int(desk.selected_index or 0)
         for i, r in enumerate(desk.rows):
             mark = "[#c9a68a]›[/]" if i == sel else " "
-            type_c = (
-                "#7aa2c4"
-                if r.type_label.lower().startswith("f")
-                else ("#d4b06a" if r.type_label.lower().startswith("g") else "#a0a0a0")
-            )
-            role_c = "#6fbf8a" if r.role.lower() == "buy" else "#c97a72"
-            role_s = (r.role or "—")[:3]
+            # Type: dim words (Foreign/Local) — design .dim, not F/L cryptic
             type_s = (r.type_label or "—")[:7]
-            partial = "*" if r.has_partial else " "
+            type_c = "#7a7a7a"
+            role_raw = (r.role or "—").strip().lower()
+            if role_raw.startswith("buy"):
+                role_s, role_c = "buy", "#6fbf8a"
+            elif role_raw.startswith("sell"):
+                role_s, role_c = "sell", "#c97a72"
+            else:
+                role_s, role_c = (r.role or "—")[:4], "#7a7a7a"
+            partial = "[#d4b06a]*[/]" if r.has_partial else ""
             lines.append(
-                f"{mark}[#e8e8e8]{r.code:4}[/] [{type_c}]{type_s:7}[/] "
-                f"[{role_c}]{role_s:3}[/] "
-                f"[#c8c8c8]{r.day_net:>8}[/] "
-                f"[#c8c8c8]{r.net3:>7}[/] [#c8c8c8]{r.net5:>7}[/] "
-                f"[#c8c8c8]{r.net7:>7}[/] [#c8c8c8]{r.net10:>7}[/] "
-                f"[#c8c8c8]{r.net20:>7}[/] "
-                f"[#a0a0a0]{r.streak:>3}[/] [#c8c8c8]{r.delta1:>7}[/]{partial}"
+                f"{mark}[bold #e8e8e8]{r.code:4}[/] "
+                f"[{type_c}]{type_s:7}[/] "
+                f"[{role_c}]{role_s:4}[/] "
+                f"{format_signed_flow_markup(r.day_net, width=8)} "
+                f"{format_signed_flow_markup(r.net3, width=8)} "
+                f"{format_signed_flow_markup(r.net5, width=8)} "
+                f"{format_signed_flow_markup(r.net7, width=8)} "
+                f"{format_signed_flow_markup(r.net10, width=8)} "
+                f"{format_signed_flow_markup(r.net20, width=8)} "
+                f"[#7a7a7a]{r.streak:>3}[/] "
+                f"{format_signed_flow_markup(r.delta1, width=8)}{partial}"
             )
         self.query_one("#td-flow-days", Static).update("\n".join(lines))
 

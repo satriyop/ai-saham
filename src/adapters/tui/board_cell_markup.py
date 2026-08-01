@@ -188,15 +188,15 @@ def format_preopen_board_cells(row: Any) -> tuple[Text | str, ...]:
     )
 
 
-def format_signed_flow_cell(value: str) -> Text:
-    """Tint DayNet / Net5 / Δ1 strings that look like +12.3B / −1.2M."""
+def signed_flow_color(value: str) -> str:
+    """OpenCode mint/coral/fog for DayNet · NetX · Δ1 display strings."""
     s = (value or "—").strip() or "—"
     if s in {"—", "-", ""}:
-        return Text(s, style=_ASH)
+        return _ASH
     if s.startswith("+"):
-        return Text(s, style=_MINT)
+        return _MINT
     if s.startswith("-") or s.startswith("−"):
-        return Text(s, style=_CORAL)
+        return _CORAL
     cleaned = (
         s.replace(",", "")
         .replace("B", "")
@@ -209,12 +209,26 @@ def format_signed_flow_cell(value: str) -> Text:
     try:
         v = float(cleaned)
     except (TypeError, ValueError):
-        return Text(s, style=_FOG)
+        return _FOG
     if v > 0:
-        return Text(s, style=_MINT)
+        return _MINT
     if v < 0:
-        return Text(s, style=_CORAL)
-    return Text(s, style=_FOG)
+        return _CORAL
+    return _FOG
+
+
+def format_signed_flow_cell(value: str) -> Text:
+    """Tint DayNet / Net5 / Δ1 strings that look like +12.3B / −1.2M."""
+    s = (value or "—").strip() or "—"
+    return Text(s, style=signed_flow_color(s))
+
+
+def format_signed_flow_markup(value: str, *, width: int | None = None) -> str:
+    """Textual markup for Static radar rows (same tint as format_signed_flow_cell)."""
+    s = (value or "—").strip() or "—"
+    color = signed_flow_color(s)
+    body = f"{s:>{width}}" if width is not None else s
+    return f"[{color}]{body}[/]"
 
 
 def format_broker_list_cells(row: Any) -> tuple[Text | str, ...]:
