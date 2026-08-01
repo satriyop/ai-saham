@@ -54,8 +54,8 @@ Ship Textual against **`.app` inside this mock**. Design-tools strip is for revi
 | 2 | Plan | Structure | Geometry triangle · inherit Action · `l` paper confirm |
 | 3 | Paper | Notebook | Notebook tape · write via plan `l` confirm |
 | 4 | Pre-open | Auction | IEP board → Enter **inspect** (option chips) |
-| 5 | Ticker | Browse | **brief / detail (`[d]`)** · job chips with brass keycaps → CLI siblings |
-| 6 | Broker | Browse | Radar → Enter desk home · list options · desk job chips |
+| 5 | Ticker | Browse | **In-stage chip nav** · brass job chips · density `[d]` · CLI siblings under bar |
+| 6 | Broker | Browse | Radar → Enter desk home · **desk home in-stage job chips** |
 | 7 | Health | Honesty | Empty / zero / lag / ready posters |
 | 8 | Palette | Nav | Ctrl+P · peach selection |
 
@@ -98,8 +98,8 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 |------|--------|-----|
 | **brief / detail** | Density dual on Judge **and** Ticker | limited state · job chips |
 | **limited** | Snapshot / no candidate on Judge | density mode |
-| **Job chip** | Sibling CLI / desk page for focus entity | density expand |
-| **Option chip** | Optional panel or list filter | density · Action |
+| **Job chip** | Job surface under **same stage** chip bar for focus entity | density expand · **not** independent stage |
+| **Option chip** | Optional panel on **same stage** | density · Action |
 | **Chip bar** | Shared horizontal control row | free-floating one-off buttons |
 
 **Locked rules (shared)**
@@ -119,7 +119,73 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 **Authority:** every stage that exposes density, jobs, or options uses **this** interaction model.  
 **Order:** implement foundation first in TUI (shared widget), then wire stage inventories.  
 **Workflow:** design + mock first · Textual only after explicit go.  
-**Lock (2026-08-01):** power key is **visible on the chip** — bold brass `[k]` leading the product word.
+**Lock (2026-08-01):** power key is **visible on the chip** — bold brass `[k]` leading the product word.  
+**Lock (2026-08-01):** **in-stage chip navigation** is mandatory for every multi-chip stage (see below).
+
+### Vocabulary (use these terms)
+
+| Term | Meaning |
+|------|---------|
+| **Stage** | One instrument / screen mode (Accum board, View ticker, Broker list, Desk home, Judge, …) |
+| **Chip bar** | One horizontal row of **chips** under the stage title (not a “menu” or “tab strip”) |
+| **Chip** | One bar control: **job**, **density**, or **option** |
+| **Job chip** | Opens a sibling product surface for the **same entity** without leaving the stage |
+| **Density chip** | Toggles brief ↔ detail on the **same stage body** (`[d] detail` · `is-on` = detail) |
+| **Option chip** | Toggles an optional panel on the **same stage** (e.g. pre-open `why`) |
+| **Job surface** | Body under the chip bar while a job chip is `is-on` — still the **same stage** |
+| **`is-on` / focus** | Active chip (peach fill) and keyboard focus on the bar |
+| **Independent stage** | A *different* stage with its own chrome (title trail, table, **chip bar gone**) — **forbidden** as the result of a chip activate |
+
+**Reference stage:** **View ticker** — chip bar + job surfaces under the bar is the canonical pattern.
+
+### In-stage chip navigation (**mandatory**)
+
+**One-line rule:**
+
+> **Chip-bar stages use in-stage chip navigation: chips switch job / density / option on the same stage under a persistent chip bar; they never open an independent stage.**
+
+Whenever a stage has **more than one chip** (or a density + job set), this is **required**:
+
+| # | Rule |
+|---|------|
+| 1 | **Same stage** — Activating a chip does **not** open a separate stage |
+| 2 | **Chip bar stays mounted** — Same chips, same order; active job/option is **`is-on`** |
+| 3 | **Body swaps under the bar** — Default body *or* job surface; no full remount to another instrument |
+| 4 | **Switch in place** — Chip click or power letter switches job without resetting the entity trail |
+| 5 | **Close in place** — Second press same job **or** `esc` → stage default body (e.g. ticker show) |
+| 6 | **Power letter = keycap** — Brass `[k]` matches the bound letter; stage-local only |
+| 7 | **Drill-in is separate** — e.g. Enter desk home may leave for a **nested** instrument; `esc` returns to **same stage + job** (or show), not a third parallel stage invented by the chip |
+
+**Canonical shape (View ticker):**
+
+```text
+Stage: View · ticker · UNVR
+Chip bar: [b] brokers  [f] flow*  [o] foreign  [x] dist  [n] fin  [d] detail
+                    │
+                    └─ is-on → job surface under bar (still this stage)
+esc / second press → ticker show body
+```
+
+**Anti-pattern (forbidden):**
+
+```text
+Chip → independent stage (new title, chip bar gone, separate trail)
+```
+
+Example of the anti-pattern (historical, **fixed**): brokers → `ticker-desks` stage that dropped the ticker chip bar.
+
+**Stages that must conform**
+
+| Stage | Chip bar | Conformance |
+|-------|----------|-------------|
+| **View ticker** | jobs + density | **Reference · conforming** |
+| **Broker desk home** | `[t] buy/sell` · `[f] flow` · `[c] calendar` · `[h] history` · `[m] top 5` | **Mandatory** (same shell; deep job under bar) |
+| **Judge** | `[d] detail` | **Mandatory** (density in-stage; no multi-job wall) |
+| **Pre-open inspect** | option chips (`why` · `auction+` · `warn`) | **Mandatory** (options in-stage) |
+| Accum / Pre-open **board** | no multi job chips | N/A |
+| Broker **list** (Ctrl+P) | no chip bar | N/A (list *is* the stage) |
+
+**Intent:** entity stays fixed; depth changes under the bar. One mental model, simple `esc` trail, scannable brass keys.
 
 ### Placement & chrome
 
@@ -209,11 +275,12 @@ Do **not** use peach for key glyphs or brass for signed data. One scan dialect: 
 
 | Kind | Activate means | Label examples |
 |------|----------------|----------------|
-| **Density** | Toggle brief ↔ detail on current stage body | **`[d] detail`** |
-| **Job** | Open sibling CLI / desk page · `esc` trail back | **`[b] brokers`** · **`[f] flow`** · **`[t] buy/sell`** |
-| **Option** | Toggle optional panel (no power letter) | `why` · `auction+` · `warn` |
+| **Density** | Toggle brief ↔ detail on **current stage body** | **`[d] detail`** |
+| **Job** | Open **job surface under the same chip bar** · `esc` → stage default body | **`[b] brokers`** · **`[f] flow`** · **`[t] buy/sell`** |
+| **Option** | Toggle optional panel on **same stage** (no power letter) | `why` · `auction+` · `warn` |
 
-Jobs never invent Action. Options never re-score.
+Jobs never invent Action. Options never re-score.  
+**Job ≠ independent stage** — see **In-stage chip navigation**.
 
 ### TUI implementer notes (later · order)
 
@@ -221,18 +288,19 @@ Jobs never invent Action. Options never re-score.
 2. Each chip: focusable control · click + Enter/Space.  
 3. Rely on Textual **default Tab** focus chain — do not reimplement Tab.  
 4. Stage `on_key` only for **documented power letters** + global `d` / `p` / `esc` — letter must match keycap.  
-5. Wire stages in inventory order: Judge → Ticker → Pre-open inspect → Broker list → Broker home.  
-6. Visual tokens match mock `.flag-chip` + `.chip-key` (brass) · peach focus/`is-on`.  
-7. Footer `kbd` uses the **same brass** as chip keys (navigation dialect).
+5. **Never** route a chip activate to a new stage that unmounts the chip bar (in-stage chip navigation).  
+6. Wire stages in inventory order: Judge → Ticker → Pre-open inspect → Broker list → Broker home.  
+7. Visual tokens match mock `.flag-chip` + `.chip-key` (brass) · peach focus/`is-on`.  
+8. Footer `kbd` uses the **same brass** as chip keys (navigation dialect).
 
 ---
 
-## 2. Consistent chip navigation (all stages)
+## 2. Stage chip inventories (all chip bars)
 
-Every row below is a **chip bar** under the Shared Chip bar contract.  
+Every row below is a **chip bar** under the Shared Chip bar contract **and** **in-stage chip navigation**.  
 Power keys are **stage-local** (only while that stage owns input).
 
-### Judge (nested)
+### Judge (nested) · **in-stage chip navigation · conforming**
 
 | Chip (paint) | Kind | Power | Effect |
 |--------------|------|-------|--------|
@@ -240,27 +308,30 @@ Power keys are **stage-local** (only while that stage owns input).
 
 - **No** meta `brief`/`detail` after the bar.  
 - **No** multi-chip wall. Limited = **banner** only · not a chip.  
-- Nav: click · Tab · Enter/Space · `d` (keycap + `is-on` teach state).
+- Nav: click · Tab · Enter/Space · `d` (keycap + `is-on` teach state).  
+- Density never opens a new stage.
 
-### Ticker show (`v t`)
+### Ticker show (`v t`) · **reference · conforming**
 
 | Chip (paint) | Kind | Power | CLI / effect |
 |--------------|------|-------|----------------|
-| **`[b] brokers`** | job | **`b`** | `view ticker top-brokers` |
+| **`[b] brokers`** | job | **`b`** | `view ticker top-brokers` · **job surface** (stock desks radar) |
 | **`[f] flow`** | job | **`f`** | `view ticker flow` (foreign flow summary / `broker_summaries`) |
 | **`[o] foreign`** | job | **`o`** | `view ticker foreign-history` |
 | **`[x] dist`** | job | **`x`** | `view ticker distribution` |
 | **`[n] fin`** | job | **`n`** | `view ticker financials` |
 | **`[d] detail`** | density | **`d`** | toggle detail on **show** body (`is-on` = detail) |
 
+- **All five jobs** are **job surfaces under this stage** — never leave for an independent stage.  
 - Word **`flow`** kept (CLI verb); keycap **`[f]`** is the scan target.  
-- Job → sub-stage titled with CLI job name · bar remains · switch via chip or letter · `esc` → show.  
-- **`d` only when show body is visible** (not while a job table is front). Prefer: `esc` first, then `d`.  
-- Also: `p` plan · `esc` trail.  
-- Nav: click · Tab · Enter/Space · **`b f o x n d`** (letters match keycaps).  
-- **No** density meta text. Optional footer keys only: brass `b f o x n d · esc` (no “brief” word).
+- Job → body under bar · `is-on` · switch via chip or letter · `esc` / second press → show.  
+- **`d` only when show body is visible** (not while a job surface is front). Prefer: `esc` first, then `d`.  
+- **Drill-in:** brokers job · Enter desk home may nest; `esc` desk → **brokers job again** (not a third stage).  
+- Also: `p` plan · `esc` trail to board.  
+- Nav: click · Tab · Enter/Space · **`b f o x n d`**.  
+- **No** density meta text. Optional footer: brass `b f o x n d · esc`.
 
-### Pre-open inspect
+### Pre-open inspect · **in-stage · conforming**
 
 | Chip (paint) | Kind | Power | Effect |
 |--------------|------|-------|--------|
@@ -268,22 +339,24 @@ Power keys are **stage-local** (only while that stage owns input).
 | **auction+** | option | — | toggle auction+ panel |
 | **warn** | option | — | toggle warn panel |
 
-- Nav: click · Tab · Enter/Space only (no letter soup · **no fake keycaps**).
+- Nav: click · Tab · Enter/Space only (no letter soup · **no fake keycaps**).  
+- Options never open an independent stage.
 
-### Broker list / stock desks (radar) — **no chip bar**
+### Broker list (Ctrl+P) — **no chip bar · N/A**
 
-Honesty lives in **title + meta + footer**, not cryptic chips.
+Honesty lives in **title + meta + footer**, not cryptic chips. List *is* the stage.
 
 | Surface | Title | Meta / footer honesty |
 |---------|-------|------------------------|
 | Tracked radar (`v b`) | `View · broker list` | `{n} desks · tracked · Enter home` |
-| From stock (`b` on ticker) | `View · desks · BBCA` | `{n} desks · top brokers · Enter home` |
 | Thin Net windows | (same title) | append **`· thin NetX (partial sessions)`** when any desk lacks full Net3/5/… sample |
+
+Stock-scoped desks from ticker **`[b] brokers`** are **not** this list — they are an **on-ticker job surface** (see §3 · brokers).
 
 **Reject:** operator chips named `partial_net` / `from_ticker` (code keys as chrome).  
 **Reject:** status chips that look like filters but do not change the table.
 
-### Broker home (desk) — **TUI is design authority for richness**
+### Broker home (desk) · **in-stage chip navigation · mandatory**
 
 Shipped `BrokerDesk` / desk models outrank a thinner mock. Design mock must stay at least as rich as:
 
@@ -299,26 +372,27 @@ Shipped `BrokerDesk` / desk models outrank a thinner mock. Design mock must stay
 
 | Chip (paint) | Kind | Power | Effect |
 |--------------|------|-------|--------|
-| **`[t] buy/sell`** | job | **`t`** | latest session dual heat |
-| **`[f] flow`** | job | **`f`** | this desk day-net series |
-| **`[c] calendar`** | job | **`c`** | ~1 month desk calendar |
-| **`[h] history`** | job | **`h`** | per-ticker daily for desk |
-| **`[m] top 5`** | job | **`m`** | multi-window top-5 matrix |
+| **`[t] buy/sell`** | job | **`t`** | latest session dual heat · **job surface** |
+| **`[f] flow`** | job | **`f`** | this desk day-net series · **job surface** |
+| **`[c] calendar`** | job | **`c`** | ~1 month desk calendar · **job surface** |
+| **`[h] history`** | job | **`h`** | per-ticker daily for desk · **job surface** |
+| **`[m] top 5`** | job | **`m`** | multi-window top-5 matrix · **job surface** |
 
+- **Same rule as View ticker:** chip bar stays; jobs swap body under the bar; no independent stage per chip.  
 - Same chip bar model + **keycap-in-chip** (brass `[k]`); no “Hub” word in UI.  
-- `v` → view ticker for desk top (1s #1) — not a chip.  
-- Ticker `f` ≠ broker `f` (different stages — both valid; keycaps still show `[f]`).  
+- `v` → view ticker for desk top (1s #1) — not a chip · drill-in; `esc` returns to desk home.  
+- Ticker `f` ≠ broker `f` (different **stages** — both valid; keycaps still show `[f]`).  
 - Nav: click · Tab · Enter/Space · **`t f c h m`**.
 
-### Stages without chip bar
+### Stages without chip bar (in-stage chip nav N/A)
 
-Accum (source badge only) · Broker list / stock desks (honesty in meta) · Plan · Paper · Health · Palette.
+Accum (source badge only) · Broker list (honesty in meta) · Plan · Paper · Health · Palette.
 
 ---
 
 ## Ticker stage (content lock)
 
-**Chip bar rules:** §2 Ticker show only — do not fork navigation here.  
+**Chip bar rules:** §1–2 · **in-stage chip navigation** (reference).  
 **Lock date:** 2026-08-01 · multi-surface with `view ticker *`.
 
 ### Default: brief (consistent with Judge)
@@ -363,10 +437,10 @@ Accum (source badge only) · Broker list / stock desks (honesty in meta) · Plan
 ## 3. Ticker job desks (design lock · 2026-08-01)
 
 **Authority:** mock `.app` in `tui-cockpit-opencode.html` · multi-surface use cases unchanged.  
-**All five jobs** (**brokers · flow · foreign · dist · fin**) stay **on-ticker** under the same chip bar.  
-Brokers = stock desks radar body · **not** an independent stage · `esc` → ticker show · chips switch jobs.
+**In-stage chip navigation (mandatory):** all five jobs (**brokers · flow · foreign · dist · fin**) are **job surfaces** under View ticker — same chip bar · `is-on` · `esc` → show · chips switch jobs.  
+Brokers = stock desks radar **body** · **not** an independent `ticker-desks` stage.
 
-### Shared shell (all four on-ticker jobs)
+### Shared shell (all five on-ticker jobs)
 
 ```text
 View · ticker · BBCA · {job}          {job} · local cache
@@ -471,10 +545,11 @@ Not a 3-row mini top table. Chip **brokers** / `b` opens radar **under the ticke
 
 ### TUI implement order (after design accept)
 
-1. Shared `TickerJobDesk` shell (hero + pulses + body slot)  
-2. **flow** desk (highest daily use)  
-3. **foreign** · **dist** · **fin**  
-4. Keep loaders / use cases; replace monospaced paint only  
+1. Shared job shell (hero + pulses + body slot) under persistent chip bar  
+2. **In-stage chip navigation** for every multi-chip stage (no chip → independent stage)  
+3. **flow** · **foreign** · **dist** · **fin** · **brokers** as job surfaces  
+4. Broker desk home chips same contract  
+5. Keep loaders / use cases; presentation only in adapters  
 
 ---
 
@@ -483,7 +558,7 @@ Not a 3-row mini top table. Chip **brokers** / `b` opens radar **under the ticke
 | Path | Keys | Must not |
 |------|------|----------|
 | **Action** | Board `Enter` → Judge · `p` Plan · `l` Paper | Ticker/broker invent Action |
-| **Browse** | `v t` · `v b` · broker Enter home · chip bar jobs | ENTER/WATCH/AVOID authority |
+| **Browse** | `v t` · `v b` · broker Enter home · **in-stage** chip jobs | ENTER/WATCH/AVOID authority · **chip → independent stage** |
 | **Paper** | Confirm after geometry | Auto-write · corpus · orders |
 | **Pre-open** | Enter → auction inspect | Same stage as accum Judge |
 
