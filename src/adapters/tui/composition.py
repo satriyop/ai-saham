@@ -408,20 +408,23 @@ class _TickerTopBrokersLoader:
 
 
 class _TickerJobLoader:
-    """Stock-axis ticker jobs: flow · foreign · dist · fin (CLI use-case path).
+    """Stock-axis ticker jobs: brokers · flow · foreign · dist · fin.
 
     Same deps as CLI via build_view_ticker_deps; pure formatters in
-    adapters.shared.view_ticker_job_text.
+    adapters.shared.view_ticker_job_text. Brokers stays on-ticker (chip job),
+    not an independent stage.
     """
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
         self._lock = Lock()
+        self._desks = _TickerTopBrokersLoader(db_path)
 
     def __call__(self, job: str, ticker: str) -> Any:
         with self._lock:
             from src.adapters.shared.view_ticker_job_text import (
                 empty_ticker_job,
+                format_ticker_brokers_job,
                 format_ticker_distribution_job,
                 format_ticker_financials_job,
                 format_ticker_flow_job,
@@ -444,6 +447,18 @@ class _TickerJobLoader:
             ticker_u = str(ticker).upper()
             job_k = (job or "").strip().lower()
             deps = build_view_ticker_deps(self._db_path)
+
+            if job_k == "brokers":
+                # Same payload as ticker-desks radar; paint under ticker chips
+                payload = self._desks(ticker_u)
+                rows = list(getattr(payload, "rows", ()) or ())
+                return format_ticker_brokers_job(
+                    ticker_u,
+                    rows,
+                    as_of=getattr(payload, "as_of", None),
+                    note=getattr(payload, "note", None),
+                    fetch_hint=f"saham fetch market {ticker_u}",
+                )
 
             if job_k == "flow":
                 result = deps.flow.execute(ViewTickerFlowRequest(ticker=ticker_u, days=10))

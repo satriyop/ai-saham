@@ -24,6 +24,23 @@ def _fake_dashboard(ticker: str) -> object:
 def _job_loader(job: str, ticker: str) -> TickerJobText:
     """Deterministic loader using real formatters (same shape as composition)."""
     ticker_u = str(ticker).upper()
+    if job == "brokers":
+        from src.adapters.shared.view_ticker_job_text import format_ticker_brokers_job
+
+        rows = (
+            SimpleNamespace(
+                code="YP",
+                type_label="Foreign",
+                role="buy",
+                as_of="2026-07-29",
+                day_net="+1.0B",
+                net5="+2.0B",
+                streak="1",
+                delta1="+0.1B",
+                has_partial_netx=False,
+            ),
+        )
+        return format_ticker_brokers_job(ticker_u, rows, as_of="2026-07-29")
     if job == "flow":
         summaries = (
             SimpleNamespace(
@@ -200,18 +217,7 @@ def test_ticker_jobs_open_real_bodies_and_esc_to_show():
             assert app._ticker_job is None
             assert app._status_note == "view ticker"
 
-            # Power b / action_ticker_desks from open job must open desks trail
-            opened_desks: list[str] = []
-
-            def _capture_desks(stock: str) -> None:
-                opened_desks.append(stock)
-                app._ticker_job = None
-                app._ticker_job_text = None
-                app._stage = "ticker-desks"
-                app._status_note = "view ticker desks"
-                app._ticker_desks_stock = stock
-
-            app._open_ticker_desks = _capture_desks  # type: ignore[method-assign]
+            # Power b / brokers from open job must stay on-ticker (chip shell)
             app._stage = "detail"
             app._status_note = "view ticker"
             app._focus_ticker = "BBCA"
@@ -222,27 +228,33 @@ def test_ticker_jobs_open_real_bodies_and_esc_to_show():
                     break
             assert app._ticker_job == "dist"
             assert app._status_note == "view ticker dist"
-            # Chip path: action_ticker_job("brokers") and power b: action_ticker_desks
             app.action_ticker_job("brokers")
-            await pilot.pause(0.05)
-            assert opened_desks == ["BBCA"], "brokers from open dist must open desks"
-            assert app._ticker_job is None
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._ticker_job == "brokers" and app._ticker_job_text is not None:
+                    break
+            assert app._stage == "detail"
+            assert app._ticker_job == "brokers"
+            assert app._status_note == "view ticker brokers"
+            assert app._stage != "ticker-desks"
+            assert isinstance(app._ticker_job_text, TickerJobText)
+            assert app._ticker_job_text.job == "brokers"
 
-            # Reset desks capture; open fin then power b (action_ticker_desks)
-            opened_desks.clear()
-            app._stage = "detail"
-            app._status_note = "view ticker"
-            app._focus_ticker = "BBCA"
+            # Power b (action_ticker_desks alias) from fin → brokers job on ticker
             app.action_ticker_job("fin")
             for _ in range(40):
                 await pilot.pause(0.05)
                 if app._ticker_job == "fin":
                     break
             assert app._ticker_job == "fin"
-            app.action_ticker_desks()  # Binding b
-            await pilot.pause(0.05)
-            assert opened_desks == ["BBCA"], "power b from open fin must open desks"
-            assert app._ticker_job is None
+            app.action_ticker_desks()  # Binding b alias
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._ticker_job == "brokers" and app._ticker_job_text is not None:
+                    break
+            assert app._stage == "detail"
+            assert app._ticker_job == "brokers"
+            assert app._status_note == "view ticker brokers"
 
     asyncio.run(scenario())
 

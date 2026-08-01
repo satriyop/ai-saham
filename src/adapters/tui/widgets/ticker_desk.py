@@ -12,6 +12,7 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
+from src.adapters.shared.ticker_brokers_desk_model import TickerBrokersDeskModel
 from src.adapters.shared.ticker_dist_desk_model import DistSideRow, TickerDistDeskModel
 from src.adapters.shared.ticker_flow_desk_model import TickerFlowDeskModel
 from src.adapters.shared.ticker_foreign_desk_model import TickerForeignDeskModel
@@ -483,7 +484,11 @@ class TickerDesk(Vertical):
         self._job_title: str = ""
         self._job_body: str = ""
         self._job_desk: (
-            TickerFlowDeskModel | TickerForeignDeskModel | TickerDistDeskModel | None
+            TickerFlowDeskModel
+            | TickerForeignDeskModel
+            | TickerDistDeskModel
+            | TickerBrokersDeskModel
+            | None
         ) = None
 
     def compose(self) -> ComposeResult:
@@ -648,7 +653,13 @@ class TickerDesk(Vertical):
         *,
         title: str = "",
         body: str = "",
-        desk: TickerFlowDeskModel | TickerForeignDeskModel | TickerDistDeskModel | None = None,
+        desk: (
+            TickerFlowDeskModel
+            | TickerForeignDeskModel
+            | TickerDistDeskModel
+            | TickerBrokersDeskModel
+            | None
+        ) = None,
     ) -> None:
         """Show/hide job body under chip bar (browse-only CLI sibling)."""
         self._active_job = job
@@ -1022,8 +1033,11 @@ class TickerDesk(Vertical):
             isinstance(self._job_desk, TickerForeignDeskModel) and self._active_job == "foreign"
         )
         dist_ok = isinstance(self._job_desk, TickerDistDeskModel) and self._active_job == "dist"
+        brokers_ok = (
+            isinstance(self._job_desk, TickerBrokersDeskModel) and self._active_job == "brokers"
+        )
 
-        if flow_ok or foreign_ok or dist_ok:
+        if flow_ok or foreign_ok or dist_ok or brokers_ok:
             if shell_el is not None:
                 shell_el.display = True
             try:
@@ -1036,9 +1050,12 @@ class TickerDesk(Vertical):
             elif foreign_ok:
                 assert isinstance(self._job_desk, TickerForeignDeskModel)
                 self._paint_foreign_desk(self._job_desk)
-            else:
+            elif dist_ok:
                 assert isinstance(self._job_desk, TickerDistDeskModel)
                 self._paint_dist_desk(self._job_desk)
+            else:
+                assert isinstance(self._job_desk, TickerBrokersDeskModel)
+                self._paint_brokers_desk(self._job_desk)
             return
 
         if shell_el is not None:
@@ -1052,7 +1069,12 @@ class TickerDesk(Vertical):
 
     def _paint_job_hero_pulses(
         self,
-        desk: TickerFlowDeskModel | TickerForeignDeskModel | TickerDistDeskModel,
+        desk: (
+            TickerFlowDeskModel
+            | TickerForeignDeskModel
+            | TickerDistDeskModel
+            | TickerBrokersDeskModel
+        ),
     ) -> None:
         """Shared hero + 4-pulse chrome for structured job desks."""
         self.query_one("#td-flow-lab", Static).update(desk.hero_lab)
@@ -1234,6 +1256,48 @@ class TickerDesk(Vertical):
         except Exception:
             # Fallback: keep dual mounted; never invent sides
             pass
+
+    def _paint_brokers_desk(self, desk: TickerBrokersDeskModel) -> None:
+        """On-ticker stock desks radar · same chip shell as flow/foreign/dist."""
+        self._set_dist_dual_visible(False)
+        self._paint_job_hero_pulses(desk)
+
+        if desk.empty or not desk.rows:
+            self.query_one("#td-flow-days-head", Static).update("STOCK DESKS · RADAR")
+            self.query_one("#td-flow-days", Static).update(
+                f"[#555555]no top desks · {desk.fetch_hint}[/]"
+            )
+            return
+
+        self.query_one("#td-flow-days-head", Static).update(
+            f"STOCK DESKS · {len(desk.rows)} · ↑↓ · ENTER HOME"
+        )
+        head = (
+            f"[#555555]{'':1}{'Code':5}[/]  [#555555]{'Type':8}[/]  "
+            f"[#555555]{'Role':5}[/]  [#555555]{'DayNet':>10}[/]  "
+            f"[#555555]{'Net5':>10}[/]  [#555555]{'Stk':>4}[/]  "
+            f"[#555555]{'Δ1':>10}[/]"
+        )
+        lines = [head]
+        sel = int(desk.selected_index or 0)
+        for i, r in enumerate(desk.rows):
+            mark = "[#c9a68a]›[/]" if i == sel else " "
+            type_c = (
+                "#7aa2c4"
+                if r.type_label.lower().startswith("f")
+                else ("#d4b06a" if r.type_label.lower().startswith("g") else "#a0a0a0")
+            )
+            role_c = "#6fbf8a" if r.role.lower() == "buy" else "#c97a72"
+            partial = " *" if r.has_partial else ""
+            lines.append(
+                f"{mark}[#e8e8e8]{r.code:5}[/]  [{type_c}]{r.type_label:8}[/]  "
+                f"[{role_c}]{r.role:5}[/]  [#c8c8c8]{r.day_net:>10}[/]  "
+                f"[#c8c8c8]{r.net5:>10}[/]  [#a0a0a0]{r.streak:>4}[/]  "
+                f"[#c8c8c8]{r.delta1:>10}[/]{partial}"
+            )
+        if any(r.has_partial for r in desk.rows):
+            lines.append("[#555555]* partial NetX — cached sessions only[/]")
+        self.query_one("#td-flow-days", Static).update("\n".join(lines))
 
     def _paint_job_and_chips_only(self) -> None:
         """When model not yet painted, still show job body + chips."""

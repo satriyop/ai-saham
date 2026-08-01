@@ -363,8 +363,8 @@ Accum (source badge only) · Broker list / stock desks (honesty in meta) · Plan
 ## 3. Ticker job desks (design lock · 2026-08-01)
 
 **Authority:** mock `.app` in `tui-cockpit-opencode.html` · multi-surface use cases unchanged.  
-**Exception:** **brokers** leaves ticker for **stock desks radar** (`View · desks · TICKER`) — list chrome.  
-**flow · foreign · dist · fin** stay **on-ticker** under the same chip bar.
+**All five jobs** (**brokers · flow · foreign · dist · fin**) stay **on-ticker** under the same chip bar.  
+Brokers = stock desks radar body · **not** an independent stage · `esc` → ticker show · chips switch jobs.
 
 ### Shared shell (all four on-ticker jobs)
 
@@ -452,20 +452,21 @@ Cap top 5 sides · top 4 counterparties. Share bar = % of that side’s amount.
 
 No full spreadsheet. Expand-to-wide columns is optional later — not show brief/detail dual.
 
-### `brokers` · stock desks radar (**TUI is design authority**)
+### `brokers` · stock desks radar (**on-ticker job · same shell as flow/…**)
 
-Not a 3-row mini top table. Chip **brokers** / `b` opens the **same rich radar as TUI `ticker-desks`**:
+Not a 3-row mini top table. Chip **brokers** / `b` opens radar **under the ticker chip bar** (same job contract as flow/foreign/dist/fin):
 
 | Piece | Spec |
 |-------|------|
-| Title | `View · desks · TICKER` |
-| Meta | `as of · N desks · top brokers · Enter home` · **thin NetX (partial sessions)** when any desk partial |
-| Columns | `Code · Type · Role · AsOf · DayNet · Net3 · Net5 · Net7 · Net10 · Net20 · Stk · Δ1` |
-| Type | **Foreign** / **Local** (words on radar; not cryptic A) |
+| Title | `View · ticker · TICKER · brokers` (job title · chip shell) |
+| Hero | `STOCK DESKS · TICKER` · N desks · as of · top brokers · local cache |
+| Meta | `view ticker top-brokers · local cache` · **partial NetX** when any desk partial |
+| Body | Radar rows: `Code · Type · Role · DayNet · Net5 · Stk · Δ1` (richer NetX ok) |
+| Type | **Foreign** / **Local** (words; not cryptic A) |
 | Role | `buy` / `sell` from top-brokers ranking |
-| NetX | Stock-scoped multi-session · partial = `value*(used/X)` |
-| Keys | `↑↓` · **Enter** desk home · **esc** ticker show · chips switch job |
-| Reject | Implementer hero (“list trail / leaves shell”) · 3-row sample tops only |
+| NetX | Stock-scoped multi-session · partial marked |
+| Keys | `↑↓` select · **Enter** desk home · **esc** ticker show · **chips switch job** |
+| Reject | Independent `ticker-desks` stage that drops the chip bar · “leaves shell” |
 
 ### TUI implement order (after design accept)
 

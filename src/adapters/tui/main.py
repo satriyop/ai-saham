@@ -81,7 +81,7 @@ class CockpitApp(App[None]):
         Binding("c", "broker_calendar", "Desk calendar", show=False),
         # `v` is chord prefix off desk hub (v t / v b); on desk hub = jump ticker
         # (handled in on_key so prefix chords do not fight single-key v).
-        Binding("b", "ticker_desks", "Ticker→desks", show=False),
+        Binding("b", "ticker_job_brokers", "Ticker brokers", show=False),
         Binding("o", "ticker_job_foreign", "Ticker foreign", show=False),
         Binding("x", "ticker_job_dist", "Ticker dist", show=False),
         Binding("n", "ticker_job_fin", "Ticker fin", show=False),
@@ -182,7 +182,7 @@ class CockpitApp(App[None]):
         self._broker_desk_history_model: Any | None = None
         self._broker_desk_calendar_model: Any | None = None
         self._ticker_detail_open: bool = False
-        self._ticker_job: str | None = None  # flow|foreign|dist|fin while job open
+        self._ticker_job: str | None = None  # brokers|flow|foreign|dist|fin while job open
         self._ticker_job_text: Any | None = None
         self._judge_detail_open: bool = False
         self._preopen_detail_open: bool = False
@@ -1268,6 +1268,14 @@ class CockpitApp(App[None]):
                     return
             if self._stage == "detail" and self._broker_page == "show":
                 self._view_from_desk = False
+                # From brokers chip job → back to on-ticker brokers job (not independent stage)
+                if self._desk_entry == "ticker-brokers-job" and self._ticker_desks_stock:
+                    stock = str(self._ticker_desks_stock).upper()
+                    self._broker_page = None
+                    self._broker_desk_code = None
+                    self._focus_ticker = stock
+                    self._open_ticker_job("brokers", stock)
+                    return
                 if self._desk_entry == "ticker-desks" and self._ticker_desks_stock:
                     self._restore_ticker_desks_table()
                     return
@@ -1339,7 +1347,7 @@ class CockpitApp(App[None]):
         self._open_broker_deep("top")
 
     def _on_ticker_show_or_job(self) -> bool:
-        """True on ticker show or stock-axis job (flow/foreign/dist/fin), not desks."""
+        """True on ticker show or stock-axis job (brokers/flow/foreign/dist/fin)."""
         if self._stage not in {"detail", "loading"}:
             return False
         if self._ticker_job is not None:
@@ -1347,7 +1355,7 @@ class CockpitApp(App[None]):
         note = str(self._status_note or "")
         if note == "view ticker" or note == "loading ticker job":
             return True
-        # view ticker flow|foreign|dist|fin — not "view ticker desks"
+        # view ticker brokers|flow|… — not independent ticker-desks stage
         if note.startswith("view ticker ") and "desks" not in note:
             return True
         return False
@@ -1434,21 +1442,23 @@ class CockpitApp(App[None]):
         if not self._on_ticker_show_or_job():
             return
         job = (job or "").strip().lower()
-        if job == "brokers":
-            # Leave job surface → top-desks (do not require status == view ticker)
-            self.action_ticker_desks()
-            return
-        if job not in {"flow", "foreign", "dist", "fin"}:
+        # All stock-axis jobs stay on ticker chip shell (including brokers)
+        if job not in {"brokers", "flow", "foreign", "dist", "fin"}:
             return
         # Second press same job → close to show
         if self._ticker_job == job:
             self._close_ticker_job()
             return
-        stock = str(self._focus_ticker or "").upper()
+        # Company ticker for load — not a desk code from brokers radar selection
+        stock = str(getattr(self, "_ticker_desks_stock", None) or self._focus_ticker or "").upper()
         if not stock or stock == "—":
             self.notify("No ticker focused", timeout=1.5)
             return
         self._open_ticker_job(job, stock)
+
+    def action_ticker_job_brokers(self) -> None:
+        """Power ``b`` · brokers chip — on-ticker job (not independent stage)."""
+        self.action_ticker_job("brokers")
 
     def _focus_detail_scroll_if_safe(self, scroll: VerticalScroll) -> None:
         """Focus scroll for page keys only when focus is not on chips/prompt."""
@@ -1515,7 +1525,17 @@ class CockpitApp(App[None]):
 
     def _close_ticker_job(self) -> None:
         """Trail: job → ticker show (density preserved)."""
-        stock = str(self._focus_ticker or "").upper()
+        # Prefer company stock (brokers job may have moved focus to a desk code)
+        stock = str(getattr(self, "_ticker_desks_stock", None) or self._focus_ticker or "").upper()
+        if self._ticker_job == "brokers":
+            self._broker_rows = []
+            self._broker_row_index = 0
+            self._desk_entry = None
+            # restore company ticker for show
+            if getattr(self, "_ticker_desks_stock", None):
+                stock = str(self._ticker_desks_stock).upper()
+                self._focus_ticker = stock
+            self._ticker_desks_stock = None
         self._ticker_job = None
         self._ticker_job_text = None
         self._stage = "detail"
@@ -1531,7 +1551,6 @@ class CockpitApp(App[None]):
         except Exception:
             pass
         self._refresh_chrome()
-        self.notify("Ticker show", timeout=0.8)
 
     @work(thread=True, exclusive=True, group="detail")
     def _execute_ticker_job(self, job: str, stock: str) -> None:
@@ -1558,7 +1577,17 @@ class CockpitApp(App[None]):
         self._board_title = payload.title
         self._meta = f"{payload.cli_verb} · local cache"
         self._status_note = f"view ticker {job}"
+        # Keep company ticker for job identity (not desk code)
         self._focus_ticker = stock
+        if job == "brokers":
+            # Rows for ↑↓ · Enter desk home — still under ticker chips
+            rows = list(getattr(payload, "broker_rows", ()) or ())
+            self._broker_rows = rows
+            self._broker_row_index = 0
+            self._ticker_desks_stock = stock
+            self._desk_entry = "ticker-brokers-job"
+            self._broker_page = None
+            self._broker_desk_code = None
         try:
             desk = self.query_one("#ticker-desk")
             if hasattr(desk, "set_job_view"):
@@ -1573,8 +1602,7 @@ class CockpitApp(App[None]):
         except Exception:
             pass
         self._refresh_chrome()
-        note = "empty" if payload.empty else "ok"
-        self.notify(f"{payload.cli_verb} {stock} · {note}", timeout=1.5)
+        # Quiet load — chip is-on + body are the feedback (no toast spam)
 
     def action_ticker_job_foreign(self) -> None:
         self.action_ticker_job("foreign")
@@ -1653,28 +1681,8 @@ class CockpitApp(App[None]):
             pass
 
     def action_ticker_desks(self) -> None:
-        """From view ticker show or job: open top desks (CLI top-brokers)."""
-        if self._modal_blocks_board_keys():
-            return
-        # Power b / brokers chip from show OR any open job (status view ticker *)
-        if not self._on_ticker_show_or_job():
-            return
-        stock = str(self._focus_ticker or "").upper()
-        if not stock or stock == "—":
-            self.notify("No ticker focused", timeout=1.5)
-            return
-        # Clear job state before leaving to desks trail
-        self._ticker_job = None
-        self._ticker_job_text = None
-        try:
-            desk = self.query_one("#ticker-desk")
-            if hasattr(desk, "set_job_view"):
-                desk.set_job_view(None)  # type: ignore[attr-defined]
-            elif hasattr(desk, "set_active_job"):
-                desk.set_active_job("brokers")  # type: ignore[attr-defined]
-        except Exception:
-            pass
-        self._open_ticker_desks(stock)
+        """Alias: brokers chip path — on-ticker job (consistent with flow/foreign/…)."""
+        self.action_ticker_job("brokers")
 
     def action_refresh_local(self) -> None:
         if self._modal_blocks_board_keys():
@@ -1698,7 +1706,7 @@ class CockpitApp(App[None]):
         self._run_command("plan-swing")
 
     def action_view_ticker(self) -> None:
-        """Enter: board inspect, or desk home from broker-list / ticker-desks."""
+        """Enter: board inspect, desk home from list/desks, or desk from brokers job."""
         if self._modal_blocks_board_keys():
             return
         if self._stage == "broker-list":
@@ -1707,6 +1715,10 @@ class CockpitApp(App[None]):
         if self._stage == "ticker-desks":
             self._open_broker_desk_show(entry="ticker-desks")
             return
+        # On-ticker brokers job · same Enter → desk home as radar stage
+        if self._stage == "detail" and self._ticker_job == "brokers" and self._broker_rows:
+            self._open_broker_desk_show(entry="ticker-brokers-job")
+            return
         self._open_detail()
 
     def _modal_blocks_board_keys(self) -> bool:
@@ -1714,8 +1726,50 @@ class CockpitApp(App[None]):
         # screen_stack[0] is the main CockpitApp screen; anything above is a modal.
         return len(self.screen_stack) > 1
 
+    def _brokers_job_active(self) -> bool:
+        return self._stage == "detail" and self._ticker_job == "brokers" and bool(self._broker_rows)
+
+    def _move_brokers_job_cursor(self, *, delta: int) -> None:
+        """↑↓ on brokers chip job — reselect row and repaint radar highlight."""
+        if not self._broker_rows:
+            return
+        n = len(self._broker_rows)
+        self._broker_row_index = max(0, min(n - 1, self._broker_row_index + delta))
+        self._update_broker_focus()
+        # Repaint job body with selection mark
+        payload = self._ticker_job_text
+        if payload is None:
+            return
+        from src.adapters.shared.view_ticker_job_text import format_ticker_brokers_job
+
+        stock = str(self._ticker_desks_stock or self._focus_ticker or "").upper()
+        desk_model = getattr(payload, "desk", None)
+        rebuilt = format_ticker_brokers_job(
+            stock,
+            self._broker_rows,
+            as_of=getattr(desk_model, "as_of", None) if desk_model else None,
+            note=getattr(desk_model, "note", None) if desk_model else None,
+            selected_index=self._broker_row_index,
+            fetch_hint=getattr(payload, "fetch_hint", None),
+        )
+        self._ticker_job_text = rebuilt
+        try:
+            desk = self.query_one("#ticker-desk")
+            if hasattr(desk, "set_job_view"):
+                desk.set_job_view(  # type: ignore[attr-defined]
+                    "brokers",
+                    title=rebuilt.title,
+                    body=rebuilt.body,
+                    desk=rebuilt.desk,
+                )
+        except Exception:
+            pass
+
     def action_cursor_down(self) -> None:
         if self._modal_blocks_board_keys():
+            return
+        if self._brokers_job_active():
+            self._move_brokers_job_cursor(delta=1)
             return
         if self._stage in {"broker-list", "ticker-desks"}:
             if not self._broker_rows:
@@ -1732,6 +1786,9 @@ class CockpitApp(App[None]):
 
     def action_cursor_up(self) -> None:
         if self._modal_blocks_board_keys():
+            return
+        if self._brokers_job_active():
+            self._move_brokers_job_cursor(delta=-1)
             return
         if self._stage in {"broker-list", "ticker-desks"}:
             if not self._broker_rows:

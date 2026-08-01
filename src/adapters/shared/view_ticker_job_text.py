@@ -1,7 +1,7 @@
 """Pure multi-surface text formatters for stock-axis ticker jobs.
 
-Jobs: flow · foreign-history · distribution · financials
-(CLI: view ticker flow|foreign-history|distribution|financials)
+Jobs: brokers · flow · foreign-history · distribution · financials
+(CLI: view ticker top-brokers|flow|foreign-history|distribution|financials)
 
 Layer: Adapter (shared pure presentation — no IO)
 """
@@ -20,15 +20,17 @@ from src.adapters.shared.view_number_format import format_value
 class TickerJobText:
     """Browse-only ticker job body for CLI parity text / TUI paint."""
 
-    job: str  # flow | foreign | dist | fin
+    job: str  # brokers | flow | foreign | dist | fin
     ticker: str
     title: str
     body: str
     empty: bool
     fetch_hint: str
     cli_verb: str
-    # Optional structured desk model for TUI (flow first; other jobs later)
+    # Optional structured desk model for TUI (on-ticker job paint)
     desk: Any = None
+    # Raw desk rows for brokers job navigation (Enter desk home)
+    broker_rows: tuple[Any, ...] = ()
 
     def as_text(self) -> str:
         return f"{self.title}\n\n{self.body}".strip()
@@ -40,6 +42,48 @@ def _fmt_signed(value: Decimal | float | int) -> str:
     if d > 0 and not s.startswith("+"):
         return f"+{s}"
     return s
+
+
+def format_ticker_brokers_job(
+    ticker: str,
+    rows: Sequence[Any],
+    *,
+    as_of: Any = None,
+    note: str | None = None,
+    selected_index: int = 0,
+    fetch_hint: str | None = None,
+) -> TickerJobText:
+    """Format stock desks radar as on-ticker brokers job (not independent stage)."""
+    from src.adapters.shared.ticker_brokers_desk_model import (
+        build_ticker_brokers_desk_model,
+    )
+
+    ticker_u = str(ticker).upper()
+    hint = fetch_hint or f"saham fetch market {ticker_u}"
+    desk = build_ticker_brokers_desk_model(
+        ticker_u,
+        rows,
+        as_of=as_of,
+        note=note,
+        selected_index=selected_index,
+        fetch_hint=hint,
+    )
+    body = desk.as_text()
+    # Drop duplicate title line for job body slot under chips
+    body_lines = body.split("\n")
+    if body_lines and body_lines[0].startswith("View · ticker"):
+        body = "\n".join(body_lines[1:]).lstrip("\n")
+    return TickerJobText(
+        job="brokers",
+        ticker=ticker_u,
+        title=desk.title,
+        body=body if not desk.empty else f"not cached · no top desks\nHint: {hint}",
+        empty=desk.empty,
+        fetch_hint=hint,
+        cli_verb="view ticker top-brokers",
+        desk=desk,
+        broker_rows=tuple(rows or ()),
+    )
 
 
 def format_ticker_flow_job(
@@ -368,6 +412,7 @@ def empty_ticker_job(job: str, ticker: str, *, message: str = "not cached") -> T
     """Honest empty job body when use case returns None."""
     ticker_u = str(ticker).upper()
     verbs = {
+        "brokers": ("view ticker top-brokers", f"saham fetch market {ticker_u}"),
         "flow": ("view ticker flow", f"saham fetch market {ticker_u}"),
         "foreign": ("view ticker foreign-history", f"saham fetch broker-history {ticker_u}"),
         "dist": ("view ticker distribution", f"saham fetch market {ticker_u}"),
@@ -375,6 +420,7 @@ def empty_ticker_job(job: str, ticker: str, *, message: str = "not cached") -> T
     }
     cli, hint = verbs.get(job, (f"view ticker {job}", f"saham fetch market {ticker_u}"))
     titles = {
+        "brokers": "brokers",
         "flow": "flow",
         "foreign": "foreign-history",
         "dist": "distribution",
