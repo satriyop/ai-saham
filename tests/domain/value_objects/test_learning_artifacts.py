@@ -310,3 +310,68 @@ def test_from_mapping_requires_attested_ticker_sets() -> None:
     round_trip = AccumPopulationBinding.from_mapping(binding.to_dict())
     assert round_trip.membership_tickers == ("BBCA",)
     assert round_trip.named_universe_tickers == ("BBCA", "BBRI")
+
+
+def test_validate_accum_population_binding_rejects_membership_outside_named_universe() -> None:
+    """P0: membership_tickers must be a subset of named_universe_tickers.
+
+    Digests/counts alone must not authorize adversarial membership that invents
+    tickers outside the declared named roster (e.g. ASII,FAKE ⊆ {ASII} fails).
+    """
+    from dataclasses import replace
+
+    from src.domain.value_objects.learning_artifacts import (
+        AccumPopulationBinding,
+        stamp_universe_membership_id,
+        validate_accum_population_binding,
+    )
+
+    with pytest.raises(LearningContractError, match="subset of named_universe_tickers"):
+        AccumPopulationBinding.create(
+            membership_tickers=["ASII", "FAKE"],
+            named_universe_tickers=["ASII"],
+            membership_session="2026-07-01",
+            pit_tradable_lookback_sessions=10,
+            producer_source_revision="ai-saham@test",
+        )
+
+    # Honest binding then adversarially widen membership while re-stamping digests.
+    honest = AccumPopulationBinding.create(
+        membership_tickers=["ASII"],
+        named_universe_tickers=["ASII"],
+        membership_session="2026-07-01",
+        pit_tradable_lookback_sessions=10,
+        producer_source_revision="ai-saham@test",
+    )
+    adversarial_membership = ("ASII", "FAKE")
+    adversarial = replace(
+        honest,
+        membership_tickers=adversarial_membership,
+        membership_count=len(adversarial_membership),
+        membership_digest=stamp_universe_membership_id(adversarial_membership),
+    )
+    with pytest.raises(LearningContractError, match="subset of named_universe_tickers"):
+        validate_accum_population_binding(
+            adversarial,
+            outer_universe_id=adversarial.membership_digest,
+            economic_session="2026-07-01",
+        )
+
+    # Honest equal-set and proper-subset still pass.
+    validate_accum_population_binding(
+        honest,
+        outer_universe_id=honest.membership_digest,
+        economic_session="2026-07-01",
+    )
+    subset_ok = AccumPopulationBinding.create(
+        membership_tickers=["ASII"],
+        named_universe_tickers=["ASII", "BBCA"],
+        membership_session="2026-07-01",
+        pit_tradable_lookback_sessions=10,
+        producer_source_revision="ai-saham@test",
+    )
+    validate_accum_population_binding(
+        subset_ok,
+        outer_universe_id=subset_ok.membership_digest,
+        economic_session="2026-07-01",
+    )

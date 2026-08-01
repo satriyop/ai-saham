@@ -318,6 +318,15 @@ class AccumPopulationBinding:
             )
         membership = _normalize_ticker_set(membership_tickers, field="membership_tickers")
         named = _normalize_ticker_set(named_universe_tickers, field="named_universe_tickers")
+        # Population meaning: configured named roster ∩ PIT-tradable membership.
+        # Membership must be a subset of the named universe (never invent tickers).
+        named_set = set(named)
+        extras = tuple(t for t in membership if t not in named_set)
+        if extras:
+            raise LearningContractError(
+                "membership_tickers must be a subset of named_universe_tickers "
+                f"(extra={list(extras)!r})"
+            )
         membership_digest = stamp_universe_membership_id(membership)
         named_digest = stamp_universe_membership_id(named)
         return cls(
@@ -449,6 +458,16 @@ def validate_accum_population_binding(
     if tuple(binding.named_universe_tickers) != named:
         raise LearningContractError(
             "population_binding.named_universe_tickers must be sorted unique uppercase"
+        )
+    # Declared population meaning: named LQ45 roster ∩ PIT-tradable membership.
+    # Digests/counts alone never authorize a membership ticker outside the named roster.
+    named_set = set(named)
+    extras = tuple(t for t in membership if t not in named_set)
+    if extras:
+        raise LearningContractError(
+            "population_binding.membership_tickers must be a subset of "
+            "named_universe_tickers "
+            f"(extra={list(extras)!r})"
         )
 
     expected_count = len(membership)
