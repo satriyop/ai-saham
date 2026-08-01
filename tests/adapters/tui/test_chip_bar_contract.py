@@ -80,6 +80,61 @@ def test_chip_bar_compose_jobs_then_density_no_meta():
     asyncio.run(scenario())
 
 
+def test_chip_bar_fin_period_between_jobs_and_density():
+    """Job-local binary toggle [y] quarterly|annual · not a job power key."""
+    from src.adapters.tui.widgets.chip_bar import (
+        TICKER_FIN_PERIOD_FLAG,
+        TICKER_FIN_PERIOD_POWER,
+        power_key_for_flag,
+    )
+
+    assert power_key_for_flag("period") == "y"
+    assert TICKER_FIN_PERIOD_POWER == "y"
+    assert "y" not in TICKER_JOB_POWER_KEYS
+
+    async def scenario() -> None:
+        class _A(App):
+            def compose(self) -> ComposeResult:
+                yield ChipBar(
+                    id="bar",
+                    chips=TICKER_JOB_CHIPS,
+                    chip_id_prefix="td-flag",
+                    include_fin_period=True,
+                    period_id="td-flag-period",
+                    include_detail=True,
+                    detail_id="td-flag-detail",
+                )
+
+        app = _A()
+        async with app.run_test() as pilot:
+            await pilot.pause(0.05)
+            bar = app.query_one("#bar", ChipBar)
+            chips = [c for c in bar.children if isinstance(c, FlagChip)]
+            keys = [c.flag_key for c in chips]
+            assert keys == [
+                "brokers",
+                "flow",
+                "foreign",
+                "dist",
+                "fin",
+                TICKER_FIN_PERIOD_FLAG,
+                "detail",
+            ]
+            period = app.query_one("#td-flag-period", FlagChip)
+            assert period.power_key == "y"
+            assert period.word == "quarterly"
+            period.set_word("annual")
+            assert period.word == "annual"
+            # is-on only for annual when fin arms it
+            bar.paint_states(on_keys=("fin", "period"))
+            assert "is-on" in period.classes
+            # Product rule: hide (not dim) when not fin — parent TickerDesk sets display
+            period.display = False
+            assert period.display is False
+
+    asyncio.run(scenario())
+
+
 def test_flag_chip_enter_space_activate_path():
     """Keyboard activate matches click (Chip bar navigation)."""
     chip = FlagChip("flow", "flow", id="t-flow")

@@ -138,6 +138,21 @@ class FlagChip(Static):
     def power_key(self) -> str | None:
         return self._power_key
 
+    @property
+    def word(self) -> str:
+        """Product / mode word (no keycap)."""
+        return self._word
+
+    def set_word(self, word: str) -> None:
+        """Update product/mode word and repaint keycap (binary toggle flip label)."""
+        self._word = (word or "").strip() or "—"
+        self._label = self._word
+        self.set_chip_state(
+            available=self._available,
+            expanded=self._expanded,
+            warn=self.has_class("warn"),
+        )
+
     def set_chip_state(
         self,
         *,

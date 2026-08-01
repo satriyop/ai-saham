@@ -533,14 +533,25 @@ class TickerDesk(Vertical):
             | None
         ) = None
 
+    def on_mount(self) -> None:
+        # Fin sub-chip starts hidden until [n] fin is selected
+        try:
+            period = self.query_one("#td-flag-period", FlagChip)
+            period.display = False
+            period.can_focus = False
+        except Exception:
+            pass
+
     def compose(self) -> ComposeResult:
         yield Static("", classes="td-crumb", id="td-crumb")
 
-        # Chip bar first under crumb: jobs + density · no row label (bible §2)
+        # Chip bar: jobs + density. [y] period mounts in bar but paints only when fin front.
         yield ChipBar(
             id="td-flags",
             chips=TICKER_JOB_CHIPS,
             chip_id_prefix="td-flag",
+            include_fin_period=True,
+            period_id="td-flag-period",
             include_detail=True,
             detail_id="td-flag-detail",
         )
@@ -691,6 +702,15 @@ class TickerDesk(Vertical):
                 return
             if hasattr(app, "action_ticker_job"):
                 app.action_ticker_job(key)  # type: ignore[attr-defined]
+            return
+        if key == "period":
+            # Binary toggle [y] · quarterly ↔ annual · only armed on fin
+            try:
+                app = self.app
+            except Exception:
+                return
+            if hasattr(app, "action_toggle_fin_period"):
+                app.action_toggle_fin_period()  # type: ignore[attr-defined]
             return
         if self._model is None:
             return
@@ -1043,7 +1063,10 @@ class TickerDesk(Vertical):
         foot = model.footer or ""
         foot = foot.replace("d detail", "d detail").replace("d collapse", "d detail")
         if "d detail" not in foot and "b f o x n" not in foot:
-            foot = f"b f o x n jobs · d detail · {foot}".strip(" ·")
+            if self._active_job == "fin":
+                foot = f"b f o x n jobs · y period · d detail · {foot}".strip(" ·")
+            else:
+                foot = f"b f o x n jobs · d detail · {foot}".strip(" ·")
         if self._detail_all:
             foot = foot.replace("d detail", "d brief", 1)
         self.query_one("#td-footer", Static).update(
@@ -1056,9 +1079,36 @@ class TickerDesk(Vertical):
             on_keys.add("detail")
         if self._active_job:
             on_keys.add(self._active_job)
+
+        # Fin period grain: **only in fin job context** (not dim-on-bar for other jobs).
+        # Hidden when fin not front · flip label · is-on when annual · y unbound off fin.
+        fin_period = "quarterly"
+        try:
+            app = self.app
+            fin_period = (
+                str(getattr(app, "_ticker_fin_period", "quarterly") or "quarterly").strip().lower()
+            )
+        except Exception:
+            pass
+        if fin_period not in {"quarterly", "annual"}:
+            fin_period = "quarterly"
+        period_word = "annual" if fin_period == "annual" else "quarterly"
+        fin_front = self._active_job == "fin"
+        if fin_front and fin_period == "annual":
+            on_keys.add("period")
+
         try:
             bar = self.query_one("#td-flags", ChipBar)
+            period_chip = bar.chip("period")
+            if period_chip is not None and fin_front:
+                period_chip.set_word(period_word)
+            # paint_states first; then enforce fin-only visibility (not dim-on-bar)
             bar.paint_states(on_keys=on_keys)
+            if period_chip is not None:
+                period_chip.display = bool(fin_front)
+                period_chip.can_focus = bool(fin_front)
+                if not fin_front:
+                    period_chip.set_chip_state(available=False, expanded=False)
         except Exception:
             try:
                 self.query_one("#td-flag-detail", FlagChip).set_chip_state(

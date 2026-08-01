@@ -3,6 +3,7 @@
 Plain Tab focus chain via child FlagChip(s). No row labels.
 Density state = ``[d] detail`` chip ``is-on`` only — no brief/detail meta text.
 Job chips paint bold brass ``[k]`` keycaps (power letters).
+Binary toggles (e.g. fin period ``[y]``) use real bindings only — never decoration.
 
 Layer: Adapter (Textual widget)
 """
@@ -17,6 +18,7 @@ from textual.containers import Horizontal
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
 # Ticker show job chips · power b f o x n · density d last (bible §2).
+# Fin period grain is not a job: binary toggle [y] between fin and detail.
 # (flag_key, product_word)
 TICKER_JOB_CHIPS: tuple[tuple[str, str], ...] = (
     ("brokers", "brokers"),
@@ -32,6 +34,9 @@ TICKER_JOB_POWER_KEYS: dict[str, str] = {
     "x": "dist",
     "n": "fin",
 }
+# Job-local binary toggle · fin period grain (not a job power key)
+TICKER_FIN_PERIOD_FLAG = "period"
+TICKER_FIN_PERIOD_POWER = "y"
 # flag_key → power letter (inverse of TICKER_JOB_POWER_KEYS)
 TICKER_JOB_FLAG_POWER: dict[str, str] = {v: k for k, v in TICKER_JOB_POWER_KEYS.items()}
 # Broker home job chips · power t f c h m · (flag_key == power letter)
@@ -45,12 +50,14 @@ BROKER_HOME_CHIPS: tuple[tuple[str, str], ...] = (
 
 
 def power_key_for_flag(flag_key: str) -> str | None:
-    """Resolve power letter for a chip flag_key (ticker / broker / density)."""
+    """Resolve power letter for a chip flag_key (ticker / broker / density / period)."""
     k = (flag_key or "").strip()
     if not k:
         return None
     if k == "detail":
         return "d"
+    if k == TICKER_FIN_PERIOD_FLAG:
+        return TICKER_FIN_PERIOD_POWER
     if k in TICKER_JOB_FLAG_POWER:
         return TICKER_JOB_FLAG_POWER[k]
     # Broker home: flag_key is the letter
@@ -95,11 +102,17 @@ class ChipBar(Horizontal):
         meta_text: str = "",
         include_detail: bool = False,
         detail_id: str | None = None,
+        include_fin_period: bool = False,
+        period_id: str | None = None,
     ) -> None:
         """Optionally pre-declare chips (compose-time).
 
         Prefer parent ``compose`` yielding ``ChipBar`` then children, or pass
         ``chips`` / ``include_detail`` for a self-contained bar.
+
+        ``include_fin_period``: job-local binary toggle ``[y] quarterly|annual``
+        between jobs and density. **Paint/show only while fin is front** — hidden
+        (not dimmed) on show and other jobs; parent sets ``display`` / unbinds ``y``.
 
         ``meta_id`` / ``meta_text`` are accepted for call-site compatibility but
         **not painted** — density state is chip ``is-on`` only (design lock).
@@ -111,6 +124,8 @@ class ChipBar(Horizontal):
         self._meta_text = meta_text  # ignored for density (no brief/detail meta)
         self._include_detail = include_detail
         self._detail_id = detail_id or f"{chip_id_prefix}-detail"
+        self._include_fin_period = include_fin_period
+        self._period_id = period_id or f"{chip_id_prefix}-period"
 
     def compose(self) -> ComposeResult:
         for flag_key, word in self._chips_spec:
@@ -119,6 +134,14 @@ class ChipBar(Horizontal):
                 word,
                 power_key=power_key_for_flag(flag_key),
                 id=f"{self._chip_id_prefix}-{flag_key}",
+            )
+        if self._include_fin_period:
+            # Binary toggle · flip label · power y · not a job
+            yield FlagChip(
+                TICKER_FIN_PERIOD_FLAG,
+                "quarterly",
+                power_key=TICKER_FIN_PERIOD_POWER,
+                id=self._period_id,
             )
         if self._include_detail:
             # Design lock: [d] detail · is-on = detail · no brief meta

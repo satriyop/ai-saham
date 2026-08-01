@@ -107,10 +107,13 @@ def _fmt_eps(value: float | None) -> str:
         return "—"
 
 
-def _period_label(period: Any) -> str:
+def _period_label(period: Any, *, period_type: str = "quarter") -> str:
     pe = getattr(period, "period_end", None)
     if pe is None:
         return "—"
+    grain = (period_type or "quarter").strip().lower()
+    if grain == "annual" and hasattr(pe, "year"):
+        return f"FY {int(pe.year)}"
     if hasattr(pe, "month") and hasattr(pe, "year"):
         q = (int(pe.month) - 1) // 3 + 1
         return f"Q{q} {pe.year}"
@@ -197,6 +200,7 @@ def _card_from_result(result: Any | None, *, kind: str, hint: str) -> FinCard:
     status = str(getattr(result, "status", "empty") or "empty")
     periods = list(getattr(result, "periods", ()) or ())
     src = str(getattr(result, "source", None) or "—")
+    grain = str(getattr(result, "period_type", "quarter") or "quarter").strip().lower()
     if status != "ok" or not periods:
         msg = getattr(result, "message", None) or f"No {kind} periods cached"
         return FinCard(
@@ -220,7 +224,7 @@ def _card_from_result(result: Any | None, *, kind: str, hint: str) -> FinCard:
         kind=kind,
         title=title,
         status="ok",
-        period_label=_period_label(latest),
+        period_label=_period_label(latest, period_type=grain),
         source=src,
         rows=metrics,
         history=_history_lines(kind, periods, skip_first=True),
@@ -238,7 +242,6 @@ def build_ticker_fin_desk_model(
     ticker_u = str(ticker).upper()
     hint = fetch_hint or f"saham fetch financials {ticker_u}"
     title = f"View · ticker · {ticker_u} · financials"
-    footer = "esc show · chips switch · CLI · saham view ticker financials · browse only"
     story = "Three statements · latest period metrics · local cache · not Action."
 
     by_kind: dict[str, Any] = {}
@@ -255,13 +258,15 @@ def build_ticker_fin_desk_model(
     any_ok = any(c.status == "ok" for c in cards)
     empty = not any_ok
 
-    # Hero from latest income period when present
+    # Hero from latest income period when present (grain once — not a second control)
+    period_type = "quarter"
+    for r in (by_kind.get("income"), by_kind.get("balance"), by_kind.get("cashflow")):
+        if r is not None:
+            period_type = str(getattr(r, "period_type", "quarter") or "quarter")
+            break
     if income.status == "ok":
         hero_big = income.period_label
         src = income.source
-        period_type = "quarter"
-        if by_kind.get("income") is not None:
-            period_type = str(getattr(by_kind["income"], "period_type", "quarter") or "quarter")
         hero_sub = f"{period_type} · source={src} · local cache"
     else:
         hero_big = "—"
@@ -273,6 +278,11 @@ def build_ticker_fin_desk_model(
         FinPulse("bal", "Balance", "ok" if balance.status == "ok" else "—"),
         FinPulse("cf", "Cashflow", "ok" if cashflow.status == "ok" else "—"),
         FinPulse("n", "Cards", f"{ok_n}/3"),
+    )
+    # Footer: y period when grain is in play (chip bar owns the control)
+    footer = (
+        "esc show · y period · chips switch · "
+        "CLI · saham view ticker financials --period quarterly|annual · browse only"
     )
 
     return TickerFinDeskModel(

@@ -85,6 +85,8 @@ class CockpitApp(App[None]):
         Binding("o", "ticker_job_foreign", "Ticker foreign", show=False),
         Binding("x", "ticker_job_dist", "Ticker dist", show=False),
         Binding("n", "ticker_job_fin", "Ticker fin", show=False),
+        # Fin period grain · binary toggle · armed only while fin job front
+        Binding("y", "toggle_fin_period", "Fin period", show=False),
         Binding("d", "toggle_detail", "Detail", show=False),
         # Prompt rail focus (OpenCode chrome · non-Action)
         Binding("colon", "focus_prompt", "Prompt", show=False),
@@ -125,7 +127,7 @@ class CockpitApp(App[None]):
         broker_matrix_loader: Callable[[str], Any] | None = None,
         broker_calendar_loader: Callable[[str], Any] | None = None,
         ticker_desks_loader: Callable[[str], Any] | None = None,
-        ticker_job_loader: Callable[[str, str], Any] | None = None,
+        ticker_job_loader: Callable[..., Any] | None = None,
         accum_controller: Any | None = None,
         preopen_controller: Any | None = None,
         accum_presenter: Any | None = None,
@@ -184,6 +186,8 @@ class CockpitApp(App[None]):
         self._ticker_detail_open: bool = False
         self._ticker_job: str | None = None  # brokers|flow|foreign|dist|fin while job open
         self._ticker_job_text: Any | None = None
+        # Fin period grain · CLI --period quarterly|annual · job-local arm for y
+        self._ticker_fin_period: str = "quarterly"
         self._judge_detail_open: bool = False
         self._preopen_detail_open: bool = False
         self._prompt_mode: str = "idle"  # idle | agent | cli (display only)
@@ -1556,7 +1560,12 @@ class CockpitApp(App[None]):
     def _execute_ticker_job(self, job: str, stock: str) -> None:
         try:
             if self._ticker_job_loader is not None:
-                payload = self._ticker_job_loader(job, stock)
+                fin_period = str(getattr(self, "_ticker_fin_period", "quarterly") or "quarterly")
+                try:
+                    payload = self._ticker_job_loader(job, stock, fin_period)
+                except TypeError:
+                    # Older test/injected loaders: (job, ticker) only
+                    payload = self._ticker_job_loader(job, stock)
             else:
                 from src.adapters.shared.view_ticker_job_text import empty_ticker_job
 
@@ -1612,6 +1621,29 @@ class CockpitApp(App[None]):
 
     def action_ticker_job_fin(self) -> None:
         self.action_ticker_job("fin")
+
+    def action_toggle_fin_period(self) -> None:
+        """Binary toggle ``y``: fin period quarterly ↔ annual (CLI --period).
+
+        Armed only while the fin job surface is front. Flip label + reload via
+        use-case period_type — no adapter-side fetch policy.
+        """
+        if self._modal_blocks_board_keys():
+            return
+        if not self._on_ticker_show_or_job():
+            return
+        if self._ticker_job != "fin":
+            return
+        cur = (getattr(self, "_ticker_fin_period", None) or "quarterly").strip().lower()
+        self._ticker_fin_period = "annual" if cur != "annual" else "quarterly"
+        stock = str(getattr(self, "_ticker_desks_stock", None) or self._focus_ticker or "").upper()
+        if not stock or stock == "—":
+            self.notify("No ticker focused", timeout=1.5)
+            return
+        # Reload fin in place (do not use action_ticker_job — second press closes)
+        self._open_ticker_job("fin", stock)
+        grain = self._ticker_fin_period
+        self.notify(f"Fin · {grain} · CLI --period {grain}", timeout=1.2)
 
     def action_focus_prompt(self) -> None:
         """Focus OpenCode prompt rail (: or /). Non-Action chrome only."""

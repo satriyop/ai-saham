@@ -78,6 +78,51 @@ def test_fin_desk_three_cards_hero_from_income():
     text = format_ticker_financials_job("BBCA", results)
     assert text.desk is not None
     assert text.job == "fin"
+
+
+def test_fin_desk_annual_fy_label_and_hero_sub():
+    results = (
+        SimpleNamespace(
+            statement="income",
+            period_type="annual",
+            status="ok",
+            source="yahoo",
+            periods=(_period(period_end=date(2025, 12, 31)),),
+            message=None,
+        ),
+        SimpleNamespace(
+            statement="balance",
+            period_type="annual",
+            status="ok",
+            source="yahoo",
+            periods=(
+                _period(
+                    period_end=date(2025, 12, 31),
+                    total_revenue=None,
+                    net_income=None,
+                    eps_basic=None,
+                    total_assets=1e15,
+                    stockholders_equity=2e14,
+                    total_debt=5e13,
+                ),
+            ),
+            message=None,
+        ),
+        SimpleNamespace(
+            statement="cashflow",
+            period_type="annual",
+            status="empty",
+            source="yahoo",
+            periods=(),
+            message="No cashflow periods cached",
+        ),
+    )
+    desk = build_ticker_fin_desk_model("BBCA", results)
+    assert desk.hero_big == "FY 2025"
+    assert desk.hero_sub.startswith("annual")
+    assert desk.cards[0].period_label == "FY 2025"
+    assert "y period" in desk.footer
+    text = format_ticker_financials_job("BBCA", results)
     assert "INCOME" in text.body
     assert "BALANCE" in text.body
 

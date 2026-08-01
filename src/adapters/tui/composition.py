@@ -420,7 +420,18 @@ class _TickerJobLoader:
         self._lock = Lock()
         self._desks = _TickerTopBrokersLoader(db_path)
 
-    def __call__(self, job: str, ticker: str) -> Any:
+    def __call__(
+        self,
+        job: str,
+        ticker: str,
+        fin_period: str = "quarterly",
+    ) -> Any:
+        """Load ticker job payload.
+
+        ``fin_period`` is CLI-parity grain for the fin job only:
+        ``quarterly`` (default) | ``annual`` → domain ``quarter`` | ``annual``.
+        Ignored for non-fin jobs.
+        """
         with self._lock:
             from src.adapters.shared.view_ticker_job_text import (
                 empty_ticker_job,
@@ -504,6 +515,9 @@ class _TickerJobLoader:
                 )
 
             if job_k == "fin":
+                # CLI: --period quarterly|annual → domain quarter|annual
+                grain = (fin_period or "quarterly").strip().lower()
+                period_type = "annual" if grain == "annual" else "quarter"
                 results = []
                 for kind in ("income", "balance", "cashflow"):
                     results.append(
@@ -511,7 +525,7 @@ class _TickerJobLoader:
                             ViewTickerFinancialsRequest(
                                 ticker=ticker_u,
                                 statement=kind,  # type: ignore[arg-type]
-                                period_type="quarter",
+                                period_type=period_type,  # type: ignore[arg-type]
                                 limit=8,
                                 source="yahoo",
                             )
