@@ -28,13 +28,21 @@ def test_hidden_badge_has_hide_class_and_no_layout():
             app._board_source = "live"
             app._recomputing = False
             app._paint_board_source_badge()
-            await pilot.pause(0.02)
+            await pilot.pause(0.05)
             assert "hide" not in badge.classes
             assert "live" in badge.classes
             assert badge.display is True
             rendered = badge.render()
             plain = rendered.plain if hasattr(rendered, "plain") else str(rendered)
             assert "live" in plain.lower()
+            # Regression: solid full border + height:1 zeroed content → empty green box
+            assert badge.content_size.height >= 1
+            # No full-box solid border (left accent only)
+            b = badge.styles.border
+            assert b.top[0] in {"", "none"} or b.top[0] is None or not b.top[0]
+            assert b.right[0] in {"", "none"} or b.right[0] is None or not b.right[0]
+            assert b.bottom[0] in {"", "none"} or b.bottom[0] is None or not b.bottom[0]
+            assert b.left[0] == "solid"
 
             # Back to non-accum: hollow must not remain
             app._stage = "detail"

@@ -108,16 +108,21 @@ Screen {
 }
 
 /* Boards: OpenCode radar, peach selection wash */
-/* src-badge: never paint an empty bordered box (ghost green hollow) */
+/*
+ * src-badge: NEVER full solid border + height:1 — Textual gutter eats content
+ * height (border top+bottom) → content height 0 → empty green hollow box.
+ * Use left accent only; height auto so the label always paints.
+ */
 #board-source-badge {
-    height: 1;
+    height: auto;
     width: auto;
     max-width: 100%;
     margin: 0 0 1 0;
     padding: 0 1;
     color: #6b6b6b;
     background: #141414;
-    border: solid #1c1c1c;
+    border: none;
+    border-left: solid #555555;
 }
 
 #board-source-badge.hide {
@@ -149,13 +154,15 @@ Screen {
 #board-source-badge.snap {
     color: #d4b06a;
     background: #1a1810;
-    border: solid #3a3220;
+    border: none;
+    border-left: solid #d4b06a;
 }
 
 #board-source-badge.live {
     color: #6fbf8a;
     background: #121a14;
-    border: solid #1e3a28;
+    border: none;
+    border-left: solid #6fbf8a;
 }
 
 #board-table {
