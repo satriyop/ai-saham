@@ -27,6 +27,7 @@ from src.application.use_case.record_accumulation_observations_use_case import (
 )
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
+from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
 
 if TYPE_CHECKING:
     from src.domain.value_objects.market_context import MarketContext
@@ -206,12 +207,22 @@ class BackfillSignalObservationsUseCase:
         observation_identity: LeanObservationIdentity,
         membership_resolver: MembershipResolver,
         pit_window_sessions: int,
+        named_universe_tickers: Sequence[str],
+        producer_source_revision: str,
+        population_name: str = "lq45",
         evaluate_market_context: Callable[..., MarketContext] | None = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
         evidence_context_builder: SignalEvidenceExecutionContextBuilder | None = None,
     ) -> None:
         if pit_window_sessions < 1:
             raise ValueError(f"pit_window_sessions must be >= 1, got {pit_window_sessions}")
+        if not producer_source_revision or not str(producer_source_revision).strip():
+            raise ValueError("producer_source_revision must be non-empty")
+        named = tuple(
+            sorted({str(t).strip().upper() for t in named_universe_tickers if str(t).strip()})
+        )
+        if not named:
+            raise ValueError("named_universe_tickers must be non-empty for population binding")
         self._record = record_observations_use_case
         self._request_builder = screen_request_builder
         self._market = market_data_repository
@@ -221,6 +232,9 @@ class BackfillSignalObservationsUseCase:
         self._observation_identity = observation_identity
         self._membership_resolver = membership_resolver
         self._pit_window_sessions = pit_window_sessions
+        self._named_universe_tickers = named
+        self._producer_source_revision = str(producer_source_revision).strip()
+        self._population_name = population_name
         self._evaluate_market_context = evaluate_market_context
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
             market_data_repository
@@ -333,11 +347,20 @@ class BackfillSignalObservationsUseCase:
                 for observation_candidate in unit.observation_candidates:
                     evaluated_tickers_for_date.add(observation_candidate.candidate.ticker)
 
+            population_binding = AccumPopulationBinding.create(
+                membership_tickers=tickers,
+                named_universe_tickers=self._named_universe_tickers,
+                membership_session=trading_date,
+                pit_tradable_lookback_sessions=self._pit_window_sessions,
+                producer_source_revision=self._producer_source_revision,
+                population_name=self._population_name,
+            )
             saved_count += self._record.persist_multi_window(
                 window_results=window_results,
                 snapshot_date=trading_date,
                 execution_context=context,
                 universe_tickers=list(tickers),
+                population_binding=population_binding,
                 canonical_window=7,
             )
             processed.append(trading_date)

@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Mapping, Sequence
 
@@ -27,6 +27,7 @@ from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
     LEARNING_SCHEMA_VERSION,
     PRODUCTION_POLICY_VERSION_V1,
+    AccumPopulationBinding,
     AssessmentPurpose,
     LabelAvailability,
     LearningContractError,
@@ -36,6 +37,8 @@ from src.domain.value_objects.learning_artifacts import (
     OutcomeBasis,
     ProductionPolicySnapshot,
     is_accum_population_universe_id,
+    recompute_path_label_fingerprint,
+    validate_accum_population_binding,
     validate_artifact_integrity,
     validate_label_availability_outcome,
     validate_label_identity,
@@ -44,6 +47,7 @@ from src.domain.value_objects.learning_artifacts import (
 )
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 from src.domain.value_objects.signal_observation_contracts import (
     ACCUMULATION_DISCOVERY_HORIZON_CONTRACT,
@@ -78,9 +82,10 @@ PATH_LABEL_CONTRACTS: tuple[LearningContractId, ...] = (
     LearningContractId.ACCUM_10D_LABEL,
     LearningContractId.ACCUM_20D_LABEL,
 )
-# Population authority for ACCUM challenge inputs (locked choice c — write-path
-# membership digest). Free-form universe_id strings are not population authority.
+# Population authority for ACCUM challenge inputs (Option A typed binding).
+# A 64-hex universe_id alone is never sufficient.
 ACTIVE_POPULATION_AUTHORITY_CONTRACT = ACCUM_POPULATION_AUTHORITY_CONTRACT
+LEGACY_PAYLOAD_SCHEMA_VERSION = LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION
 
 # Horizon nicknames for operator-facing reports (H3/H10/H20).
 _HORIZON_KEY_BY_CONTRACT: Mapping[LearningContractId, str] = {
@@ -88,6 +93,26 @@ _HORIZON_KEY_BY_CONTRACT: Mapping[LearningContractId, str] = {
     LearningContractId.ACCUM_10D_LABEL: "H10",
     LearningContractId.ACCUM_20D_LABEL: "H20",
 }
+_PATH_LABEL_HORIZON_DAYS: Mapping[LearningContractId, int] = {
+    LearningContractId.ACCUM_3D_LABEL: 3,
+    LearningContractId.ACCUM_10D_LABEL: 10,
+    LearningContractId.ACCUM_20D_LABEL: 20,
+}
+_ALLOWED_PATH_OUTCOMES: frozenset[str] = frozenset({"SUCCESS", "FAILURE", "NEUTRAL"})
+_AVAILABLE_METRIC_KEYS: frozenset[str] = frozenset(
+    {
+        "ticker",
+        "signal_date",
+        "label_window_start",
+        "label_window_end",
+        "entry_reference_price",
+        "close_return_pct",
+        "max_forward_return_pct",
+        "max_adverse_excursion_pct",
+        "days_to_peak",
+        "days_to_trough",
+    }
+)
 
 
 class ProducerReadinessStatus(str, Enum):
@@ -129,6 +154,9 @@ class ObservationCohortValidation:
     invalid_reasons: tuple[str, ...]
     session_dates: tuple[date, ...]
     has_contract_corruption: bool
+    # True when at least one observation passes full current (schema-10 + binding) authority.
+    has_current_population_authority: bool = False
+    legacy_observation_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -179,20 +207,29 @@ def classify_producer_status(
     label_validation: LabelCohortValidation,
     session_count: int,
     available_h10_labels: int,
+    has_current_population_authority: bool | None = None,
 ) -> ProducerReadinessStatus:
     """Apply locked precedence rules for one cohort.
 
     Rules (exact):
     - LEGACY_RAW_ONLY: observations exist under absent/unknown/historical binding
-      without snapshot corruption and without observation/label corruption.
+      (including schema-9 without population_binding) without snapshot corruption
+      and without observation/label corruption.
     - BLOCKED_POLICY: active binding claimed but set partial/mixed/malformed/
       invalid/mismatched, any snapshot corruption, observation contract/
-      provenance/digest corruption, or label digest corruption.
-    - COLLECTING: exact active snapshots verify, observations+labels validate,
-      but <2 sessions or zero AVAILABLE primary H10 labels.
-    - CHALLENGE_INPUT_READY: exact active snapshots verify, observations+labels
-      validate, ≥2 sessions, and ≥1 AVAILABLE price_path.accum_10d.v1 label.
+      provenance/digest/population corruption, or label digest corruption.
+    - COLLECTING: exact active snapshots verify, current population authority
+      present, observations+labels validate, but <2 sessions or zero AVAILABLE
+      primary H10 labels.
+    - CHALLENGE_INPUT_READY: exact active snapshots verify, current population
+      authority present, observations+labels validate, ≥2 sessions, and ≥1
+      AVAILABLE price_path.accum_10d.v1 label.
     """
+    current_authority = (
+        observation_validation.has_current_population_authority
+        if has_current_population_authority is None
+        else has_current_population_authority
+    )
     if (
         snapshot.has_corruption
         or observation_validation.has_contract_corruption
@@ -201,6 +238,9 @@ def classify_producer_status(
     ):
         return ProducerReadinessStatus.BLOCKED_POLICY
     if not snapshot.active_set_verified:
+        return ProducerReadinessStatus.LEGACY_RAW_ONLY
+    if not current_authority:
+        # Schema-9 / unbound historical corpus even when active snapshots exist.
         return ProducerReadinessStatus.LEGACY_RAW_ONLY
     if session_count < 2 or available_h10_labels < 1:
         return ProducerReadinessStatus.COLLECTING
@@ -269,6 +309,10 @@ def verify_snapshot_binding(
         try:
             validate_policy_snapshot_integrity(snap)
         except LearningContractError:
+            has_corruption = True
+            invalid.append(snap.policy_id)
+            continue
+        if snap.schema_version != LEARNING_SCHEMA_VERSION:
             has_corruption = True
             invalid.append(snap.policy_id)
             continue
@@ -486,10 +530,36 @@ def _session_binding_reasons(observation: LearningObservation) -> list[str]:
     return reasons
 
 
+def _parse_aware_datetime(raw: Any) -> datetime | None:
+    """Parse ISO datetime requiring timezone awareness; reject naive/junk."""
+    if isinstance(raw, datetime):
+        if raw.tzinfo is None or raw.utcoffset() is None:
+            return None
+        return raw
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    text = raw.strip()
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
+
+
+def _datetimes_equal(a: datetime, b: datetime) -> bool:
+    """Timezone-aware equality via UTC instants."""
+    return a.astimezone().timestamp() == b.astimezone().timestamp()
+
+
 def _production_payload_semantic_reasons(
     observation: LearningObservation,
     *,
     session: date | None,
+    require_current_payload_schema: bool = True,
 ) -> list[str]:
     """Fail-closed checks for production session payload shape (writer locks).
 
@@ -514,7 +584,7 @@ def _production_payload_semantic_reasons(
         reasons.append(f"artifact_type:{artifact_type!r}")
 
     payload_schema = payload.get("schema_version")
-    if payload_schema != ACTIVE_PAYLOAD_SCHEMA_VERSION:
+    if require_current_payload_schema and payload_schema != ACTIVE_PAYLOAD_SCHEMA_VERSION:
         reasons.append(
             f"payload_schema_version:{payload_schema!r}!=expected:{ACTIVE_PAYLOAD_SCHEMA_VERSION}"
         )
@@ -545,6 +615,23 @@ def _production_payload_semantic_reasons(
         if keys != ACTIVE_FEATURES_WINDOWS:
             reasons.append(f"features_by_window_keys:{sorted(keys)}")
 
+    # Payload captured_at must equal outer captured_at (PIT capture authority).
+    payload_captured = _parse_aware_datetime(payload.get("captured_at"))
+    if payload_captured is None:
+        reasons.append(f"payload.captured_at_malformed:{payload.get('captured_at')!r}")
+    else:
+        outer_captured = observation.captured_at
+        if (
+            outer_captured.tzinfo is None
+            or outer_captured.utcoffset() is None
+            or not _datetimes_equal(payload_captured, outer_captured)
+        ):
+            reasons.append(
+                "captured_at_mismatch:"
+                f"payload={payload.get('captured_at')!r},"
+                f"outer={outer_captured.isoformat()!r}"
+            )
+
     shared = payload.get("shared")
     if not isinstance(shared, Mapping):
         reasons.append("shared_missing")
@@ -562,11 +649,23 @@ def _production_payload_semantic_reasons(
         if not isinstance(provenance, Mapping) or not provenance:
             reasons.append("shared.provenance_missing")
         else:
-            if (
-                "decision_at" not in provenance
-                or not str(provenance.get("decision_at") or "").strip()
-            ):
-                reasons.append("shared.provenance.decision_at_missing")
+            decision_at = _parse_aware_datetime(provenance.get("decision_at"))
+            if decision_at is None:
+                reasons.append(
+                    f"shared.provenance.decision_at_malformed:{provenance.get('decision_at')!r}"
+                )
+            else:
+                cutoff = observation.cutoff_at
+                if (
+                    cutoff.tzinfo is None
+                    or cutoff.utcoffset() is None
+                    or not _datetimes_equal(decision_at, cutoff)
+                ):
+                    reasons.append(
+                        "decision_at_cutoff_mismatch:"
+                        f"decision_at={provenance.get('decision_at')!r},"
+                        f"cutoff_at={cutoff.isoformat()!r}"
+                    )
             latest = provenance.get("latest_completed_session")
             latest_date = parse_canonical_session_date(latest)
             if latest_date is None:
@@ -576,6 +675,24 @@ def _production_payload_semantic_reasons(
                     "provenance_session_mismatch:"
                     f"latest={latest_date.isoformat()},session={session.isoformat()}"
                 )
+            analysis_as_of = parse_canonical_session_date(provenance.get("analysis_as_of"))
+            if analysis_as_of is None:
+                reasons.append(
+                    "shared.provenance.analysis_as_of_malformed:"
+                    f"{provenance.get('analysis_as_of')!r}"
+                )
+            elif session is not None and analysis_as_of != session:
+                reasons.append(
+                    "analysis_as_of_session_mismatch:"
+                    f"analysis_as_of={analysis_as_of.isoformat()},"
+                    f"session={session.isoformat()}"
+                )
+
+    # Option A population binding (schema-10 current authority only).
+    if require_current_payload_schema:
+        reasons.extend(
+            _population_binding_reasons(observation, session=session, payload=payload)
+        )
 
     # Optional payload contract fields: if present, must match active producer contract.
     for key in ("observation_contract", "producer_observation_contract"):
@@ -587,6 +704,42 @@ def _production_payload_semantic_reasons(
     return reasons
 
 
+def _population_binding_reasons(
+    observation: LearningObservation,
+    *,
+    session: date | None,
+    payload: Mapping[str, Any],
+) -> list[str]:
+    """Validate typed population_binding; 64-hex universe_id alone never suffices."""
+    reasons: list[str] = []
+    # Shape of outer universe_id is necessary but not sufficient.
+    if not is_accum_population_universe_id(observation.universe_id):
+        reasons.append(
+            "population_authority_unbound:"
+            f"universe_id={observation.universe_id!r},"
+            f"contract={ACTIVE_POPULATION_AUTHORITY_CONTRACT}"
+        )
+        return reasons
+
+    raw_binding = payload.get("population_binding")
+    if raw_binding is None:
+        reasons.append(
+            "population_authority_unbound:missing_population_binding,"
+            f"contract={ACTIVE_POPULATION_AUTHORITY_CONTRACT}"
+        )
+        return reasons
+    try:
+        binding = AccumPopulationBinding.from_mapping(raw_binding)
+        validate_accum_population_binding(
+            binding,
+            outer_universe_id=observation.universe_id,
+            economic_session=session,
+        )
+    except LearningContractError as exc:
+        reasons.append(f"population_authority_unbound:{exc}")
+    return reasons
+
+
 def validate_observation_cohort(
     observations: Sequence[LearningObservation],
     *,
@@ -595,11 +748,19 @@ def validate_observation_cohort(
     expected_learning_observation_contract_id: str = ACTIVE_LEARNING_OBSERVATION_CONTRACT,
     expected_producer_observation_contract: str = ACTIVE_PRODUCER_OBSERVATION_CONTRACT,
 ) -> ObservationCohortValidation:
-    """Validate every observation: digest, identity, schema, producer payload, session."""
+    """Validate every observation: digest, identity, schema, producer payload, session.
+
+    Schema-9 ACCUM rows without population_binding are immutable historical corpus
+    (legacy, not corruption). Schema-10 rows require complete typed binding and
+    full PIT/provenance equalities for current authority.
+    """
     reasons: list[str] = []
-    session_dates: set[date] = set()
+    current_session_dates: set[date] = set()
+    legacy_session_dates: set[date] = set()
     valid = 0
     invalid = 0
+    legacy_count = 0
+    current_authority_count = 0
 
     for obs in observations:
         obs_reasons: list[str] = []
@@ -617,20 +778,45 @@ def validate_observation_cohort(
             obs_reasons.append("compatibility_id_mismatch")
         if obs.contract_id.value != expected_learning_observation_contract_id:
             obs_reasons.append(f"contract_id:{obs.contract_id.value}")
+
+        payload = obs.decision_payload if isinstance(obs.decision_payload, Mapping) else {}
+        payload_schema = payload.get("schema_version") if isinstance(payload, Mapping) else None
+        is_legacy_payload = (
+            purpose_value == AssessmentPurpose.ACCUMULATION_DISCOVERY.value
+            and payload_schema == LEGACY_PAYLOAD_SCHEMA_VERSION
+        )
+        is_current_payload = (
+            purpose_value == AssessmentPurpose.ACCUMULATION_DISCOVERY.value
+            and payload_schema == ACTIVE_PAYLOAD_SCHEMA_VERSION
+        )
+
         # Active ACCUM discovery production write locks (persister + ADR-056).
         if purpose_value == AssessmentPurpose.ACCUMULATION_DISCOVERY.value:
             if obs.policy_contract != ACTIVE_POLICY_CONTRACT:
                 obs_reasons.append(f"policy_contract:{obs.policy_contract}")
             if obs.horizon_contract != ACTIVE_HORIZON_CONTRACT:
                 obs_reasons.append(f"horizon_contract:{obs.horizon_contract}")
-            # Population authority: membership digest only (not inventable free-form labels).
-            # Self-consistent observation_id recomputation is not population proof.
+            # Free-form inventable universe_id is always unbound corruption.
             if not is_accum_population_universe_id(obs.universe_id):
                 obs_reasons.append(
                     "population_authority_unbound:"
                     f"universe_id={obs.universe_id!r},"
                     f"contract={ACTIVE_POPULATION_AUTHORITY_CONTRACT}"
                 )
+            elif is_current_payload:
+                # Schema-10: hex alone never suffices — validated in payload semantics.
+                pass
+            elif is_legacy_payload:
+                # Schema-9: hex shape is historical; not current authority.
+                pass
+            else:
+                # Unknown/missing payload schema with hex universe is not current authority.
+                # Treat as corruption when it claims neither legacy nor current schema.
+                if payload_schema not in (None, LEGACY_PAYLOAD_SCHEMA_VERSION):
+                    obs_reasons.append(
+                        f"payload_schema_version:{payload_schema!r}"
+                        f"!=expected:{ACTIVE_PAYLOAD_SCHEMA_VERSION}"
+                    )
 
         # Authoritative economic session: bound to window_id + ticker.
         bound = bound_economic_session(obs)
@@ -641,19 +827,49 @@ def validate_observation_cohort(
             session_for_payload = bound[1]
 
         # Schema + producer payload semantics (writer shape).
+        # Schema-9 historical rows are not revalidated under the schema-10 contract;
+        # they remain LEGACY_RAW_ONLY when digests/identity hold and no other corruption.
         if purpose_value == AssessmentPurpose.ACCUMULATION_DISCOVERY.value:
-            obs_reasons.extend(
-                _production_payload_semantic_reasons(obs, session=session_for_payload)
-            )
+            if is_legacy_payload:
+                pass
+            elif is_current_payload:
+                obs_reasons.extend(
+                    _production_payload_semantic_reasons(
+                        obs,
+                        session=session_for_payload,
+                        require_current_payload_schema=True,
+                    )
+                )
+            else:
+                # Missing/foreign schema: require current contract (fail closed).
+                obs_reasons.extend(
+                    _production_payload_semantic_reasons(
+                        obs,
+                        session=session_for_payload,
+                        require_current_payload_schema=True,
+                    )
+                )
 
         if obs_reasons:
             invalid += 1
             reasons.append(f"{obs.observation_id}:{','.join(obs_reasons)}")
+        elif is_legacy_payload:
+            # Valid historical row: digests/identity OK, no current authority.
+            legacy_count += 1
+            if bound is not None:
+                legacy_session_dates.add(bound[1])
         else:
-            # Only fully valid, bound observations contribute session depth.
+            # Fully valid current-authority observation contributes session depth.
             assert bound is not None  # binding reasons would have been recorded
-            session_dates.add(bound[1])
+            current_session_dates.add(bound[1])
             valid += 1
+            current_authority_count += 1
+
+    # Readiness session depth uses current-authority sessions only when present;
+    # otherwise report legacy diagnostic sessions (LEGACY_RAW_ONLY path).
+    report_sessions = (
+        current_session_dates if current_authority_count > 0 else legacy_session_dates
+    )
 
     return ObservationCohortValidation(
         expected_learning_observation_contract_id=expected_learning_observation_contract_id,
@@ -661,8 +877,12 @@ def validate_observation_cohort(
         valid_observation_count=valid,
         invalid_observation_count=invalid,
         invalid_reasons=tuple(reasons[:50]),
-        session_dates=tuple(sorted(session_dates)),
+        session_dates=tuple(sorted(report_sessions)),
+        # Only current-authority corruption (or digest/identity failures) block.
+        # Pure legacy schema-9 rows are not contract corruption.
         has_contract_corruption=invalid > 0,
+        has_current_population_authority=current_authority_count > 0,
+        legacy_observation_count=legacy_count,
     )
 
 
@@ -748,12 +968,127 @@ def extract_fingerprint_setup_readiness_status(
     return None
 
 
+def _path_label_semantic_reasons(
+    label: LearningOutcomeLabel,
+    *,
+    observation: LearningObservation | None,
+) -> list[str]:
+    """Full path-label semantic matrix (schema, outcome, fingerprint, metrics, window)."""
+    reasons: list[str] = []
+    if label.schema_version != LEARNING_SCHEMA_VERSION:
+        reasons.append(
+            f"label_schema_version:{label.schema_version}!=expected:{LEARNING_SCHEMA_VERSION}"
+        )
+
+    if label.contract_id not in PATH_LABEL_CONTRACTS:
+        reasons.append(f"incompatible_label_family:{label.contract_id.value}")
+        return reasons
+
+    if observation is not None:
+        expected_fp = recompute_path_label_fingerprint(
+            observation_id=observation.observation_id,
+            observation_artifact_digest=observation.artifact_digest,
+            label_contract=label.contract_id,
+        )
+        if label.fingerprint != expected_fp:
+            reasons.append(
+                f"fingerprint_mismatch:stored={label.fingerprint!r},expected={expected_fp!r}"
+            )
+
+    if label.availability is LabelAvailability.AVAILABLE:
+        if label.outcome not in _ALLOWED_PATH_OUTCOMES:
+            reasons.append(f"outcome_vocabulary:{label.outcome!r}")
+        metrics = label.metrics if isinstance(label.metrics, Mapping) else {}
+        missing = sorted(_AVAILABLE_METRIC_KEYS - set(metrics))
+        if missing:
+            reasons.append(f"metrics_missing_fields:{missing}")
+        else:
+            # Units: pct fields numeric; entry reference equals frozen shared.current_price.
+            for pct_key in (
+                "close_return_pct",
+                "max_forward_return_pct",
+                "max_adverse_excursion_pct",
+            ):
+                raw = metrics.get(pct_key)
+                if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                    reasons.append(f"metrics.{pct_key}_not_numeric:{raw!r}")
+            for day_key in ("days_to_peak", "days_to_trough"):
+                raw = metrics.get(day_key)
+                try:
+                    day_v = int(raw)
+                except (TypeError, ValueError):
+                    reasons.append(f"metrics.{day_key}_not_int:{raw!r}")
+                    day_v = None
+                horizon_days = _PATH_LABEL_HORIZON_DAYS[label.contract_id]
+                if day_v is not None and not (1 <= day_v <= horizon_days):
+                    reasons.append(
+                        f"metrics.{day_key}_outside_horizon:{day_v}not_in_1..{horizon_days}"
+                    )
+            # Exact 3/10/20-session window: signal_date + inclusive session span.
+            signal_date = parse_canonical_session_date(metrics.get("signal_date"))
+            win_start = parse_canonical_session_date(metrics.get("label_window_start"))
+            win_end = parse_canonical_session_date(metrics.get("label_window_end"))
+            horizon_days = _PATH_LABEL_HORIZON_DAYS[label.contract_id]
+            if signal_date is None:
+                reasons.append(f"metrics.signal_date_malformed:{metrics.get('signal_date')!r}")
+            if win_start is None or win_end is None:
+                reasons.append("metrics.label_window_dates_malformed")
+            else:
+                if win_start > win_end:
+                    reasons.append("metrics.label_window_inverted")
+                if signal_date is not None and win_start <= signal_date:
+                    reasons.append(
+                        "metrics.label_window_not_after_signal:"
+                        f"start={win_start.isoformat()},signal={signal_date.isoformat()}"
+                    )
+            if observation is not None:
+                obs_session = observation_session_date(observation)
+                if (
+                    signal_date is not None
+                    and obs_session is not None
+                    and signal_date != obs_session
+                ):
+                    reasons.append(
+                        "metrics.signal_date_session_mismatch:"
+                        f"signal={signal_date.isoformat()},session={obs_session.isoformat()}"
+                    )
+                # Entry reference equals frozen shared.current_price.
+                payload = observation.decision_payload
+                shared = payload.get("shared") if isinstance(payload, Mapping) else None
+                raw_price = shared.get("current_price") if isinstance(shared, Mapping) else None
+                try:
+                    frozen = float(raw_price) if raw_price is not None else None
+                    entry = float(metrics.get("entry_reference_price"))
+                except (TypeError, ValueError):
+                    reasons.append(
+                        f"metrics.entry_reference_price_invalid:"
+                        f"{metrics.get('entry_reference_price')!r}"
+                    )
+                else:
+                    if frozen is None or frozen <= 0:
+                        reasons.append(f"entry_reference_no_frozen_price:{raw_price!r}")
+                    elif abs(entry - frozen) > 1e-9:
+                        reasons.append(
+                            f"entry_reference_mismatch:entry={entry},frozen={frozen}"
+                        )
+            # Horizon identity is the contract (3/10/20); days_to_* already gated.
+            _ = horizon_days
+    elif label.availability is LabelAvailability.UNAVAILABLE:
+        metrics = label.metrics if isinstance(label.metrics, Mapping) else {}
+        reason = metrics.get("unavailable_reason")
+        if not isinstance(reason, str) or not reason.strip():
+            reasons.append("metrics.unavailable_reason_missing")
+
+    return reasons
+
+
 def count_labels_by_horizon(
     *,
     observation_ids: Sequence[str],
     labels: Sequence[LearningOutcomeLabel],
+    observations_by_id: Mapping[str, LearningObservation] | None = None,
 ) -> LabelCohortValidation:
-    """Count path labels after digest, identity, basis, and availability↔outcome checks.
+    """Count path labels after digest, identity, basis, and full semantic checks.
 
     Read-side authority: a rehashed ``AVAILABLE``+``outcome=None`` (or
     ``UNAVAILABLE``+outcome) label is integrity corruption — never counted as a
@@ -763,8 +1098,12 @@ def count_labels_by_horizon(
     Multi-row path labels for the same observation + horizon are also
     authority-bearing integrity corruption (``conflict``): they skip AVAILABLE
     tally and set ``has_integrity_corruption`` so classification fails closed.
+
+    Incompatible label families (e.g. pre-open on an accumulation observation)
+    fail closed rather than being silently ignored.
     """
     obs_set = set(observation_ids)
+    obs_map = dict(observations_by_id or {})
     by_contract: dict[LearningContractId, list[LearningOutcomeLabel]] = {
         c: [] for c in PATH_LABEL_CONTRACTS
     }
@@ -796,6 +1135,14 @@ def count_labels_by_horizon(
                 label_reasons.append("unavailable_with_outcome")
             else:
                 label_reasons.append(f"availability_outcome:{msg}")
+
+        parent = obs_map.get(label.observation_id)
+        if label.contract_id not in PATH_LABEL_CONTRACTS:
+            # Incompatible family attached to an accumulation observation → corruption.
+            label_reasons.append(f"incompatible_label_family:{label.contract_id.value}")
+        else:
+            label_reasons.extend(_path_label_semantic_reasons(label, observation=parent))
+
         if label_reasons:
             invalid_label_count += 1
             invalid_reasons.append(f"{label.label_id}:{','.join(label_reasons)}")
@@ -900,6 +1247,7 @@ def project_cohort_readiness(
         expected_learning_observation_contract_id=expected_learning_observation_contract_id,
         expected_producer_observation_contract=expected_producer_observation_contract,
     )
+    observations_by_id = {o.observation_id: o for o in observations}
     valid_ids = [
         o.observation_id
         for o in observations
@@ -916,6 +1264,7 @@ def project_cohort_readiness(
     label_validation = count_labels_by_horizon(
         observation_ids=label_ids,
         labels=labels,
+        observations_by_id=observations_by_id,
     )
     labels_by_horizon = label_validation.counts_by_horizon
     h10 = labels_by_horizon["H10"]

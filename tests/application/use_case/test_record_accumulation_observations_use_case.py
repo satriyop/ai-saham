@@ -20,6 +20,7 @@ from src.application.services.effective_market_session_resolver import (
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.signal_engine import SignalEngine
 from src.application.services.signal_engine_config import SignalEngineConfig
+from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityId,
@@ -122,6 +123,13 @@ def test_persist_multi_window_writes_one_session_observation():
         snapshot_date=as_of,
         execution_context=ctx,
         universe_tickers=["BBCA"],
+        population_binding=AccumPopulationBinding.create(
+            membership_tickers=["BBCA"],
+            named_universe_tickers=["ASII", "BBCA", "BBRI"],
+            membership_session=as_of,
+            pit_tradable_lookback_sessions=10,
+            producer_source_revision="ai-saham@test",
+        ),
         canonical_window=7,
     )
 

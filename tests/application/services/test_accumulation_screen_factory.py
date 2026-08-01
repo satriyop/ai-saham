@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
+from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
 from src.application.services.accumulation_screen_factory import (
     AccumulationScreenUseCaseBundle,
     create_accumulation_screen_use_case,
@@ -135,6 +136,13 @@ def test_bundle_factory_supplies_screen_use_case_and_working_recorder():
         snapshot_date=as_of,
         execution_context=ctx,
         universe_tickers=["BBCA"],
+        population_binding=AccumPopulationBinding.create(
+            membership_tickers=["BBCA"],
+            named_universe_tickers=["ASII", "BBCA", "BBRI"],
+            membership_session=as_of,
+            pit_tradable_lookback_sessions=10,
+            producer_source_revision="ai-saham@test",
+        ),
     )
     assert saved == 1
     assert len(spy_repo.saved) == 1

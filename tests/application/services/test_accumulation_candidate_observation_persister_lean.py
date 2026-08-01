@@ -68,6 +68,19 @@ def _session():
     )
 
 
+def _test_population_binding(session: date = date(2026, 7, 16), tickers=None):
+    from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
+
+    tickers = tickers or ["BBCA"]
+    return AccumPopulationBinding.create(
+        membership_tickers=tickers,
+        named_universe_tickers=["ASII", "BBCA", "BBRI"],
+        membership_session=session,
+        pit_tradable_lookback_sessions=10,
+        producer_source_revision="ai-saham@test+git:deadbeef",
+    )
+
+
 def _call(persister, **kwargs):
     base = dict(
         window_results={
@@ -80,6 +93,7 @@ def _call(persister, **kwargs):
         observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
         semantic_compatibility_id=_VALID_ID,
         universe_tickers=["BBCA"],
+        population_binding=_test_population_binding(),
     )
     base.update(kwargs)
     return persister.persist_session_multi_window(**base)
@@ -125,6 +139,7 @@ def test_missing_required_window_raises() -> None:
             observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
             semantic_compatibility_id=_VALID_ID,
             universe_tickers=["BBCA"],
+            population_binding=_test_population_binding(),
         )
 
 
@@ -173,6 +188,7 @@ def test_persist_skips_existing_observation_without_rebuild(
         observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
         semantic_compatibility_id=_VALID_ID,
         universe_tickers=universe,
+        population_binding=_test_population_binding(tickers=universe),
     )
     assert saved == 0
     assert repo.saved == []

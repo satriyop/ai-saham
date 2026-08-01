@@ -29,7 +29,12 @@ Diagnostic/research only — does not change ENTER/authority scoring.
 v8 -> v9 (sector macro context fingerprint): ADR-053 DIAGNOSTIC smc_* fields
 (smc_sector_group, smc_macro_regime, smc_composite_score, smc_coverage_score,
 smc_factor_summary). Display/attribution only — no Signal/Risk scoring impact.
-Older schema (1-8) rows are outside the current canonical contract — they are
+v9 -> v10 (Option A population binding): decision_payload.population_binding
+carries typed AccumPopulationBinding (population.accum.lq45_current_roster_
+pit_tradable.v1). Schema-9 rows without binding remain immutable historical
+corpus (LEGACY_RAW_ONLY); current authority requires schema 10 + complete
+binding. Lean compatibility ID forks with this payload schema bump.
+Older schema (1-9) rows are outside the current canonical contract — they are
 never mutated, migrated, or reinterpreted here, and their raw payloads are not
 validated by the current-contract validator below.
 """
@@ -44,7 +49,9 @@ from src.domain.value_objects.alpha_trigger_score import (
     SECTOR_CONTEXT_EVIDENCE_NAME,
 )
 
-CANDIDATE_OBSERVATION_SCHEMA_VERSION = 9
+CANDIDATE_OBSERVATION_SCHEMA_VERSION = 10
+# Historical ACCUM session payload schema that predates typed population binding.
+LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION = 9
 SIGNAL_FORWARD_LABEL_SCHEMA_VERSION = 3
 
 

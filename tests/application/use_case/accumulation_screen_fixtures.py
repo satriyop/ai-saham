@@ -1,3 +1,4 @@
+from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
 """Shared fixtures and mocks for accumulation screen tests."""
 
 from datetime import date, timedelta
@@ -462,11 +463,19 @@ def record_observations(use_case: AccumulationScreenUseCase, request):
         if int(window) == 7:
             primary = resp
     assert primary is not None
+    tickers = list(request.tickers or []) or ["BBCA"]
     saved = recorder.persist_multi_window(
         window_results=window_results,
         snapshot_date=primary.screened_at,
         execution_context=context,
         universe_tickers=list(request.tickers or []),
+        population_binding=AccumPopulationBinding.create(
+            membership_tickers=tickers,
+            named_universe_tickers=sorted(set(tickers) | {"ASII", "BBCA", "BBRI"}),
+            membership_session=primary.screened_at,
+            pit_tradable_lookback_sessions=10,
+            producer_source_revision="ai-saham@test",
+        ),
         canonical_window=7,
     )
     return RecordAccumulationObservationsResult(response=primary, recorded_count=saved)

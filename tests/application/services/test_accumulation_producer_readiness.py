@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from src.application.services.accumulation_producer_readiness import (
     LabelCohortValidation,
@@ -22,8 +22,10 @@ from src.application.services.accumulation_production_policy_descriptors import 
 )
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
+    LEARNING_SCHEMA_VERSION,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     PRODUCTION_POLICY_ID_HARD_FILTERS,
+    AccumPopulationBinding,
     AssessmentPurpose,
     LabelAvailability,
     LearningContractError,
@@ -34,8 +36,13 @@ from src.domain.value_objects.learning_artifacts import (
     ProductionPolicySnapshot,
     _artifact_payload,
     artifact_digest,
+    recompute_path_label_fingerprint,
     stamp_universe_membership_id,
     validate_label_availability_outcome,
+)
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
@@ -44,7 +51,10 @@ OBS_CONTRACT = LearningContractId.ACCUMULATION_OBSERVATION.value
 PRODUCER_CONTRACT = "accumulation-discovery.v2"
 MATERIAL = "sha256:" + ("11" * 32)
 # Locked ACCUM population identity: capture membership digest (not free-form labels).
-LOCKED_UNIVERSE_ID = stamp_universe_membership_id(["ASII", "BBCA", "BBRI", "BMRI", "TLKM"])
+MEMBERSHIP_TICKERS = ["ASII", "BBCA", "BBRI", "BMRI", "TLKM"]
+NAMED_ROSTER = ["ASII", "BBCA", "BBRI", "BMRI", "TLKM", "UNTR", "HMSP"]
+LOCKED_UNIVERSE_ID = stamp_universe_membership_id(MEMBERSHIP_TICKERS)
+PRODUCER_REV = "ai-saham@test+git:deadbeef"
 
 
 def _ok_labels() -> LabelCohortValidation:
@@ -57,6 +67,16 @@ def _ok_labels() -> LabelCohortValidation:
     )
 
 
+def _binding_for_session(session_date: str) -> dict:
+    return AccumPopulationBinding.create(
+        membership_tickers=MEMBERSHIP_TICKERS,
+        named_universe_tickers=NAMED_ROSTER,
+        membership_session=session_date,
+        pit_tradable_lookback_sessions=10,
+        producer_source_revision=PRODUCER_REV,
+    ).to_dict()
+
+
 def _payload(
     *,
     session_date: str | None,
@@ -66,15 +86,30 @@ def _payload(
     artifact_type: str = "accumulation_session_observation",
     workflow: str = "research_accum_capture",
     horizon_primary: str = "accum_10d",
-    schema_version: int = 9,
+    schema_version: int | None = None,
     with_provenance: bool = True,
+    with_population_binding: bool | None = None,
+    captured_at: datetime | None = None,
+    decision_at: str | None = None,
+    population_binding: dict | None = None,
 ) -> dict:
+    if schema_version is None:
+        schema_version = CANDIDATE_OBSERVATION_SCHEMA_VERSION
+    if with_population_binding is None:
+        with_population_binding = schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION
     trade_setup = {"action": action} if action is not None else None
     signal = {"setup_readiness": {"status": readiness}} if readiness is not None else {}
     shared: dict = {"current_price": 100.0}
+    cap = captured_at or (
+        datetime.fromisoformat(f"{session_date}T12:00:00+00:00")
+        if session_date
+        else NOW
+    )
     if with_provenance and session_date is not None:
         shared["provenance"] = {
-            "decision_at": f"{session_date}T12:00:00+00:00",
+            "decision_at": decision_at
+            if decision_at is not None
+            else f"{session_date}T12:00:00+00:00",
             "latest_completed_session": session_date,
             "analysis_as_of": session_date,
             "market_session_name": "regular",
@@ -89,6 +124,7 @@ def _payload(
         "canonical_window": 7,
         "workflow": workflow,
         "horizon_primary": horizon_primary,
+        "captured_at": cap.isoformat(),
         "shared": shared,
         "features_by_window": {
             "7": {
@@ -105,6 +141,8 @@ def _payload(
     }
     if session_date is not None:
         body["session_date"] = session_date
+    if with_population_binding and session_date is not None:
+        body["population_binding"] = population_binding or _binding_for_session(session_date)
     return body
 
 
@@ -119,6 +157,9 @@ def _observation(
     session_date: str | None = None,
     force_contract: LearningContractId | None = None,
     artifact_type: str = "accumulation_session_observation",
+    schema_version: int | None = None,
+    with_population_binding: bool | None = None,
+    decision_at: str | None = None,
 ) -> LearningObservation:
     at = datetime(2026, 7, day, 12, 0, tzinfo=timezone.utc)
     ticker_u = ticker.upper()
@@ -163,29 +204,101 @@ def _observation(
             action=action,
             readiness=readiness,
             artifact_type=artifact_type,
+            schema_version=schema_version,
+            with_population_binding=with_population_binding,
+            captured_at=at,
+            decision_at=decision_at,
         ),
         captured_at=at,
     )
 
 
+def _legacy_observation(
+    *,
+    day: int,
+    ticker: str = "BBCA",
+    compatibility_id: str = COMPAT,
+    action: str | None = "WATCH",
+    readiness: str | None = None,
+) -> LearningObservation:
+    """Schema-9 historical row without population_binding (immutable corpus)."""
+    return _observation(
+        day=day,
+        ticker=ticker,
+        compatibility_id=compatibility_id,
+        action=action,
+        readiness=readiness,
+        schema_version=LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        with_population_binding=False,
+    )
+
+
+def _available_metrics(
+    *,
+    ticker: str = "BBCA",
+    signal_date: str,
+    horizon_days: int = 10,
+    entry_price: float = 100.0,
+) -> dict:
+    start = date.fromisoformat(signal_date) + timedelta(days=1)
+    end = start + timedelta(days=horizon_days - 1)
+    return {
+        "ticker": ticker.upper(),
+        "signal_date": signal_date,
+        "label_window_start": start.isoformat(),
+        "label_window_end": end.isoformat(),
+        "entry_reference_price": entry_price,
+        "close_return_pct": 3.5,
+        "max_forward_return_pct": 5.0,
+        "max_adverse_excursion_pct": -1.0,
+        "days_to_peak": min(2, horizon_days),
+        "days_to_trough": 1,
+    }
+
+
 def _label(
-    observation_id: str,
+    observation: LearningObservation | str,
     *,
     contract: LearningContractId = LearningContractId.ACCUM_10D_LABEL,
     availability: LabelAvailability = LabelAvailability.AVAILABLE,
     outcome: str | None = "SUCCESS",
     outcome_basis: OutcomeBasis = OutcomeBasis.PRICE_PATH_ONLY,
-    fingerprint: str = "fp-1",
+    fingerprint: str | None = None,
+    metrics: dict | None = None,
 ) -> LearningOutcomeLabel:
+    if isinstance(observation, LearningObservation):
+        observation_id = observation.observation_id
+        if fingerprint is None:
+            fingerprint = recompute_path_label_fingerprint(
+                observation_id=observation.observation_id,
+                observation_artifact_digest=observation.artifact_digest,
+                label_contract=contract,
+            )
+        if metrics is None and availability is LabelAvailability.AVAILABLE:
+            session = observation_session_date(observation)
+            sd = session.isoformat() if session else "2026-07-01"
+            ticker = str(observation.decision_payload.get("ticker", "BBCA"))
+            horizon = {LearningContractId.ACCUM_3D_LABEL: 3,
+                       LearningContractId.ACCUM_10D_LABEL: 10,
+                       LearningContractId.ACCUM_20D_LABEL: 20}.get(contract, 10)
+            metrics = _available_metrics(ticker=ticker, signal_date=sd, horizon_days=horizon)
+    else:
+        observation_id = observation
+        if fingerprint is None:
+            fingerprint = "fp-1"
     if availability is LabelAvailability.UNAVAILABLE:
         outcome = None
+        if metrics is None:
+            metrics = {"unavailable_reason": "corporate_action_in_window"}
+    if metrics is None:
+        metrics = {}
     return LearningOutcomeLabel.create(
         contract_id=contract,
         observation_id=observation_id,
         outcome_basis=outcome_basis,
         availability=availability,
         outcome=outcome,
-        metrics={"forward_return_pct": 1.0} if outcome else {},
+        metrics=metrics,
         fingerprint=fingerprint,
         labeled_at=NOW,
     )
@@ -357,6 +470,7 @@ def test_classify_collecting_and_ready() -> None:
         invalid_reasons=(),
         session_dates=(),
         has_contract_corruption=False,
+        has_current_population_authority=True,
     )
     assert (
         classify_producer_status(
@@ -469,7 +583,7 @@ def test_extract_action_and_readiness_from_frozen_payload_only() -> None:
 
 
 def test_project_legacy_zero_snapshot_cohort() -> None:
-    obs = [_observation(day=1), _observation(day=2, ticker="BBRI")]
+    obs = [_legacy_observation(day=1), _legacy_observation(day=2, ticker="BBRI")]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=obs,
@@ -487,7 +601,7 @@ def test_project_challenge_input_ready() -> None:
         _observation(day=1, action="WATCH", readiness=None),
         _observation(day=2, ticker="BBRI", action="ENTER", readiness="INCOMPLETE"),
     ]
-    labels = [_label(obs[0].observation_id)]
+    labels = [_label(obs[0])]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=obs,
@@ -538,7 +652,7 @@ def test_invented_universe_labels_cannot_be_challenge_input_ready() -> None:
     for o in obs:
         validate_observation_identity(o)
 
-    labels = [_label(obs[0].observation_id)]
+    labels = [_label(obs[0])]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=obs,
@@ -583,7 +697,7 @@ def test_free_form_lq45_pit_label_is_not_population_authority() -> None:
         decision_payload=_payload(session_date="2026-07-02", ticker="BBRI"),
         captured_at=at2,
     )
-    labels = [_label(o1.observation_id)]
+    labels = [_label(o1)]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[o1, o2],
@@ -601,7 +715,7 @@ def test_project_blocked_on_preopen_contract_under_accum_purpose() -> None:
         _observation(day=1, force_contract=LearningContractId.PRE_OPEN_OBSERVATION),
         _observation(day=2, ticker="BBRI", force_contract=LearningContractId.PRE_OPEN_OBSERVATION),
     ]
-    labels = [_label(o.observation_id) for o in bad]
+    labels = [_label(o) for o in bad]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=bad,
@@ -636,7 +750,7 @@ def test_missing_session_date_does_not_count_sessions_via_cutoff() -> None:
         },
         cutoff_at=at2,
     )
-    labels = [_label(o1.observation_id)]
+    labels = [_label(o1)]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[o1, o2],
@@ -655,7 +769,7 @@ def test_project_blocked_on_partial_snapshots() -> None:
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=obs,
-        labels=[_label(obs[0].observation_id)],
+        labels=[_label(obs[0])],
         snapshots=snaps,
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
@@ -675,7 +789,7 @@ def test_malformed_session_date_prefix_blocks_ready() -> None:
         _observation(day=1, session_date="2026-07-01-not-a-date"),
         _observation(day=2, ticker="BBRI", session_date="2026-07-02-not-a-date"),
     ]
-    labels = [_label(obs[0].observation_id)]
+    labels = [_label(obs[0])]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=obs,
@@ -692,7 +806,7 @@ def test_fuzzy_accumulation_artifact_type_rejected() -> None:
         _observation(day=1, artifact_type="accumulation_pre_open_fabricated"),
         _observation(day=2, ticker="BBRI", artifact_type="accumulation_pre_open_fabricated"),
     ]
-    labels = [_label(o.observation_id) for o in obs]
+    labels = [_label(o) for o in obs]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=obs,
@@ -754,7 +868,7 @@ def test_rehashed_available_without_outcome_blocks_and_does_not_count_h10() -> N
         _observation(day=2, ticker="BBRI"),
     ]
     # create() rejects AVAILABLE+None; rebuild outside create then rehash.
-    valid = _label(obs[0].observation_id, outcome="SUCCESS")
+    valid = _label(obs[0], outcome="SUCCESS")
     with_none = replace(valid, outcome=None, metrics={})
     rehashed = _rehash_label(with_none)
     # Digest + identity still consistent — only the availability↔outcome pair is wrong.
@@ -804,7 +918,7 @@ def test_rehashed_unavailable_with_outcome_blocks_and_does_not_tally_unavailable
         _observation(day=2, ticker="BBRI"),
     ]
     valid = _label(
-        obs[0].observation_id,
+        obs[0],
         availability=LabelAvailability.UNAVAILABLE,
         outcome=None,
     )
@@ -839,7 +953,7 @@ def test_valid_available_h10_outcome_still_enables_challenge_input_ready() -> No
         _observation(day=1, action="WATCH", readiness=None),
         _observation(day=2, ticker="BBRI", action="ENTER", readiness="INCOMPLETE"),
     ]
-    labels = [_label(obs[0].observation_id, outcome="SUCCESS")]
+    labels = [_label(obs[0], outcome="SUCCESS")]
     assert labels[0].availability is LabelAvailability.AVAILABLE
     assert labels[0].outcome is not None
     # create path still rejects AVAILABLE+None
@@ -875,7 +989,7 @@ def test_tampered_observation_digest_blocks() -> None:
     o1 = _observation(day=1)
     o2 = _observation(day=2, ticker="BBRI")
     bad = replace(o1, artifact_digest="0" * 64)
-    labels = [_label(o1.observation_id), _label(o2.observation_id)]
+    labels = [_label(o1), _label(o2)]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[bad, o2],
@@ -916,7 +1030,7 @@ def test_wrong_policy_contract_blocks_ready() -> None:
         decision_payload=dict(o2.decision_payload),
         captured_at=o2.captured_at,
     )
-    labels = [_label(bad1.observation_id), _label(bad2.observation_id)]
+    labels = [_label(bad1), _label(bad2)]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[bad1, bad2],
@@ -951,7 +1065,7 @@ def test_wrong_horizon_contract_blocks_ready() -> None:
         decision_payload=_payload(session_date="2026-07-02"),
         captured_at=datetime(2026, 7, 2, 12, 0, tzinfo=timezone.utc),
     )
-    labels = [_label(o1.observation_id)]
+    labels = [_label(o1)]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[o1, o2],
@@ -995,7 +1109,7 @@ def test_forged_observation_id_with_valid_digest_blocks() -> None:
     from src.domain.value_objects.learning_artifacts import validate_artifact_integrity
 
     validate_artifact_integrity(forged, id_field="observation_id")
-    labels = [_label(o1.observation_id), _label(o2.observation_id)]
+    labels = [_label(o1), _label(o2)]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[forged, o2],
@@ -1011,8 +1125,8 @@ def test_forged_observation_id_with_valid_digest_blocks() -> None:
 
 def test_forged_label_id_with_valid_digest_blocks() -> None:
     obs = [_observation(day=1), _observation(day=2, ticker="BBRI")]
-    label = _label(obs[0].observation_id)
-    other = _label(obs[1].observation_id)
+    label = _label(obs[0])
+    other = _label(obs[1])
     forged = replace(label, label_id=other.label_id)
     from src.domain.value_objects.learning_artifacts import validate_artifact_integrity
 
@@ -1039,7 +1153,7 @@ def test_happy_path_fixtures_are_production_shaped() -> None:
     )
 
     validate_observation_identity(o)
-    lab = _label(o.observation_id)
+    lab = _label(o)
     validate_label_identity(lab)
     assert lab.outcome_basis is OutcomeBasis.PRICE_PATH_ONLY
 
@@ -1070,7 +1184,7 @@ def test_unbound_payload_session_dates_do_not_manufacture_depth() -> None:
         decision_payload=_payload(session_date="2026-07-03", ticker="BBRI"),
         captured_at=day1,
     )
-    labels = [_label(o1.observation_id), _label(o2.observation_id)]
+    labels = [_label(o1), _label(o2)]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[o1, o2],
@@ -1114,7 +1228,7 @@ def test_production_shaped_multi_session_can_reach_ready() -> None:
         _observation(day=1, ticker="BBCA"),
         _observation(day=2, ticker="BBRI"),
     ]
-    labels = [_label(obs[0].observation_id)]
+    labels = [_label(obs[0])]
     # Bound: window_id ticker:date matches payload.
     assert obs[0].window_id == "BBCA:2026-07-01"
     assert obs[0].decision_payload["session_date"] == "2026-07-01"
@@ -1147,12 +1261,14 @@ def test_multi_row_h10_path_label_conflict_blocks_ready_fail_closed() -> None:
     obs_b = _observation(day=2, ticker="BBRI")
     # Two digest-valid H10 *rows* for the same observation. label_id is
     # (observation_id, contract) so ids may match; digests must differ.
-    conflict_a1 = _label(obs_a.observation_id, outcome="SUCCESS", fingerprint="fp-conflict-a")
-    conflict_a2 = _label(obs_a.observation_id, outcome="FAILURE", fingerprint="fp-conflict-b")
+    # Fingerprints must still recompute against the parent observation digest.
+    conflict_a1 = _label(obs_a, outcome="SUCCESS")
+    conflict_a2 = _label(obs_a, outcome="FAILURE")
     assert conflict_a1.observation_id == conflict_a2.observation_id
     assert conflict_a1.contract_id is conflict_a2.contract_id
+    assert conflict_a1.fingerprint == conflict_a2.fingerprint
     assert conflict_a1.artifact_digest != conflict_a2.artifact_digest
-    clean_b = _label(obs_b.observation_id, outcome="SUCCESS", fingerprint="fp-clean-b")
+    clean_b = _label(obs_b, outcome="SUCCESS")
 
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
@@ -1184,22 +1300,18 @@ def test_multi_row_h3_path_label_conflict_also_blocks_ready() -> None:
 
     obs_a = _observation(day=1, ticker="BBCA")
     obs_b = _observation(day=2, ticker="BBRI")
-    h3_a1 = _label(
-        obs_a.observation_id,
-        contract=LearningContractId.ACCUM_3D_LABEL,
-        fingerprint="h3-a",
-    )
+    h3_a1 = _label(obs_a, contract=LearningContractId.ACCUM_3D_LABEL)
     h3_a2 = _label(
-        obs_a.observation_id,
+        obs_a,
         contract=LearningContractId.ACCUM_3D_LABEL,
-        fingerprint="h3-b",
         outcome="FAILURE",
     )
-    h10_b = _label(obs_b.observation_id, fingerprint="h10-b")
+    h10_b = _label(obs_b)
 
     counts = count_labels_by_horizon(
         observation_ids=[obs_a.observation_id, obs_b.observation_id],
         labels=[h3_a1, h3_a2, h10_b],
+        observations_by_id={obs_a.observation_id: obs_a, obs_b.observation_id: obs_b},
     )
     assert counts.has_integrity_corruption is True
     assert counts.counts_by_horizon["H3"].conflict >= 1
@@ -1264,7 +1376,7 @@ def test_outer_schema_version_999_blocks_ready() -> None:
     from src.domain.value_objects.learning_artifacts import validate_artifact_integrity
 
     validate_artifact_integrity(bad1, id_field="observation_id")
-    labels = [_label(bad1.observation_id), _label(bad2.observation_id)]
+    labels = [_label(bad1), _label(bad2)]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[bad1, bad2],
@@ -1309,7 +1421,7 @@ def test_payload_schema_version_999_blocks_ready() -> None:
     from src.domain.value_objects.learning_artifacts import validate_artifact_integrity
 
     validate_artifact_integrity(bad1, id_field="observation_id")
-    labels = [_label(bad1.observation_id)]
+    labels = [_label(bad1)]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[bad1, bad2],
@@ -1338,7 +1450,7 @@ def test_wrong_workflow_blocks_ready() -> None:
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[o, _observation(day=2, ticker="BBRI")],
-        labels=[_label(o.observation_id)],
+        labels=[_label(o)],
         snapshots=_full_v2_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
@@ -1363,7 +1475,7 @@ def test_wrong_horizon_primary_blocks_ready() -> None:
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[o, _observation(day=2, ticker="BBRI")],
-        labels=[_label(o.observation_id)],
+        labels=[_label(o)],
         snapshots=_full_v2_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
@@ -1386,7 +1498,7 @@ def test_missing_provenance_blocks_ready() -> None:
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[o, _observation(day=2, ticker="BBRI")],
-        labels=[_label(o.observation_id)],
+        labels=[_label(o)],
         snapshots=_full_v2_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
@@ -1413,7 +1525,7 @@ def test_missing_features_window_blocks_ready() -> None:
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=[o, _observation(day=2, ticker="BBRI")],
-        labels=[_label(o.observation_id)],
+        labels=[_label(o)],
         snapshots=_full_v2_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
@@ -1421,3 +1533,263 @@ def test_missing_features_window_blocks_ready() -> None:
     assert any(
         "features_by_window_keys" in r for r in cohort.observation_validation.invalid_reasons
     )
+
+def test_schema9_without_binding_is_legacy_raw_only_even_with_snapshots() -> None:
+    """Schema-9 historical rows never grant CHALLENGE_INPUT_READY (Option A)."""
+    obs = [
+        _legacy_observation(day=1),
+        _legacy_observation(day=2, ticker="BBRI"),
+    ]
+    labels = [_label(obs[0])]
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=labels,
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.snapshot.active_set_verified is True
+    assert cohort.observation_validation.has_current_population_authority is False
+    assert cohort.observation_validation.legacy_observation_count == 2
+    assert cohort.producer_status is ProducerReadinessStatus.LEGACY_RAW_ONLY
+    assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+
+
+def test_schema10_missing_population_binding_is_blocked_not_ready() -> None:
+    o1 = _observation(day=1, with_population_binding=False)
+    o2 = _observation(day=2, ticker="BBRI", with_population_binding=False)
+    assert "population_binding" not in o1.decision_payload
+    labels = [_label(o1)]
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[o1, o2],
+        labels=labels,
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert "population_authority_unbound" in " ".join(
+        cohort.observation_validation.invalid_reasons
+    )
+    assert cohort.session_count == 0
+
+
+def test_hex_only_universe_without_binding_is_not_population_authority() -> None:
+    """64-hex universe_id alone never yields CHALLENGE_INPUT_READY."""
+    assert len(LOCKED_UNIVERSE_ID) == 64
+    o1 = _observation(day=1, with_population_binding=False)
+    o2 = _observation(day=2, ticker="BBRI", with_population_binding=False)
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[o1, o2],
+        labels=[_label(o1)],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+
+
+def test_bad_decision_at_does_not_inflate_session_count_or_ready() -> None:
+    o1 = _observation(day=1, decision_at="not-a-timestamp")
+    o2 = _observation(day=2, ticker="BBRI", decision_at="not-a-timestamp")
+    # Same July-1 cutoff identity with inventable session claim already bound;
+    # malformed decision_at must fail closed.
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[o1, o2],
+        labels=[_label(o1)],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    assert cohort.session_count == 0
+    assert any(
+        "decision_at" in r for r in cohort.observation_validation.invalid_reasons
+    )
+
+
+def test_captured_at_mismatch_blocks_ready() -> None:
+    at = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    other = datetime(2026, 7, 1, 15, 0, tzinfo=timezone.utc)
+    payload = _payload(session_date="2026-07-01", ticker="BBCA", captured_at=other)
+    o = LearningObservation.create(
+        purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+        policy_contract="accumulation_discovery.policy.v1",
+        horizon_contract="accum_10d",
+        compatibility_id=COMPAT,
+        cutoff_at=at,
+        universe_id=LOCKED_UNIVERSE_ID,
+        window_id="BBCA:2026-07-01",
+        decision_payload=payload,
+        captured_at=at,
+    )
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[o, _observation(day=2, ticker="BBRI")],
+        labels=[_label(o)],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert any("captured_at_mismatch" in r for r in cohort.observation_validation.invalid_reasons)
+
+
+def test_analysis_as_of_mismatch_blocks_ready() -> None:
+    payload = _payload(session_date="2026-07-01", ticker="BBCA")
+    payload["shared"]["provenance"]["analysis_as_of"] = "2026-07-03"
+    o = LearningObservation.create(
+        purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+        policy_contract="accumulation_discovery.policy.v1",
+        horizon_contract="accum_10d",
+        compatibility_id=COMPAT,
+        cutoff_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+        universe_id=LOCKED_UNIVERSE_ID,
+        window_id="BBCA:2026-07-01",
+        decision_payload=payload,
+        captured_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+    )
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[o, _observation(day=2, ticker="BBRI")],
+        labels=[_label(o)],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert any(
+        "analysis_as_of_session_mismatch" in r
+        for r in cohort.observation_validation.invalid_reasons
+    )
+
+
+def test_label_schema_999_and_banana_outcome_and_invented_fingerprint_block() -> None:
+    obs = [_observation(day=1), _observation(day=2, ticker="BBRI")]
+    valid = _label(obs[0], outcome="SUCCESS")
+    bad = _rehash_label(
+        replace(
+            valid,
+            schema_version=999,
+            outcome="BANANA",
+            fingerprint="invented-fingerprint",
+        )
+    )
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[bad],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    reasons = " ".join(cohort.label_validation.invalid_reasons)
+    assert "label_schema_version" in reasons or "outcome_vocabulary" in reasons
+    assert "fingerprint_mismatch" in reasons or "invented" in reasons or "BANANA" in reasons
+    assert cohort.labels_by_horizon["H10"].available == 0
+
+
+def test_incompatible_preopen_label_family_blocks_cohort() -> None:
+    """Pre-open label on accumulation observation fails closed (not ignored)."""
+    obs = [_observation(day=1), _observation(day=2, ticker="BBRI")]
+    # Construct pre-open label linked to accum observation id.
+    pre = LearningOutcomeLabel.create(
+        contract_id=LearningContractId.PRE_OPEN_LABEL,
+        observation_id=obs[0].observation_id,
+        outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
+        availability=LabelAvailability.AVAILABLE,
+        outcome="SUCCESS",
+        metrics={"return_pct": 1.0},
+        fingerprint=recompute_path_label_fingerprint(
+            observation_id=obs[0].observation_id,
+            observation_artifact_digest=obs[0].artifact_digest,
+            label_contract=LearningContractId.PRE_OPEN_LABEL,
+        ),
+        labeled_at=NOW,
+    )
+    # Also include a clean H10 so only family incompatibility should block.
+    clean = _label(obs[0], outcome="SUCCESS")
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[pre, clean],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert any(
+        "incompatible_label_family" in r for r in cohort.label_validation.invalid_reasons
+    )
+
+
+def test_snapshot_schema_version_999_fails_active_set_verified() -> None:
+    snaps = list(_full_v2_set())
+    bad = _rehash_snapshot(replace(snaps[0], schema_version=999))
+    snaps[0] = bad
+    report = verify_snapshot_binding(
+        snaps,
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+        compatibility_id=COMPAT,
+    )
+    assert report.active_set_verified is False
+    assert report.has_corruption is True
+
+    obs = [_observation(day=1), _observation(day=2, ticker="BBRI")]
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[_label(obs[0])],
+        snapshots=tuple(snaps),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.snapshot.active_set_verified is False
+    assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+
+
+def _rehash_snapshot(snap: ProductionPolicySnapshot) -> ProductionPolicySnapshot:
+    # schema_version is outside payload_digest; integrity checks columns only.
+    return snap
+
+
+def test_candidate_observation_schema_version_is_10() -> None:
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 10
+    assert LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 9
+    o = _observation(day=1)
+    assert o.decision_payload["schema_version"] == 10
+    assert "population_binding" in o.decision_payload
+    binding = AccumPopulationBinding.from_mapping(o.decision_payload["population_binding"])
+    assert binding.membership_digest == o.universe_id
+    assert binding.contract_id.startswith("population.accum.")
+
+
+def test_build_session_observation_payload_requires_population_binding() -> None:
+    from src.application.services.accumulation_observation_fingerprint import (
+        build_session_observation_payload,
+    )
+
+    features = {"7": {}, "30": {}, "90": {}}
+    shared = {"current_price": "100"}
+    try:
+        build_session_observation_payload(
+            ticker="BBCA",
+            session_date=date(2026, 7, 1),
+            captured_at=NOW,
+            canonical_window=7,
+            features_by_window=features,
+            shared=shared,
+        )
+        raise AssertionError("expected population_binding required")
+    except ValueError as exc:
+        assert "population_binding" in str(exc)
+
+    payload = build_session_observation_payload(
+        ticker="BBCA",
+        session_date=date(2026, 7, 1),
+        captured_at=NOW,
+        canonical_window=7,
+        features_by_window=features,
+        shared=shared,
+        population_binding=_binding_for_session("2026-07-01"),
+    )
+    assert payload["schema_version"] == 10
+    assert payload["population_binding"]["membership_session"] == "2026-07-01"

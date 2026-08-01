@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
 
 from src.application.dto import accumulation_screen as accumulation_dto
 from src.application.services.accumulation_observation_institutional_fingerprint import (
@@ -208,12 +208,14 @@ def build_session_observation_payload(
     features_by_window: dict[str, dict[str, Any]],
     shared: dict[str, Any],
     screen_results_by_window: dict[str, str] | None = None,
+    population_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """ADR-056: one ticker-session observation with multi-window engine packs.
 
     ``features_by_window`` keys are string window sizes (\"7\", \"30\", \"90\").
     Each value is a full engine pack (candidate + signal + risk + contexts).
     ``shared`` must include ``current_price`` (session close) for path labels.
+    Schema-10 requires ``population_binding`` (Option A typed population authority).
     """
     required = {"7", "30", "90"}
     keys = set(features_by_window)
@@ -228,6 +230,13 @@ def build_session_observation_payload(
         price_ok = False
     if not price_ok:
         raise ValueError("shared.current_price must be a positive session close")
+    if population_binding is None:
+        raise ValueError(
+            "schema-10 session observation requires population_binding "
+            "(Option A AccumPopulationBinding)"
+        )
+    if not isinstance(population_binding, Mapping) or not population_binding:
+        raise ValueError("population_binding must be a non-empty mapping")
     return {
         "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
         "artifact_type": "accumulation_session_observation",
@@ -239,6 +248,7 @@ def build_session_observation_payload(
         "horizon_primary": "accum_10d",
         "screen_results_by_window": dict(screen_results_by_window or {}),
         "shared": dict(shared),
+        "population_binding": dict(population_binding),
         "features_by_window": {
             "7": features_by_window["7"],
             "30": features_by_window["30"],

@@ -7,17 +7,24 @@ import json
 import re
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from types import MappingProxyType
 from typing import Any, ClassVar, Mapping
 
 LEARNING_SCHEMA_VERSION = 1
 
-# Locked ACCUM population authority (write-path membership digest; not free-form
-# labels and not a PIT universe warehouse). See stamp_universe_membership_id.
-# Choice (c): already-canonical capture artifact — artifact_digest of sorted tickers.
-ACCUM_POPULATION_AUTHORITY_CONTRACT = "capture_universe_membership_digest.v1"
+# Option A population authority (typed binding on decision_payload). A 64-hex
+# universe_id alone is never sufficient for challenge readiness.
+ACCUM_POPULATION_AUTHORITY_CONTRACT = (
+    "population.accum.lq45_current_roster_pit_tradable.v1"
+)
+ACCUM_POPULATION_BINDING_SCHEMA_VERSION = 1
+ACCUM_POPULATION_NAME = "lq45"
+ACCUM_TRADABLE_MEMBERSHIP_CONTRACT = "pit_tradable.candle_presence.v1"
+ACCUM_POPULATION_BENCHMARK_SYMBOL = "IHSG"
+# Legacy shape-only contract retained for documentation of pre-schema-10 rows.
+LEGACY_ACCUM_POPULATION_AUTHORITY_CONTRACT = "capture_universe_membership_digest.v1"
 _UNIVERSE_MEMBERSHIP_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -206,11 +213,244 @@ def is_accum_population_universe_id(universe_id: str) -> bool:
 
     Shape-only gate: 64 lowercase hex chars (sha256 of sorted ticker membership).
     Does not reconstruct historical LQ45 constituency (parked warehouse).
+    **Not** population authority for readiness — require typed AccumPopulationBinding.
     """
 
     if not isinstance(universe_id, str):
         return False
     return _UNIVERSE_MEMBERSHIP_DIGEST_RE.fullmatch(universe_id) is not None
+
+
+@dataclass(frozen=True)
+class AccumPopulationBinding:
+    """Typed producer-attested population binding (Option A, schema-10 payload).
+
+    Population meaning: current configured LQ45 roster intersected with
+    candle-active PIT tradability for the observation session. Not historical
+    LQ45 index constituency reconstruction.
+    """
+
+    schema_version: int
+    contract_id: str
+    population_name: str
+    membership_session: str
+    membership_digest: str
+    membership_count: int
+    named_universe_digest: str
+    tradable_membership_contract: str
+    pit_tradable_lookback_sessions: int
+    benchmark_symbol: str
+    producer_source_revision: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "contract_id": self.contract_id,
+            "population_name": self.population_name,
+            "membership_session": self.membership_session,
+            "membership_digest": self.membership_digest,
+            "membership_count": self.membership_count,
+            "named_universe_digest": self.named_universe_digest,
+            "tradable_membership_contract": self.tradable_membership_contract,
+            "pit_tradable_lookback_sessions": self.pit_tradable_lookback_sessions,
+            "benchmark_symbol": self.benchmark_symbol,
+            "producer_source_revision": self.producer_source_revision,
+        }
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        membership_tickers: Sequence[str],
+        named_universe_tickers: Sequence[str],
+        membership_session: date | str,
+        pit_tradable_lookback_sessions: int,
+        producer_source_revision: str,
+        population_name: str = ACCUM_POPULATION_NAME,
+        benchmark_symbol: str = ACCUM_POPULATION_BENCHMARK_SYMBOL,
+        tradable_membership_contract: str = ACCUM_TRADABLE_MEMBERSHIP_CONTRACT,
+    ) -> AccumPopulationBinding:
+        """Build a complete schema-1 binding from capture-time membership inputs."""
+        from datetime import date as date_cls
+
+        if isinstance(membership_session, date_cls):
+            session_s = membership_session.isoformat()
+        else:
+            session_s = str(membership_session).strip()
+        if not session_s:
+            raise LearningContractError("membership_session must be non-empty")
+        if pit_tradable_lookback_sessions < 1:
+            raise LearningContractError(
+                "pit_tradable_lookback_sessions must be >= 1, "
+                f"got {pit_tradable_lookback_sessions}"
+            )
+        _require_non_empty("producer_source_revision", producer_source_revision)
+        _require_non_empty("population_name", population_name)
+        _require_non_empty("benchmark_symbol", benchmark_symbol)
+        _require_non_empty("tradable_membership_contract", tradable_membership_contract)
+        membership = tuple(sorted({str(t).strip().upper() for t in membership_tickers if str(t).strip()}))
+        named = tuple(
+            sorted({str(t).strip().upper() for t in named_universe_tickers if str(t).strip()})
+        )
+        if not membership:
+            raise LearningContractError("membership_tickers must be non-empty")
+        if not named:
+            raise LearningContractError("named_universe_tickers must be non-empty")
+        membership_digest = stamp_universe_membership_id(membership)
+        named_digest = stamp_universe_membership_id(named)
+        return cls(
+            schema_version=ACCUM_POPULATION_BINDING_SCHEMA_VERSION,
+            contract_id=ACCUM_POPULATION_AUTHORITY_CONTRACT,
+            population_name=population_name,
+            membership_session=session_s,
+            membership_digest=membership_digest,
+            membership_count=len(membership),
+            named_universe_digest=named_digest,
+            tradable_membership_contract=tradable_membership_contract,
+            pit_tradable_lookback_sessions=int(pit_tradable_lookback_sessions),
+            benchmark_symbol=benchmark_symbol,
+            producer_source_revision=producer_source_revision.strip(),
+        )
+
+    @classmethod
+    def from_mapping(cls, raw: Mapping[str, Any]) -> AccumPopulationBinding:
+        """Parse a stored binding mapping; raises LearningContractError on malformation."""
+        if not isinstance(raw, Mapping):
+            raise LearningContractError(
+                f"population_binding must be a mapping, got {type(raw).__name__}"
+            )
+        try:
+            schema_version = int(raw["schema_version"])
+            membership_count = int(raw["membership_count"])
+            lookback = int(raw["pit_tradable_lookback_sessions"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise LearningContractError(
+                f"population_binding has malformed numeric fields: {exc}"
+            ) from exc
+        for key in (
+            "contract_id",
+            "population_name",
+            "membership_session",
+            "membership_digest",
+            "named_universe_digest",
+            "tradable_membership_contract",
+            "benchmark_symbol",
+            "producer_source_revision",
+        ):
+            if key not in raw:
+                raise LearningContractError(f"population_binding missing field {key!r}")
+            if not isinstance(raw[key], str) or not str(raw[key]).strip():
+                raise LearningContractError(f"population_binding.{key} must be non-empty string")
+        return cls(
+            schema_version=schema_version,
+            contract_id=str(raw["contract_id"]).strip(),
+            population_name=str(raw["population_name"]).strip(),
+            membership_session=str(raw["membership_session"]).strip(),
+            membership_digest=str(raw["membership_digest"]).strip(),
+            membership_count=membership_count,
+            named_universe_digest=str(raw["named_universe_digest"]).strip(),
+            tradable_membership_contract=str(raw["tradable_membership_contract"]).strip(),
+            pit_tradable_lookback_sessions=lookback,
+            benchmark_symbol=str(raw["benchmark_symbol"]).strip(),
+            producer_source_revision=str(raw["producer_source_revision"]).strip(),
+        )
+
+
+def validate_accum_population_binding(
+    binding: AccumPopulationBinding,
+    *,
+    outer_universe_id: str,
+    economic_session: date | str | None,
+) -> None:
+    """Fail-closed validation of every exact Option A field and cross-link."""
+    from datetime import date as date_cls
+
+    if binding.schema_version != ACCUM_POPULATION_BINDING_SCHEMA_VERSION:
+        raise LearningContractError(
+            f"population_binding.schema_version={binding.schema_version}"
+            f"!=expected:{ACCUM_POPULATION_BINDING_SCHEMA_VERSION}"
+        )
+    if binding.contract_id != ACCUM_POPULATION_AUTHORITY_CONTRACT:
+        raise LearningContractError(
+            f"population_binding.contract_id={binding.contract_id!r}"
+            f"!=expected:{ACCUM_POPULATION_AUTHORITY_CONTRACT!r}"
+        )
+    if binding.population_name != ACCUM_POPULATION_NAME:
+        raise LearningContractError(
+            f"population_binding.population_name={binding.population_name!r}"
+            f"!=expected:{ACCUM_POPULATION_NAME!r}"
+        )
+    if binding.tradable_membership_contract != ACCUM_TRADABLE_MEMBERSHIP_CONTRACT:
+        raise LearningContractError(
+            "population_binding.tradable_membership_contract="
+            f"{binding.tradable_membership_contract!r}"
+            f"!=expected:{ACCUM_TRADABLE_MEMBERSHIP_CONTRACT!r}"
+        )
+    if binding.benchmark_symbol != ACCUM_POPULATION_BENCHMARK_SYMBOL:
+        raise LearningContractError(
+            f"population_binding.benchmark_symbol={binding.benchmark_symbol!r}"
+            f"!=expected:{ACCUM_POPULATION_BENCHMARK_SYMBOL!r}"
+        )
+    if binding.membership_count < 1:
+        raise LearningContractError(
+            f"population_binding.membership_count must be positive, got {binding.membership_count}"
+        )
+    if binding.pit_tradable_lookback_sessions < 1:
+        raise LearningContractError(
+            "population_binding.pit_tradable_lookback_sessions must be >= 1, "
+            f"got {binding.pit_tradable_lookback_sessions}"
+        )
+    if not binding.producer_source_revision.strip():
+        raise LearningContractError("population_binding.producer_source_revision must be non-empty")
+    if not is_accum_population_universe_id(binding.membership_digest):
+        raise LearningContractError(
+            f"population_binding.membership_digest shape invalid: {binding.membership_digest!r}"
+        )
+    if not is_accum_population_universe_id(binding.named_universe_digest):
+        raise LearningContractError(
+            "population_binding.named_universe_digest shape invalid: "
+            f"{binding.named_universe_digest!r}"
+        )
+    if binding.membership_digest != outer_universe_id:
+        raise LearningContractError(
+            "population_binding.membership_digest must equal outer universe_id "
+            f"(binding={binding.membership_digest!r}, universe_id={outer_universe_id!r})"
+        )
+    session_raw = economic_session
+    if isinstance(session_raw, date_cls):
+        session_s = session_raw.isoformat()
+    elif isinstance(session_raw, str):
+        session_s = session_raw.strip()
+    else:
+        session_s = ""
+    if not session_s:
+        raise LearningContractError(
+            "population_binding requires a bound economic session for membership_session link"
+        )
+    if binding.membership_session != session_s:
+        raise LearningContractError(
+            "population_binding.membership_session must equal economic session "
+            f"(binding={binding.membership_session!r}, session={session_s!r})"
+        )
+
+
+def recompute_path_label_fingerprint(
+    *,
+    observation_id: str,
+    observation_artifact_digest: str,
+    label_contract: LearningContractId | str,
+) -> str:
+    """Producer fingerprint: digest(observation_id, decision_digest, label_contract)."""
+    contract_value = (
+        label_contract.value if isinstance(label_contract, LearningContractId) else str(label_contract)
+    )
+    return artifact_digest(
+        {
+            "observation_id": observation_id,
+            "decision_digest": observation_artifact_digest,
+            "label_contract": contract_value,
+        }
+    )
 
 
 def _require_non_empty(name: str, value: str) -> None:

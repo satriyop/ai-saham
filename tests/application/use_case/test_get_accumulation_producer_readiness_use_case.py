@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Sequence
 
 import pytest
@@ -16,6 +16,7 @@ from src.application.use_case.get_accumulation_producer_readiness_use_case impor
 )
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
+    AccumPopulationBinding,
     AssessmentPurpose,
     LabelAvailability,
     LearningContractId,
@@ -23,7 +24,12 @@ from src.domain.value_objects.learning_artifacts import (
     LearningOutcomeLabel,
     OutcomeBasis,
     ProductionPolicySnapshot,
+    recompute_path_label_fingerprint,
     stamp_universe_membership_id,
+)
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
     SQLiteLearningArtifactRepository,
@@ -35,17 +41,28 @@ COMPAT_B = "sha256:" + ("bb" * 32)
 OBS_CONTRACT = LearningContractId.ACCUMULATION_OBSERVATION.value
 PRODUCER_CONTRACT = "accumulation-discovery.v2"
 MATERIAL = "sha256:" + ("22" * 32)
-LOCKED_UNIVERSE_ID = stamp_universe_membership_id(["ASII", "BBCA", "BBRI", "BMRI", "TLKM"])
-UNIVERSE_ID = stamp_universe_membership_id(["BBCA", "BBRI"])
+MEMBERSHIP = ["BBCA", "BBRI"]
+NAMED_ROSTER = ["ASII", "BBCA", "BBRI", "BMRI", "TLKM"]
+UNIVERSE_ID = stamp_universe_membership_id(MEMBERSHIP)
 
 
-def _payload(session_date: str, *, ticker: str = "BBCA", action: str = "WATCH") -> dict:
+def _payload(
+    session_date: str,
+    *,
+    ticker: str = "BBCA",
+    action: str = "WATCH",
+    schema_version: int = CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    with_binding: bool = True,
+    captured_at: datetime | None = None,
+) -> dict:
     t = ticker.upper()
-    return {
-        "schema_version": 9,
+    cap = captured_at or datetime.fromisoformat(f"{session_date}T12:00:00+00:00")
+    body = {
+        "schema_version": schema_version,
         "artifact_type": "accumulation_session_observation",
         "ticker": t,
         "session_date": session_date,
+        "captured_at": cap.isoformat(),
         "canonical_window": 7,
         "workflow": "research_accum_capture",
         "horizon_primary": "accum_10d",
@@ -71,6 +88,15 @@ def _payload(session_date: str, *, ticker: str = "BBCA", action: str = "WATCH") 
             "90": {"trade_setup": {"action": action}, "signal": {}, "candidate": {}},
         },
     }
+    if with_binding and schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION:
+        body["population_binding"] = AccumPopulationBinding.create(
+            membership_tickers=MEMBERSHIP,
+            named_universe_tickers=NAMED_ROSTER,
+            membership_session=session_date,
+            pit_tradable_lookback_sessions=10,
+            producer_source_revision="ai-saham@test+git:cafebabe",
+        ).to_dict()
+    return body
 
 
 def _observation(
@@ -78,6 +104,8 @@ def _observation(
     day: int,
     compatibility_id: str,
     ticker: str = "BBCA",
+    schema_version: int = CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    with_binding: bool = True,
 ) -> LearningObservation:
     at = datetime(2026, 7, day, 12, 0, tzinfo=timezone.utc)
     t = ticker.upper()
@@ -90,20 +118,45 @@ def _observation(
         cutoff_at=at,
         universe_id=UNIVERSE_ID,
         window_id=f"{t}:{sd}",
-        decision_payload=_payload(sd, ticker=t),
+        decision_payload=_payload(
+            sd,
+            ticker=t,
+            schema_version=schema_version,
+            with_binding=with_binding,
+            captured_at=at,
+        ),
         captured_at=at,
     )
 
 
-def _label(observation_id: str) -> LearningOutcomeLabel:
+def _label(observation: LearningObservation) -> LearningOutcomeLabel:
+    session = date.fromisoformat(str(observation.decision_payload["session_date"]))
+    start = session + timedelta(days=1)
+    end = start + timedelta(days=9)
+    metrics = {
+        "ticker": observation.decision_payload["ticker"],
+        "signal_date": session.isoformat(),
+        "label_window_start": start.isoformat(),
+        "label_window_end": end.isoformat(),
+        "entry_reference_price": 100.0,
+        "close_return_pct": 3.5,
+        "max_forward_return_pct": 5.0,
+        "max_adverse_excursion_pct": -1.0,
+        "days_to_peak": 2,
+        "days_to_trough": 1,
+    }
     return LearningOutcomeLabel.create(
         contract_id=LearningContractId.ACCUM_10D_LABEL,
-        observation_id=observation_id,
+        observation_id=observation.observation_id,
         outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
         availability=LabelAvailability.AVAILABLE,
         outcome="SUCCESS",
-        metrics={"forward_return_pct": 1.0},
-        fingerprint="fp",
+        metrics=metrics,
+        fingerprint=recompute_path_label_fingerprint(
+            observation_id=observation.observation_id,
+            observation_artifact_digest=observation.artifact_digest,
+            label_contract=LearningContractId.ACCUM_10D_LABEL,
+        ),
         labeled_at=NOW,
     )
 
@@ -175,20 +228,34 @@ def test_use_case_reports_legacy_and_ready_cohorts_without_writes(tmp_path) -> N
     db = tmp_path / "learn.db"
     repo = SQLiteLearningArtifactRepository(db)
 
+    # Schema-9 historical cohort (no population_binding) → LEGACY_RAW_ONLY.
     legacy_obs = [
-        _observation(day=1, compatibility_id=COMPAT_A, ticker="BBCA"),
-        _observation(day=2, compatibility_id=COMPAT_A, ticker="BBRI"),
+        _observation(
+            day=1,
+            compatibility_id=COMPAT_A,
+            ticker="BBCA",
+            schema_version=LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+            with_binding=False,
+        ),
+        _observation(
+            day=2,
+            compatibility_id=COMPAT_A,
+            ticker="BBRI",
+            schema_version=LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+            with_binding=False,
+        ),
     ]
     for o in legacy_obs:
         repo.add_observation(o)
 
+    # Schema-10 + binding + labels + snapshots → CHALLENGE_INPUT_READY.
     ready_obs = [
         _observation(day=3, compatibility_id=COMPAT_B, ticker="BBCA"),
         _observation(day=4, compatibility_id=COMPAT_B, ticker="BBRI"),
     ]
     for o in ready_obs:
         repo.add_observation(o)
-        repo.add_label(_label(o.observation_id))
+        repo.add_label(_label(o))
     _seed_full_v2(repo, COMPAT_B)
 
     spy = _WriteSpyRepo(repo)
@@ -219,12 +286,17 @@ def test_use_case_reports_legacy_and_ready_cohorts_without_writes(tmp_path) -> N
 def test_use_case_no_implicit_cohort_pooling(tmp_path) -> None:
     db = tmp_path / "learn.db"
     repo = SQLiteLearningArtifactRepository(db)
-    o1 = _observation(day=1, compatibility_id=COMPAT_A)
+    o1 = _observation(
+        day=1,
+        compatibility_id=COMPAT_A,
+        schema_version=LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        with_binding=False,
+    )
     o2 = _observation(day=1, compatibility_id=COMPAT_B, ticker="BBRI")
     repo.add_observation(o1)
     repo.add_observation(o2)
     _seed_full_v2(repo, COMPAT_B)
-    repo.add_label(_label(o2.observation_id))
+    repo.add_label(_label(o2))
 
     report = GetAccumulationProducerReadinessUseCase(
         observations=repo,

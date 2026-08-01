@@ -1,8 +1,8 @@
 # Accum Action / Setup-Readiness Absence — Root Cause (P3)
 
-**Date:** 2026-08-01  
-**Scope:** ACCUMULATION_DISCOVERY session observations on maintainer DB  
-**Task:** `tasks/backlog/grow_snapshot_bound_accum_challenge_corpus.md` P3  
+**Date:** 2026-08-01
+**Scope:** ACCUMULATION_DISCOVERY session observations on maintainer DB
+**Task:** `tasks/backlog/grow_snapshot_bound_accum_challenge_corpus.md` P3
 **Method:** code-path trace (assessor → fingerprint payload → SQLite payload) + measured
 counts from frozen `decision_payload_json` (no recompute of today’s Action/readiness).
 
@@ -26,8 +26,8 @@ counts from frozen `decision_payload_json` (no recompute of today’s Action/rea
 
 Present readiness breakdown (11):
 
-- `INELIGIBLE` with family breakout/pullback and failed phase requirements: 6  
-- `UNAVAILABLE` with `missing_required_inputs=["setup_evidence"]`: 5  
+- `INELIGIBLE` with family breakout/pullback and failed phase requirements: 6
+- `UNAVAILABLE` with `missing_required_inputs=["setup_evidence"]`: 5
 
 Action distribution (304): BLOCKED_STRUCTURAL 204, BLOCKED_EXECUTION 38, AVOID 32, WATCH 30, ENTER 0.
 
@@ -63,6 +63,6 @@ Action distribution (304): BLOCKED_STRUCTURAL 204, BLOCKED_EXECUTION 38, AVOID 3
 
 ## Verification hooks
 
-- `tests/application/services/test_accumulation_action_readiness_transport.py`  
-  — lineage: computed readiness survives payload; missing family stays null;  
+- `tests/application/services/test_accumulation_action_readiness_transport.py`
+  — lineage: computed readiness survives payload; missing family stays null;
   status extractors never recompute Action/readiness.

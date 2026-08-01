@@ -120,12 +120,14 @@ class RecordingRecordUseCase:
         snapshot_date,
         execution_context,
         universe_tickers,
+        population_binding,
         canonical_window,
     ) -> int:
         self.persist_calls.append(
             {
                 "snapshot_date": snapshot_date,
                 "universe_tickers": list(universe_tickers),
+                "population_binding": population_binding,
             }
         )
         # one saved row per unique ticker in universe for this date
@@ -164,6 +166,8 @@ def _make_use_case(
         observation_identity=_identity(),
         membership_resolver=membership_resolver,
         pit_window_sessions=pit_window_sessions,
+        named_universe_tickers=["ASII", "BBCA", "BBRI", "BMRI", "TLKM"],
+        producer_source_revision="ai-saham@test+git:deadbeef",
         evaluate_market_context=None,
         session_resolver=MagicMock(
             resolve=lambda run_at: SimpleNamespace(
@@ -377,4 +381,6 @@ class TestPitWindowValidation:
                 observation_identity=_identity(),
                 membership_resolver=lambda d: (),
                 pit_window_sessions=0,
+                named_universe_tickers=["BBCA"],
+                producer_source_revision="ai-saham@test",
             )

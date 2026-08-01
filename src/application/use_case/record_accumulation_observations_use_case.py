@@ -77,6 +77,7 @@ class RecordAccumulationObservationsUseCase:
         snapshot_date,
         execution_context: "SignalEvidenceExecutionContext",
         universe_tickers: list[str],
+        population_binding,
         canonical_window: int = 7,
     ) -> int:
         """Persist merged session observations after all windows were screened."""
@@ -87,5 +88,6 @@ class RecordAccumulationObservationsUseCase:
             observation_contract=execution_context.observation_contract,
             semantic_compatibility_id=execution_context.semantic_compatibility_id,
             universe_tickers=universe_tickers,
+            population_binding=population_binding,
             canonical_window=canonical_window,
         )

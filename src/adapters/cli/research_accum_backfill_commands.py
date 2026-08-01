@@ -238,6 +238,18 @@ def run_signal_observation_corpus_write(
         typer.echo(f"[error] production policy snapshot ensure failed: {exc}", err=True)
         raise typer.Exit(1) from exc
 
+    if named_tickers is None:
+        # Board-wide pure candle-active still needs a named roster digest for
+        # Option A population binding; use the resolved membership roster of the
+        # run is not available here — require an explicit named universe for
+        # challenge corpus capture. Fall back to empty is rejected by use case.
+        typer.echo(
+            "[error] population binding (schema-10) requires a named universe "
+            "(e.g. lq45); 'cached' board-wide mode is not challenge-corpus authority.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     return BackfillSignalObservationsUseCase(
         record_observations_use_case=screen_bundle.record_observations_use_case,
         screen_request_builder=screen_request_builder,
@@ -245,6 +257,9 @@ def run_signal_observation_corpus_write(
         observation_identity=observation_identity,
         membership_resolver=membership_resolver,
         pit_window_sessions=pit_window,
+        named_universe_tickers=named_tickers,
+        producer_source_revision=resolve_producer_source_revision(),
+        population_name=universe if universe != "cached" else "lq45",
         evaluate_market_context=_evaluate_market_context_for_corpus,
         session_resolver=EffectiveMarketSessionResolver(market_repo),
         evidence_context_builder=SignalEvidenceExecutionContextBuilder(

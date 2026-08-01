@@ -18,6 +18,7 @@ from src.application.services.accumulation_observation_fingerprint import (
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import (
+    AccumPopulationBinding,
     AssessmentPurpose,
     LearningContractId,
     LearningObservation,
@@ -85,6 +86,7 @@ class AccumulationCandidateObservationPersister:
         observation_contract: str | None,
         semantic_compatibility_id: "SemanticCompatibilityId | None",
         universe_tickers: list[str],
+        population_binding: AccumPopulationBinding | dict[str, Any],
         canonical_window: int = 7,
     ) -> int:
         """Persist one ADR-056 session observation per ticker (windows 7/30/90 merged).
@@ -93,6 +95,9 @@ class AccumulationCandidateObservationPersister:
         Tickers missing any required window are skipped (not half-written).
         Existing observation_ids are skipped (first write wins) so re-backfill
         does not conflict when ``captured_at`` changes the artifact digest.
+
+        ``population_binding`` is the Option A typed authority for schema-10
+        payloads (must agree with ``universe_tickers`` membership digest).
         """
         if observation_contract != ACCUMULATION_DISCOVERY_CONTRACT:
             raise ValueError(
@@ -115,6 +120,18 @@ class AccumulationCandidateObservationPersister:
             if window not in window_results:
                 raise ValueError(f"window_results missing required window {window}")
 
+        if isinstance(population_binding, AccumPopulationBinding):
+            binding_dict = population_binding.to_dict()
+            binding_obj = population_binding
+        elif isinstance(population_binding, dict):
+            binding_obj = AccumPopulationBinding.from_mapping(population_binding)
+            binding_dict = binding_obj.to_dict()
+        else:
+            raise ValueError(
+                "population_binding must be AccumPopulationBinding or dict, "
+                f"got {type(population_binding).__name__}"
+            )
+
         # ticker -> window -> OC
         by_ticker: dict[str, dict[int, Any]] = {}
         for window, (_req, candidates) in window_results.items():
@@ -126,8 +143,19 @@ class AccumulationCandidateObservationPersister:
         # Config hash from canonical window request (material config identity).
         canon_req = window_results[canonical_window][0]
         config_hash = compute_accumulation_config_hash(canon_req)
-        # Locked population authority: capture membership digest (not free-form labels).
+        # Locked population authority: capture membership digest + typed binding.
         universe_id = stamp_universe_membership_id(universe_tickers)
+        if binding_obj.membership_digest != universe_id:
+            raise ValueError(
+                "population_binding.membership_digest must equal stamp of universe_tickers "
+                f"(binding={binding_obj.membership_digest!r}, stamped={universe_id!r})"
+            )
+        if binding_obj.membership_session != snapshot_date.isoformat():
+            raise ValueError(
+                "population_binding.membership_session must equal snapshot_date "
+                f"(binding={binding_obj.membership_session!r}, "
+                f"snapshot={snapshot_date.isoformat()!r})"
+            )
         market_context = getattr(canon_req, "market_context", None)
         shared_mce = (
             market_context.to_dict()
@@ -203,6 +231,7 @@ class AccumulationCandidateObservationPersister:
                 features_by_window=features_by_window,
                 shared=shared,
                 screen_results_by_window=screen_results,
+                population_binding=binding_dict,
             )
             observation = LearningObservation.create(
                 purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
