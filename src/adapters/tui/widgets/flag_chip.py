@@ -31,6 +31,9 @@ def format_chip_markup(
     """Leading bold ``[k]`` + product word (design keycap-in-chip).
 
     Brass when idle; dark ink when is-on (peach fill). Dim mutes both.
+
+    Important: Textual/Rich markup treats ``[b]`` as a style tag. Escape the
+    opening bracket so the keycap is literal: ``\\[b]`` → visible ``[b]``.
     """
     word = (word or "").strip() or "—"
     k = (power_key or "").strip().lower()
@@ -40,7 +43,8 @@ def format_chip_markup(
         if is_on:
             return f"[bold {_ON_INK}]{word}[/]"
         return word
-    keycap = f"[{k}]"
+    # Literal keycap for Textual Content markup (do not use raw [k])
+    keycap = f"\\[{k}]"
     if dim:
         return f"[bold {_DIM_KEY}]{keycap}[/] [{_DIM_LAB}]{word}[/]"
     if is_on:
