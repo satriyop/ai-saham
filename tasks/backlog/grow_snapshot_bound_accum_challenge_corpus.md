@@ -2,6 +2,26 @@
 
 Status: `IN_PROGRESS_CONTRACT_HARDENING`
 
+## Locked Decisions (2026-08-02) — market-session authority for path labels
+
+Authoritative market-session source for ACCUM path labels and readiness:
+
+| Dimension | Lock |
+|---|---|
+| Contract | `idx.trading_sessions.ihsg_candle.v1` |
+| Meaning | Session dates are exactly IHSG benchmark candle dates in a coverage-spanned cache window. A weekday without an IHSG candle is a **non-session** (holiday / market closed) under this contract — **not** independent IDX holiday reconstruction and **not** an ingestion-gap guess. |
+| Owner / writer | Capture/fetch paths that persist IHSG candles (existing market repository write path). Status never writes. |
+| Read-only repository | `TradingSessionCalendarReadRepository` → `SQLiteIHSGTradingSessionCalendarReadRepository` (SQLite `mode=ro`, no `_ensure_schema`, no file/table creation). |
+| Completeness proof | `get_date_range(IHSG)` must fully span `[coverage_start, coverage_end]`. If not, return `None` (fail closed). Interior weekday absences become non-sessions once span is proven. |
+| Session-set identity | `session_calendar_contract`, `session_calendar_revision` (coverage bounds), `session_calendar_digest` = digest of `{contract, coverage_start, coverage_end, sessions[]}`. |
+| Missing vs corrupt | Missing/unspanned cache → no calendar → AVAILABLE windows fail closed / labels stay provisional. Corrupt label session identity (wrong first-N, length, digest) → integrity corruption / `BLOCKED_POLICY`. |
+| Label fields (metrics schema v2) | `label_window_sessions` (exact ordered N ISO dates), `session_calendar_contract`, `session_calendar_revision`, `session_calendar_digest`, plus existing window endpoints. |
+| Producer/validator axis | Same calendar authority. Producer resolves first N sessions after signal, requires one ticker candle **per exact session date**, never skips a session to a later ticker candle. |
+| Coverage for readiness load | Per cohort from AVAILABLE labels: `min(signal_date)` .. `max(label_window_end)`. Never `newest observation + 40 days`. No AVAILABLE labels → no calendar required (COLLECTING). |
+| Observation payload versions | Purpose-specific: `ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION=11` (attested population tickers + binding schema 2); `PRE_OPEN_OBSERVATION_PAYLOAD_SCHEMA_VERSION=10` (pre-open does not inherit accum-only population bumps). Lean compatibility folds the accumulation payload version only. |
+
+Do **not** use the gap-free availability helper (`IHSGTradingSessionCalendarProvider` weekday-complete mode) as challenge path-label authority; that provider remains for DQ-002I availability lag, where unexplained weekday holes fail closed differently.
+
 Source: code-first cross-repo product-gap audit on 2026-07-31.
 
 Companion consumer task:
@@ -69,12 +89,13 @@ stage and commit only files owned by this task.
      `BackfillSignalObservationsUseCase`; storage owner: the existing
      `LearningObservationRepository` inside `decision_payload.population_binding`.
      Do not add a population warehouse or a second repository in this task.
-   - Exact binding fields: `schema_version=1`, the contract ID above,
+   - Exact binding fields: `schema_version=2`, the contract ID above,
      `population_name=lq45`, `membership_session` equal to the observation
      session, `membership_digest` equal to outer `universe_id`, positive
-     `membership_count`, `named_universe_digest` over the sorted configured LQ45
-     roster used by the run,
-     `tradable_membership_contract=pit_tradable.candle_presence.v1`, material
+     `membership_count`, attested sorted `membership_tickers` and
+     `named_universe_tickers` with membership ⊆ named roster,
+     `named_universe_digest` over the sorted configured LQ45 roster used by the
+     run, `tradable_membership_contract=pit_tradable.candle_presence.v1`, material
      `pit_tradable_lookback_sessions`, `benchmark_symbol=IHSG`, and non-empty
      `producer_source_revision`.
    - `universe_id` remains
@@ -83,15 +104,20 @@ stage and commit only files owned by this task.
      exact contract fields. This is producer-attested authority protected by
      the immutable observation digest; it is not an independent reconstruction
      or cryptographic proof of external origin.
-   - Classification: `OBSERVATION_SCHEMA`, not `NON_SEMANTIC`. Bump
-     `CANDIDATE_OBSERVATION_SCHEMA_VERSION` from 9 to 10. The lean compatibility
-     ID forks because that payload schema version is already material. Keep
+   - Classification: `OBSERVATION_SCHEMA`, not `NON_SEMANTIC`. Current
+     accumulation payload schema is
+     `ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION=11` (attested ticker sets;
+     incomplete schema-10 is non-current). Pre-open remains on
+     `PRE_OPEN_OBSERVATION_PAYLOAD_SCHEMA_VERSION=10` and must not silently
+     inherit accumulation-only population bumps. Lean compatibility folds the
+     accumulation payload version only. Keep
      `learning_observation.accumulation_discovery.v2`,
      `accumulation-discovery.v2`, and `production_policy_snapshot.v2`; no SQLite
      migration, snapshot v3, dual write, or compatibility alias is authorized.
    - Existing schema-9 observations without `population_binding` remain
      immutable historical corpus and project as `LEGACY_RAW_ONLY`, including
-     their old compatibility cohorts. A schema-10/current-cohort row with a
+     their old compatibility cohorts. Incomplete schema-10 (pre-attested tickers)
+     is also non-current / `LEGACY_RAW_ONLY`. A schema-11/current-cohort row with a
      missing or invalid binding is `BLOCKED_POLICY`. Never rewrite schema-9 rows
      or attach a binding after the fact.
 5. **P3 is diagnose plus bounded repair.** Produce a root-cause report and fix
