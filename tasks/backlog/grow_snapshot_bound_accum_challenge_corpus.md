@@ -2,25 +2,23 @@
 
 Status: `IN_PROGRESS_CONTRACT_HARDENING`
 
-## Locked Decisions (2026-08-02) — market-session authority for path labels
+## Locked Decisions (2026-08-02/03) — market-session authority for path labels
 
 Authoritative market-session source for ACCUM path labels and readiness:
 
 | Dimension | Lock |
 |---|---|
-| Contract | `idx.trading_sessions.ihsg_candle.v1` |
-| Meaning | Session dates are exactly IHSG benchmark candle dates in a coverage-spanned cache window. A weekday without an IHSG candle is a **non-session** (holiday / market closed) under this contract — **not** independent IDX holiday reconstruction and **not** an ingestion-gap guess. |
-| Owner / writer | Capture/fetch paths that persist IHSG candles (existing market repository write path). Status never writes. |
-| Read-only repository | `TradingSessionCalendarReadRepository` → `SQLiteIHSGTradingSessionCalendarReadRepository` (SQLite `mode=ro`, no `_ensure_schema`, no file/table creation). |
-| Completeness proof | `get_date_range(IHSG)` must fully span `[coverage_start, coverage_end]`. If not, return `None` (fail closed). Interior weekday absences become non-sessions once span is proven. |
-| Session-set identity | `session_calendar_contract`, `session_calendar_revision` (coverage bounds), `session_calendar_digest` = digest of `{contract, coverage_start, coverage_end, sessions[]}`. |
-| Missing vs corrupt | Missing/unspanned cache → no calendar → AVAILABLE windows fail closed / labels stay provisional. Corrupt label session identity (wrong first-N, length, digest) → integrity corruption / `BLOCKED_POLICY`. |
-| Label fields (metrics schema v2) | `label_window_sessions` (exact ordered N ISO dates), `session_calendar_contract`, `session_calendar_revision`, `session_calendar_digest`, plus existing window endpoints. |
-| Producer/validator axis | Same calendar authority. Producer resolves first N sessions after signal, requires one ticker candle **per exact session date**, never skips a session to a later ticker candle. |
-| Coverage for readiness load | Per cohort from AVAILABLE labels: `min(signal_date)` .. `max(label_window_end)`. Never `newest observation + 40 days`. No AVAILABLE labels → no calendar required (COLLECTING). |
-| Observation payload versions | Purpose-specific: `ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION=11` (attested population tickers + binding schema 2); `PRE_OPEN_OBSERVATION_PAYLOAD_SCHEMA_VERSION=10` (pre-open does not inherit accum-only population bumps). Lean compatibility folds the accumulation payload version only. |
+| Contract | `stockbit.trading_sessions.ihsg_history.v1` |
+| Meaning | A **successfully completed, strict Stockbit IHSG historical query** defines observed market-session dates for its requested range. **Not** official IDX calendar authority. Stockbit is the source. |
+| Artifact | Immutable `TradingSessionCalendarSnapshot` (snapshot_id, contract, source, benchmark, coverage, ordered_sessions, source_revision, captured_at, payload_digest) persisted in `trading_session_calendar_snapshots`. |
+| Writer | Strict Stockbit probe → write repository only on fully validated responses. Status never writes and never contacts Stockbit. |
+| Read-only repository | `SQLiteTradingSessionCalendarSnapshotReadRepository` (`mode=ro`, no schema ensure). Load **by snapshot_id bound on each label**, never “latest”. |
+| Completeness | Every pagination page must succeed. Partial results after errors are forbidden. Empty complete range is allowed. Unexplained local IHSG cache holes prove nothing without a snapshot. |
+| Label metrics schema v3 | `calendar_snapshot_id`, `calendar_contract_id`, `calendar_source_revision`, `label_window_sessions`, `label_window_digest` = digest({snapshot_id, label_contract, signal_date, sessions}). **Do not** hash growing full-cache coverage. |
+| Producer/validator | Same snapshot identity. Producer binds labels to one snapshot; readiness reloads that exact snapshot and rechecks first-N + digests + revision. |
+| Observation payload versions | Accum **11** / binding **2**; pre-open **10**. |
 
-Do **not** use the gap-free availability helper (`IHSGTradingSessionCalendarProvider` weekday-complete mode) as challenge path-label authority; that provider remains for DQ-002I availability lag, where unexplained weekday holes fail closed differently.
+Cron/application order: strict Stockbit calendar sync → persist snapshot → generate labels → read-only readiness status.
 
 Source: code-first cross-repo product-gap audit on 2026-07-31.
 

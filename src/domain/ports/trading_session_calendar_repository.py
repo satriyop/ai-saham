@@ -1,30 +1,47 @@
-"""Read port for authoritative market-session calendars (path labels / readiness).
+"""Ports for immutable trading-session calendar snapshots.
 
-Layer: Domain port. Implementations live in infrastructure and must stay
-read-only for status/readiness composition roots.
+Layer: Domain ports
 """
 
 from __future__ import annotations
 
 from datetime import date
-from typing import Protocol
+from typing import Protocol, Sequence
 
-from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
+from src.domain.value_objects.trading_session_calendar_snapshot import (
+    TradingSessionCalendarSnapshot,
+)
 
 
-class TradingSessionCalendarReadRepository(Protocol):
-    """Load a proven session calendar for a coverage window without mutation."""
+class TradingSessionCalendarSource(Protocol):
+    """Strict external source that attests a complete session set for a range."""
 
-    def load_calendar(
+    def fetch_snapshot(
+        self,
+        coverage_start: date,
+        coverage_end: date,
+    ) -> TradingSessionCalendarSnapshot:
+        """Fetch and validate a complete snapshot. Never returns partial data.
+
+        Raises on network failure, incomplete pagination, or malformed payload.
+        """
+        ...
+
+
+class TradingSessionCalendarSnapshotWriteRepository(Protocol):
+    def add_snapshot(self, snapshot: TradingSessionCalendarSnapshot) -> None: ...
+
+
+class TradingSessionCalendarSnapshotReadRepository(Protocol):
+    def get_snapshot(self, snapshot_id: str) -> TradingSessionCalendarSnapshot | None: ...
+
+    def list_snapshots(self) -> Sequence[TradingSessionCalendarSnapshot]: ...
+
+    def find_covering_snapshot(
         self,
         *,
         coverage_start: date,
         coverage_end: date,
-    ) -> KnownTradingSessionCalendar | None:
-        """Return a proven calendar or None when coverage cannot be proven.
-
-        Implementations must not create databases, tables, indexes, columns,
-        directories, or files. Fail closed when the source cannot prove complete
-        coverage for the requested interval.
-        """
+    ) -> TradingSessionCalendarSnapshot | None:
+        """Return a snapshot whose coverage fully spans the requested range."""
         ...
