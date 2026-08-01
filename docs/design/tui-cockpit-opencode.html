@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-fin-subchip-y</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-preopen-act</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -2497,7 +2497,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 01-fin-subchip-y</span>
+      <span class="rev" id="buildStamp">mock · 01-preopen-act</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -2715,24 +2715,27 @@
             <span id="paperTicker" style="display:none">BBCA</span>
           </div>
 
- <!-- 5 PRE-OPEN (denser auction board) -->
+ <!-- 5 PRE-OPEN · session strip + Action board (design lock 2026-08-01) -->
  <div class="preopen-view is-hidden" id="preopenView">
  <div class="auction-strip" id="auctionStrip">
  <div class="stat">
- <div class="lbl">Session</div>
- <div class="val sm">pre-open · IEP</div>
+ <div class="lbl">Source</div>
+ <div class="val sm">SNAPSHOT</div>
  </div>
  <div class="stat">
- <div class="lbl">Universe</div>
- <div class="val">312 <span class="dim" style="font-size:12px;font-weight:400">scanned</span></div>
+ <div class="lbl">Phase</div>
+ <div class="val sm">NCP_LOCKED</div>
  </div>
  <div class="stat">
- <div class="lbl">Pass / Watch / Block</div>
- <div class="val">12 <span class="dim" style="font-size:12px">/</span> 7 <span class="dim" style="font-size:12px">/</span> 4</div>
+ <div class="lbl">Funnel</div>
+ <div class="val">312 <span class="dim" style="font-size:12px;font-weight:400">scan</span>
+  · <span style="color:var(--green)">E3</span>
+  <span class="dim" style="font-size:12px">/</span>
+  <span style="color:var(--amber)">W7</span></div>
  </div>
  <div class="stat">
- <div class="lbl">Auction clock</div>
- <div class="val">08:54:12</div>
+ <div class="lbl">Window</div>
+ <div class="val sm">08:57 WIB</div>
  </div>
  </div>
 
@@ -2741,13 +2744,13 @@
  <thead>
  <tr>
  <th style="width:56px">Tkr</th>
+ <th style="width:64px">Act</th>
  <th class="num">IEP</th>
  <th class="num">Δ%</th>
  <th class="num">IEV</th>
- <th class="num">NCP</th>
+ <th style="width:48px">NCP</th>
  <th class="num">ΔIEV</th>
- <th style="width:44px">Grd</th>
- <th style="width:56px">Risk</th>
+ <th style="width:44px">Risk</th>
  </tr>
  </thead>
  <tbody id="preopenBody"></tbody>
@@ -2756,31 +2759,31 @@
  
  <div class="card" id="preopenEvidence">
  <div class="kv">
- <span class="k">Provenance</span><span class="v">verified NCP · Stockbit</span>
- <span class="k">Auction imbalance</span><span class="v pos">buy-lean · 1.34×</span>
- <span class="k">Prior close vs IEP</span><span class="v">gap +1.8% inside band</span>
- <span class="k">Risk gate</span><span class="v">clear · liquidity ok</span>
- <span class="k">Note</span><span class="v dim">assess pre-open for full grade trail</span>
+ <span class="k">Focus</span><span class="v">BBRI · ENTER</span>
+ <span class="k">Provenance</span><span class="v">NCP lock · snapshot ref</span>
+ <span class="k">Imbalance</span><span class="v pos">buy-lean · 1.34×</span>
+ <span class="k">Gap source</span><span class="v">IEP · +1.8%</span>
+ <span class="k">Notation</span><span class="v dim">—</span>
  </div>
  </div>
 
             <div class="footer-note">
               <span><span class="kbd">↑↓</span> move</span>
-              <span><span class="kbd">Enter</span> auction inspect</span>
+              <span><span class="kbd">Enter</span> inspect</span>
               <span><span class="kbd">p</span> plan</span>
               <span><span class="kbd">s a</span> accum</span>
-              <span class="dim">Tkr IEP Δ% IEV NCP ΔIEV Grd Risk</span>
+              <span class="dim">Tkr Act IEP Δ% IEV NCP ΔIEV Risk</span>
             </div>
           </div>
 
-          <!-- 5b PRE-OPEN INSPECT · code-richer auction flags -->
+          <!-- 5b PRE-OPEN INSPECT · present-only · why / auction+ / plan / warn -->
           <div class="list-view is-hidden" id="preopenInspectView">
 <div class="section-label">Pre-open · <span id="poiTicker">BBRI</span></div>
 
             <div class="plan-inherit" style="margin-bottom:12px">
-              <span class="act" id="poiGrade" style="color:var(--green)">A</span>
-              <span class="badge pass" id="poiRisk">clear</span>
-              <span class="note">grade · risk · present-only</span>
+              <span class="act" id="poiGrade" style="color:var(--green)">ENTER</span>
+              <span class="badge pass" id="poiRisk">~</span>
+              <span class="note">Action · risk annotate · present-only</span>
             </div>
 
             <div class="oc-hero" style="margin-bottom:12px">
@@ -2791,40 +2794,50 @@
               </div>
               <div class="kv" style="margin-top:12px">
                 <span class="k">IEV</span><span class="v" id="poiIev">12.4M</span>
-                <span class="k">NCP</span><span class="v" id="poiNcp">0.92</span>
+                <span class="k">NCP</span><span class="v" id="poiNcp">LOCK</span>
                 <span class="k">ΔIEV</span><span class="v" id="poiDiev">+2.1M</span>
-                <span class="k">Session</span><span class="v">pre-open · local IEV</span>
+                <span class="k">Gap src</span><span class="v" id="poiGapSrc">IEP</span>
+                <span class="k">Session</span><span class="v">SNAPSHOT · NCP_LOCKED</span>
               </div>
             </div>
 
             <div class="flag-row" data-flag-group="poi" role="toolbar" aria-label="Pre-open chips">
               <button type="button" class="flag-chip" data-flag="why" title="why">why</button>
               <button type="button" class="flag-chip" data-flag="auction+" title="auction+">auction+</button>
+              <button type="button" class="flag-chip" data-flag="plan" title="plan">plan</button>
               <button type="button" class="flag-chip" data-flag="warn" title="warn">warn</button>
             </div>
             <div class="flag-panel" data-flag-panel="why" data-flag-group="poi">
-              <h4>Why (board row)</h4>
-              <p id="poiWhy" style="margin:0;color:var(--text-dim)">Grade A · NCP lock · ΔIEV positive · risk clear</p>
+              <h4>Why (signal · present-only)</h4>
+              <p id="poiWhy" style="margin:0;color:var(--text-dim)">Dir BULL · conf H · quality A · Sig 72 · locked ΔIEV + · no missing baseline</p>
             </div>
             <div class="flag-panel" data-flag-panel="auction+" data-flag-group="poi">
-              <h4>Auction / broker (on candidate source)</h4>
-              <div class="line"><span class="k">trend</span><span class="v" id="poiTrend">buy-lean</span></div>
+              <h4>Auction book · intensity (not NCP)</h4>
+              <div class="line"><span class="k">imbalance</span><span class="v" id="poiTrend">buy-lean · 1.34×</span></div>
+              <div class="line"><span class="k">spread%</span><span class="v" id="poiSpread">0.42%</span></div>
+              <div class="line"><span class="k">intensity</span><span class="v" id="poiIntensity">6.1×</span></div>
               <div class="line"><span class="k">broker tag</span><span class="v" id="poiBrokerTag">local-support</span></div>
-              <div class="line"><span class="k">backing_score</span><span class="v" id="poiBackScore">0.72</span></div>
-              <div class="line"><span class="k">buy_streak</span><span class="v" id="poiBuyStreak">3</span></div>
+              <div class="line"><span class="k">backing</span><span class="v" id="poiBackScore">0.72 · streak 3</span></div>
+            </div>
+            <div class="flag-panel" data-flag-panel="plan" data-flag-group="poi">
+              <h4>Plan (geometry · not Action invent)</h4>
+              <div class="line"><span class="k">entry range</span><span class="v" id="poiEntry">4,780 – 4,860</span></div>
+              <div class="line"><span class="k">stop%</span><span class="v" id="poiStop">−2.4%</span></div>
+              <div class="line"><span class="k">ATR</span><span class="v" id="poiAtr">118</span></div>
+              <div class="line"><span class="k">capital band</span><span class="v" id="poiCap">2–3 lots · sample</span></div>
             </div>
             <div class="flag-panel" data-flag-panel="warn" data-flag-group="poi">
-              <h4>Snapshot warnings</h4>
-              <p id="poiWarn" style="margin:0;color:var(--amber)">none · sample would list ≤4 warning lines</p>
+              <h4>Warn · notation · risk</h4>
+              <p id="poiWarn" style="margin:0;color:var(--amber)">notation — · risk ~ annotate · regime neutral</p>
             </div>
 
             <div class="plan-ctx" id="poiBody">
               <h3>Levels</h3>
-              <p id="poiTrail">IEP · Δ% · IEV · NCP · ΔIEV · local IEV snapshot path</p>
+              <p id="poiTrail">Act ENTER · IEP · locked ΔIEV · NCP LOCK · present-only · not Judge</p>
             </div>
 
             <div class="footer-note">
-              <span><span class="kbd">esc</span> IEP board</span>
+              <span><span class="kbd">esc</span> board</span>
               <span><span class="kbd">p</span> plan</span>
               <span><span class="kbd">v</span> ticker</span>
             </div>
@@ -3949,20 +3962,20 @@
  { t: "EXCL", signal: 62, accum: 37.5, action: "WATCH", phase: "NONE", streak: 1, rsi: 53.8, net: 0.3, disc: -0.2, price: 2280, gate: "OPEN" },
  ];
 
- // 1:1 with preopen board: Tkr IEP Δ% IEV NCP ΔIEV Grd Risk
+ // Board contract: Tkr Act IEP Δ% IEV NCP ΔIEV Risk · NCP=lock flag · ΔIEV=locked baseline
  const PREOPEN = [
- { t: "BBRI", iep: 4820, d: 1.8, iev: "12.4M", ncp: 0.92, diev: "+2.1M", grade: "A", risk: "clear" },
- { t: "BMRI", iep: 6150, d: 1.2, iev: "9.1M", ncp: 0.88, diev: "+0.8M", grade: "A", risk: "clear" },
- { t: "BBCA", iep: 9925, d: 0.8, iev: "6.2M", ncp: 0.81, diev: "+0.3M", grade: "B", risk: "clear" },
- { t: "TLKM", iep: 3180, d: -0.6, iev: "18.7M", ncp: 0.74, diev: "−1.2M", grade: "B", risk: "clear" },
- { t: "ASII", iep: 4720, d: 2.4, iev: "14.0M", ncp: 0.69, diev: "+1.5M", grade: "A", risk: "watch" },
- { t: "ADRO", iep: 2680, d: 3.1, iev: "22.3M", ncp: 0.55, diev: "+4.5M", grade: "C", risk: "block" },
- { t: "PTBA", iep: 2890, d: 1.5, iev: "5.4M", ncp: 0.71, diev: "+0.6M", grade: "B", risk: "clear" },
- { t: "ICBP", iep: 11250, d: 0.4, iev: "1.1M", ncp: 0.66, diev: "−0.1M", grade: "C", risk: "watch" },
- { t: "UNVR", iep: 2410, d: -1.1, iev: "3.8M", ncp: 0.60, diev: "−0.4M", grade: "C", risk: "clear" },
- { t: "EXCL", iep: 2280, d: 1.9, iev: "8.6M", ncp: 0.77, diev: "+1.1M", grade: "B", risk: "clear" },
- { t: "KLBF", iep: 1545, d: 0.3, iev: "4.2M", ncp: 0.63, diev: "+0.2M", grade: "C", risk: "clear" },
- { t: "INDF", iep: 6850, d: 0.9, iev: "2.0M", ncp: 0.70, diev: "+0.3M", grade: "B", risk: "clear" },
+ { t: "BBRI", act: "ENTER", iep: 4820, d: 1.8, iev: "12.4M", ncp: "LOCK", diev: "+2.1M", risk: "~", imb: "1.34×", gapSrc: "IEP" },
+ { t: "BMRI", act: "ENTER", iep: 6150, d: 1.2, iev: "9.1M", ncp: "LOCK", diev: "+0.8M", risk: "~", imb: "1.12×", gapSrc: "IEP" },
+ { t: "BBCA", act: "WATCH", iep: 9925, d: 0.8, iev: "6.2M", ncp: "LOCK", diev: "+0.3M", risk: "~", imb: "0.98×", gapSrc: "IEP" },
+ { t: "TLKM", act: "WATCH", iep: 3180, d: -0.6, iev: "18.7M", ncp: "LOCK", diev: "−1.2M", risk: "↓", imb: "0.72×", gapSrc: "IEP" },
+ { t: "ASII", act: "ENTER", iep: 4720, d: 2.4, iev: "14.0M", ncp: "LOCK", diev: "+1.5M", risk: "↑", imb: "1.41×", gapSrc: "IEP" },
+ { t: "ADRO", act: "WATCH", iep: 2680, d: 3.1, iev: "22.3M", ncp: "LOCK", diev: "+4.5M", risk: "↑", imb: "1.55×", gapSrc: "BEST_BID" },
+ { t: "PTBA", act: "WATCH", iep: 2890, d: 1.5, iev: "5.4M", ncp: "LOCK", diev: "+0.6M", risk: "~", imb: "1.05×", gapSrc: "IEP" },
+ { t: "ICBP", act: "—", iep: 11250, d: 0.4, iev: "1.1M", ncp: "disc", diev: "—", risk: "—", imb: "—", gapSrc: "IEP" },
+ { t: "UNVR", act: "—", iep: 2410, d: -1.1, iev: "3.8M", ncp: "disc", diev: "—", risk: "~", imb: "—", gapSrc: "IEP" },
+ { t: "EXCL", act: "WATCH", iep: 2280, d: 1.9, iev: "8.6M", ncp: "LOCK", diev: "+1.1M", risk: "~", imb: "1.18×", gapSrc: "IEP" },
+ { t: "KLBF", act: "—", iep: 1545, d: 0.3, iev: "4.2M", ncp: "disc", diev: "—", risk: "—", imb: "—", gapSrc: "IEP" },
+ { t: "INDF", act: "WATCH", iep: 6850, d: 0.9, iev: "2.0M", ncp: "LOCK", diev: "+0.3M", risk: "~", imb: "0.91×", gapSrc: "IEP" },
  ];
 
 
@@ -4127,16 +4140,20 @@
  $("preopenBody").innerHTML = PREOPEN.map((r, i) => {
  const dCls = r.d >= 0 ? "pos" : "neg";
  const dStr = (r.d >= 0 ? "+" : "") + r.d.toFixed(1);
+ const act = r.act || "—";
+ const actBadge = act === "ENTER" ? "enter" : act === "WATCH" ? "watch" : "neutral";
+ const ncp = r.ncp || "—";
+ const risk = r.risk || "—";
  return `
  <tr data-i="${i}" class="${i === state.preIndex ? "is-selected" : ""}">
  <td><span class="ticker">${r.t}</span></td>
+ <td><span class="badge ${badgeClass(actBadge === "neutral" ? "skip" : act)}">${act}</span></td>
  <td class="num">${r.iep.toLocaleString("en-US")}</td>
  <td class="num ${dCls}">${dStr}</td>
  <td class="num dim">${r.iev}</td>
- <td class="num dim">${r.ncp.toFixed(2)}</td>
+ <td class="dim">${ncp}</td>
  <td class="num dim">${r.diev}</td>
- <td><span class="badge ${gradeClass(r.grade)}">${r.grade}</span></td>
- <td><span class="badge ${badgeClass(r.risk)}">${r.risk}</span></td>
+ <td class="dim">${risk}</td>
  </tr>
  `;
  }).join("");
@@ -4161,14 +4178,14 @@
       const el = (id) => $(id);
       if (el("poiTicker")) el("poiTicker").textContent = r.t;
       if (el("poiGrade")) {
-        el("poiGrade").textContent = r.grade;
-        const g = String(r.grade || "").toUpperCase();
+        const act = r.act || "—";
+        el("poiGrade").textContent = act;
         el("poiGrade").style.color =
-          g === "A" ? "var(--green)" : g === "B" ? "var(--blue)" : "var(--amber)";
+          act === "ENTER" ? "var(--green)" : act === "WATCH" ? "var(--amber)" : "var(--text-mute)";
       }
       if (el("poiRisk")) {
-        el("poiRisk").textContent = r.risk;
-        el("poiRisk").className = "badge " + badgeClass(r.risk);
+        el("poiRisk").textContent = r.risk || "—";
+        el("poiRisk").className = "badge " + (r.risk === "↑" ? "warn" : r.risk === "↓" ? "fail" : "pass");
       }
       if (el("poiIep")) el("poiIep").textContent = Number(r.iep).toLocaleString("en-US");
       if (el("poiDelta")) {
@@ -4178,11 +4195,19 @@
         el("poiDelta").className = "chg" + (d < 0 ? " neg" : "");
       }
       if (el("poiIev")) el("poiIev").textContent = r.iev;
-      if (el("poiNcp")) el("poiNcp").textContent = Number(r.ncp).toFixed(2);
+      if (el("poiNcp")) el("poiNcp").textContent = r.ncp || "—";
       if (el("poiDiev")) el("poiDiev").textContent = r.diev;
+      if (el("poiGapSrc")) el("poiGapSrc").textContent = r.gapSrc || "—";
+      if (el("poiTrend")) el("poiTrend").textContent = r.imb && r.imb !== "—" ? `buy-lean · ${r.imb}` : "— (no book / fast)";
+      if (el("poiWhy")) {
+        el("poiWhy").textContent =
+          r.act && r.act !== "—"
+            ? `Act ${r.act} · NCP ${r.ncp} · locked ΔIEV ${r.diev} · present-only (no re-screen)`
+            : `Act — · phase disc/snapshot · no TradeSetup authority · IEV ${r.iev} present`;
+      }
       if (el("poiTrail")) {
         el("poiTrail").textContent =
-          `${r.t} · IEP ${Number(r.iep).toLocaleString("en-US")} · ΔIEV ${r.diev} · grade ${r.grade} · risk ${r.risk} · local IEV snapshot · no Action path`;
+          `${r.t} · Act ${r.act} · IEP ${Number(r.iep).toLocaleString("en-US")} · NCP ${r.ncp} · ΔIEV ${r.diev} · risk ${r.risk} · present-only · not Judge`;
       }
     }
 
@@ -4312,14 +4337,16 @@
  function updatePreopenEvidence() {
  const r = PREOPEN[state.preIndex];
  if (!r) return;
+ const gap = `${r.d >= 0 ? "+" : ""}${r.d.toFixed(1)}%`;
+ const imb = r.imb && r.imb !== "—" ? r.imb : "—";
  $("preopenEvidence").innerHTML = `
  <div class="kv">
- <span class="k">Focus</span><span class="v"><strong style="color:var(--text)">${r.t}</strong> · grade ${r.grade}</span>
- <span class="k">Provenance</span><span class="v">verified NCP · Stockbit</span>
- <span class="k">ΔIEV</span><span class="v">${r.diev}</span>
- <span class="k">Prior close vs IEP</span><span class="v">gap ${r.d >= 0 ? "+" : ""}${r.d.toFixed(1)}% ${Math.abs(r.d) > 2 ? "wide" : "inside band"}</span>
- <span class="k">Risk gate</span><span class="v">${r.risk} · IEV ${r.iev}</span>
- <span class="k">Note</span><span class="v dim">assess pre-open for full grade trail</span>
+ <span class="k">Focus</span><span class="v"><strong style="color:var(--text)">${r.t}</strong> · ${r.act || "—"}</span>
+ <span class="k">Provenance</span><span class="v">NCP ${r.ncp} · snapshot</span>
+ <span class="k">Imbalance</span><span class="v">${imb}</span>
+ <span class="k">Gap source</span><span class="v">${r.gapSrc || "—"} · ${gap}</span>
+ <span class="k">ΔIEV locked</span><span class="v">${r.diev}</span>
+ <span class="k">Risk</span><span class="v">${r.risk} · IEV ${r.iev}</span>
  </div>
  `;
  }

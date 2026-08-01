@@ -81,61 +81,62 @@
       <a href="./tui-journey-hub.html">← Journey hub</a>
     </p>
     <p class="col-contract">
-      TUI column contract · 1:1 with <code>CockpitApp._render_board_table</code> (preopen) ·
-      <strong style="color:var(--fog);font-weight:500">Tkr · IEP · Δ% · IEV · NCP · ΔIEV · Grd · Risk</strong>
-      · Flags live in focus strip / inspect body, not as a board column
+      Design lock · see <code>tui-cockpit-opencode.md</code> § Pre-open ·
+      <strong style="color:var(--fog);font-weight:500">Tkr · Act · IEP · Δ% · IEV · NCP · ΔIEV · Risk</strong>
+      · NCP = lock flag (not intensity) · ΔIEV = locked baseline · Act = TradeSetup when authoritative ·
+      session strip: Source · Phase · Funnel E/W · Window
     </p>
     <div class="app">
       <div class="main">
         <header class="top">
-          <div>Screen · pre-open · <strong>IEV snapshot 2026-07-29</strong></div>
-          <div>local · no live auction stream</div>
+          <div>Screen · pre-open · <strong>SNAPSHOT · NCP_LOCKED</strong></div>
+          <div>local IEV · no silent live stream</div>
         </header>
         <div class="auction">
-          <div class="c"><div class="k">Session</div><div class="v">Pre-open</div></div>
-          <div class="c"><div class="k">Graded</div><div class="v">12</div></div>
-          <div class="c"><div class="k">A / B / C</div><div class="v"><span class="a">3</span> · <span class="b">5</span> · <span class="c">4</span></div></div>
-          <div class="c"><div class="k">Clock</div><div class="v" style="font-size:1rem">08:45 WIB</div></div>
+          <div class="c"><div class="k">Source</div><div class="v">SNAPSHOT</div></div>
+          <div class="c"><div class="k">Phase</div><div class="v a">NCP_LOCKED</div></div>
+          <div class="c"><div class="k">Funnel</div><div class="v">312 · <span class="a">E3</span> · <span class="c">W7</span></div></div>
+          <div class="c"><div class="k">Window</div><div class="v" style="font-size:1rem">08:57 WIB</div></div>
         </div>
         <div class="stage">
           <table>
             <thead>
               <tr>
                 <th>Tkr</th>
+                <th>Act</th>
                 <th class="num">IEP</th>
                 <th class="num">Δ%</th>
                 <th class="num">IEV</th>
-                <th class="num">NCP</th>
+                <th>NCP</th>
                 <th class="num">ΔIEV</th>
-                <th>Grd</th>
                 <th>Risk</th>
               </tr>
             </thead>
             <tbody>
               <tr class="is-on">
-                <td class="t">BBRI</td><td class="num">4,820</td><td class="num pos">+1.8</td><td class="num">12.4M</td>
-                <td class="num">0.92</td><td class="num pos">+2.1M</td><td class="gA">A</td><td class="pos">clear</td>
+                <td class="t">BBRI</td><td class="gA">ENTER</td><td class="num">4,820</td><td class="num pos">+1.8</td><td class="num">12.4M</td>
+                <td>LOCK</td><td class="num pos">+2.1M</td><td class="pos">~</td>
               </tr>
               <tr>
-                <td class="t">BMRI</td><td class="num">6,150</td><td class="num pos">+1.2</td><td class="num">9.1M</td>
-                <td class="num">0.88</td><td class="num pos">+0.8M</td><td class="gA">A</td><td class="pos">clear</td>
+                <td class="t">BMRI</td><td class="gA">ENTER</td><td class="num">6,150</td><td class="num pos">+1.2</td><td class="num">9.1M</td>
+                <td>LOCK</td><td class="num pos">+0.8M</td><td class="pos">~</td>
               </tr>
               <tr>
-                <td class="t">BBCA</td><td class="num">9,925</td><td class="num pos">+0.8</td><td class="num">6.2M</td>
-                <td class="num">0.81</td><td class="num pos">+0.3M</td><td class="gB">B</td><td class="pos">clear</td>
+                <td class="t">BBCA</td><td class="gB">WATCH</td><td class="num">9,925</td><td class="num pos">+0.8</td><td class="num">6.2M</td>
+                <td>LOCK</td><td class="num pos">+0.3M</td><td class="pos">~</td>
               </tr>
               <tr>
-                <td class="t">ADRO</td><td class="num">2,680</td><td class="num pos">+3.1</td><td class="num">22.3M</td>
-                <td class="num">0.55</td><td class="num pos">+4.5M</td><td class="gC">C</td><td class="neg">block</td>
+                <td class="t">ADRO</td><td class="gB">WATCH</td><td class="num">2,680</td><td class="num pos">+3.1</td><td class="num">22.3M</td>
+                <td>LOCK</td><td class="num pos">+4.5M</td><td class="neg">↑</td>
               </tr>
               <tr>
-                <td class="t">TLKM</td><td class="num">3,180</td><td class="num neg">−0.6</td><td class="num">18.7M</td>
-                <td class="num">0.74</td><td class="num neg">−1.2M</td><td class="gB">B</td><td class="pos">clear</td>
+                <td class="t">UNVR</td><td class="gC">—</td><td class="num">2,410</td><td class="num neg">−1.1</td><td class="num">3.8M</td>
+                <td>disc</td><td class="num">—</td><td>—</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div class="evidence"><strong>BBRI focus</strong> · IEP 4,820 · ΔIEV +2.1M · grade A · risk clear · Enter = auction inspect (not accum Judge)</div>
+        <div class="evidence"><strong>BBRI focus</strong> · ENTER · IEP 4,820 · NCP LOCK · ΔIEV +2.1M · imb 1.34× · Enter = inspect (not Judge)</div>
         <div class="foot">
           <span><kbd>↑↓</kbd> move</span>
           <span><kbd>↵</kbd> inspect</span>
