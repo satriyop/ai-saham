@@ -29,6 +29,11 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
+# Challenge path-label / readiness session authority (IHSG candle oracle).
+# Distinct from gap-free availability lag helpers that reject weekday holes.
+IDX_TRADING_SESSIONS_CONTRACT = "idx.trading_sessions.ihsg_candle.v1"
+PATH_LABEL_METRICS_SCHEMA_VERSION = 2
+
 
 class TradingSessionCalendar(Protocol):
     """Answers "how many proven IDX sessions occurred in (earlier, later]"."""
@@ -120,3 +125,22 @@ class KnownTradingSessionCalendar:
         if len(after) < n:
             return None
         return after[:n]
+
+
+def session_calendar_revision(calendar: KnownTradingSessionCalendar) -> str:
+    """Stable coverage revision string for a proven calendar snapshot."""
+    return f"{calendar.coverage_start.isoformat()}/{calendar.coverage_end.isoformat()}"
+
+
+def session_calendar_digest(calendar: KnownTradingSessionCalendar) -> str:
+    """Digest of contract + coverage + ordered session set (identity surface)."""
+    from src.domain.value_objects.learning_artifacts import artifact_digest
+
+    return artifact_digest(
+        {
+            "contract_id": IDX_TRADING_SESSIONS_CONTRACT,
+            "coverage_start": calendar.coverage_start.isoformat(),
+            "coverage_end": calendar.coverage_end.isoformat(),
+            "sessions": [session.isoformat() for session in calendar.sessions],
+        }
+    )
