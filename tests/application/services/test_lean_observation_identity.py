@@ -34,8 +34,9 @@ _SHA256_PREFIXED = re.compile(r"^sha256:[0-9a-f]{64}\Z")
 
 # Locked golden vector (activation task §5.4).
 _GOLDEN_CONFIG = "x: 1\n"
-# Schema-10 population-binding fork (was schema-9: sha256:5b2849a0…).
-_GOLDEN_COMPATIBILITY_ID = "sha256:12dc594c02504ef28fc1ce6f2e93b4ac033a54970144d6fad25d372cdf8f19c0"
+# Schema-11 attested-ticker population-binding fork
+# (schema-10 was sha256:12dc594c…; schema-9 was sha256:5b2849a0…).
+_GOLDEN_COMPATIBILITY_ID = "sha256:e3546ed44a29990d0b08a19cb07e46fc11e5d7a03aa6049076312db0dd502ecd"
 
 
 def test_resolver_returns_valid_prefixed_sha256() -> None:
@@ -63,7 +64,7 @@ def test_changed_config_value_forks_the_id() -> None:
 def test_lean_v2_golden_vector() -> None:
     """Exact frozen bytes and digest from the activation-task lock."""
     expected_material = (
-        '{"candidate_observation_schema_version":10,'
+        '{"candidate_observation_schema_version":11,'
         '"contract_id":"lean_accumulation_compatibility.v2",'
         '"evidence_contract_version":"1.5",'
         '"policy_snapshot_binding_contract":"production_policy_snapshot.v2",'
@@ -81,7 +82,7 @@ def test_lean_v2_golden_vector() -> None:
         }
     )
     assert material == expected_material
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 10
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 11
     assert SEMANTIC_ENGINE_VERSION == "1.5"
     assert EVIDENCE_CONTRACT_VERSION == "1.5"
     assert resolve_lean_semantic_compatibility_id(_GOLDEN_CONFIG).value == _GOLDEN_COMPATIBILITY_ID

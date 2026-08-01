@@ -49,7 +49,11 @@ from src.domain.value_objects.alpha_trigger_score import (
     SECTOR_CONTEXT_EVIDENCE_NAME,
 )
 
-CANDIDATE_OBSERVATION_SCHEMA_VERSION = 10
+# Current: typed population binding with attested membership/named ticker sets.
+CANDIDATE_OBSERVATION_SCHEMA_VERSION = 11
+# Schema-10 claimed Option A population binding but predates required attested
+# membership_tickers / named_universe_tickers. Not reinterpreted as current.
+INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION = 10
 # Historical ACCUM session payload schema that predates typed population binding.
 LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION = 9
 SIGNAL_FORWARD_LABEL_SCHEMA_VERSION = 3

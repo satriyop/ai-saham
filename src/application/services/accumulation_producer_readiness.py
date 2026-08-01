@@ -48,6 +48,7 @@ from src.domain.value_objects.learning_artifacts import (
 )
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
 from src.domain.value_objects.signal_observation_contracts import (
@@ -87,6 +88,17 @@ PATH_LABEL_CONTRACTS: tuple[LearningContractId, ...] = (
 # A 64-hex universe_id alone is never sufficient.
 ACTIVE_POPULATION_AUTHORITY_CONTRACT = ACCUM_POPULATION_AUTHORITY_CONTRACT
 LEGACY_PAYLOAD_SCHEMA_VERSION = LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION
+# Schema-10 incomplete population surface (pre-attested tickers): non-current.
+INCOMPLETE_PAYLOAD_SCHEMA_VERSION = (
+    INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION
+)
+# Non-current ACCUM payload schemas that must not be revalidated as current.
+NON_CURRENT_PAYLOAD_SCHEMA_VERSIONS: frozenset[int] = frozenset(
+    {
+        LEGACY_PAYLOAD_SCHEMA_VERSION,
+        INCOMPLETE_PAYLOAD_SCHEMA_VERSION,
+    }
+)
 
 # Horizon nicknames for operator-facing reports (H3/H10/H20).
 _HORIZON_KEY_BY_CONTRACT: Mapping[LearningContractId, str] = {
@@ -162,7 +174,7 @@ class ObservationCohortValidation:
     invalid_reasons: tuple[str, ...]
     session_dates: tuple[date, ...]
     has_contract_corruption: bool
-    # True when at least one observation passes full current (schema-10 + binding) authority.
+    # True when at least one observation passes full current schema + binding authority.
     has_current_population_authority: bool = False
     legacy_observation_count: int = 0
     # Observation IDs that individually passed validation (current-authority or
@@ -227,10 +239,10 @@ def classify_producer_status(
     - LEGACY_RAW_ONLY: observations exist under absent/unknown/historical binding
       (including schema-9 without population_binding) without snapshot corruption
       and without observation/label corruption. Pure schema-9 only — never when
-      mixed with schema-10 current-authority rows.
+      mixed with current-authority rows.
     - BLOCKED_POLICY: active binding claimed but set partial/mixed/malformed/
       invalid/mismatched, any snapshot corruption, observation contract/
-      provenance/digest/population corruption, mixed schema-9+schema-10 cohort,
+      provenance/digest/population corruption, mixed non-current+current cohort,
       or label digest corruption.
     - COLLECTING: exact active snapshots verify, current population authority
       present, observations+labels validate, but <2 sessions or zero AVAILABLE
@@ -702,7 +714,7 @@ def _production_payload_semantic_reasons(
                     f"session={session.isoformat()}"
                 )
 
-    # Option A population binding (schema-10 current authority only).
+    # Option A population binding (current payload schema authority only).
     if require_current_payload_schema:
         reasons.extend(_population_binding_reasons(observation, session=session, payload=payload))
 
@@ -762,9 +774,11 @@ def validate_observation_cohort(
 ) -> ObservationCohortValidation:
     """Validate every observation: digest, identity, schema, producer payload, session.
 
-    Schema-9 ACCUM rows without population_binding are immutable historical corpus
-    (legacy, not corruption). Schema-10 rows require complete typed binding and
-    full PIT/provenance equalities for current authority.
+    Schema-9 ACCUM rows without population_binding and schema-10 incomplete
+    (pre-attested ticker sets) are immutable non-current corpus — not
+    revalidated as the current schema and not current challenge authority.
+    Current payload schema requires complete typed binding with attested
+    ticker sets and full PIT/provenance equalities.
     """
     reasons: list[str] = []
     current_session_dates: set[date] = set()
@@ -794,10 +808,11 @@ def validate_observation_cohort(
 
         payload = obs.decision_payload if isinstance(obs.decision_payload, Mapping) else {}
         payload_schema = payload.get("schema_version") if isinstance(payload, Mapping) else None
-        is_legacy_payload = (
+        is_non_current_payload = (
             purpose_value == AssessmentPurpose.ACCUMULATION_DISCOVERY.value
-            and payload_schema == LEGACY_PAYLOAD_SCHEMA_VERSION
+            and payload_schema in NON_CURRENT_PAYLOAD_SCHEMA_VERSIONS
         )
+        is_legacy_payload = is_non_current_payload
         is_current_payload = (
             purpose_value == AssessmentPurpose.ACCUMULATION_DISCOVERY.value
             and payload_schema == ACTIVE_PAYLOAD_SCHEMA_VERSION
@@ -817,15 +832,15 @@ def validate_observation_cohort(
                     f"contract={ACTIVE_POPULATION_AUTHORITY_CONTRACT}"
                 )
             elif is_current_payload:
-                # Schema-10: hex alone never suffices — validated in payload semantics.
+                # Current schema: hex alone never suffices — validated in payload semantics.
                 pass
-            elif is_legacy_payload:
-                # Schema-9: hex shape is historical; not current authority.
+            elif is_non_current_payload:
+                # Schema-9 / incomplete schema-10: historical; not current authority.
                 pass
             else:
                 # Unknown/missing payload schema with hex universe is not current authority.
-                # Treat as corruption when it claims neither legacy nor current schema.
-                if payload_schema not in (None, LEGACY_PAYLOAD_SCHEMA_VERSION):
+                # Treat as corruption when it claims neither non-current nor current schema.
+                if payload_schema not in (None, *NON_CURRENT_PAYLOAD_SCHEMA_VERSIONS):
                     obs_reasons.append(
                         f"payload_schema_version:{payload_schema!r}"
                         f"!=expected:{ACTIVE_PAYLOAD_SCHEMA_VERSION}"
@@ -840,10 +855,10 @@ def validate_observation_cohort(
             session_for_payload = bound[1]
 
         # Schema + producer payload semantics (writer shape).
-        # Schema-9 historical rows are not revalidated under the schema-10 contract;
+        # Non-current rows are not revalidated under the current schema contract;
         # they remain LEGACY_RAW_ONLY when digests/identity hold and no other corruption.
         if purpose_value == AssessmentPurpose.ACCUMULATION_DISCOVERY.value:
-            if is_legacy_payload:
+            if is_non_current_payload:
                 pass
             elif is_current_payload:
                 obs_reasons.extend(
@@ -880,7 +895,7 @@ def validate_observation_cohort(
             valid += 1
             current_authority_count += 1
 
-    # Cohorts never mix schema-9 historical and schema-10 current authority.
+    # Cohorts never mix non-current historical and current authority.
     # Coexistence is authority-bearing corruption even when each row is valid
     # in isolation — READY must not follow from "any current row exists".
     mixed_schema_cohort = legacy_count > 0 and current_authority_count > 0
@@ -901,7 +916,7 @@ def validate_observation_cohort(
         invalid_reasons=tuple(reasons[:50]),
         session_dates=tuple(sorted(report_sessions)),
         # Current-authority corruption, digest/identity failures, or mixed
-        # schema-9 + schema-10 coexistence block. Pure legacy schema-9 alone
+        # non-current + current coexistence block. Pure non-current alone
         # is not contract corruption.
         has_contract_corruption=invalid > 0 or mixed_schema_cohort,
         has_current_population_authority=current_authority_count > 0,

@@ -17,7 +17,11 @@ LEARNING_SCHEMA_VERSION = 1
 # Option A population authority (typed binding on decision_payload). A 64-hex
 # universe_id alone is never sufficient for challenge readiness.
 ACCUM_POPULATION_AUTHORITY_CONTRACT = "population.accum.lq45_current_roster_pit_tradable.v1"
-ACCUM_POPULATION_BINDING_SCHEMA_VERSION = 1
+# Schema 2: attested membership_tickers / named_universe_tickers are required
+# and membership must be a subset of the named roster.
+ACCUM_POPULATION_BINDING_SCHEMA_VERSION = 2
+# Schema 1: incomplete surface before attested ticker sets were required.
+LEGACY_ACCUM_POPULATION_BINDING_SCHEMA_VERSION = 1
 ACCUM_POPULATION_NAME = "lq45"
 ACCUM_TRADABLE_MEMBERSHIP_CONTRACT = "pit_tradable.candle_presence.v1"
 ACCUM_POPULATION_BENCHMARK_SYMBOL = "IHSG"
@@ -288,7 +292,7 @@ class AccumPopulationBinding:
         benchmark_symbol: str = ACCUM_POPULATION_BENCHMARK_SYMBOL,
         tradable_membership_contract: str = ACCUM_TRADABLE_MEMBERSHIP_CONTRACT,
     ) -> AccumPopulationBinding:
-        """Build a complete schema-1 binding from capture-time membership inputs."""
+        """Build a complete current-schema binding from capture-time membership inputs."""
         from datetime import date as date_cls
 
         if isinstance(membership_session, date_cls):

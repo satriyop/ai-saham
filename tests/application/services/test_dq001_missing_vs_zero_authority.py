@@ -226,7 +226,7 @@ def test_schema_versions_bumped_for_dq001():
     # Current cohort after the risk-path PIT cutoff fix
     # (v9 / engine 1.5 / evidence 1.5). Engine bump forks the cohort;
     # EVIDENCE_CONTRACT unchanged (no evidence-semantics change).
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 10
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 11
     assert SIGNAL_FORWARD_LABEL_SCHEMA_VERSION == 3
     assert EVIDENCE_CONTRACT_VERSION == "1.5"
     assert SEMANTIC_ENGINE_VERSION == "1.5"

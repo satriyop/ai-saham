@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Sequence
 
 import pytest
@@ -18,6 +18,7 @@ from src.domain.services.trading_calendar import (
     first_weekday_session_after,
     nth_weekday_session_on_or_after,
 )
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
     AccumPopulationBinding,
@@ -48,6 +49,23 @@ MATERIAL = "sha256:" + ("22" * 32)
 MEMBERSHIP = ["BBCA", "BBRI"]
 NAMED_ROSTER = ["ASII", "BBCA", "BBRI", "BMRI", "TLKM"]
 UNIVERSE_ID = stamp_universe_membership_id(MEMBERSHIP)
+
+
+def _weekday_sessions(start: date, end: date) -> tuple[date, ...]:
+    out: list[date] = []
+    current = start
+    while current <= end:
+        if current.weekday() < 5:
+            out.append(current)
+        current += timedelta(days=1)
+    return tuple(out)
+
+
+DEFAULT_SESSION_CALENDAR = KnownTradingSessionCalendar(
+    sessions=_weekday_sessions(date(2026, 6, 1), date(2026, 9, 30)),
+    coverage_start=date(2026, 6, 1),
+    coverage_end=date(2026, 9, 30),
+)
 
 
 def _payload(
@@ -252,7 +270,7 @@ def test_use_case_reports_legacy_and_ready_cohorts_without_writes(tmp_path) -> N
     for o in legacy_obs:
         repo.add_observation(o)
 
-    # Schema-10 + binding + labels + snapshots → CHALLENGE_INPUT_READY.
+    # Current schema + binding + labels + snapshots → CHALLENGE_INPUT_READY.
     ready_obs = [
         _observation(day=3, compatibility_id=COMPAT_B, ticker="BBCA"),
         _observation(day=4, compatibility_id=COMPAT_B, ticker="BBRI"),
@@ -267,6 +285,7 @@ def test_use_case_reports_legacy_and_ready_cohorts_without_writes(tmp_path) -> N
         observations=spy,
         labels=spy,
         policy_snapshots=spy,
+        session_calendar=DEFAULT_SESSION_CALENDAR,
     ).execute()
 
     assert spy.write_calls == []
@@ -306,6 +325,7 @@ def test_use_case_no_implicit_cohort_pooling(tmp_path) -> None:
         observations=repo,
         labels=repo,
         policy_snapshots=repo,
+        session_calendar=DEFAULT_SESSION_CALENDAR,
     ).execute()
     by_id = {c.compatibility_id: c for c in report.cohorts}
     assert by_id[COMPAT_A].observation_count == 1

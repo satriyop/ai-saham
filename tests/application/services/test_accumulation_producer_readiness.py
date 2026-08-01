@@ -1764,10 +1764,11 @@ def test_mixed_schema9_and_schema10_cohort_is_blocked_not_ready() -> None:
     assert cohort.producer_status is not ProducerReadinessStatus.COLLECTING
 
 
-def test_schema10_missing_population_binding_is_blocked_not_ready() -> None:
+def test_current_schema_missing_population_binding_is_blocked_not_ready() -> None:
     o1 = _observation(day=1, with_population_binding=False)
     o2 = _observation(day=2, ticker="BBRI", with_population_binding=False)
     assert "population_binding" not in o1.decision_payload
+    assert o1.decision_payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
     labels = [_label(o1)]
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
@@ -1777,8 +1778,84 @@ def test_schema10_missing_population_binding_is_blocked_not_ready() -> None:
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
-    assert "population_authority_unbound" in " ".join(cohort.observation_validation.invalid_reasons)
-    assert cohort.session_count == 0
+
+
+def test_incomplete_schema10_without_attested_tickers_is_non_current_not_redefined() -> None:
+    """P1: schema-10 incomplete shape is non-current, not silently current.
+
+    Prior schema-10 rows without membership_tickers/named_universe_tickers must
+    not be revalidated as the current schema (which would force BLOCKED_POLICY
+    as if they were corrupt current rows). They classify as LEGACY_RAW_ONLY.
+    """
+    from src.domain.value_objects.signal_artifact_schema import (
+        INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    )
+
+    incomplete_schema = INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION
+    assert incomplete_schema == 10
+    assert incomplete_schema != CANDIDATE_OBSERVATION_SCHEMA_VERSION
+
+    def _schema10_incomplete(day: int, ticker: str = "BBCA") -> LearningObservation:
+        # Shape that schema-10 writers could have persisted before attested tickers:
+        # schema_version=10, no membership_tickers / named_universe_tickers fields.
+        obs = _observation(
+            day=day,
+            ticker=ticker,
+            schema_version=incomplete_schema,
+            with_population_binding=False,
+        )
+        payload = dict(obs.decision_payload)
+        # Optional: digest-only binding without attested tickers (incomplete authority).
+        payload["population_binding"] = {
+            "schema_version": 1,
+            "contract_id": "population.accum.lq45_current_roster_pit_tradable.v1",
+            "population_name": "lq45",
+            "membership_session": f"2026-07-{day:02d}",
+            "membership_digest": obs.universe_id,
+            "membership_count": 5,
+            "named_universe_digest": stamp_universe_membership_id(NAMED_ROSTER),
+            "tradable_membership_contract": "pit_tradable.candle_presence.v1",
+            "pit_tradable_lookback_sessions": 10,
+            "benchmark_symbol": "IHSG",
+            "producer_source_revision": PRODUCER_REV,
+            # deliberately omit membership_tickers / named_universe_tickers
+        }
+        out = LearningObservation.create(
+            purpose=obs.purpose,
+            policy_contract=obs.policy_contract,
+            horizon_contract=obs.horizon_contract,
+            compatibility_id=obs.compatibility_id,
+            cutoff_at=obs.cutoff_at,
+            universe_id=obs.universe_id,
+            window_id=obs.window_id,
+            decision_payload=payload,
+            captured_at=obs.captured_at,
+        )
+        return out
+
+    obs = [
+        _schema10_incomplete(1, "BBCA"),
+        _schema10_incomplete(2, "BBRI"),
+    ]
+    assert obs[0].decision_payload["schema_version"] == 10
+    assert "membership_tickers" not in obs[0].decision_payload.get("population_binding", {})
+
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[_label(obs[0])],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    ov = cohort.observation_validation
+    # Not revalidated as current → not contract corruption for missing tickers.
+    assert ov.has_current_population_authority is False
+    assert ov.has_contract_corruption is False
+    assert ov.legacy_observation_count == 2
+    assert ov.valid_observation_count == 0
+    assert cohort.producer_status is ProducerReadinessStatus.LEGACY_RAW_ONLY
+    assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    assert cohort.producer_status is not ProducerReadinessStatus.BLOCKED_POLICY
 
 
 def test_hex_only_universe_without_binding_is_not_population_authority() -> None:
@@ -2158,15 +2235,29 @@ def _rehash_snapshot(snap: ProductionPolicySnapshot) -> ProductionPolicySnapshot
     return snap
 
 
-def test_candidate_observation_schema_version_is_10() -> None:
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 10
+def test_candidate_observation_schema_version_is_11_with_attested_tickers() -> None:
+    from src.domain.value_objects.learning_artifacts import (
+        ACCUM_POPULATION_BINDING_SCHEMA_VERSION,
+        LEGACY_ACCUM_POPULATION_BINDING_SCHEMA_VERSION,
+    )
+    from src.domain.value_objects.signal_artifact_schema import (
+        INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    )
+
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 11
+    assert INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 10
     assert LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 9
+    assert ACCUM_POPULATION_BINDING_SCHEMA_VERSION == 2
+    assert LEGACY_ACCUM_POPULATION_BINDING_SCHEMA_VERSION == 1
     o = _observation(day=1)
-    assert o.decision_payload["schema_version"] == 10
+    assert o.decision_payload["schema_version"] == 11
     assert "population_binding" in o.decision_payload
     binding = AccumPopulationBinding.from_mapping(o.decision_payload["population_binding"])
+    assert binding.schema_version == 2
     assert binding.membership_digest == o.universe_id
     assert binding.contract_id.startswith("population.accum.")
+    assert binding.membership_tickers
+    assert binding.named_universe_tickers
 
 
 def test_build_session_observation_payload_requires_population_binding() -> None:
@@ -2198,8 +2289,11 @@ def test_build_session_observation_payload_requires_population_binding() -> None
         shared=shared,
         population_binding=_binding_for_session("2026-07-01"),
     )
-    assert payload["schema_version"] == 10
+    assert payload["schema_version"] == 11
     assert payload["population_binding"]["membership_session"] == "2026-07-01"
+    assert payload["population_binding"]["schema_version"] == 2
+    assert "membership_tickers" in payload["population_binding"]
+    assert "named_universe_tickers" in payload["population_binding"]
 
 
 def test_overlong_h10_label_window_rejected_not_challenge_input_ready() -> None:
