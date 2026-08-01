@@ -1026,11 +1026,17 @@ def _path_label_semantic_reasons(
         if label.outcome not in _ALLOWED_PATH_OUTCOMES:
             reasons.append(f"outcome_vocabulary:{label.outcome!r}")
         metrics = label.metrics if isinstance(label.metrics, Mapping) else {}
-        missing = sorted(_AVAILABLE_METRIC_KEYS - set(metrics))
+        metric_keys = set(metrics)
+        missing = sorted(_AVAILABLE_METRIC_KEYS - metric_keys)
+        extra = sorted(metric_keys - _AVAILABLE_METRIC_KEYS)
         if missing:
             reasons.append(f"metrics_missing_fields:{missing}")
-        else:
-            # Units: pct fields numeric; entry reference equals frozen shared.current_price.
+        if extra:
+            # Closed production metric surface — invented keys are corruption.
+            reasons.append(f"metrics_extra_fields:{extra}")
+        # Type/window checks run when required keys are present (extras still fail closed).
+        if not missing:
+            # Units: pct fields exact numeric (no string coercion); day indices exact int.
             for pct_key in (
                 "close_return_pct",
                 "max_forward_return_pct",
@@ -1041,16 +1047,24 @@ def _path_label_semantic_reasons(
                     reasons.append(f"metrics.{pct_key}_not_numeric:{raw!r}")
             for day_key in ("days_to_peak", "days_to_trough"):
                 raw = metrics.get(day_key)
-                try:
-                    day_v = int(raw)
-                except (TypeError, ValueError):
+                # Production emits int day indices. Reject float (1.9), str ("1"), bool.
+                if isinstance(raw, bool) or type(raw) is not int:
                     reasons.append(f"metrics.{day_key}_not_int:{raw!r}")
                     day_v = None
+                else:
+                    day_v = raw
                 horizon_days = _PATH_LABEL_HORIZON_DAYS[label.contract_id]
                 if day_v is not None and not (1 <= day_v <= horizon_days):
                     reasons.append(
                         f"metrics.{day_key}_outside_horizon:{day_v}not_in_1..{horizon_days}"
                     )
+            # Entry reference: exact numeric type (int|float), never string-coerced.
+            raw_entry = metrics.get("entry_reference_price")
+            if isinstance(raw_entry, bool) or not isinstance(raw_entry, (int, float)):
+                reasons.append(f"metrics.entry_reference_price_invalid:{raw_entry!r}")
+                entry: float | None = None
+            else:
+                entry = float(raw_entry)
             # Exact 3/10/20 market-session window (weekday-session calendar).
             # Authority: inclusive Mon–Fri span between endpoints must equal the
             # contract horizon. Ordering + days_to_* alone are not sufficient.
@@ -1113,19 +1127,18 @@ def _path_label_semantic_reasons(
                             "metrics.ticker_mismatch:"
                             f"metrics={metric_ticker},observation={obs_ticker}"
                         )
-                # Entry reference equals frozen shared.current_price.
-                payload = observation.decision_payload
-                shared = payload.get("shared") if isinstance(payload, Mapping) else None
-                raw_price = shared.get("current_price") if isinstance(shared, Mapping) else None
-                try:
-                    frozen = float(raw_price) if raw_price is not None else None
-                    entry = float(metrics.get("entry_reference_price"))
-                except (TypeError, ValueError):
-                    reasons.append(
-                        f"metrics.entry_reference_price_invalid:"
-                        f"{metrics.get('entry_reference_price')!r}"
+                # Entry reference equals frozen shared.current_price (when entry typed).
+                # Label entry must already be exact numeric; frozen is observation truth.
+                if entry is not None:
+                    payload = observation.decision_payload
+                    shared = payload.get("shared") if isinstance(payload, Mapping) else None
+                    raw_price = (
+                        shared.get("current_price") if isinstance(shared, Mapping) else None
                     )
-                else:
+                    try:
+                        frozen = float(raw_price) if raw_price is not None else None
+                    except (TypeError, ValueError):
+                        frozen = None
                     if frozen is None or frozen <= 0:
                         reasons.append(f"entry_reference_no_frozen_price:{raw_price!r}")
                     elif abs(entry - frozen) > 1e-9:

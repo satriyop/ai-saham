@@ -1987,6 +1987,73 @@ def test_unavailable_invented_reason_is_corruption_not_valid_unavailable() -> No
     assert control.producer_status is not ProducerReadinessStatus.BLOCKED_POLICY
 
 
+def test_available_metrics_reject_coerced_types_and_extra_keys() -> None:
+    """P0: day indices must be exact int; entry price exact numeric; metric set closed.
+
+    Adversarial label with days_to_peak=1.9, entry_reference_price=\"100.0\", and an
+    invented extra key must not count as AVAILABLE and must not yield
+    CHALLENGE_INPUT_READY. Honest exact-type metrics still pass.
+    """
+    from src.application.services.accumulation_producer_readiness import (
+        count_labels_by_horizon,
+    )
+
+    obs = [
+        _observation(day=1, ticker="BBCA", action="WATCH", readiness=None),
+        _observation(day=2, ticker="BBRI", action="ENTER", readiness="INCOMPLETE"),
+    ]
+    session = observation_session_date(obs[0])
+    assert session is not None
+    coerced = _available_metrics(
+        ticker="BBCA",
+        signal_date=session.isoformat(),
+        horizon_days=10,
+        entry_price=100.0,
+    )
+    coerced["days_to_peak"] = 1.9
+    coerced["entry_reference_price"] = "100.0"
+    coerced["invented_extra"] = "anything"
+    bad_label = _label(obs[0], outcome="SUCCESS", metrics=coerced)
+
+    counts = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[bad_label],
+        observations_by_id={o.observation_id: o for o in obs},
+    )
+    assert counts.has_integrity_corruption is True
+    assert counts.counts_by_horizon["H10"].available == 0
+    reasons = " ".join(counts.invalid_reasons)
+    assert "metrics.days_to_peak_not_int" in reasons
+    assert "metrics.entry_reference_price_invalid" in reasons
+    assert "metrics_extra_fields" in reasons
+    assert "invented_extra" in reasons
+
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[bad_label],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert cohort.labels_by_horizon["H10"].available == 0
+
+    # Control: exact production types still READY when the rest of the cohort is valid.
+    good_h10 = _label(obs[0], outcome="SUCCESS")
+    good_h10_b = _label(obs[1], outcome="SUCCESS")
+    control = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[good_h10, good_h10_b],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert control.label_validation.has_integrity_corruption is False
+    assert control.labels_by_horizon["H10"].available == 2
+    assert control.producer_status is ProducerReadinessStatus.CHALLENGE_INPUT_READY
+
+
 def test_label_schema_999_and_banana_outcome_and_invented_fingerprint_block() -> None:
     obs = [_observation(day=1), _observation(day=2, ticker="BBRI")]
     valid = _label(obs[0], outcome="SUCCESS")
