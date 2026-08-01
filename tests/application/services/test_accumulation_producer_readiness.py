@@ -1477,6 +1477,77 @@ def test_wrong_workflow_blocks_ready() -> None:
     assert any("workflow:" in r for r in cohort.observation_validation.invalid_reasons)
 
 
+def test_invalid_observation_contributes_zero_labels_actions_and_readiness() -> None:
+    """P0: invalid rows block the cohort but contribute zero diagnostics authority.
+
+    Adversarial shape: identity-complete observation with wrong workflow that still
+    carries Action=ENTER, setup-readiness=INCOMPLETE, and an AVAILABLE H10 label.
+    Matrix rule: invalid observations contribute zero labels, Actions, or readiness.
+    """
+    invalid = LearningObservation.create(
+        purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+        policy_contract="accumulation_discovery.policy.v1",
+        horizon_contract="accum_10d",
+        compatibility_id=COMPAT,
+        cutoff_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+        universe_id=LOCKED_UNIVERSE_ID,
+        window_id="BBCA:2026-07-01",
+        decision_payload=_payload(
+            session_date="2026-07-01",
+            ticker="BBCA",
+            workflow="screen_accum",
+            action="ENTER",
+            readiness="INCOMPLETE",
+        ),
+        captured_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+    )
+    assert extract_action_from_payload(invalid.decision_payload) == "ENTER"
+    assert extract_setup_readiness_status_from_payload(invalid.decision_payload) == "INCOMPLETE"
+    # Solo invalid row: block closed; no Action/readiness/label contribution.
+    solo = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[invalid],
+        labels=[_label(invalid)],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert solo.observation_validation.has_contract_corruption is True
+    assert solo.observation_validation.invalid_observation_count == 1
+    assert solo.observation_validation.validated_observation_ids == ()
+    assert any("workflow:" in r for r in solo.observation_validation.invalid_reasons)
+    assert solo.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert solo.labels_by_horizon["H10"].available == 0
+    assert solo.labels_by_horizon["H10"].unavailable == 0
+    assert solo.labels_by_horizon["H10"].conflict == 0
+    # Insufficient_horizon counts only against validated observation IDs (none).
+    assert solo.labels_by_horizon["H10"].insufficient_horizon == 0
+    assert solo.action_distribution == {}
+    assert solo.setup_readiness_present == 0
+    assert solo.setup_readiness_missing == 0
+    assert solo.setup_readiness_state_distribution == {}
+
+    # Co-present valid row still contributes its own Action/readiness; invalid does not.
+    valid = _observation(day=2, ticker="BBRI", action="WATCH", readiness=None)
+    mixed = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[invalid, valid],
+        labels=[_label(invalid), _label(valid)],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert mixed.observation_validation.has_contract_corruption is True
+    assert mixed.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert mixed.observation_validation.validated_observation_ids == (valid.observation_id,)
+    # Only the valid row's AVAILABLE H10 counts; invalid row's label is excluded.
+    assert mixed.labels_by_horizon["H10"].available == 1
+    assert "ENTER" not in mixed.action_distribution
+    assert mixed.action_distribution == {"WATCH": 1}
+    assert mixed.setup_readiness_present == 0
+    assert mixed.setup_readiness_missing == 1
+    assert mixed.setup_readiness_state_distribution == {"null": 1}
+    assert "INCOMPLETE" not in mixed.setup_readiness_state_distribution
+
+
 def test_wrong_horizon_primary_blocks_ready() -> None:
     o = LearningObservation.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
@@ -1573,6 +1644,58 @@ def test_schema9_without_binding_is_legacy_raw_only_even_with_snapshots() -> Non
     assert cohort.observation_validation.legacy_observation_count == 2
     assert cohort.observation_validation.has_contract_corruption is False
     assert cohort.producer_status is ProducerReadinessStatus.LEGACY_RAW_ONLY
+    assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+
+
+def test_tampered_membership_count_and_named_digest_block_ready() -> None:
+    """Adversarial: count=999 + invented named digest must not grant READY.
+
+    Shape checks (positive count, hash-shaped digest, membership==universe_id)
+    alone are insufficient after observation rehash.
+    """
+    from src.domain.value_objects.learning_artifacts import (
+        stamp_universe_membership_id,
+        validate_artifact_integrity,
+    )
+
+    invented = stamp_universe_membership_id(["ZZZZ", "YYYY"])
+
+    def _tamper(obs: LearningObservation) -> LearningObservation:
+        payload = dict(obs.decision_payload)
+        binding = dict(payload["population_binding"])
+        assert binding["membership_count"] == len(binding["membership_tickers"])
+        binding["membership_count"] = 999
+        binding["named_universe_digest"] = invented
+        payload["population_binding"] = binding
+        out = LearningObservation.create(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            policy_contract="accumulation_discovery.policy.v1",
+            horizon_contract="accum_10d",
+            compatibility_id=COMPAT,
+            cutoff_at=obs.cutoff_at,
+            universe_id=obs.universe_id,
+            window_id=obs.window_id,
+            decision_payload=payload,
+            captured_at=obs.captured_at,
+        )
+        validate_artifact_integrity(out, id_field="observation_id")
+        return out
+
+    tampered_a = _tamper(_observation(day=1, action="WATCH", readiness=None))
+    tampered_b = _tamper(_observation(day=2, ticker="BBRI", action="ENTER", readiness="INCOMPLETE"))
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[tampered_a, tampered_b],
+        labels=[_label(tampered_a)],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    reasons = " ".join(cohort.observation_validation.invalid_reasons)
+    assert cohort.observation_validation.has_current_population_authority is False
+    assert cohort.observation_validation.has_contract_corruption is True
+    assert "membership_count" in reasons or "named_universe_digest" in reasons
+    assert cohort.session_count == 0
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
 
 

@@ -161,6 +161,10 @@ class ObservationCohortValidation:
     # True when at least one observation passes full current (schema-10 + binding) authority.
     has_current_population_authority: bool = False
     legacy_observation_count: int = 0
+    # Observation IDs that individually passed validation (current-authority or
+    # schema-9 legacy). Invalid / authority-corrupt rows are excluded. Action,
+    # setup-readiness, and label tallies must use only this set.
+    validated_observation_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -761,6 +765,7 @@ def validate_observation_cohort(
     reasons: list[str] = []
     current_session_dates: set[date] = set()
     legacy_session_dates: set[date] = set()
+    validated_ids: list[str] = []
     valid = 0
     invalid = 0
     legacy_count = 0
@@ -859,12 +864,14 @@ def validate_observation_cohort(
             reasons.append(f"{obs.observation_id}:{','.join(obs_reasons)}")
         elif is_legacy_payload:
             # Valid historical row: digests/identity OK, no current authority.
+            validated_ids.append(obs.observation_id)
             legacy_count += 1
             if bound is not None:
                 legacy_session_dates.add(bound[1])
         else:
             # Fully valid current-authority observation contributes session depth.
             assert bound is not None  # binding reasons would have been recorded
+            validated_ids.append(obs.observation_id)
             current_session_dates.add(bound[1])
             valid += 1
             current_authority_count += 1
@@ -895,6 +902,7 @@ def validate_observation_cohort(
         has_contract_corruption=invalid > 0 or mixed_schema_cohort,
         has_current_population_authority=current_authority_count > 0,
         legacy_observation_count=legacy_count,
+        validated_observation_ids=tuple(validated_ids),
     )
 
 
@@ -1239,12 +1247,18 @@ def project_cohort_readiness(
         expected_producer_observation_contract=expected_producer_observation_contract,
     )
 
+    # Invalid / authority-corrupt rows contribute zero Action, readiness, or labels.
+    # Use full matrix validation success only — never purpose/compat presence alone,
+    # and never expand to all loaded IDs when the cohort is corrupted.
+    validated_id_set = frozenset(obs_validation.validated_observation_ids)
+    validated_observations = [o for o in observations if o.observation_id in validated_id_set]
+
     action_counts: Counter[str] = Counter()
     readiness_states: Counter[str] = Counter()
     readiness_present = 0
     readiness_missing = 0
 
-    for obs in observations:
+    for obs in validated_observations:
         action = extract_action_from_payload(obs.decision_payload)
         action_counts[action if action is not None else "null"] += 1
         readiness = extract_setup_readiness_status_from_payload(obs.decision_payload)
@@ -1274,18 +1288,8 @@ def project_cohort_readiness(
         expected_producer_observation_contract=expected_producer_observation_contract,
     )
     observations_by_id = {o.observation_id: o for o in observations}
-    valid_ids = [
-        o.observation_id
-        for o in observations
-        if o.purpose.value == purpose_value
-        and o.compatibility_id == compatibility_id
-        and o.contract_id.value == expected_learning_observation_contract_id
-        and observation_session_date(o) is not None
-    ]
-    if obs_validation.has_contract_corruption:
-        label_ids = [o.observation_id for o in observations]
-    else:
-        label_ids = valid_ids
+    # Label tallies follow the same validated-ID set as Action/readiness.
+    label_ids = list(obs_validation.validated_observation_ids)
 
     label_validation = count_labels_by_horizon(
         observation_ids=label_ids,
