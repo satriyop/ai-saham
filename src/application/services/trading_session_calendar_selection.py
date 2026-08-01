@@ -15,6 +15,39 @@ from src.domain.value_objects.trading_session_calendar_snapshot import (
 )
 
 
+def assert_no_calendar_source_conflicts(
+    snapshots: Sequence[TradingSessionCalendarSnapshot],
+) -> None:
+    """Fail closed if any active snapshots share authority key with different sessions.
+
+    Authority key: contract_id, source, benchmark, coverage_start/end, source_revision.
+    """
+    by_key: dict[tuple[str, str, str, date, date, str], list[TradingSessionCalendarSnapshot]] = {}
+    for snapshot in snapshots:
+        try:
+            validate_active_stockbit_calendar_snapshot(snapshot)
+        except LearningContractError:
+            continue
+        key = (
+            snapshot.contract_id,
+            snapshot.source,
+            snapshot.benchmark,
+            snapshot.coverage_start,
+            snapshot.coverage_end,
+            snapshot.source_revision,
+        )
+        by_key.setdefault(key, []).append(snapshot)
+    for key, group in by_key.items():
+        session_sets = {g.ordered_sessions for g in group}
+        if len(session_sets) > 1:
+            raise LearningContractError(
+                "calendar source conflict: identical contract/source/benchmark/"
+                "coverage/source_revision with divergent sessions "
+                f"(revision={key[5]!r}, "
+                f"coverage={key[3].isoformat()}..{key[4].isoformat()})"
+            )
+
+
 def select_calendar_snapshot(
     snapshots: Sequence[TradingSessionCalendarSnapshot],
     *,
@@ -27,9 +60,10 @@ def select_calendar_snapshot(
     - Snapshot must pass active Stockbit/IHSG validation.
     - Must prove first ``horizon_days`` sessions after ``signal_date``.
     - Newest ``captured_at`` wins; ``snapshot_id`` is the deterministic tie-breaker.
-    - Two eligible snapshots with identical ``source_revision`` and coverage but
-      different ordered sessions are a source conflict (raise).
+    - Two eligible snapshots with identical authority key but different ordered
+      sessions are a source conflict (raise) — never treated as ordinary skip.
     """
+    assert_no_calendar_source_conflicts(snapshots)
     eligible: list[TradingSessionCalendarSnapshot] = []
     for snapshot in snapshots:
         try:
@@ -40,19 +74,4 @@ def select_calendar_snapshot(
             eligible.append(snapshot)
     if not eligible:
         return None
-
-    # Source conflict: same revision + coverage, different session sets.
-    by_rev_cov: dict[tuple[str, date, date], list[TradingSessionCalendarSnapshot]] = {}
-    for snap in eligible:
-        key = (snap.source_revision, snap.coverage_start, snap.coverage_end)
-        by_rev_cov.setdefault(key, []).append(snap)
-    for key, group in by_rev_cov.items():
-        session_sets = {g.ordered_sessions for g in group}
-        if len(session_sets) > 1:
-            raise LearningContractError(
-                "calendar source conflict: identical source_revision and coverage "
-                f"with divergent sessions (revision={key[0]!r}, "
-                f"coverage={key[1].isoformat()}..{key[2].isoformat()})"
-            )
-
     return max(eligible, key=lambda s: (s.captured_at, s.snapshot_id))

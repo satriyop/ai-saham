@@ -210,7 +210,6 @@ def test_sync_labels_readiness_vertical(tmp_path: Path) -> None:
         SyncTradingSessionCalendarRequest(
             coverage_start=date(2026, 7, 1),
             coverage_end=date(2026, 8, 31),
-            captured_at=NOW,
         )
     )
     assert result.inserted is True

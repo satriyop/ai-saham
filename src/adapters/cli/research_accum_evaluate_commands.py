@@ -19,6 +19,7 @@ from src.adapters.cli.research_learning_helpers import (
     status_cohort,
 )
 from src.application.services.trading_session_calendar_selection import (
+    assert_no_calendar_source_conflicts,
     select_calendar_snapshot,
 )
 from src.application.use_case.database_learning_lifecycle_use_case import (
@@ -119,17 +120,20 @@ def accumulation_labels(
     # Never re-range a growing IHSG candle cache for label identity.
     calendar_store = SQLiteTradingSessionCalendarSnapshotRepository(resolved)
     snapshots = tuple(calendar_store.list_snapshots())
+    # Authority conflict is not an ordinary skip — fail the command (and cron).
+    try:
+        assert_no_calendar_source_conflicts(snapshots)
+    except LearningContractError as exc:
+        typer.echo(f"calendar source conflict: {exc}", err=True)
+        raise typer.Exit(1) from exc
 
     def _resolve_snapshot(signal_date, horizon_days):
-        try:
-            return select_calendar_snapshot(
-                snapshots,
-                signal_date=signal_date,
-                horizon_days=horizon_days,
-            )
-        except LearningContractError:
-            # Source conflict: fail closed to provisional (no terminal label).
-            return None
+        # Propagates LearningContractError on conflict (must not map to None/skip).
+        return select_calendar_snapshot(
+            snapshots,
+            signal_date=signal_date,
+            horizon_days=horizon_days,
+        )
 
     use_case = GenerateAccumulationPricePathLabelsUseCase(
         observations=repo,
@@ -256,34 +260,26 @@ def accumulation_sync_session_calendar(
 
     Production path for trading_session_calendar_snapshots. Cron runs this
     between capture and labels.
+
+    Ordering: open learning repo → resolve auto coverage (no-op without Stockbit)
+    → authenticate → write snapshot. Auto no-op must not require login or create tables.
     """
     from datetime import date as date_cls
 
+    # 1) Learning repo only (may create learning schema via write repo; not snapshot table).
     resolved, repo = repository(db_path)
-    stockbit_config = load_stockbit_provider_config()
-    session = _stockbit_session.get_stockbit_session(stockbit_config)
-    if not session or not session.authenticated:
-        raise typer.BadParameter(
-            "Stockbit session expired. Run `saham fetch stockbit login` to refresh."
-        )
-    captured_at = datetime.now(IDX_TIMEZONE)
-    source = StockbitTradingSessionCalendarSource(
-        session.api_client,
-        stockbit_config=stockbit_config,
-        captured_at=captured_at,
-    )
-    snap_repo = SQLiteTradingSessionCalendarSnapshotRepository(resolved)
-    sync_uc = SyncTradingSessionCalendarSnapshotUseCase(
-        source=source,
-        snapshots=snap_repo,
-    )
 
+    # 2) Resolve coverage before Stockbit auth / snapshot writer construction.
     if auto:
         end_date = date_cls.fromisoformat(end) if end else datetime.now(IDX_TIMEZONE).date()
-        coverage = ResolveTradingSessionCalendarSyncCoverageUseCase(
-            observations=repo,
-            labels=repo,
-        ).execute(ResolveCalendarSyncCoverageRequest(end_date=end_date))
+        try:
+            coverage = ResolveTradingSessionCalendarSyncCoverageUseCase(
+                observations=repo,
+                labels=repo,
+            ).execute(ResolveCalendarSyncCoverageRequest(end_date=end_date))
+        except ValueError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(1) from exc
         if coverage.no_op:
             payload = {
                 "artifact_type": "trading_session_calendar_sync",
@@ -298,16 +294,45 @@ def accumulation_sync_session_calendar(
     else:
         if not start or not end:
             raise typer.BadParameter("provide --start and --end, or use --auto")
-        cov_start = date_cls.fromisoformat(start)
-        cov_end = date_cls.fromisoformat(end)
+        try:
+            cov_start = date_cls.fromisoformat(start)
+            cov_end = date_cls.fromisoformat(end)
+        except ValueError as exc:
+            typer.echo(f"invalid date: {exc}", err=True)
+            raise typer.Exit(1) from exc
+        if cov_start > cov_end:
+            typer.echo("coverage_start must not be after coverage_end", err=True)
+            raise typer.Exit(1)
 
-    result = sync_uc.execute(
-        SyncTradingSessionCalendarRequest(
-            coverage_start=cov_start,
-            coverage_end=cov_end,
-            captured_at=captured_at,
+    # 3) Authenticate Stockbit only when a real sync will run.
+    stockbit_config = load_stockbit_provider_config()
+    session = _stockbit_session.get_stockbit_session(stockbit_config)
+    if not session or not session.authenticated:
+        raise typer.BadParameter(
+            "Stockbit session expired. Run `saham fetch stockbit login` to refresh."
         )
+    source = StockbitTradingSessionCalendarSource(
+        session.api_client,
+        stockbit_config=stockbit_config,
+        captured_at=datetime.now(IDX_TIMEZONE),
     )
+    snap_repo = SQLiteTradingSessionCalendarSnapshotRepository(resolved)
+    sync_uc = SyncTradingSessionCalendarSnapshotUseCase(
+        source=source,
+        snapshots=snap_repo,
+    )
+
+    try:
+        result = sync_uc.execute(
+            SyncTradingSessionCalendarRequest(
+                coverage_start=cov_start,
+                coverage_end=cov_end,
+            )
+        )
+    except LearningContractError as exc:
+        typer.echo(f"calendar sync failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
     payload = {
         "artifact_type": "trading_session_calendar_sync",
         "snapshot_id": result.snapshot_id,

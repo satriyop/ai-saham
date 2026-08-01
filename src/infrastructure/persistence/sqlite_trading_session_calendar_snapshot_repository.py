@@ -70,6 +70,37 @@ class SQLiteTradingSessionCalendarSnapshotRepository:
         sessions_json = json.dumps([s.isoformat() for s in snapshot.ordered_sessions])
         artifact_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         with self._connect() as conn:
+            # Natural authority key: contract/source/benchmark/coverage/revision.
+            # Same key with different sessions is a source conflict — never insert.
+            peers = conn.execute(
+                f"SELECT {_SELECT_COLUMNS} FROM trading_session_calendar_snapshots "
+                "WHERE contract_id = ? AND source = ? AND benchmark = ? "
+                "AND coverage_start = ? AND coverage_end = ? AND source_revision = ?",
+                (
+                    snapshot.contract_id,
+                    snapshot.source,
+                    snapshot.benchmark,
+                    snapshot.coverage_start.isoformat(),
+                    snapshot.coverage_end.isoformat(),
+                    snapshot.source_revision,
+                ),
+            ).fetchall()
+            for peer in peers:
+                loaded = _row_to_snapshot(peer, requested_id=peer["snapshot_id"])
+                if loaded.ordered_sessions != snapshot.ordered_sessions:
+                    raise LearningContractError(
+                        "calendar source conflict: identical contract/source/benchmark/"
+                        "coverage/source_revision with divergent sessions "
+                        f"(existing={loaded.snapshot_id!r}, "
+                        f"incoming={snapshot.snapshot_id!r}, "
+                        f"revision={snapshot.source_revision!r}, "
+                        f"coverage={snapshot.coverage_start.isoformat()}.."
+                        f"{snapshot.coverage_end.isoformat()})"
+                    )
+                if loaded.snapshot_id == snapshot.snapshot_id:
+                    # Exact idempotent hit (same identity).
+                    return False
+
             existing = conn.execute(
                 f"SELECT {_SELECT_COLUMNS} FROM trading_session_calendar_snapshots "
                 "WHERE snapshot_id = ?",

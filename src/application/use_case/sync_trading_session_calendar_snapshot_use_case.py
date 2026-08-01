@@ -6,7 +6,7 @@ Layer: Application
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from typing import Protocol, Sequence
 
 from src.domain.ports.trading_session_calendar_repository import (
@@ -20,6 +20,9 @@ from src.domain.value_objects.learning_artifacts import (
     LearningObservation,
     LearningOutcomeLabel,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION,
+)
 from src.domain.value_objects.trading_session_calendar_snapshot import (
     validate_active_stockbit_calendar_snapshot,
 )
@@ -29,14 +32,17 @@ _PATH_LABEL_CONTRACTS: tuple[LearningContractId, ...] = (
     LearningContractId.ACCUM_10D_LABEL,
     LearningContractId.ACCUM_20D_LABEL,
 )
-_CURRENT_ACCUM_PAYLOAD_SCHEMA = 11
 
 
 @dataclass(frozen=True)
 class SyncTradingSessionCalendarRequest:
+    """Coverage window for a strict Stockbit calendar acquisition.
+
+    Capture timestamp is owned by the source at fetch time (not this request).
+    """
+
     coverage_start: date
     coverage_end: date
-    captured_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -168,12 +174,10 @@ class ResolveTradingSessionCalendarSyncCoverageUseCase:
         start = min(needing)
         end = request.end_date
         if start > end:
-            return ResolveCalendarSyncCoverageResult(
-                coverage_start=None,
-                coverage_end=None,
-                eligible_observation_count=len(current),
-                no_op=True,
-                no_op_reason="coverage_start_after_end",
+            # Contradicts pending observations vs cron/session boundary — not a no-op.
+            raise ValueError(
+                "coverage_start_after_end: earliest unlabeled observation "
+                f"{start.isoformat()} is after end_date {end.isoformat()}"
             )
         return ResolveCalendarSyncCoverageResult(
             coverage_start=start,
@@ -187,4 +191,4 @@ def _is_current_accum_payload(obs: LearningObservation) -> bool:
     payload = obs.decision_payload
     if not isinstance(payload, dict):
         return False
-    return payload.get("schema_version") == _CURRENT_ACCUM_PAYLOAD_SCHEMA
+    return payload.get("schema_version") == ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION
