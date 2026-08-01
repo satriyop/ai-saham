@@ -118,54 +118,60 @@ def format_ticker_foreign_history_job(
     points: Sequence[Any],
     *,
     resolved_source: str = "—",
+    window_days: int | None = None,
+    as_of: Any = None,
     fetch_hint: str | None = None,
 ) -> TickerJobText:
-    """Format foreign_flow_points series (foreign-history)."""
+    """Format foreign_flow_points series (foreign-history).
+
+    Body text stays multi-surface; ``desk`` carries structured foreign job UI.
+    """
+    from src.adapters.shared.ticker_foreign_desk_model import (
+        build_ticker_foreign_desk_model,
+    )
+
     ticker_u = str(ticker).upper()
     hint = fetch_hint or f"saham fetch broker-history {ticker_u}"
-    if not points:
+    desk = build_ticker_foreign_desk_model(
+        ticker_u,
+        points,
+        resolved_source=resolved_source,
+        window_days=window_days if window_days is not None else len(list(points or ())),
+        as_of=as_of,
+        fetch_hint=hint,
+    )
+    if desk.empty:
         return TickerJobText(
             job="foreign",
             ticker=ticker_u,
-            title=f"View · ticker · {ticker_u} · foreign-history",
+            title=desk.title,
             body=f"not cached · foreign flow points empty\nHint: {hint}",
             empty=True,
             fetch_hint=hint,
             cli_verb="view ticker foreign-history",
+            desk=desk,
         )
 
     lines: list[str] = [
-        f"Foreign history · {ticker_u} · source {resolved_source} · last {len(points)} days",
+        f"Foreign history · {ticker_u} · source {desk.source} · last {len(desk.days)} days",
+        f"Latest  {desk.hero_big}  ·  5d {desk.pulses[0].value}  ·  20d {desk.pulses[1].value}",
         "",
         f"{'Date':12}  {'Source':10}  {'Net':>12}  {'Lot':>10}  {'Avg':>10}",
         "─" * 58,
     ]
-    for p in points:
-        d = getattr(p, "date", None)
-        d_s = d.isoformat() if d is not None and hasattr(d, "isoformat") else str(d or "—")
-        src = str(getattr(p, "source", "—") or "—")
-        net = getattr(p, "net_val", Decimal("0"))
-        lot = getattr(p, "net_lot", 0)
-        avg = getattr(p, "avg_price", None)
-        try:
-            avg_s = f"{float(avg):,.0f}" if avg is not None else "—"
-        except (TypeError, ValueError):
-            avg_s = "—"
-        try:
-            lot_s = f"{int(lot):,}"
-        except (TypeError, ValueError):
-            lot_s = str(lot)
-        lines.append(f"{d_s:12}  {src:10}  {_fmt_signed(net):>12}  {lot_s:>10}  {avg_s:>10}")
+    for d in desk.days:
+        lines.append(f"{d.date_s:12}  {d.source:10}  {d.net_s:>12}  {d.lot_s:>10}  {d.avg_s:>10}")
     lines.append("")
     lines.append("CLI · saham view ticker foreign-history  ·  local cache · browse only")
     return TickerJobText(
         job="foreign",
         ticker=ticker_u,
-        title=f"View · ticker · {ticker_u} · foreign-history",
+        title=desk.title,
         body="\n".join(lines),
         empty=False,
         fetch_hint=hint,
         cli_verb="view ticker foreign-history",
+        desk=desk,
     )
 
 

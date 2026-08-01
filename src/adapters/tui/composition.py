@@ -471,6 +471,8 @@ class _TickerJobLoader:
                     result.ticker,
                     result.points,
                     resolved_source=result.resolved_source,
+                    window_days=result.days,
+                    as_of=result.as_of,
                     fetch_hint=result.fetch_hint,
                 )
 

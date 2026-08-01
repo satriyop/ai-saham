@@ -13,6 +13,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
 from src.adapters.shared.ticker_flow_desk_model import TickerFlowDeskModel
+from src.adapters.shared.ticker_foreign_desk_model import TickerForeignDeskModel
 from src.adapters.tui.ticker_desk_model import (
     FRESH_GRID_SLOTS,
     TickerDeskModel,
@@ -439,7 +440,7 @@ class TickerDesk(Vertical):
         self._active_job: str | None = None
         self._job_title: str = ""
         self._job_body: str = ""
-        self._job_desk: TickerFlowDeskModel | None = None
+        self._job_desk: TickerFlowDeskModel | TickerForeignDeskModel | None = None
 
     def compose(self) -> ComposeResult:
         yield Static("", classes="td-crumb", id="td-crumb")
@@ -589,7 +590,7 @@ class TickerDesk(Vertical):
         *,
         title: str = "",
         body: str = "",
-        desk: TickerFlowDeskModel | None = None,
+        desk: TickerFlowDeskModel | TickerForeignDeskModel | None = None,
     ) -> None:
         """Show/hide job body under chip bar (browse-only CLI sibling)."""
         self._active_job = job
@@ -692,7 +693,7 @@ class TickerDesk(Vertical):
             self._paint_job_body()
             self._paint_chip_bar()
             foot = "esc show · chips switch job · b f o x n · browse only"
-            if isinstance(self._job_desk, TickerFlowDeskModel) and self._job_desk.footer:
+            if self._job_desk is not None and getattr(self._job_desk, "footer", None):
                 foot = self._job_desk.footer
             self.query_one("#td-footer", Static).update(
                 f"[#555555]{foot}[/]\n[#d4b06a]{model.authority}[/]"
@@ -955,25 +956,35 @@ class TickerDesk(Vertical):
                 pass
 
     def _paint_job_body(self) -> None:
-        """Paint structured flow desk when present; else flat body (loading / other jobs)."""
-        flow_desk_el = None
+        """Paint structured job desk when present; else flat body (loading / other jobs)."""
+        shell_el = None
         try:
-            flow_desk_el = self.query_one("#td-flow-desk", Vertical)
+            shell_el = self.query_one("#td-flow-desk", Vertical)
         except Exception:
-            flow_desk_el = None
+            shell_el = None
 
-        if isinstance(self._job_desk, TickerFlowDeskModel) and self._active_job == "flow":
-            if flow_desk_el is not None:
-                flow_desk_el.display = True
+        flow_ok = isinstance(self._job_desk, TickerFlowDeskModel) and self._active_job == "flow"
+        foreign_ok = (
+            isinstance(self._job_desk, TickerForeignDeskModel) and self._active_job == "foreign"
+        )
+
+        if flow_ok or foreign_ok:
+            if shell_el is not None:
+                shell_el.display = True
             try:
                 self.query_one("#td-job-body", Static).display = False
             except Exception:
                 pass
-            self._paint_flow_desk(self._job_desk)
+            if flow_ok:
+                assert isinstance(self._job_desk, TickerFlowDeskModel)
+                self._paint_flow_desk(self._job_desk)
+            else:
+                assert isinstance(self._job_desk, TickerForeignDeskModel)
+                self._paint_foreign_desk(self._job_desk)
             return
 
-        if flow_desk_el is not None:
-            flow_desk_el.display = False
+        if shell_el is not None:
+            shell_el.display = False
         try:
             body_el = self.query_one("#td-job-body", Static)
             body_el.display = True
@@ -981,8 +992,8 @@ class TickerDesk(Vertical):
         except Exception:
             pass
 
-    def _paint_flow_desk(self, desk: TickerFlowDeskModel) -> None:
-        """Design lock: hero · 4 pulses · sessions table · real nets only."""
+    def _paint_job_hero_pulses(self, desk: TickerFlowDeskModel | TickerForeignDeskModel) -> None:
+        """Shared hero + 4-pulse chrome for structured job desks."""
         self.query_one("#td-flow-lab", Static).update(desk.hero_lab)
         big = self.query_one("#td-flow-big", Static)
         for c in ("pos", "neg"):
@@ -1007,34 +1018,70 @@ class TickerDesk(Vertical):
                 pk.update("")
                 pv.update("")
 
+        story = (desk.story or "").replace("\n", " · ")
+        self.query_one("#td-flow-story", Static).update(f"[#555555]{story}[/]" if story else "")
+
+    def _paint_flow_desk(self, desk: TickerFlowDeskModel) -> None:
+        """Design lock: hero · 4 pulses · sessions table · real nets only."""
+        self._paint_job_hero_pulses(desk)
+
         if desk.empty or not desk.days:
             self.query_one("#td-flow-days-head", Static).update("SESSIONS")
             self.query_one("#td-flow-days", Static).update(
                 f"[#555555]no sessions · {desk.fetch_hint}[/]"
             )
-        else:
-            self.query_one("#td-flow-days-head", Static).update(
-                f"SESSIONS · {len(desk.days)} · NEWEST FIRST"
-            )
-            head = (
-                f"[#555555]{'Date':10}[/]  {'':10}  [#555555]{'Net':>10}[/]  "
-                f"[#555555]{'Ratio':>7}[/]  [#555555]{'Buyer':>6}[/]  [#555555]{'Seller':>6}[/]"
-            )
-            lines = [head]
-            for d in desk.days:
-                tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#a0a0a0")
-                bar = bar_glyphs(d.bar_pct, width=10, hollow=False)
-                pad = max(0, 10 - len(bar))
-                bar_s = f"[{tone}]{bar}[/]{' ' * pad}" if bar else f"{'':10}"
-                lines.append(
-                    f"[#d8d8d8]{d.date_s:10}[/]  {bar_s}  [{tone}]{d.net_s:>10}[/]  "
-                    f"[#7a7a7a]{d.ratio_s:>7}[/]  [#c8c8c8]{d.buyer:>6}[/]  "
-                    f"[#c8c8c8]{d.seller:>6}[/]"
-                )
-            self.query_one("#td-flow-days", Static).update("\n".join(lines))
+            return
 
-        story = (desk.story or "").replace("\n", " · ")
-        self.query_one("#td-flow-story", Static).update(f"[#555555]{story}[/]" if story else "")
+        self.query_one("#td-flow-days-head", Static).update(
+            f"SESSIONS · {len(desk.days)} · NEWEST FIRST"
+        )
+        head = (
+            f"[#555555]{'Date':10}[/]  {'':10}  [#555555]{'Net':>10}[/]  "
+            f"[#555555]{'Ratio':>7}[/]  [#555555]{'Buyer':>6}[/]  [#555555]{'Seller':>6}[/]"
+        )
+        lines = [head]
+        for d in desk.days:
+            tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#a0a0a0")
+            bar = bar_glyphs(d.bar_pct, width=10, hollow=False)
+            pad = max(0, 10 - len(bar))
+            bar_s = f"[{tone}]{bar}[/]{' ' * pad}" if bar else f"{'':10}"
+            lines.append(
+                f"[#d8d8d8]{d.date_s:10}[/]  {bar_s}  [{tone}]{d.net_s:>10}[/]  "
+                f"[#7a7a7a]{d.ratio_s:>7}[/]  [#c8c8c8]{d.buyer:>6}[/]  "
+                f"[#c8c8c8]{d.seller:>6}[/]"
+            )
+        self.query_one("#td-flow-days", Static).update("\n".join(lines))
+
+    def _paint_foreign_desk(self, desk: TickerForeignDeskModel) -> None:
+        """Design lock: hero · 5d/20d/days/source · daily points (net · lot · avg)."""
+        self._paint_job_hero_pulses(desk)
+
+        if desk.empty or not desk.days:
+            self.query_one("#td-flow-days-head", Static).update("DAILY POINTS")
+            self.query_one("#td-flow-days", Static).update(
+                f"[#555555]no points · {desk.fetch_hint}[/]"
+            )
+            return
+
+        self.query_one("#td-flow-days-head", Static).update(
+            f"DAILY POINTS · {len(desk.days)} · NEWEST FIRST"
+        )
+        head = (
+            f"[#555555]{'Date':10}[/]  {'':8}  [#555555]{'Source':10}[/]  "
+            f"[#555555]{'Net':>10}[/]  [#555555]{'Lot':>10}[/]  [#555555]{'Avg':>8}[/]"
+        )
+        lines = [head]
+        for d in desk.days:
+            tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#a0a0a0")
+            bar = bar_glyphs(d.bar_pct, width=8, hollow=False)
+            pad = max(0, 8 - len(bar))
+            bar_s = f"[{tone}]{bar}[/]{' ' * pad}" if bar else f"{'':8}"
+            lines.append(
+                f"[#d8d8d8]{d.date_s:10}[/]  {bar_s}  [#7a7a7a]{d.source:10}[/]  "
+                f"[{tone}]{d.net_s:>10}[/]  [#c8c8c8]{d.lot_s:>10}[/]  "
+                f"[#c8c8c8]{d.avg_s:>8}[/]"
+            )
+        self.query_one("#td-flow-days", Static).update("\n".join(lines))
 
     def _paint_job_and_chips_only(self) -> None:
         """When model not yet painted, still show job body + chips."""
