@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-preopen-act</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260802-preopen-judge-shaped</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -2497,7 +2497,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 01-preopen-act</span>
+      <span class="rev" id="buildStamp">mock · 02-preopen-judge-shaped</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -2776,17 +2776,17 @@
             </div>
           </div>
 
-          <!-- 5b PRE-OPEN INSPECT · present-only · why / auction+ / plan / warn -->
+          <!-- 5b PRE-OPEN INSPECT · Judge-shaped: Why always · auction row · [d] detail · p plan -->
           <div class="list-view is-hidden" id="preopenInspectView">
 <div class="section-label">Pre-open · <span id="poiTicker">BBRI</span></div>
 
             <div class="plan-inherit" style="margin-bottom:12px">
               <span class="act" id="poiGrade" style="color:var(--green)">ENTER</span>
               <span class="badge pass" id="poiRisk">~</span>
-              <span class="note">Action · risk annotate · present-only</span>
+              <span class="note">Action · risk annotate · present-only · not Judge</span>
             </div>
 
-            <div class="oc-hero" style="margin-bottom:12px">
+            <div class="oc-hero" style="margin-bottom:10px">
               <div class="lab">IEP · session</div>
               <div class="row">
                 <span class="price-xl" id="poiIep" style="font-size:1.75rem">4,820</span>
@@ -2799,47 +2799,46 @@
                 <span class="k">Gap src</span><span class="v" id="poiGapSrc">IEP</span>
                 <span class="k">Session</span><span class="v">SNAPSHOT · NCP_LOCKED</span>
               </div>
+              <p id="poiWhy" style="margin:12px 0 0;color:var(--text-dim);font-size:13px;line-height:1.45">
+                ← Why: Dir BULL · conf H · quality A · Sig 72 · locked ΔIEV + · no missing baseline
+              </p>
             </div>
 
-            <div class="flag-row" data-flag-group="poi" role="toolbar" aria-label="Pre-open chips">
-              <button type="button" class="flag-chip" data-flag="why" title="why">why</button>
-              <button type="button" class="flag-chip" data-flag="auction+" title="auction+">auction+</button>
-              <button type="button" class="flag-chip" data-flag="plan" title="plan">plan</button>
-              <button type="button" class="flag-chip" data-flag="warn" title="warn">warn</button>
-            </div>
-            <div class="flag-panel" data-flag-panel="why" data-flag-group="poi">
-              <h4>Why (signal · present-only)</h4>
-              <p id="poiWhy" style="margin:0;color:var(--text-dim)">Dir BULL · conf H · quality A · Sig 72 · locked ΔIEV + · no missing baseline</p>
-            </div>
-            <div class="flag-panel" data-flag-panel="auction+" data-flag-group="poi">
-              <h4>Auction book · intensity (not NCP)</h4>
-              <div class="line"><span class="k">imbalance</span><span class="v" id="poiTrend">buy-lean · 1.34×</span></div>
-              <div class="line"><span class="k">spread%</span><span class="v" id="poiSpread">0.42%</span></div>
-              <div class="line"><span class="k">intensity</span><span class="v" id="poiIntensity">6.1×</span></div>
-              <div class="line"><span class="k">broker tag</span><span class="v" id="poiBrokerTag">local-support</span></div>
-              <div class="line"><span class="k">backing</span><span class="v" id="poiBackScore">0.72 · streak 3</span></div>
-            </div>
-            <div class="flag-panel" data-flag-panel="plan" data-flag-group="poi">
-              <h4>Plan (geometry · not Action invent)</h4>
-              <div class="line"><span class="k">entry range</span><span class="v" id="poiEntry">4,780 – 4,860</span></div>
-              <div class="line"><span class="k">stop%</span><span class="v" id="poiStop">−2.4%</span></div>
-              <div class="line"><span class="k">ATR</span><span class="v" id="poiAtr">118</span></div>
-              <div class="line"><span class="k">capital band</span><span class="v" id="poiCap">2–3 lots · sample</span></div>
-            </div>
-            <div class="flag-panel" data-flag-panel="warn" data-flag-group="poi">
-              <h4>Warn · notation · risk</h4>
-              <p id="poiWarn" style="margin:0;color:var(--amber)">notation — · risk ~ annotate · regime neutral</p>
+            <!-- Always-on auction second row (not a chip) -->
+            <div class="card" id="poiAuctionRow" style="margin-bottom:10px">
+              <div class="section-label" style="margin:0 0 8px">Auction</div>
+              <div class="kv">
+                <span class="k">Imb</span><span class="v pos" id="poiTrend">1.34×</span>
+                <span class="k">Spread</span><span class="v" id="poiSpread">0.42%</span>
+                <span class="k">Intensity</span><span class="v" id="poiIntensity">6.1×</span>
+                <span class="k">Backing</span><span class="v" id="poiBackScore">0.72 · streak 3</span>
+                <span class="k">Broker</span><span class="v" id="poiBrokerTag">local-support</span>
+              </div>
             </div>
 
-            <div class="plan-ctx" id="poiBody">
-              <h3>Levels</h3>
-              <p id="poiTrail">Act ENTER · IEP · locked ΔIEV · NCP LOCK · present-only · not Judge</p>
+            <!-- Warn banner only when non-empty (hidden by default if none) -->
+            <div class="card" id="poiWarnBanner" style="margin-bottom:10px;border-color:var(--amber);display:none">
+              <p id="poiWarn" style="margin:0;color:var(--amber);font-size:13px">—</p>
+            </div>
+
+            <div class="flag-row" data-flag-group="poi" role="toolbar" aria-label="Pre-open density">
+              <button type="button" class="flag-chip" data-flag="detail" id="poiDetailChip" title="[d] detail">
+                <span class="chip-key">[d]</span><span class="chip-lab">detail</span>
+              </button>
+            </div>
+            <div class="flag-panel" data-flag-panel="detail" data-flag-group="poi" id="poiDetailPanel">
+              <h4>Detail (optional depth)</h4>
+              <p id="poiTrail" style="margin:0;color:var(--text-dim);font-size:13px;line-height:1.45">
+                Factors · full book · filter rejects when present. Plan geometry is <span class="kbd">p</span> only — not here.
+              </p>
             </div>
 
             <div class="footer-note">
               <span><span class="kbd">esc</span> board</span>
+              <span><span class="kbd">d</span> detail</span>
               <span><span class="kbd">p</span> plan</span>
               <span><span class="kbd">v</span> ticker</span>
+              <span class="dim">no why/auction+/plan chips</span>
             </div>
           </div>
 
@@ -4173,6 +4172,7 @@
     }
 
     function paintPreopenInspect() {
+      // Judge-shaped brief: Why always · auction row always · no option-chip wall
       const r = PREOPEN[state.preIndex] || PREOPEN[0];
       if (!r) return;
       const el = (id) => $(id);
@@ -4198,16 +4198,38 @@
       if (el("poiNcp")) el("poiNcp").textContent = r.ncp || "—";
       if (el("poiDiev")) el("poiDiev").textContent = r.diev;
       if (el("poiGapSrc")) el("poiGapSrc").textContent = r.gapSrc || "—";
-      if (el("poiTrend")) el("poiTrend").textContent = r.imb && r.imb !== "—" ? `buy-lean · ${r.imb}` : "— (no book / fast)";
+      // Always-on auction second row
+      const hasBook = r.imb && r.imb !== "—";
+      if (el("poiTrend")) {
+        el("poiTrend").textContent = hasBook ? r.imb : "—";
+        el("poiTrend").className = "v" + (hasBook ? " pos" : " dim");
+      }
+      if (el("poiSpread")) el("poiSpread").textContent = hasBook ? "0.42%" : "—";
+      if (el("poiIntensity")) el("poiIntensity").textContent = hasBook ? "6.1×" : "—";
+      if (el("poiBackScore")) el("poiBackScore").textContent = hasBook ? "0.72 · streak 3" : "—";
+      if (el("poiBrokerTag")) el("poiBrokerTag").textContent = hasBook ? "local-support" : "—";
+      // Why always in hero (not a chip)
       if (el("poiWhy")) {
         el("poiWhy").textContent =
           r.act && r.act !== "—"
-            ? `Act ${r.act} · NCP ${r.ncp} · locked ΔIEV ${r.diev} · present-only (no re-screen)`
-            : `Act — · phase disc/snapshot · no TradeSetup authority · IEV ${r.iev} present`;
+            ? `← Why: Act ${r.act} · NCP ${r.ncp} · locked ΔIEV ${r.diev} · present-only (no re-screen)`
+            : `← Why: Act — · phase disc/snapshot · no TradeSetup authority · IEV ${r.iev}`;
+      }
+      // Warn banner only when non-empty sample (mock: show for risk ↑ only)
+      const warnEl = el("poiWarn");
+      const warnBan = el("poiWarnBanner");
+      if (warnEl && warnBan) {
+        if (r.risk === "↑") {
+          warnBan.style.display = "";
+          warnEl.textContent = "risk ↑ annotate · check liquidity / extension";
+        } else {
+          warnBan.style.display = "none";
+          warnEl.textContent = "—";
+        }
       }
       if (el("poiTrail")) {
         el("poiTrail").textContent =
-          `${r.t} · Act ${r.act} · IEP ${Number(r.iep).toLocaleString("en-US")} · NCP ${r.ncp} · ΔIEV ${r.diev} · risk ${r.risk} · present-only · not Judge`;
+          `${r.t} · detail depth · plan is p only · not an inspect chip · present-only · not Judge`;
       }
     }
 

@@ -53,7 +53,7 @@ Ship Textual against **`.app` inside this mock**. Design-tools strip is for revi
 | 1 | Accum | Action discover | Signal radar · **snapshot\|live** badge · Action chips · Enter → Judge |
 | 2 | Plan | Structure | Geometry triangle · inherit Action · `l` paper confirm |
 | 3 | Paper | Notebook | Notebook tape · write via plan `l` confirm |
-| 4 | Pre-open | Auction | Session strip · Action board → Enter **inspect** (option chips) |
+| 4 | Pre-open | Auction | Session strip · Action board → Enter **inspect** (Judge-shaped brief) |
 | 5 | Ticker | Browse | **In-stage chip nav** · brass job chips · density `[d]` · CLI siblings under bar |
 | 6 | Broker | Browse | Radar → Enter desk home · **desk home in-stage job chips** |
 | 7 | Health | Honesty | Empty / zero / lag / ready posters |
@@ -77,7 +77,7 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 | Stage | Enter from | What |
 |-------|------------|------|
 | **Judge** | Accum **Enter** only | Verdict hero · **brief (default) / detail (`d`)** · limited = **banner** only |
-| Pre-open inspect | Pre-open board Enter | Action hero · IEP · chips `why` · `auction+` · `plan` · `warn` |
+| Pre-open inspect | Pre-open board Enter | Action hero · Why always · auction second row · optional `[d] detail` · **`p` plan** |
 | Broker home | Broker radar Enter | Net hero + job chip bar |
 
 **Reject:** Judge as a top frame-switch button or number key.  
@@ -165,7 +165,7 @@ Date        ████████        −27.8B   …
 | **Job chip** | Opens a sibling product surface for the **same entity** without leaving the stage |
 | **Density chip** | Special binary toggle: brief ↔ detail on the **same stage body** (`[d] detail` · `is-on` = detail) |
 | **Binary toggle chip** | Exactly **two** modes · one power letter · label shows **current mode** (flip label) · `is-on` = non-default mode |
-| **Option chip** | Toggles an optional panel on the **same stage** (e.g. pre-open `why`) — no power letter unless listed |
+| **Option chip** | Toggles an optional panel on the **same stage** when needed — no power letter unless listed · **not** pre-open inspect (see § Pre-open) |
 | **Job surface** | Body under the chip bar while a job chip is `is-on` — still the **same stage** |
 | **`is-on` / focus** | Active chip (peach fill) and keyboard focus on the bar |
 | **Independent stage** | A *different* stage with its own chrome (title trail, table, **chip bar gone**) — **forbidden** as the result of a chip activate |
@@ -241,7 +241,7 @@ Example of the anti-pattern (historical, **fixed**): brokers → `ticker-desks` 
 | **View ticker** | jobs + density | **Reference · conforming** |
 | **Broker desk home** | `[t] buy/sell` · `[f] flow` · `[c] calendar` · `[h] history` · `[m] top 5` | **Mandatory** (same shell; deep job under bar) |
 | **Judge** | `[d] detail` | **Mandatory** (density in-stage; no multi-job wall) |
-| **Pre-open inspect** | option chips (`why` · `auction+` · `plan` · `warn`) | **Mandatory** (options in-stage) |
+| **Pre-open inspect** | optional **`[d] detail`** only (Judge-shaped) · **no** why/auction+/plan/warn chip wall | **Mandatory** |
 | Accum / Pre-open **board** | no multi job chips | N/A |
 | Broker **list** (Ctrl+P) | no chip bar | N/A (list *is* the stage) |
 
@@ -275,7 +275,7 @@ Every chip that has a **power letter** paints that letter **on the chip**, not o
 | Space | One space after `]`: `[f] flow` |
 | Density | **`[d] detail`** only — not `detail · d` · **never** a second word `brief` on the bar |
 | Binary toggle | **`[k] <current mode>`** — flip the mode word on activate · optional short dual `A\|B` only if both tokens are tiny |
-| No power key | Option chips without a letter stay **label-only** (pre-open `why` · `auction+` · `plan` · `warn`) — no fake `[—]` |
+| No power key | Option chips without a letter stay **label-only** — no fake `[—]` · pre-open inspect does **not** use a multi-option chip wall |
 | is-on | Chip fills **peach**; keycap stays bold — use dark ink on peach so `[k]` remains readable (not brass-on-peach mud) |
 | Dim | Keycap + label both dim · still honest · **dimmed keycap still means the key exists** (unavailable data), not a fake |
 
@@ -400,7 +400,7 @@ Prompt rail is chrome (`:` / `/` focus) · **no tall Input focus border** (ghost
 | **Density** | Toggle brief ↔ detail on **current stage body** (fixed word `detail`) | **`[d] detail`** |
 | **Binary toggle** | Flip exactly two modes · label shows **current** mode | **`[y] quarterly`** / **`[y] annual`** (fin) |
 | **Job** | Open **job surface under the same chip bar** · `esc` → stage default body | **`[b] brokers`** · **`[f] flow`** · **`[t] buy/sell`** |
-| **Option** | Toggle optional panel on **same stage** (no power letter) | `why` · `auction+` · `plan` · `warn` |
+| **Option** | Toggle optional panel on **same stage** (no power letter) when used | rare; pre-open inspect is **not** an option-chip wall |
 
 Jobs never invent Action. Options never re-score. Binary toggles never open a job surface.  
 **Job ≠ independent stage** — see **In-stage chip navigation**.  
@@ -460,17 +460,14 @@ Power keys are **stage-local** (only while that stage owns input).
 
 ### Pre-open board + inspect · **in-stage · conforming**
 
-See full **§ Pre-open stage** below (session strip · board semantics · chips · data authority).
+See full **§ Pre-open stage** below (session strip · board · Judge-shaped inspect).
 
 | Chip (paint) | Kind | Power | Effect |
 |--------------|------|-------|--------|
-| **why** | option | — | signal why · conf · quality · ΔIEV missing caution · rejects |
-| **auction+** | option | — | book pressure · imbalance · spread · gap source · intensity (true name) |
-| **plan** | option | — | entry range · stop% · ATR · capital band |
-| **warn** | option | — | notation UMA/SUSP · risk annotate · regime · filter rejects |
+| **`[d] detail`** | density | **`d`** | optional depth only (factors · full book · rejects) · same dual idea as Judge |
 
-- Nav: click · Tab · Enter/Space only (no letter soup · **no fake keycaps**).  
-- Options never open an independent stage.  
+- **No** option chips: ~~why~~ · ~~auction+~~ · ~~plan~~ · ~~warn~~ (chip wall rejected — aligns with screen accum / Judge).  
+- **Why** always in brief hero · **auction** always-on second row · **plan** = global **`p`** only · **warn** = banner when non-empty.  
 - Enter inspect is **present-only** — never re-runs screen / never invents Action.
 
 ### Broker list (Ctrl+P) — **no chip bar · N/A**
@@ -729,10 +726,11 @@ Not a 3-row mini top table. Chip **brokers** / `b` opens radar **under the ticke
 
 ---
 
-## Pre-open stage (locked · 2026-08-01)
+## Pre-open stage (locked · 2026-08-01 · inspect aligned 2026-08-02)
 
 **Related:** [`tui-preopen-board.html`](./tui-preopen-board.html) · CLI `saham screen pre-open` · ADR-048 · multi-surface `screen-preopen`.  
-**Mission:** Morning auction scan from **honest** IEV/NCP data + (when available) TradeSetup Action — **not** a thin clone of Accum Judge and **not** letter-grade theater.
+**Mission:** Morning auction scan from **honest** IEV/NCP data + (when available) TradeSetup Action — **not** a thin clone of Accum Judge and **not** letter-grade theater.  
+**Inspect IA:** same mental model as **screen accum → Judge** (hero + Why always + density detail + **`p` plan**), with auction as specialty body — **not** a multi-option chip wall.
 
 ### Data plane vs chrome (authority)
 
@@ -787,8 +785,8 @@ Tkr · Act · IEP · Δ% · IEV · NCP · ΔIEV · Risk
 | **ΔIEV** | **Locked** final − baseline (signed K/M or %) | `—` if baseline missing · never invent |
 | **Risk** | RiskEngine annotate (`↑` `↓` `~`) and/or notation flag | `—` if none |
 
-**Dropped from board chrome:** letter **Grd A/B/C** (was theater; conf/quality live under inspect **why**).  
-**Not board columns (inspect / strip):** imbalance, spread, entry/stop, Dir/Conf/Sig, full plan — depth only.
+**Dropped from board chrome:** letter **Grd A/B/C** (was theater; conf/quality live in inspect **Why** line).  
+**Not board columns:** imbalance, spread, entry/stop, Dir/Conf/Sig — live on inspect brief (auction row / Why) or **`p` plan**.
 
 ```text
 Screen · pre-open · SNAPSHOT · discovery-only
@@ -800,22 +798,55 @@ ADRO  WATCH  2,680  +3.1  22.3M   LOCK  +4.5M     ↑
 UNVR  —      2,410  −1.1   3.8M   disc   —        —
 ```
 
-### Inspect (Enter · present-only)
+### Inspect (Enter · present-only · **Judge-shaped**)
 
-| Zone | Spec |
-|------|------|
-| Hero | **Act** badge · Risk · IEP big · Δ% |
-| Levels kv | IEV · NCP lock · locked ΔIEV · gap source · session source |
-| Chips | **`why` · `auction+` · `plan` · `warn`** (label-only · no power letters) |
+**Parity with screen accum → Judge:**
 
-| Chip | Content (real fields only) |
-|------|----------------------------|
-| **why** | Dir · conf · auction quality · Sig score · factor notes · `delta_iev_missing` caution · filter rejects |
-| **auction+** | bid/offer imbalance or pressure · spread% · best bid/offer lots · gap source · **iev_intensity** (named intensity, not “NCP”) · broker backing tag/score/streak when cached |
-| **plan** | entry range low/high · stop% · ATR · capital band |
-| **warn** | ticker_notation · risk annotate detail · regime RISK_OFF · ≤4 snapshot warnings |
+| Accum Judge | Pre-open inspect |
+|-------------|------------------|
+| Action · Gate hero | **Act** · Risk hero |
+| `← Why:` always in brief | **`← Why:` always** (no `why` chip) |
+| Specialty body (scores / stack brief) | **AUCTION second row always** (no `auction+` chip) |
+| `[d] detail` optional depth | **`[d] detail`** optional (factors · full book · rejects) |
+| **`p` Plan** global | **`p` Plan only** — **no** plan chip |
+| No multi-chip wall | **Reject** `why` · `auction+` · `plan` · `warn` chips |
 
-**Keys:** `↑↓` board · `Enter` inspect · `esc` board · `p` plan (geometry) · `v` ticker · never same stage as Accum Judge.
+#### Brief layout (default on Enter)
+
+```text
+Pre-open · BBRI
+ENTER  ·  risk ~  ·  present-only
+
+IEP  4,820   +1.8%
+IEV 12.4M · NCP LOCK · ΔIEV +2.1M · gap IEP
+
+← Why: Dir BULL · conf H · quality A · Sig 72 · locked ΔIEV + · …
+
+AUCTION  (always-on · not a chip)
+  imb 1.34× · spread 0.42% · intensity 6.1× · backing 0.72 · streak 3
+  (honest — when fast / no book)
+
+[warn banner only if non-empty]
+  UMA · regime RISK_OFF · …
+
+[ d ] detail     ← optional · hidden if nothing extra
+
+footer: esc board · d detail · p plan · v ticker
+```
+
+| Zone | Spec | Always? |
+|------|------|---------|
+| **Hero** | **Act** · Risk · IEP big · Δ% | yes |
+| **Levels kv** | IEV · NCP lock · locked ΔIEV · gap source · session | yes |
+| **Why line** | Dir · conf · quality · Sig · `delta_iev_missing` caution · short rejects | **yes · never chip** |
+| **AUCTION row** | imbalance/pressure · spread% · bid/offer lots when present · **iev_intensity** (named intensity) · broker backing tag/score/streak | **yes · second row** · `—` if no book |
+| **Warn banner** | notation · risk detail · regime · ≤4 warnings | **only when non-empty** |
+| **`[d] detail`** | long factor list · full book · filter reject table | optional density |
+| **Plan** | entry/stop/ATR geometry | **`p` only** → Plan stage · not painted as inspect chip |
+
+**Keys:** `↑↓` board · `Enter` inspect · `esc` board · **`d`** detail (when chip present) · **`p` plan** (geometry) · `v` ticker · never same stage as Accum Judge.
+
+**Reject (inspect):** option-chip wall · plan chip · why chip · auction+ chip · empty permanent warn chip · inventing book metrics.
 
 ### CLI / TUI multi-surface
 
@@ -823,7 +854,7 @@ UNVR  —      2,410  −1.1   3.8M   disc   —        —
 |---------|------|-----------|
 | **CLI full** | `PreOpenWorkflowUseCase` | Action · Dir · Conf/Q · Sig · Gap · plan · RSI · Risk · source authority |
 | **TUI board** | Snapshot loader (intentional thin) | Session strip honesty · board columns with **correct** NCP/ΔIEV semantics · Act when available |
-| **TUI inspect** | Present-only from board row | Chips above · no re-screen on Enter |
+| **TUI inspect** | Present-only from board row | Judge-shaped brief · no re-screen on Enter · **`p` for plan** |
 
 When TUI cannot run full workflow: **Phase = discovery-only** (or SNAPSHOT) on strip · **Act = —** · still show IEP/IEV from snapshot · never fake ENTER.
 
@@ -831,9 +862,10 @@ When TUI cannot run full workflow: **Phase = discovery-only** (or SNAPSHOT) on s
 
 1. Fix NCP / ΔIEV bindings + session strip (honesty first)  
 2. Act column when workflow/snapshot can carry Action; else honest `—`  
-3. Inspect chips `why` / `auction+` / `plan` / `warn` field map  
-4. Optional imbalance when not `fast_mode`  
-5. Visual parity with mock strip + board  
+3. Inspect brief: Why always · auction row always · warn banner · drop option chips  
+4. Optional `[d] detail` for long depth  
+5. Plan only via existing **`p`** binding (no plan chip)  
+6. Visual parity with mock strip + board + inspect 
 
 ---
 
@@ -868,8 +900,8 @@ When TUI cannot run full workflow: **Phase = discovery-only** (or SNAPSHOT) on s
 - **Board:** `Tkr · Act · IEP · Δ% · IEV · NCP · ΔIEV · Risk`  
 - **NCP** = lock/phase flag · **ΔIEV** = locked baseline delta · never intensity  
 - **Act** = TradeSetup Action when authoritative · else `—`  
-- **Inspect:** Action hero · chips **why · auction+ · plan · warn** (no power letters)  
-- **Reject:** Grd A/B/C as authority · silent live stream · re-score on Enter  
+- **Inspect (Judge-shaped):** Act hero · **Why always** · **AUCTION second row always** · warn banner if any · optional **`[d] detail`** · **plan = `p` only**  
+- **Reject:** option-chip wall (`why`/`auction+`/`plan`/`warn`) · Grd theater · silent live stream · re-score on Enter  
 
 ### Ticker (`v t` · multi-surface with `view ticker *`)
 - **Show density:** brief (default) / detail (`d`) — same dual as Judge · **show body only**  
@@ -929,6 +961,8 @@ When TUI cannot run full workflow: **Phase = discovery-only** (or SNAPSHOT) on s
 - Pre-open letter **Grd** as TradeSetup stand-in  
 - Pre-open inventing **ENTER** without NCP authority / workflow Action  
 - Pre-open inspect re-running screen on Enter  
+- Pre-open inspect **option-chip wall** (`why` · `auction+` · `plan` · `warn`) — use Judge-shaped brief instead  
+- Pre-open **plan chip** (plan is global **`p`** only)  
 
 ---
 
