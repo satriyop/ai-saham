@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-dist-broker</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-brokers-radar</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -2423,7 +2423,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 01-dist-broker</span>
+      <span class="rev" id="buildStamp">mock · 01-brokers-radar</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -3353,36 +3353,157 @@
                 </div>
               </div>
 
-              <!-- BROKERS note (real trail = stock desks radar) -->
+              <!-- BROKERS = stock desks radar (TUI authority: same columns as ticker-desks stage) -->
               <div class="tj-desk" id="tjDeskBrokers" data-job="brokers">
-                <div class="tj-hero">
+                <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--text-mute);line-height:1.45">
                   <div>
-                    <div class="lab">Brokers · list trail</div>
-                    <div class="big" style="font-size:1.2rem">View · desks · BBCA</div>
-                    <div class="sub">top-brokers → stock desk radar · Enter desk home · esc show</div>
+                    <strong style="color:var(--text);font-weight:600;font-size:13px" id="tjBrokersTitle">View · desks · BBRI</strong>
+                    <span id="tjBrokersMeta"> · as of 2026-07-31 · 12 desks · top brokers · Enter home</span><br />
+                    <span style="color:var(--amber)">thin NetX (partial sessions)</span>
+                    <span class="dim"> when sample &lt; window · shown as value*(used/X)</span>
                   </div>
-                  <div>
-                    <div class="side-lab">Product</div>
-                    <div class="sub" style="color:var(--text-dim);margin:0">
-                      Exception: leaves on-ticker shell<br />
-                      for list chrome (same as TUI today).
-                    </div>
+                  <div style="text-align:right;max-width:22em">
+                    Ranking: top-brokers day · Net3/5/7/10/20 = stock-scoped sessions<br />
+                    mint buy · coral sell · Enter → desk home · esc show
                   </div>
                 </div>
-                <p style="margin:0 0 10px;font-size:12px;color:var(--text-mute)">Sample tops · click product path opens full radar.</p>
-                <table class="mini-tbl">
-                  <thead><tr><th>#</th><th>Code</th><th>Type</th><th class="num">Net buy</th><th class="num">Share</th></tr></thead>
+                <table class="result-table dense" id="tjBrokersTable">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Type</th>
+                      <th>Role</th>
+                      <th>AsOf</th>
+                      <th class="num">DayNet</th>
+                      <th class="num">Net3</th>
+                      <th class="num">Net5</th>
+                      <th class="num">Net7</th>
+                      <th class="num">Net10</th>
+                      <th class="num">Net20</th>
+                      <th class="num">Stk</th>
+                      <th class="num">Δ1</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    <tr><td class="dim">1</td><td>YP</td><td class="dim">F</td><td class="num pos">+128.4B</td><td class="num dim">12.1%</td></tr>
-                    <tr><td class="dim">2</td><td>AK</td><td class="dim">F</td><td class="num pos">+86.2B</td><td class="num dim">8.1%</td></tr>
-                    <tr><td class="dim">3</td><td>CC</td><td class="dim">L</td><td class="num pos">+41.0B</td><td class="num dim">3.9%</td></tr>
+                    <tr class="is-selected">
+                      <td><span class="ticker">BK</span></td>
+                      <td class="dim">Foreign</td>
+                      <td class="pos">buy</td>
+                      <td class="dim">2026-07-31</td>
+                      <td class="num pos">6.52B</td>
+                      <td class="num pos">27.77B</td>
+                      <td class="num pos">29.93B</td>
+                      <td class="num pos">30.36B</td>
+                      <td class="num pos">33.78B</td>
+                      <td class="num pos">6.56B</td>
+                      <td class="num">3</td>
+                      <td class="num neg">−14.48B</td>
+                    </tr>
+                    <tr>
+                      <td><span class="ticker">ZP</span></td>
+                      <td class="dim">Foreign</td>
+                      <td class="pos">buy</td>
+                      <td class="dim">2026-07-31</td>
+                      <td class="num pos">4.17B</td>
+                      <td class="num pos">2.32B</td>
+                      <td class="num neg">−442.92M</td>
+                      <td class="num neg">−859.71M</td>
+                      <td class="num neg">−1.43B</td>
+                      <td class="num neg">−8.65B</td>
+                      <td class="num">2</td>
+                      <td class="num pos">+2.70B</td>
+                    </tr>
+                    <tr>
+                      <td><span class="ticker">AK</span></td>
+                      <td class="dim">Foreign</td>
+                      <td class="pos">buy</td>
+                      <td class="dim">2026-07-31</td>
+                      <td class="num pos">3.93B</td>
+                      <td class="num pos">20.03B</td>
+                      <td class="num pos">21.55B</td>
+                      <td class="num pos">16.53B</td>
+                      <td class="num pos">27.07B</td>
+                      <td class="num pos">2.41B</td>
+                      <td class="num">2</td>
+                      <td class="num neg">−20.98B</td>
+                    </tr>
+                    <tr>
+                      <td><span class="ticker">KZ</span></td>
+                      <td class="dim">Foreign</td>
+                      <td class="pos">buy</td>
+                      <td class="dim">2026-07-31</td>
+                      <td class="num pos">1.75B</td>
+                      <td class="num pos">1.69B</td>
+                      <td class="num neg">−6.62B</td>
+                      <td class="num neg">−6.41B</td>
+                      <td class="num neg">−4.78B</td>
+                      <td class="num pos">32.87B</td>
+                      <td class="num">1</td>
+                      <td class="num pos">+1.76B</td>
+                    </tr>
+                    <tr>
+                      <td><span class="ticker">HD</span></td>
+                      <td class="dim">Foreign</td>
+                      <td class="pos">buy</td>
+                      <td class="dim">2026-07-31</td>
+                      <td class="num pos">24.86M</td>
+                      <td class="num pos">302.74M*(2/3)</td>
+                      <td class="num pos">291.34M*(2/5)</td>
+                      <td class="num pos">532.37M*(2/7)</td>
+                      <td class="num pos">851.97M*(2/10)</td>
+                      <td class="num pos">817.14M*(2/20)</td>
+                      <td class="num">2</td>
+                      <td class="num neg">−495.47M</td>
+                    </tr>
+                    <tr>
+                      <td><span class="ticker">YP</span></td>
+                      <td class="dim">Local</td>
+                      <td class="neg">sell</td>
+                      <td class="dim">2026-07-31</td>
+                      <td class="num neg">−15.37B</td>
+                      <td class="num neg">−15.07B</td>
+                      <td class="num neg">−14.02B</td>
+                      <td class="num neg">−10.01B</td>
+                      <td class="num neg">−9.67B</td>
+                      <td class="num neg">−11.85B</td>
+                      <td class="num dim">0</td>
+                      <td class="num neg">−15.52B</td>
+                    </tr>
+                    <tr>
+                      <td><span class="ticker">PD</span></td>
+                      <td class="dim">Local</td>
+                      <td class="neg">sell</td>
+                      <td class="dim">2026-07-31</td>
+                      <td class="num neg">−8.78B</td>
+                      <td class="num neg">−8.91B</td>
+                      <td class="num neg">−9.76B</td>
+                      <td class="num neg">−12.61B</td>
+                      <td class="num neg">−24.32B</td>
+                      <td class="num neg">−18.73B</td>
+                      <td class="num dim">0</td>
+                      <td class="num neg">−8.36B</td>
+                    </tr>
+                    <tr>
+                      <td><span class="ticker">XL</span></td>
+                      <td class="dim">Local</td>
+                      <td class="neg">sell</td>
+                      <td class="dim">2026-07-31</td>
+                      <td class="num neg">−7.06B</td>
+                      <td class="num neg">−6.73B</td>
+                      <td class="num neg">−5.56B</td>
+                      <td class="num neg">−5.09B</td>
+                      <td class="num neg">−3.88B</td>
+                      <td class="num neg">−2.88B</td>
+                      <td class="num dim">0</td>
+                      <td class="num neg">−6.42B</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
 
               <div class="footer-note">
                 <span><span class="kbd">esc</span> show</span>
-                <span><span class="kbd">chips</span> switch job</span>
+                <span><span class="kbd">f</span><span class="kbd">o</span><span class="kbd">x</span><span class="kbd">n</span> jobs</span>
                 <span class="dim" id="tickerJobCli">CLI · saham view ticker flow BBCA</span>
               </div>
             </div>
@@ -3403,14 +3524,14 @@
  <!-- 7a · Desk radar (list) -->
  <div class="broker-sub is-on" id="brokerRadar" data-broker-mode="radar">
  
- <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;font-size:11.5px;color:var(--text-mute)">
+ <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:12px;color:var(--text-mute);line-height:1.45">
  <div>
- <strong style="color:var(--text);font-weight:500">View · desks · BBCA</strong>
- · 12 desks · top brokers · Enter home<br />
- <span style="color:var(--amber)">thin NetX (partial sessions)</span> when any desk sample &lt; window
+ <strong style="color:var(--text);font-weight:600;font-size:13px">View · broker list</strong>
+ · tracked desks · Enter home<br />
+ <span class="dim">Tracked radar (v b) · thinner columns than stock desks</span>
  </div>
  <div style="text-align:right">
- Net columns = multi-session stock nets · mint buy · coral sell
+ DayNet · Net5 · Stk · Δ1 · mint buy · coral sell
  </div>
  </div>
  <table class="result-table dense" id="brokerTable">
@@ -5249,12 +5370,30 @@
       }
       const title = $("tickerDeepTitle");
       if (title) {
-        title.innerHTML =
-          `View · ticker · ${t} · ${spec.title}` +
-          `<span style="font-size:11px;color:var(--text-mute);font-weight:400;margin-left:8px" id="tickerJobMeta">${spec.title} · local cache</span>`;
+        if (job === "brokers") {
+          // Match TUI stock desks chrome (not implementer "list trail")
+          title.innerHTML =
+            `View · desks · ${t}` +
+            `<span style="font-size:11px;color:var(--text-mute);font-weight:400;margin-left:8px" id="tickerJobMeta">top brokers · local cache</span>`;
+        } else {
+          title.innerHTML =
+            `View · ticker · ${t} · ${spec.title}` +
+            `<span style="font-size:11px;color:var(--text-mute);font-weight:400;margin-left:8px" id="tickerJobMeta">${spec.title} · local cache</span>`;
+        }
+      }
+      const bTitle = $("tjBrokersTitle");
+      if (bTitle) bTitle.textContent = `View · desks · ${t}`;
+      const bMeta = $("tjBrokersMeta");
+      if (bMeta) {
+        bMeta.textContent = " · as of 2026-07-31 · 12 desks · top brokers · Enter home";
       }
       const cli = $("tickerJobCli");
-      if (cli) cli.textContent = `CLI · saham ${spec.cli} ${t}`;
+      if (cli) {
+        cli.textContent =
+          job === "brokers"
+            ? `↑↓ · Enter desk · esc show · CLI · saham ${spec.cli} ${t}`
+            : `CLI · saham ${spec.cli} ${t}`;
+      }
       showTickerJobDesk(job);
       document.querySelectorAll("#tickerJobFlags .flag-chip[data-deep]").forEach((b) => {
         b.classList.toggle("is-on", b.dataset.deep === job);

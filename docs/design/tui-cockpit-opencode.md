@@ -402,14 +402,20 @@ Cap top 5 sides · top 4 counterparties. Share bar = % of that side’s amount.
 
 No full spreadsheet. Expand-to-wide columns is optional later — not show brief/detail dual.
 
-### `brokers` (exception · list trail)
+### `brokers` · stock desks radar (**TUI is design authority**)
+
+Not a 3-row mini top table. Chip **brokers** / `b` opens the **same rich radar as TUI `ticker-desks`**:
 
 | Piece | Spec |
 |-------|------|
-| Title | `View · desks · BBCA` |
-| Body | Desk radar DataTable (existing stock desks) |
-| Meta | top brokers · thin NetX honesty · Enter home |
-| Trail | `esc` → ticker show |
+| Title | `View · desks · TICKER` |
+| Meta | `as of · N desks · top brokers · Enter home` · **thin NetX (partial sessions)** when any desk partial |
+| Columns | `Code · Type · Role · AsOf · DayNet · Net3 · Net5 · Net7 · Net10 · Net20 · Stk · Δ1` |
+| Type | **Foreign** / **Local** (words on radar; not cryptic A) |
+| Role | `buy` / `sell` from top-brokers ranking |
+| NetX | Stock-scoped multi-session · partial = `value*(used/X)` |
+| Keys | `↑↓` · **Enter** desk home · **esc** ticker show · chips switch job |
+| Reject | Implementer hero (“list trail / leaves shell”) · 3-row sample tops only |
 
 ### TUI implement order (after design accept)
 
