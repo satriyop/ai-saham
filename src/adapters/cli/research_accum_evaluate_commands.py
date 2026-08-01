@@ -18,16 +18,31 @@ from src.adapters.cli.research_learning_helpers import (
     resolve_label_compatibility_ids,
     status_cohort,
 )
+from src.application.services.trading_session_calendar_selection import (
+    select_calendar_snapshot,
+)
 from src.application.use_case.database_learning_lifecycle_use_case import (
     ACCUM_PATH_LABEL_CONTRACTS,
     ACCUM_PRIMARY_LABEL_CONTRACT,
     GenerateAccumulationPricePathLabelsUseCase,
     GenerateLearningLabelsRequest,
 )
+from src.application.use_case.sync_trading_session_calendar_snapshot_use_case import (
+    ResolveCalendarSyncCoverageRequest,
+    ResolveTradingSessionCalendarSyncCoverageUseCase,
+    SyncTradingSessionCalendarRequest,
+    SyncTradingSessionCalendarSnapshotUseCase,
+)
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
+    LearningContractError,
     LearningContractId,
+)
+from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
+from src.infrastructure.composition import stockbit_session_factory as _stockbit_session
+from src.infrastructure.data_providers.stockbit_trading_session_calendar_source import (
+    StockbitTradingSessionCalendarSource,
 )
 from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
     SQLiteCorporateActionCalendarRepository,
@@ -103,13 +118,18 @@ def accumulation_labels(
     # Immutable Stockbit-attested calendar snapshots already persisted for the cohort.
     # Never re-range a growing IHSG candle cache for label identity.
     calendar_store = SQLiteTradingSessionCalendarSnapshotRepository(resolved)
+    snapshots = tuple(calendar_store.list_snapshots())
 
     def _resolve_snapshot(signal_date, horizon_days):
-        # Prefer any snapshot that can prove first-N after the signal.
-        for snap in calendar_store.list_snapshots():
-            if snap.first_n_sessions_after(signal_date, horizon_days) is not None:
-                return snap
-        return None
+        try:
+            return select_calendar_snapshot(
+                snapshots,
+                signal_date=signal_date,
+                horizon_days=horizon_days,
+            )
+        except LearningContractError:
+            # Source conflict: fail closed to provisional (no terminal label).
+            return None
 
     use_case = GenerateAccumulationPricePathLabelsUseCase(
         observations=repo,
@@ -208,6 +228,96 @@ def accumulation_evaluate(
         db_path=db_path,
         fmt=fmt,
     )
+
+
+def accumulation_sync_session_calendar(
+    start: Annotated[
+        Optional[str],
+        typer.Option("--start", help="Coverage start YYYY-MM-DD (required unless --auto)"),
+    ] = None,
+    end: Annotated[
+        Optional[str],
+        typer.Option("--end", help="Coverage end YYYY-MM-DD (required unless --auto)"),
+    ] = None,
+    auto: Annotated[
+        bool,
+        typer.Option(
+            "--auto",
+            help=(
+                "Resolve coverage from earliest unlabeled current-schema observation "
+                "through --end (or today in IDX timezone)."
+            ),
+        ),
+    ] = False,
+    db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
+    fmt: Annotated[str, typer.Option("--format")] = "table",
+) -> None:
+    """Strict Stockbit IHSG calendar sync → immutable snapshot row.
+
+    Production path for trading_session_calendar_snapshots. Cron runs this
+    between capture and labels.
+    """
+    from datetime import date as date_cls
+
+    resolved, repo = repository(db_path)
+    stockbit_config = load_stockbit_provider_config()
+    session = _stockbit_session.get_stockbit_session(stockbit_config)
+    if not session or not session.authenticated:
+        raise typer.BadParameter(
+            "Stockbit session expired. Run `saham fetch stockbit login` to refresh."
+        )
+    captured_at = datetime.now(IDX_TIMEZONE)
+    source = StockbitTradingSessionCalendarSource(
+        session.api_client,
+        stockbit_config=stockbit_config,
+        captured_at=captured_at,
+    )
+    snap_repo = SQLiteTradingSessionCalendarSnapshotRepository(resolved)
+    sync_uc = SyncTradingSessionCalendarSnapshotUseCase(
+        source=source,
+        snapshots=snap_repo,
+    )
+
+    if auto:
+        end_date = date_cls.fromisoformat(end) if end else datetime.now(IDX_TIMEZONE).date()
+        coverage = ResolveTradingSessionCalendarSyncCoverageUseCase(
+            observations=repo,
+            labels=repo,
+        ).execute(ResolveCalendarSyncCoverageRequest(end_date=end_date))
+        if coverage.no_op:
+            payload = {
+                "artifact_type": "trading_session_calendar_sync",
+                "no_op": True,
+                "no_op_reason": coverage.no_op_reason,
+                "eligible_observation_count": coverage.eligible_observation_count,
+            }
+            echo(payload, fmt)
+            return
+        assert coverage.coverage_start is not None and coverage.coverage_end is not None
+        cov_start, cov_end = coverage.coverage_start, coverage.coverage_end
+    else:
+        if not start or not end:
+            raise typer.BadParameter("provide --start and --end, or use --auto")
+        cov_start = date_cls.fromisoformat(start)
+        cov_end = date_cls.fromisoformat(end)
+
+    result = sync_uc.execute(
+        SyncTradingSessionCalendarRequest(
+            coverage_start=cov_start,
+            coverage_end=cov_end,
+            captured_at=captured_at,
+        )
+    )
+    payload = {
+        "artifact_type": "trading_session_calendar_sync",
+        "snapshot_id": result.snapshot_id,
+        "inserted": result.inserted,
+        "session_count": result.session_count,
+        "coverage_start": result.coverage_start.isoformat(),
+        "coverage_end": result.coverage_end.isoformat(),
+        "no_op": False,
+    }
+    echo(payload, fmt)
 
 
 def accumulation_status(

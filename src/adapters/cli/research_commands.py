@@ -21,6 +21,7 @@ from src.adapters.cli.research_accum_evaluate_commands import (
     accumulation_labels,
     accumulation_replay,
     accumulation_status,
+    accumulation_sync_session_calendar,
 )
 from src.adapters.cli.research_accum_phase_ledger_commands import backfill_phase_ledger
 from src.adapters.cli.research_pre_open_capture_commands import pre_open_capture
@@ -73,6 +74,7 @@ research_pre_open_app.command("status")(pre_open_status)
 research_accum_app.command("capture")(signal_capture_observations)
 research_accum_app.command("backfill")(signal_backfill_observations)
 research_accum_app.command("backfill-phase-ledger")(backfill_phase_ledger)
+research_accum_app.command("sync-session-calendar")(accumulation_sync_session_calendar)
 research_accum_app.command("labels")(accumulation_labels)
 research_accum_app.command("evaluate")(accumulation_evaluate)
 research_accum_app.command("replay")(accumulation_replay)

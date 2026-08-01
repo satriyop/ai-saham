@@ -22,6 +22,9 @@ from src.application.services.accumulation_production_policy_descriptors import 
 from src.application.services.lean_observation_identity import (
     POLICY_SNAPSHOT_BINDING_CONTRACT_V2,
 )
+from src.domain.ports.trading_session_calendar_repository import (
+    TradingSessionCalendarSnapshotReadError,
+)
 from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     ACCUM_POPULATION_AUTHORITY_CONTRACT,
@@ -60,9 +63,11 @@ from src.domain.value_objects.signal_observation_contracts import (
 from src.domain.value_objects.trading_session_calendar_snapshot import (
     PATH_LABEL_METRICS_SCHEMA_VERSION,
     STOCKBIT_TRADING_SESSIONS_CONTRACT,
+    TRADING_SESSION_CALENDAR_BENCHMARK_IHSG,
+    TRADING_SESSION_CALENDAR_SOURCE_STOCKBIT,
     TradingSessionCalendarSnapshot,
     label_window_digest,
-    validate_trading_session_calendar_snapshot,
+    validate_active_stockbit_calendar_snapshot,
 )
 
 # Exact economic session date (ADR-056 payload). No prefix/slice acceptance.
@@ -1171,19 +1176,45 @@ def _path_label_semantic_reasons(
                 if session_snapshot_lookup is None:
                     reasons.append("metrics.calendar_snapshot_lookup_unproven")
                 else:
-                    snapshot = session_snapshot_lookup(snapshot_id)
-                    if snapshot is None:
+                    try:
+                        snapshot = session_snapshot_lookup(snapshot_id)
+                    except TradingSessionCalendarSnapshotReadError as exc:
+                        reasons.append(
+                            f"metrics.calendar_snapshot_lookup_corrupt:{snapshot_id}:{exc}"
+                        )
+                        snapshot = None
+                    except LearningContractError as exc:
+                        reasons.append(
+                            f"metrics.calendar_snapshot_lookup_corrupt:{snapshot_id}:{exc}"
+                        )
+                        snapshot = None
+                    if snapshot is None and not any(
+                        "calendar_snapshot_lookup_corrupt" in r for r in reasons
+                    ):
                         reasons.append(f"metrics.calendar_snapshot_missing:{snapshot_id!r}")
-                    else:
-                        try:
-                            validate_trading_session_calendar_snapshot(snapshot)
-                        except LearningContractError as exc:
-                            reasons.append(f"metrics.calendar_snapshot_corrupt:{exc}")
+                    elif snapshot is not None:
+                        if snapshot.snapshot_id != snapshot_id:
+                            reasons.append(
+                                "metrics.calendar_snapshot_id_mismatch:"
+                                f"requested={snapshot_id!r},loaded={snapshot.snapshot_id!r}"
+                            )
                             snapshot = None
+                        else:
+                            try:
+                                validate_active_stockbit_calendar_snapshot(snapshot)
+                            except LearningContractError as exc:
+                                reasons.append(f"metrics.calendar_snapshot_invalid:{exc}")
+                                snapshot = None
             if snapshot is not None and signal_date is not None:
                 if snapshot.contract_id != STOCKBIT_TRADING_SESSIONS_CONTRACT:
                     reasons.append(
                         f"metrics.calendar_snapshot_contract_invalid:{snapshot.contract_id!r}"
+                    )
+                if snapshot.source != TRADING_SESSION_CALENDAR_SOURCE_STOCKBIT:
+                    reasons.append(f"metrics.calendar_snapshot_source_invalid:{snapshot.source!r}")
+                if snapshot.benchmark != TRADING_SESSION_CALENDAR_BENCHMARK_IHSG:
+                    reasons.append(
+                        f"metrics.calendar_snapshot_benchmark_invalid:{snapshot.benchmark!r}"
                     )
                 if (
                     isinstance(stored_revision, str)
