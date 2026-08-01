@@ -368,6 +368,44 @@ Required structure:
      ID formulas, digest functions, owners, and failure states before delegating
      or coding. An open-ended value such as "validate relevant metadata" is not
      an acceptable contract.
+17. Implement authority-bearing changes in dependency order.
+   - Required order: lock the authority owner/source and missing/failure
+     semantics; lock schema, identity, compatibility, and blast radius; implement
+     the canonical producer; implement persistence and read-only retrieval;
+     implement consumers/validators; wire every production composition root;
+     then run vertical round-trip, mutation, and complete close gates.
+   - Do not tighten a consumer before proving the canonical producer emits the
+     newly required contract. Do not substitute an existing provider merely
+     because its return type fits.
+18. Prove read-only behavior transitively.
+   - Inspect every constructed dependency, including constructors, connection
+     factories, context managers, lazy initializers, schema ensures, migrations,
+     repair hooks, directory creation, and persistent PRAGMAs. A read-only use
+     case is not read-only when any nested adapter can write.
+   - Tests must prove nonexistent paths remain nonexistent, schema/file metadata
+     and row counts remain unchanged, and no create/alter/insert/update/delete or
+     migration executes. Use SQLite read-only/query-only mode where applicable.
+19. Require producer-to-consumer contract symmetry.
+   - For every tightened consumer invariant, generate a happy-path artifact
+     through the real canonical producer, persist and deserialize it, then pass
+     it through the real consumer/readiness boundary.
+   - The task cannot close when producer and consumer use different session,
+     population, horizon, cutoff, or provenance axes; when hand-built fixtures
+     pass but production artifacts fail; or when validation requires authority
+     the producer does not supply.
+20. Bound external authority and shared-schema impact exactly.
+   - Derive calendar, benchmark, population, corporate-action, or other reference
+     coverage from the exact consumed artifacts. Test newest immature rows, older
+     mature rows, unavailable future dates, holidays/interior gaps, and cohorts
+     with different ranges. Do not request hypothetical future coverage for
+     artifacts that do not yet exist.
+   - Before changing a shared schema/version constant, inventory every producer,
+     consumer, compatibility hash, command, and artifact family that imports it.
+     Use a purpose-specific version when the change is purpose-specific unless
+     the task explicitly authorizes every affected workflow to fork.
+   - Close-gate evidence must be produced after the final production/test edit
+     and on the exact commit claimed complete. Any later code, fixture,
+     composition, schema, or dependency change invalidates earlier green output.
 
 ### Mandatory Readiness / Promotion Authority Matrix
 
@@ -379,6 +417,7 @@ because the first implementation does not validate it yet.
 |---|---|---|---|---|---|---|---|
 | Observation / decision artifact | Exact production use case or canonical builder | Stable ID formula; schema and contract IDs; purpose; policy contract; horizon contract; compatibility/cohort ID; population/universe identity; window/session/cutoff dimensions | Recompute deterministic ID and immutable payload digest independently; verify stored columns agree with serialized identity | Exact artifact type; economic date/cutoff/PIT rules; required producer contract; no retired alias or fallback | State the typed missing representation and whether it is collecting, unavailable, or blocked | State the fail-closed status and operator diagnostic | Every required identity, integrity, semantic, provenance, and PIT check passes |
 | Outcome label / realized result | Named label producer and immutable repository | Stable label ID formula; observation ID; exact label contract and horizon | Recompute deterministic ID and digest; verify observation linkage and uniqueness/conflict rules | Exact outcome basis; availability/outcome invariant; horizon/benchmark/unit contract; no incompatible label family | State insufficient-horizon/unavailable behavior | Corrupt, conflicting, cross-observation, wrong-basis, or wrong-horizon labels fail closed and are never counted | The label is valid, belongs to a validated observation, and the named readiness rule permits that horizon/state |
+| External/reference authority | Named calendar, benchmark, population, corporate-action, or other reference-data owner plus the exact read path | Source contract/version; coverage start/end; revision/completeness identity; consumed session/member/event keys | Prove the exact consumed interval/set is complete and integrity-bound; absence is not proof of a holiday, non-member, or zero event | Producer and consumer use the same authority and axis; no weekday, shape-only, latest-row, or value-equivalent substitution | State unavailable/unproven coverage separately from an authoritative empty result | Stale, partial, future-dependent, ambiguous, mismatched, or transitively writable authority fails closed | The exact consumed interval/set and revision are proven, read-only, and shared by the canonical producer and consumer |
 | Policy/config snapshot | Deterministic production policy resolver and snapshot writer | Snapshot ID formula; purpose; compatibility ID; policy ID/version; decision type; semantic engine contract; observation bindings | Recompute canonical payload digest and snapshot ID; verify the complete closed set and common material identity | Exact descriptor per policy; supported active contract only; historical sets remain historical | State legacy/absent/partial behavior | Mixed, extra, duplicate, malformed, digest-invalid, or semantically unsupported sets fail closed | The exact active closed set verifies as one coherent production identity |
 | Cohort / readiness projection | Named application use case | Explicit cohort/purpose/population identity; no implicit pooling or auto-selection | Consume only artifacts verified by the rows above; preserve invalid-artifact diagnostics | Lock precedence and minimum data rules; diagnostics never become authority | State collecting/insufficient-depth behavior | Any authority-bearing corruption uses the named blocked status | All authority rows pass and the exact minimum-data rule passes |
 | Export / reopen / promotion artifact | Named artifact writer plus authoritative production store | Artifact schema/ID; cohort; production snapshot; adapter; protocol; baseline/challenger; population; source revision | Verify artifact integrity and re-resolve immutable production identity from the authoritative read-only store; hash-shaped strings alone are not proof | Historical/static/diagnostic artifacts cannot acquire current production eligibility; no auto-promotion | State historical-display-only behavior | Missing DB authority, unsupported schema, or identity mismatch blocks reopening/promotion | Current authoritative identities verify and every protocol/promotion gate passes |
@@ -400,6 +439,12 @@ Matrix enforcement rules:
   builder or a shared contract fixture produced by it. Do not hand-copy
   contract strings into a happy-path fixture when production code can provide
   them.
+- At least one vertical test must prove a real producer artifact survives
+  persistence/deserialization and is accepted by the real consumer using the
+  same external/reference authority. Component-local happy paths are
+  insufficient.
+- For read-only paths, verify transitive dependencies and side effects, not only
+  the top-level repository interface or final row values.
 - Add mutation tests for every identity, integrity, and semantic-contract
   dimension in the matrix, including cross-artifact linkage. Each mutation
   must prove the exact blocked/missing behavior and prove the mutated artifact
@@ -466,6 +511,13 @@ Before marking done:
 - [ ] The exact requested behavior is implemented, not only the general shape.
 - [ ] When applicable, every authority-matrix cell is implemented and every
       identity/integrity/semantic dimension has an independent mutation test.
+- [ ] The implementation followed authority -> schema/identity -> producer ->
+      persistence/read path -> consumer -> composition-root dependency order.
+- [ ] A real producer -> persistence/deserialization -> consumer round trip
+      passes with the exact reference authority and coverage bounds.
+- [ ] Every read-only path is transitively read-only, including constructors,
+      schema initialization, connection options, and lazy helpers.
+- [ ] Shared schema/version blast radius is inventoried and explicitly accepted.
 - [ ] No unrelated files were touched.
 - [ ] Required output fields and error paths are covered by tests.
 - [ ] Unsupported combinations fail if the task says they must fail.
@@ -474,6 +526,8 @@ Before marking done:
 - [ ] Focused tests and `git diff --check` pass.
 - [ ] Lint Gate: `ruff check src/ tests/` and `ruff format --check src/ tests/`
       pass (whole-repo, same as CI).
+- [ ] All close gates were rerun after the final edit on the exact commit/state
+      being reported; earlier green evidence was not reused.
 
 ## Manual Dependency Injection
 
