@@ -100,3 +100,23 @@ class KnownTradingSessionCalendar:
         if earlier == later:
             return 0
         return sum(1 for session in self.sessions if earlier < session <= later)
+
+    def first_n_sessions_after(self, earlier: date, n: int) -> tuple[date, ...] | None:
+        """Return the first ``n`` proven sessions strictly after ``earlier``.
+
+        Fail closed (``None``) when:
+        - ``earlier`` is outside ``[coverage_start, coverage_end]``
+        - fewer than ``n`` proven sessions exist after ``earlier`` within coverage
+
+        Coverage is assumed complete for listed sessions: the calendar never
+        invents weekdays or holidays. Callers that need holiday-aware windows
+        must supply a session set that already omits non-sessions.
+        """
+        if n < 1:
+            raise ValueError(f"n must be >= 1, got {n}")
+        if earlier < self.coverage_start or earlier > self.coverage_end:
+            return None
+        after = tuple(session for session in self.sessions if session > earlier)
+        if len(after) < n:
+            return None
+        return after[:n]

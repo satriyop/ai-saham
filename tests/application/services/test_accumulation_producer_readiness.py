@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from src.application.services.accumulation_producer_readiness import (
     LabelCohortValidation,
@@ -11,12 +11,16 @@ from src.application.services.accumulation_producer_readiness import (
     ObservationCohortValidation,
     ProducerReadinessStatus,
     classify_producer_status,
-    count_labels_by_horizon,
     extract_action_from_payload,
     extract_setup_readiness_status_from_payload,
     observation_session_date,
-    project_cohort_readiness,
     verify_snapshot_binding,
+)
+from src.application.services.accumulation_producer_readiness import (
+    count_labels_by_horizon as _count_labels_by_horizon_impl,
+)
+from src.application.services.accumulation_producer_readiness import (
+    project_cohort_readiness as _project_cohort_readiness_impl,
 )
 from src.application.services.accumulation_production_policy_descriptors import (
     ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2,
@@ -26,6 +30,7 @@ from src.domain.services.trading_calendar import (
     inclusive_weekday_sessions,
     nth_weekday_session_on_or_after,
 )
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
@@ -60,6 +65,37 @@ MEMBERSHIP_TICKERS = ["ASII", "BBCA", "BBRI", "BMRI", "TLKM"]
 NAMED_ROSTER = ["ASII", "BBCA", "BBRI", "BMRI", "TLKM", "UNTR", "HMSP"]
 LOCKED_UNIVERSE_ID = stamp_universe_membership_id(MEMBERSHIP_TICKERS)
 PRODUCER_REV = "ai-saham@test+git:deadbeef"
+
+
+def _weekday_sessions(start: date, end: date) -> tuple[date, ...]:
+    """Mon–Fri dates in [start, end] for gap-free holiday-free test calendars."""
+    out: list[date] = []
+    current = start
+    while current <= end:
+        if current.weekday() < 5:
+            out.append(current)
+        current += timedelta(days=1)
+    return tuple(out)
+
+
+# Default authoritative calendar for fixtures (no holidays in coverage).
+DEFAULT_SESSION_CALENDAR = KnownTradingSessionCalendar(
+    sessions=_weekday_sessions(date(2026, 6, 1), date(2026, 9, 30)),
+    coverage_start=date(2026, 6, 1),
+    coverage_end=date(2026, 9, 30),
+)
+
+
+def project_cohort_readiness(**kwargs):
+    """Test wrapper: inject default session calendar unless overridden."""
+    kwargs.setdefault("session_calendar", DEFAULT_SESSION_CALENDAR)
+    return _project_cohort_readiness_impl(**kwargs)
+
+
+def count_labels_by_horizon(**kwargs):
+    """Test wrapper: inject default session calendar unless overridden."""
+    kwargs.setdefault("session_calendar", DEFAULT_SESSION_CALENDAR)
+    return _count_labels_by_horizon_impl(**kwargs)
 
 
 def _ok_labels() -> LabelCohortValidation:
@@ -874,9 +910,6 @@ def test_rehashed_available_without_outcome_blocks_and_does_not_count_h10() -> N
 
     Create-time rejection is insufficient: reconstruction can bypass create.
     """
-    from src.application.services.accumulation_producer_readiness import (
-        count_labels_by_horizon,
-    )
     from src.domain.value_objects.learning_artifacts import (
         validate_artifact_integrity,
         validate_label_identity,
@@ -928,9 +961,6 @@ def test_rehashed_available_without_outcome_blocks_and_does_not_count_h10() -> N
 
 def test_rehashed_unavailable_with_outcome_blocks_and_does_not_tally_unavailable() -> None:
     """UNAVAILABLE+non-None outcome after rehash is corruption, not normal unavailable."""
-    from src.application.services.accumulation_producer_readiness import (
-        count_labels_by_horizon,
-    )
 
     obs = [
         _observation(day=1),
@@ -1313,9 +1343,6 @@ def test_multi_row_h10_path_label_conflict_blocks_ready_fail_closed() -> None:
 
 def test_multi_row_h3_path_label_conflict_also_blocks_ready() -> None:
     """H3 multi-row conflict is authority-bearing even when H10 is clean."""
-    from src.application.services.accumulation_producer_readiness import (
-        count_labels_by_horizon,
-    )
 
     obs_a = _observation(day=1, ticker="BBCA")
     obs_b = _observation(day=2, ticker="BBRI")
@@ -1865,9 +1892,6 @@ def test_available_h10_metrics_ticker_mismatch_blocks_not_challenge_input_ready(
     assert bad_label.metrics["ticker"] == "TLKM"
 
     # Direct label counting path used by projection.
-    from src.application.services.accumulation_producer_readiness import (
-        count_labels_by_horizon,
-    )
 
     counts = count_labels_by_horizon(
         observation_ids=[o.observation_id for o in obs],
@@ -1914,9 +1938,6 @@ def test_unavailable_invented_reason_is_corruption_not_valid_unavailable() -> No
 
     Control: corporate_action_in_window (production terminal) still tallies unavailable.
     """
-    from src.application.services.accumulation_producer_readiness import (
-        count_labels_by_horizon,
-    )
 
     obs = [
         _observation(day=1, ticker="BBCA"),
@@ -1994,9 +2015,6 @@ def test_available_metrics_reject_coerced_types_and_extra_keys() -> None:
     invented extra key must not count as AVAILABLE and must not yield
     CHALLENGE_INPUT_READY. Honest exact-type metrics still pass.
     """
-    from src.application.services.accumulation_producer_readiness import (
-        count_labels_by_horizon,
-    )
 
     obs = [
         _observation(day=1, ticker="BBCA", action="WATCH", readiness=None),
@@ -2210,7 +2228,7 @@ def test_overlong_h10_label_window_rejected_not_challenge_input_ready() -> None:
     )
     assert counts.counts_by_horizon["H10"].available == 0
     assert counts.invalid_label_count >= 1
-    assert any("label_window_not_exact_sessions" in r for r in counts.invalid_reasons)
+    assert any("label_window_not_first_n_sessions" in r for r in counts.invalid_reasons)
 
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
@@ -2222,12 +2240,12 @@ def test_overlong_h10_label_window_rejected_not_challenge_input_ready() -> None:
     assert cohort.labels_by_horizon["H10"].available == 0
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
     assert any(
-        "label_window_not_exact_sessions" in r for r in cohort.label_validation.invalid_reasons
+        "label_window_not_first_n_sessions" in r for r in cohort.label_validation.invalid_reasons
     )
 
 
 def test_exact_n_session_windows_accepted_for_h3_h10_h20() -> None:
-    """Exact 3/10/20 weekday-session endpoints pass the window gate."""
+    """Exact first N sessions after signal pass the window gate."""
     obs = [
         _observation(day=1, action="WATCH", readiness=None),
         _observation(day=2, ticker="BBRI", action="ENTER", readiness="INCOMPLETE"),
@@ -2246,7 +2264,9 @@ def test_exact_n_session_windows_accepted_for_h3_h10_h20() -> None:
         )
         start = date.fromisoformat(metrics["label_window_start"])
         end = date.fromisoformat(metrics["label_window_end"])
-        assert inclusive_weekday_sessions(start, end) == horizon
+        expected = DEFAULT_SESSION_CALENDAR.first_n_sessions_after(date(2026, 7, 1), horizon)
+        assert expected is not None
+        assert start == expected[0] and end == expected[-1]
         labels.append(_label(obs[0], contract=contract, metrics=metrics))
 
     counts = count_labels_by_horizon(
@@ -2257,10 +2277,7 @@ def test_exact_n_session_windows_accepted_for_h3_h10_h20() -> None:
     for _contract, _horizon, key in contracts:
         assert counts.counts_by_horizon[key].available == 1, key
     assert counts.invalid_label_count == 0
-    assert not any(
-        "label_window_not_exact_sessions" in r or "label_window_non_session_endpoint" in r
-        for r in counts.invalid_reasons
-    )
+    assert not any("label_window_not_first_n_sessions" in r for r in counts.invalid_reasons)
 
     # Primary H10 alone still enables READY when other gates pass.
     cohort = project_cohort_readiness(
@@ -2293,6 +2310,139 @@ def test_weekend_label_window_endpoint_rejected() -> None:
     )
     assert counts.counts_by_horizon["H10"].available == 0
     joined = " ".join(counts.invalid_reasons)
-    assert (
-        "label_window_non_session_endpoint" in joined or "label_window_not_exact_sessions" in joined
+    assert "label_window_not_first_n_sessions" in joined
+
+
+def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
+    """P0: first actual N sessions required — weekday length alone is not authority.
+
+    Case A — holiday: Thu 2026-07-02 is a non-session. Honest H10 starts Fri
+    2026-07-03; weekday-approx window starting Thu must be rejected.
+
+    Case B — shifted exact weekday length: signal 2026-07-01 with window
+    2026-07-20..2026-07-31 has 10 weekdays but is not the first 10 sessions.
+
+    Case C — honest holiday-aware first-N window is accepted.
+    """
+    # Proven sessions omit 2026-07-02 (Thursday holiday).
+    holiday = date(2026, 7, 2)
+    sessions = tuple(s for s in DEFAULT_SESSION_CALENDAR.sessions if s != holiday)
+    holiday_cal = KnownTradingSessionCalendar(
+        sessions=sessions,
+        coverage_start=DEFAULT_SESSION_CALENDAR.coverage_start,
+        coverage_end=DEFAULT_SESSION_CALENDAR.coverage_end,
     )
+    signal = date(2026, 7, 1)
+    honest = holiday_cal.first_n_sessions_after(signal, 10)
+    assert honest is not None
+    assert honest[0] == date(2026, 7, 3)  # skips holiday Thursday
+    assert first_weekday_session_after(signal) == date(2026, 7, 2)  # weekday approx wrong
+
+    obs = [
+        _observation(day=1, action="WATCH", readiness=None),
+        _observation(day=2, ticker="BBRI", action="ENTER", readiness="INCOMPLETE"),
+    ]
+
+    # Case A: weekday-approx window (starts on holiday) fails under holiday calendar.
+    forged_holiday_start = _available_metrics(
+        ticker="BBCA",
+        signal_date=signal.isoformat(),
+        horizon_days=10,
+        label_window_start="2026-07-02",
+        label_window_end=nth_weekday_session_on_or_after(date(2026, 7, 2), 10).isoformat(),
+    )
+    # Prove weekday length would have accepted this forged span.
+    assert (
+        inclusive_weekday_sessions(
+            date.fromisoformat(forged_holiday_start["label_window_start"]),
+            date.fromisoformat(forged_holiday_start["label_window_end"]),
+        )
+        == 10
+    )
+    bad_holiday = _label(obs[0], metrics=forged_holiday_start)
+    counts_a = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[bad_holiday],
+        observations_by_id={o.observation_id: o for o in obs},
+        session_calendar=holiday_cal,
+    )
+    assert counts_a.counts_by_horizon["H10"].available == 0
+    assert any("label_window_not_first_n_sessions" in r for r in counts_a.invalid_reasons)
+
+    # Case B: shifted exact-length weekday window after the real first-N span.
+    shifted = _available_metrics(
+        ticker="BBCA",
+        signal_date=signal.isoformat(),
+        horizon_days=10,
+        label_window_start="2026-07-20",
+        label_window_end="2026-07-31",
+    )
+    assert (
+        inclusive_weekday_sessions(
+            date.fromisoformat(shifted["label_window_start"]),
+            date.fromisoformat(shifted["label_window_end"]),
+        )
+        == 10
+    )
+    bad_shift = _label(obs[0], metrics=shifted)
+    counts_b = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[bad_shift],
+        observations_by_id={o.observation_id: o for o in obs},
+        session_calendar=holiday_cal,
+    )
+    assert counts_b.counts_by_horizon["H10"].available == 0
+    assert any("label_window_not_first_n_sessions" in r for r in counts_b.invalid_reasons)
+    cohort_b = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[bad_shift],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+        session_calendar=holiday_cal,
+    )
+    assert cohort_b.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+
+    # Case C: honest first-N after holiday is READY.
+    honest_metrics = _available_metrics(
+        ticker="BBCA",
+        signal_date=signal.isoformat(),
+        horizon_days=10,
+        label_window_start=honest[0].isoformat(),
+        label_window_end=honest[-1].isoformat(),
+    )
+    good = _label(obs[0], metrics=honest_metrics)
+    good_b = _label(obs[1], outcome="SUCCESS")  # default weekday window under holiday_cal?
+    # Second obs signal 2026-07-02 — not a session on holiday calendar; rebuild
+    # with a session that exists (2026-07-03) for a clean second row, or only
+    # require one AVAILABLE H10 on obs[0] with session depth from both obs.
+    # READY needs ≥2 sessions + ≥1 AVAILABLE H10; obs validation uses payload dates.
+    counts_c = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[good],
+        observations_by_id={o.observation_id: o for o in obs},
+        session_calendar=holiday_cal,
+    )
+    assert counts_c.counts_by_horizon["H10"].available == 1
+    assert counts_c.invalid_label_count == 0
+    cohort_c = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[good],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+        session_calendar=holiday_cal,
+    )
+    assert cohort_c.labels_by_horizon["H10"].available == 1
+    assert cohort_c.producer_status is ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    del good_b  # not needed for READY threshold
+
+    # Missing calendar fails closed (never weekday approx).
+    no_cal = _count_labels_by_horizon_impl(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[good],
+        observations_by_id={o.observation_id: o for o in obs},
+        session_calendar=None,
+    )
+    assert no_cal.counts_by_horizon["H10"].available == 0
+    assert any("label_window_session_calendar_unproven" in r for r in no_cal.invalid_reasons)

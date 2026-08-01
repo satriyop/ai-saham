@@ -21,10 +21,7 @@ from src.application.services.accumulation_production_policy_descriptors import 
 from src.application.services.lean_observation_identity import (
     POLICY_SNAPSHOT_BINDING_CONTRACT_V2,
 )
-from src.domain.services.trading_calendar import (
-    inclusive_weekday_sessions,
-    is_weekday_session,
-)
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     ACCUM_POPULATION_AUTHORITY_CONTRACT,
     ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
@@ -999,6 +996,7 @@ def _path_label_semantic_reasons(
     label: LearningOutcomeLabel,
     *,
     observation: LearningObservation | None,
+    session_calendar: KnownTradingSessionCalendar | None = None,
 ) -> list[str]:
     """Full path-label semantic matrix (schema, outcome, fingerprint, metrics, window)."""
     reasons: list[str] = []
@@ -1065,9 +1063,9 @@ def _path_label_semantic_reasons(
                 entry: float | None = None
             else:
                 entry = float(raw_entry)
-            # Exact 3/10/20 market-session window (weekday-session calendar).
-            # Authority: inclusive Mon–Fri span between endpoints must equal the
-            # contract horizon. Ordering + days_to_* alone are not sufficient.
+            # Exact first N market sessions after signal — proven via
+            # KnownTradingSessionCalendar. Weekday-length arithmetic is never
+            # authoritative (holiday-crossing and shifted exact-length windows).
             signal_date = parse_canonical_session_date(metrics.get("signal_date"))
             win_start = parse_canonical_session_date(metrics.get("label_window_start"))
             win_end = parse_canonical_session_date(metrics.get("label_window_end"))
@@ -1084,22 +1082,22 @@ def _path_label_semantic_reasons(
                         "metrics.label_window_not_after_signal:"
                         f"start={win_start.isoformat()},signal={signal_date.isoformat()}"
                     )
-                session_count = inclusive_weekday_sessions(win_start, win_end)
-                if session_count is None:
-                    # Inverted already reported; non-session endpoints fail closed.
-                    if win_start <= win_end and (
-                        not is_weekday_session(win_start) or not is_weekday_session(win_end)
-                    ):
+                if session_calendar is None:
+                    reasons.append("metrics.label_window_session_calendar_unproven")
+                elif signal_date is not None:
+                    expected = session_calendar.first_n_sessions_after(signal_date, horizon_days)
+                    if expected is None:
                         reasons.append(
-                            "metrics.label_window_non_session_endpoint:"
-                            f"start={win_start.isoformat()},end={win_end.isoformat()}"
+                            "metrics.label_window_sessions_unproven:"
+                            f"signal={signal_date.isoformat()},n={horizon_days}"
                         )
-                elif session_count != horizon_days:
-                    reasons.append(
-                        "metrics.label_window_not_exact_sessions:"
-                        f"count={session_count},expected={horizon_days},"
-                        f"start={win_start.isoformat()},end={win_end.isoformat()}"
-                    )
+                    elif win_start != expected[0] or win_end != expected[-1]:
+                        reasons.append(
+                            "metrics.label_window_not_first_n_sessions:"
+                            f"got={win_start.isoformat()}..{win_end.isoformat()},"
+                            f"expected={expected[0].isoformat()}..{expected[-1].isoformat()},"
+                            f"n={horizon_days}"
+                        )
             if observation is not None:
                 obs_session = observation_session_date(observation)
                 if (
@@ -1132,9 +1130,7 @@ def _path_label_semantic_reasons(
                 if entry is not None:
                     payload = observation.decision_payload
                     shared = payload.get("shared") if isinstance(payload, Mapping) else None
-                    raw_price = (
-                        shared.get("current_price") if isinstance(shared, Mapping) else None
-                    )
+                    raw_price = shared.get("current_price") if isinstance(shared, Mapping) else None
                     try:
                         frozen = float(raw_price) if raw_price is not None else None
                     except (TypeError, ValueError):
@@ -1176,6 +1172,7 @@ def count_labels_by_horizon(
     observation_ids: Sequence[str],
     labels: Sequence[LearningOutcomeLabel],
     observations_by_id: Mapping[str, LearningObservation] | None = None,
+    session_calendar: KnownTradingSessionCalendar | None = None,
 ) -> LabelCohortValidation:
     """Count path labels after digest, identity, basis, and full semantic checks.
 
@@ -1190,6 +1187,9 @@ def count_labels_by_horizon(
 
     Incompatible label families (e.g. pre-open on an accumulation observation)
     fail closed rather than being silently ignored.
+
+    ``session_calendar`` is required to prove AVAILABLE path-label windows as the
+    first N sessions after the signal; absence fails closed (no weekday approx).
     """
     obs_set = set(observation_ids)
     obs_map = dict(observations_by_id or {})
@@ -1230,7 +1230,13 @@ def count_labels_by_horizon(
             # Incompatible family attached to an accumulation observation → corruption.
             label_reasons.append(f"incompatible_label_family:{label.contract_id.value}")
         else:
-            label_reasons.extend(_path_label_semantic_reasons(label, observation=parent))
+            label_reasons.extend(
+                _path_label_semantic_reasons(
+                    label,
+                    observation=parent,
+                    session_calendar=session_calendar,
+                )
+            )
 
         if label_reasons:
             invalid_label_count += 1
@@ -1292,8 +1298,13 @@ def project_cohort_readiness(
     purpose_value: str,
     expected_learning_observation_contract_id: str = ACTIVE_LEARNING_OBSERVATION_CONTRACT,
     expected_producer_observation_contract: str = ACTIVE_PRODUCER_OBSERVATION_CONTRACT,
+    session_calendar: KnownTradingSessionCalendar | None = None,
 ) -> CohortProducerReadiness:
-    """Project one cohort's producer readiness from already-loaded artifacts."""
+    """Project one cohort's producer readiness from already-loaded artifacts.
+
+    ``session_calendar`` proves AVAILABLE path-label windows as the first N
+    market sessions after each signal. Without it, AVAILABLE windows fail closed.
+    """
     obs_validation = validate_observation_cohort(
         observations,
         purpose_value=purpose_value,
@@ -1350,6 +1361,7 @@ def project_cohort_readiness(
         observation_ids=label_ids,
         labels=labels,
         observations_by_id=observations_by_id,
+        session_calendar=session_calendar,
     )
     labels_by_horizon = label_validation.counts_by_horizon
     h10 = labels_by_horizon["H10"]

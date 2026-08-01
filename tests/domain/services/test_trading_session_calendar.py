@@ -118,6 +118,20 @@ def test_earlier_after_later_returns_none_defensively():
     assert calendar.sessions_apart(MONDAY, FRIDAY) is None
 
 
+def test_first_n_sessions_after_skips_holiday_and_fails_closed():
+    """First N sessions after a signal omit holidays; insufficient coverage → None."""
+    # Friday, then Tuesday (Monday holiday omitted), Wednesday.
+    calendar = _calendar((FRIDAY, TUESDAY, WEDNESDAY_NEXT_WEEK))
+    assert calendar.first_n_sessions_after(FRIDAY, 2) == (TUESDAY, WEDNESDAY_NEXT_WEEK)
+    assert calendar.first_n_sessions_after(FRIDAY, 1) == (TUESDAY,)
+    # Only two sessions after Friday — asking for 3 fails closed.
+    assert calendar.first_n_sessions_after(FRIDAY, 3) is None
+    # earlier outside coverage fails closed.
+    assert calendar.first_n_sessions_after(date(2026, 6, 1), 1) is None
+    with pytest.raises(ValueError):
+        calendar.first_n_sessions_after(FRIDAY, 0)
+
+
 class TestUnprovenEndpointsCannotProduceACount:
     """Both endpoints must themselves be proven sessions, not merely inside
     the coverage window — a date with no corresponding session is not

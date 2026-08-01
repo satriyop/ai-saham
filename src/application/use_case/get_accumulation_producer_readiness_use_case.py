@@ -6,11 +6,14 @@ policy snapshots. Never writes or repairs data.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import Any, Protocol, Sequence
 
 from src.application.services.accumulation_producer_readiness import (
     CohortProducerReadiness,
+    bound_economic_session,
     cohort_to_dict,
     project_cohort_readiness,
 )
@@ -22,14 +25,21 @@ from src.domain.ports.learning_artifact_repositories import (
     LearningOutcomeLabelRepository,
     LearningPolicySnapshotRepository,
 )
+from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     LearningContractId,
+    LearningObservation,
     ProductionPolicySnapshot,
 )
 from src.domain.value_objects.signal_observation_contracts import (
     ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
 )
+
+# H20 horizon + weekend slack so first-N proof can reach label endpoints.
+_SESSION_CALENDAR_FORWARD_BUFFER_DAYS = 40
+
+SessionCalendarLoader = Callable[[date, date], KnownTradingSessionCalendar | None]
 
 
 class _WriteRejectingPolicySnapshotPort(Protocol):
@@ -76,10 +86,16 @@ class GetAccumulationProducerReadinessUseCase:
         observations: LearningObservationRepository,
         labels: LearningOutcomeLabelRepository,
         policy_snapshots: LearningPolicySnapshotRepository | _WriteRejectingPolicySnapshotPort,
+        session_calendar: KnownTradingSessionCalendar | None = None,
+        session_calendar_loader: SessionCalendarLoader | None = None,
     ) -> None:
         self._observations = observations
         self._labels = labels
         self._policy_snapshots = policy_snapshots
+        # Authoritative market sessions for path-label window proof (fail closed
+        # when absent — never fall back to weekday-length arithmetic).
+        self._session_calendar = session_calendar
+        self._session_calendar_loader = session_calendar_loader
 
     def execute(
         self,
@@ -93,6 +109,7 @@ class GetAccumulationProducerReadinessUseCase:
 
         observations = tuple(self._observations.list_observations(purpose))
         labels = tuple(self._labels.list_labels([o.observation_id for o in observations]))
+        session_calendar = self._resolve_session_calendar(observations)
 
         by_compat: dict[str, list] = {}
         for obs in observations:
@@ -126,6 +143,7 @@ class GetAccumulationProducerReadinessUseCase:
                     expected_producer_observation_contract=(
                         ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT
                     ),
+                    session_calendar=session_calendar,
                 )
             )
 
@@ -136,3 +154,23 @@ class GetAccumulationProducerReadinessUseCase:
             cohort_count=len(cohorts),
             cohorts=tuple(cohorts),
         )
+
+    def _resolve_session_calendar(
+        self,
+        observations: Sequence[LearningObservation],
+    ) -> KnownTradingSessionCalendar | None:
+        """Prefer an explicit calendar; else load a proven span covering labels."""
+        if self._session_calendar is not None:
+            return self._session_calendar
+        if self._session_calendar_loader is None or not observations:
+            return None
+        sessions: list[date] = []
+        for obs in observations:
+            bound = bound_economic_session(obs)
+            if bound is not None:
+                sessions.append(bound[1])
+        if not sessions:
+            return None
+        coverage_start = min(sessions)
+        coverage_end = max(sessions) + timedelta(days=_SESSION_CALENDAR_FORWARD_BUFFER_DAYS)
+        return self._session_calendar_loader(coverage_start, coverage_end)
