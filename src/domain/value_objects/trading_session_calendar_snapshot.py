@@ -165,7 +165,11 @@ class TradingSessionCalendarSnapshot:
 def validate_trading_session_calendar_snapshot(
     snapshot: TradingSessionCalendarSnapshot,
 ) -> None:
-    """Recompute identity and reject any mismatch (fail closed)."""
+    """Structural integrity only: recompute identity; do not grant active authority.
+
+    Arbitrary contract/source/benchmark that rehash consistently still pass here.
+    Use :func:`validate_active_stockbit_calendar_snapshot` at authority boundaries.
+    """
     rebuilt = TradingSessionCalendarSnapshot.create(
         coverage_start=snapshot.coverage_start,
         coverage_end=snapshot.coverage_end,
@@ -186,6 +190,24 @@ def validate_trading_session_calendar_snapshot(
             "calendar snapshot_id mismatch: "
             f"stored={snapshot.snapshot_id!r}, expected={rebuilt.snapshot_id!r}"
         )
+
+
+def validate_active_stockbit_calendar_snapshot(
+    snapshot: TradingSessionCalendarSnapshot,
+) -> None:
+    """Active path-label authority: Stockbit IHSG contract only."""
+    validate_trading_session_calendar_snapshot(snapshot)
+    if snapshot.contract_id != STOCKBIT_TRADING_SESSIONS_CONTRACT:
+        raise LearningContractError(
+            f"unsupported calendar contract: {snapshot.contract_id!r} "
+            f"(expected {STOCKBIT_TRADING_SESSIONS_CONTRACT!r})"
+        )
+    if snapshot.source != TRADING_SESSION_CALENDAR_SOURCE_STOCKBIT:
+        raise LearningContractError(f"calendar source must be stockbit, got {snapshot.source!r}")
+    if snapshot.benchmark != TRADING_SESSION_CALENDAR_BENCHMARK_IHSG:
+        raise LearningContractError(f"calendar benchmark must be IHSG, got {snapshot.benchmark!r}")
+    if not snapshot.source_revision.strip():
+        raise LearningContractError("calendar source_revision must be non-empty")
 
 
 def _validate_sessions(

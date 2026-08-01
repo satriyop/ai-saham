@@ -13,6 +13,10 @@ from src.domain.value_objects.trading_session_calendar_snapshot import (
 )
 
 
+class TradingSessionCalendarSnapshotReadError(RuntimeError):
+    """Raised when a stored snapshot cannot be loaded or fails reconciliation."""
+
+
 class TradingSessionCalendarSource(Protocol):
     """Strict external source that attests a complete session set for a range."""
 
@@ -29,19 +33,19 @@ class TradingSessionCalendarSource(Protocol):
 
 
 class TradingSessionCalendarSnapshotWriteRepository(Protocol):
-    def add_snapshot(self, snapshot: TradingSessionCalendarSnapshot) -> None: ...
+    def add_snapshot(self, snapshot: TradingSessionCalendarSnapshot) -> bool:
+        """Persist snapshot. Returns True if inserted, False if exact idempotent hit.
+
+        Raises on conflict with an incompatible existing row.
+        """
+        ...
 
 
 class TradingSessionCalendarSnapshotReadRepository(Protocol):
-    def get_snapshot(self, snapshot_id: str) -> TradingSessionCalendarSnapshot | None: ...
+    def get_snapshot(self, snapshot_id: str) -> TradingSessionCalendarSnapshot | None:
+        """Load by ID. Raises TradingSessionCalendarSnapshotReadError on corruption."""
+        ...
 
-    def list_snapshots(self) -> Sequence[TradingSessionCalendarSnapshot]: ...
-
-    def find_covering_snapshot(
-        self,
-        *,
-        coverage_start: date,
-        coverage_end: date,
-    ) -> TradingSessionCalendarSnapshot | None:
-        """Return a snapshot whose coverage fully spans the requested range."""
+    def list_snapshots(self) -> Sequence[TradingSessionCalendarSnapshot]:
+        """List all snapshots. Raises TradingSessionCalendarSnapshotReadError on corruption."""
         ...
