@@ -196,13 +196,16 @@ Screen {
 #prompt-input {
     width: 1fr;
     background: #0e0e0e;
-    border: none;
+    /* Kill Textual Input tall border (empty green box on stage) */
+    border: none !important;
     color: #d8d8d8;
     padding: 0 1;
+    height: 1;
 }
 
 #prompt-input:focus {
     background: #141414;
+    border: none !important;
 }
 
 #prompt-mode {

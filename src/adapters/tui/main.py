@@ -69,8 +69,7 @@ class CockpitApp(App[None]):
         # (and other modals) so palette commands never run.
         Binding("enter", "view_ticker", "View", show=False),
         Binding("escape", "go_back", "Back", show=False),
-        Binding("j", "cursor_down", "Down", show=False),
-        Binding("k", "cursor_up", "Up", show=False),
+        # List / board rows: arrows only (design lock — not vim j/k)
         Binding("down", "cursor_down", "Down", show=False),
         Binding("up", "cursor_up", "Up", show=False),
         # Desk hub keys (no-op outside broker show/deep pages)
@@ -91,8 +90,7 @@ class CockpitApp(App[None]):
         # Prompt rail focus (OpenCode chrome · non-Action)
         Binding("colon", "focus_prompt", "Prompt", show=False),
         Binding("slash", "focus_prompt", "Prompt", show=False),
-        # Note: plain ``j`` is cursor_down on the board (vim). Re-judge is
-        # handled in on_key only when stage=detail + judge (see action_rejudge).
+        # ``j`` is Judge re-judge only (on_key) — never board list navigation.
         Binding("q", "quit", "Quit", show=True),
     ]
 
@@ -291,9 +289,11 @@ class CockpitApp(App[None]):
                     yield Static(self._footer_hint(), id="board-footer")
                     with Horizontal(id="prompt-rail"):
                         yield Static("›", id="prompt-affordance")
+                        # compact: no Textual tall focus border (ghost green box on accum)
                         yield Input(
                             placeholder="prompt · idle · : or / to focus",
                             id="prompt-input",
+                            compact=True,
                         )
                         yield Static("idle", id="prompt-mode")
             with Vertical(id="sidebar"):
@@ -1108,7 +1108,7 @@ class CockpitApp(App[None]):
     # ── two-key chords (s a / s p / v t / v b) ─────────────
 
     def on_key(self, event: events.Key) -> None:
-        """Prefix chords + desk-hub ``v`` + judge ``j`` (board ``j`` stays down)."""
+        """Prefix chords + desk-hub ``v`` + judge ``j`` re-judge (not list nav)."""
         if self._modal_blocks_board_keys():
             return
 
@@ -1127,7 +1127,7 @@ class CockpitApp(App[None]):
             self._resolve_chord(prefix, key)
             return
 
-        # On Judge detail, ``j`` re-judges (does not cursor_down).
+        # Judge only: ``j`` re-judges. Never list navigation (arrows own ↑↓).
         if (
             key == "j"
             and self._stage == "detail"

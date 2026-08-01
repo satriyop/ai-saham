@@ -24,8 +24,9 @@ HELP_BODY = """[#9b8fb8]What this app does[/]
 
 [#9b8fb8]Keys[/]
   ctrl+p   commands
-  ↑↓ j k   move rows (j = re-judge only on Judge stage)
+  ↑↓       move rows (arrows only · not j/k)
   enter    judge (accum) / inspect (pre-open) / desk home
+  j        re-judge (Judge stage only · not list nav)
   s a      screen accumulation
   s p      screen pre-open
   v t      view ticker (CLI dashboard · needs focus)

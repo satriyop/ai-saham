@@ -338,6 +338,17 @@ Power **`y`** = year / annual dual mnemonic. Not `p` (plan), not `q` (quit), not
 
 Do **not** use peach for key glyphs or brass for signed data. One scan dialect: **brass means keyboard**.
 
+**List / board row move (locked · 2026-08-01):**
+
+| Rule | Spec |
+|------|------|
+| Move | **`↑` / `↓` arrows only** (accum · pre-open · broker list · ticker desks radar · brokers job radar) |
+| Footer | Paint **`↑↓ move`** — never `j/k` · never “vim” |
+| Reject | **`j` / `k` as list navigation** (vim habit) — conflicts with Judge **`j` re-judge** and product copy |
+| `j` | **Judge re-judge only** when Judge detail is front — not board cursor |
+
+Prompt rail is chrome (`:` / `/` focus) · **no tall Input focus border** (ghost empty box is a bug).
+
 ```text
 # show / non-fin job — no [y]
 [ b ] brokers   [ f ] flow   [ o ] foreign   [ x ] dist   [ n ] fin   [ d ] detail
