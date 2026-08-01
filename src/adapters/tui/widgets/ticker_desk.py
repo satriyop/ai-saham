@@ -362,6 +362,13 @@ class TickerDesk(Vertical):
         height: auto;
     }
 
+    /* Full CLI show dump under detail · d (not height-capped inventory) */
+    TickerDesk #td-more-body {
+        height: auto;
+        color: #c8c8c8;
+        padding: 0 0 1 0;
+    }
+
     /* Flow job desk (design hero · pulses · sessions) */
     TickerDesk .td-job-shell {
         border-left: solid #c9a68a;
@@ -1032,42 +1039,47 @@ class TickerDesk(Vertical):
                 "[#555555]no secondary inventory[/]"
             )
 
-        # Detail inventory (BRIEF collapses; detail · d expands)
+        # Detail = full CLI show (FULL_PANEL_ORDER) — not thin inventory lines.
+        # Body is format_ticker_dashboard_text (same panels as `saham view ticker show`).
         head = self.query_one("#td-more-head", Static)
-        by_panel = {p.key: p for p in model.detail_panels}
         depth_open = self._detail_all or bool(open_flags)
         more_sec = self.query_one("#td-more-sec", Vertical)
+        more_body = self.query_one("#td-more-body", Static)
+        # Per-key depth slots are legacy thin summaries — keep mounted, hide always.
+        for key in _TICKER_PANEL_FLAGS:
+            try:
+                self.query_one(f"#td-depth-{key}", Vertical).display = False
+            except Exception:
+                pass
         if depth_open:
             more_sec.display = True
-            head.update("DETAIL · full inventory · d · local cache")
-            self.query_one("#td-more-body", Static).update("")
-            self.query_one("#td-more-body", Static).display = False
-            for key in _TICKER_PANEL_FLAGS:
-                panel_el = self.query_one(f"#td-depth-{key}", Vertical)
-                p = by_panel.get(key)
-                show = self._detail_all or key in open_flags
-                if not show or p is None:
-                    panel_el.display = False
-                    continue
-                panel_el.display = True
-                if p.status == "present":
-                    st = "[#6fbf8a]present[/]"
-                elif p.status == "missing":
-                    st = "[#555555]missing[/]"
-                else:
-                    st = f"[#555555]{p.status}[/]"
-                self.query_one(f"#td-depth-t-{key}", Static).update(
-                    f"[bold #d8d8d8]{p.title.upper()}[/]  {st}"
-                )
-                body_lines = list(p.lines[:8]) if p.lines else ["—"]
-                self.query_one(f"#td-depth-b-{key}", Static).update(
-                    "\n".join(f"  {ln}" for ln in body_lines)
+            head.update("DETAIL · full show · CLI panel parity · d · local cache")
+            full = (model.body or "").strip()
+            if full:
+                more_body.display = True
+                more_body.update(full)
+            else:
+                # Fallback: concatenate model detail lines without truncation
+                by_panel = {p.key: p for p in model.detail_panels}
+                chunks: list[str] = []
+                for key in _TICKER_PANEL_FLAGS:
+                    p = by_panel.get(key)
+                    if p is None:
+                        continue
+                    chunks.append(f"{p.title.upper()}  ·  {p.status}")
+                    chunks.extend(f"  {ln}" for ln in (p.lines or ()))
+                    chunks.append("")
+                more_body.display = True
+                more_body.update(
+                    "\n".join(chunks).rstrip()
+                    if chunks
+                    else "[#555555]full panel text not loaded · re-open ticker[/]"
                 )
         else:
-            # Brief default: hide extended inventory wall
+            # Brief default: mast only — hide full show wall
             more_sec.display = False
-            for key in _TICKER_PANEL_FLAGS:
-                self.query_one(f"#td-depth-{key}", Vertical).display = False
+            more_body.display = False
+            more_body.update("")
 
         self._paint_chip_bar()
 

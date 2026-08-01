@@ -698,7 +698,11 @@ def _detail_panels(dashboard: Any) -> list[TickerDetailPanel]:
     own = getattr(dashboard, "ownership", None)
     add("ownership", "Ownership", own is not None, _lines_ownership(own))
 
-    sector = getattr(dashboard, "sector_macro", None) or getattr(dashboard, "sector_context", None)
+    sector = (
+        getattr(dashboard, "sector_macro_context_evidence", None)
+        or getattr(dashboard, "sector_macro", None)
+        or getattr(dashboard, "sector_context", None)
+    )
     add(
         "sector_macro",
         "Sector / macro",
@@ -721,7 +725,7 @@ def _detail_panels(dashboard: Any) -> list[TickerDetailPanel]:
     iev = list(getattr(dashboard, "iev_rows", None) or ())
     add("iev", "IEV / NCP", bool(iev), _lines_iev(iev))
 
-    sent = getattr(dashboard, "sentiment", None)
+    sent = getattr(dashboard, "sentiment_logs", None) or getattr(dashboard, "sentiment", None)
     sent_list = list(sent) if isinstance(sent, (list, tuple)) else ([sent] if sent else [])
     add("sentiment", "News Sentiment", bool(sent_list), _lines_sentiment(sent_list))
 
@@ -735,13 +739,30 @@ def _detail_panels(dashboard: Any) -> list[TickerDetailPanel]:
     )
 
     candles = getattr(dashboard, "candles", None) or getattr(dashboard, "ohlcv", None)
-    c_n = len(candles) if isinstance(candles, (list, tuple)) else (1 if candles else 0)
-    add(
-        "candles",
-        "Candles",
-        c_n > 0,
-        (f"{c_n} bars in local cache",) if c_n else (),
-    )
+    c_list = list(candles) if isinstance(candles, (list, tuple)) else ([candles] if candles else [])
+    c_n = len(c_list)
+    candle_lines: tuple[str, ...] = ()
+    if c_n > 0:
+        rows: list[str] = [
+            f"{c_n} bars in local cache",
+            "Date         O      H      L      C     Vol",
+        ]
+        for bar in c_list[-5:]:
+            d = getattr(bar, "date", None) or getattr(bar, "trade_date", None) or "—"
+            o = getattr(bar, "open", None)
+            h = getattr(bar, "high", None)
+            lo = getattr(bar, "low", None)
+            cl = getattr(bar, "close", None)
+            v = getattr(bar, "volume", None)
+            try:
+                rows.append(
+                    f"{str(d)[:10]}  {float(o):,.0f}  {float(h):,.0f}  "
+                    f"{float(lo):,.0f}  {float(cl):,.0f}  {float(v):,.0f}"
+                )
+            except (TypeError, ValueError):
+                rows.append(f"{str(d)[:10]}  {o}  {h}  {lo}  {cl}  {v}")
+        candle_lines = tuple(rows)
+    add("candles", "Candles", c_n > 0, candle_lines)
 
     return panels
 
@@ -962,24 +983,34 @@ def _lines_sentiment(logs: list[Any]) -> tuple[str, ...]:
 
 def _lines_profile(profile: Any, notation: Any) -> tuple[str, ...]:
     lines: list[str] = []
-    src = profile or notation
-    if src is None:
-        return ()
-    for attr, lab in (
-        ("name", "Name"),
-        ("board", "Board"),
-        ("sector", "Sector"),
-        ("sub_sector", "Sub-sector"),
-        ("listing_date", "Listed"),
-        ("primary_profile", "Profile"),
-        ("tradeable", "Tradeable"),
-    ):
-        v = getattr(src, attr, None)
-        if v is not None and str(v).strip() and str(v) != "—":
-            lines.append(f"{lab}  {v}")
+    for src in (profile, notation):
+        if src is None:
+            continue
+        for attr, lab in (
+            ("name", "Name"),
+            ("board", "Board"),
+            ("sector", "Sector"),
+            ("sub_sector", "Sub-sector"),
+            ("listing_date", "Listed"),
+            ("ipo_date", "IPO"),
+            ("ipo_price", "IPO price"),
+            ("website", "Web"),
+            ("email", "Email"),
+            ("description", "About"),
+            ("primary_profile", "Profile"),
+            ("tradeable", "Tradeable"),
+        ):
+            v = getattr(src, attr, None)
+            if v is not None and str(v).strip() and str(v) != "—":
+                s = str(v).strip()
+                if lab == "About" and len(s) > 160:
+                    s = s[:157] + "…"
+                line = f"{lab}  {s}"
+                if line not in lines:
+                    lines.append(line)
     if not lines:
         lines.append("notation / profile cached")
-    return tuple(lines[:6])
+    return tuple(lines[:12])
 
 
 def _window_net(points: list[Any], days: int) -> tuple[str, str]:
