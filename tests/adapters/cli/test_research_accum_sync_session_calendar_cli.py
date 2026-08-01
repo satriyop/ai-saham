@@ -394,15 +394,12 @@ def test_cli_auto_sync_labels_status_chain(tmp_path: Path, monkeypatch) -> None:
     assert json.loads(status.output)["cohorts"][0]["producer_status"] == "CHALLENGE_INPUT_READY"
 
 
-def test_labels_exit_nonzero_on_calendar_source_conflict(tmp_path: Path) -> None:
-    """Pre-migration dual natural-key rows fail schema open / labels (not ordinary skip)."""
+def _seed_pre_migration_authority_conflict(db: Path) -> None:
+    """Insert dual natural-key rows without the unique index (corruption shape)."""
     import pytest
 
     from src.domain.value_objects.learning_artifacts import LearningContractError
 
-    db = tmp_path / "conflict.db"
-    repo = SQLiteLearningArtifactRepository(db)
-    repo.add_observation(_observation(1, "BBCA"))
     store = SQLiteTradingSessionCalendarSnapshotRepository(db)
     sessions_a = tuple(
         date.fromisoformat(d) for d in _weekdays(date(2026, 7, 1), date(2026, 7, 20))
@@ -426,7 +423,6 @@ def test_labels_exit_nonzero_on_calendar_source_conflict(tmp_path: Path) -> None
     with pytest.raises(LearningContractError, match="source conflict"):
         store.add_snapshot(b)
 
-    # Drop unique index and inject divergent peer (pre-migration corruption shape).
     payload = b.to_dict()
     with sqlite3.connect(str(db)) as conn:
         conn.execute("DROP INDEX IF EXISTS uq_trading_session_calendar_authority")
@@ -454,6 +450,18 @@ def test_labels_exit_nonzero_on_calendar_source_conflict(tmp_path: Path) -> None
         )
         conn.commit()
 
+
+def test_labels_exit_nonzero_on_calendar_source_conflict(tmp_path: Path) -> None:
+    """Pre-migration dual natural-key rows fail schema open / labels (not ordinary skip)."""
+    import pytest
+
+    from src.domain.value_objects.learning_artifacts import LearningContractError
+
+    db = tmp_path / "conflict.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    repo.add_observation(_observation(1, "BBCA"))
+    _seed_pre_migration_authority_conflict(db)
+
     # Write-repo open must refuse to migrate over dual authority rows.
     with pytest.raises(LearningContractError, match="migration integrity"):
         SQLiteTradingSessionCalendarSnapshotRepository(db)
@@ -475,6 +483,37 @@ def test_labels_exit_nonzero_on_calendar_source_conflict(tmp_path: Path) -> None
     assert result.exit_code != 0
     combined = (result.output + (result.stderr or "")).lower()
     assert "calendar source conflict" in combined or "migration integrity" in combined
+
+
+def test_sync_cli_migration_conflict_controlled_diagnostic(tmp_path: Path, monkeypatch) -> None:
+    """Pre-migration dual rows must not escape as an unhandled traceback."""
+    db = tmp_path / "sync-migrate-conflict.db"
+    SQLiteLearningArtifactRepository(db)
+    _seed_pre_migration_authority_conflict(db)
+    _patch_stockbit_ok(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        [
+            "research",
+            "accum",
+            "sync-session-calendar",
+            "--start",
+            "2026-07-01",
+            "--end",
+            "2026-07-31",
+            "--db",
+            str(db),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 1
+    combined = result.output + (result.stderr or "")
+    assert "calendar sync failed:" in combined
+    assert "migration integrity" in combined.lower()
+    # Controlled diagnostic: no Python traceback dumped to the operator.
+    assert "Traceback" not in combined
 
 
 def test_status_blocked_on_corrupt_snapshot_json(tmp_path: Path) -> None:

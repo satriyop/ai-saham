@@ -335,13 +335,14 @@ def accumulation_sync_session_calendar(
         stockbit_config=stockbit_config,
         captured_at=datetime.now(IDX_TIMEZONE),
     )
-    snap_repo = SQLiteTradingSessionCalendarSnapshotRepository(resolved)
-    sync_uc = SyncTradingSessionCalendarSnapshotUseCase(
-        source=source,
-        snapshots=snap_repo,
-    )
-
+    # Repository construction can raise LearningContractError on pre-migration
+    # natural-key dual rows; keep it inside the same controlled diagnostic path.
     try:
+        snap_repo = SQLiteTradingSessionCalendarSnapshotRepository(resolved)
+        sync_uc = SyncTradingSessionCalendarSnapshotUseCase(
+            source=source,
+            snapshots=snap_repo,
+        )
         result = sync_uc.execute(
             SyncTradingSessionCalendarRequest(
                 coverage_start=cov_start,
