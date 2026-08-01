@@ -195,6 +195,29 @@ def test_persist_skips_existing_observation_without_rebuild(
     assert obs_id in repo.get_calls
 
 
+def test_persist_rejects_tampered_count_and_named_digest_before_insert() -> None:
+    """Inconsistent count/named-digest dict must not insert schema-10 rows."""
+    from dataclasses import replace
+
+    from src.domain.value_objects.learning_artifacts import stamp_universe_membership_id
+
+    repo = _SpyRepo()
+    persister = _persister(repo)
+    base = _test_population_binding(tickers=["BBCA"])
+    invented = stamp_universe_membership_id(["FAKE1", "FAKE2"])
+    adversarial = replace(base, membership_count=999, named_universe_digest=invented)
+    with pytest.raises(ValueError, match="population_binding rejected before persist"):
+        _call(persister, population_binding=adversarial, universe_tickers=["BBCA"])
+    assert repo.saved == []
+    assert repo.get_calls == []
+
+    # Dict injection path (bypass typed object field defaults) also fails closed.
+    adversarial_dict = adversarial.to_dict()
+    with pytest.raises(ValueError, match="population_binding rejected before persist"):
+        _call(persister, population_binding=adversarial_dict, universe_tickers=["BBCA"])
+    assert repo.saved == []
+
+
 def test_persist_rejects_unsupported_population_name_before_insert() -> None:
     """idx30 (or any non-lq45) binding must not write schema-10 observations.
 

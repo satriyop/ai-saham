@@ -237,8 +237,76 @@ def test_accum_population_binding_create_rejects_unsupported_population_name() -
     )
     assert binding.population_name == "lq45"
     assert binding.contract_id == ACCUM_POPULATION_AUTHORITY_CONTRACT
+    assert binding.membership_count == 2
+    assert binding.membership_tickers == ("BBCA", "BBRI")
+    assert binding.named_universe_tickers == ("BBCA", "BBRI", "TLKM")
     validate_accum_population_binding(
         binding,
         outer_universe_id=binding.membership_digest,
         economic_session="2026-07-01",
     )
+
+
+def test_validate_accum_population_binding_rejects_tampered_count_and_named_digest() -> None:
+    """membership_count and named_universe_digest must match attested ticker sets."""
+    from dataclasses import replace
+
+    from src.domain.value_objects.learning_artifacts import (
+        AccumPopulationBinding,
+        stamp_universe_membership_id,
+        validate_accum_population_binding,
+    )
+
+    binding = AccumPopulationBinding.create(
+        membership_tickers=["BBCA", "BBRI"],
+        named_universe_tickers=["BBCA", "BBRI", "TLKM"],
+        membership_session="2026-07-01",
+        pit_tradable_lookback_sessions=10,
+        producer_source_revision="ai-saham@test",
+    )
+    invented = stamp_universe_membership_id(["FAKE", "HEX"])
+    assert len(invented) == 64
+
+    bad_count = replace(binding, membership_count=999)
+    with pytest.raises(LearningContractError, match="membership_count does not match"):
+        validate_accum_population_binding(
+            bad_count,
+            outer_universe_id=binding.membership_digest,
+            economic_session="2026-07-01",
+        )
+
+    bad_named = replace(binding, named_universe_digest=invented)
+    with pytest.raises(LearningContractError, match="named_universe_digest does not match"):
+        validate_accum_population_binding(
+            bad_named,
+            outer_universe_id=binding.membership_digest,
+            economic_session="2026-07-01",
+        )
+
+    # Honest create path still validates.
+    validate_accum_population_binding(
+        binding,
+        outer_universe_id=binding.membership_digest,
+        economic_session="2026-07-01",
+    )
+
+
+def test_from_mapping_requires_attested_ticker_sets() -> None:
+    from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
+
+    binding = AccumPopulationBinding.create(
+        membership_tickers=["BBCA"],
+        named_universe_tickers=["BBCA", "BBRI"],
+        membership_session="2026-07-01",
+        pit_tradable_lookback_sessions=10,
+        producer_source_revision="ai-saham@test",
+    )
+    raw = binding.to_dict()
+    del raw["membership_tickers"]
+    del raw["named_universe_tickers"]
+    with pytest.raises(LearningContractError, match="membership_tickers"):
+        AccumPopulationBinding.from_mapping(raw)
+
+    round_trip = AccumPopulationBinding.from_mapping(binding.to_dict())
+    assert round_trip.membership_tickers == ("BBCA",)
+    assert round_trip.named_universe_tickers == ("BBCA", "BBRI")

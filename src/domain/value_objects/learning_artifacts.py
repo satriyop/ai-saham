@@ -219,6 +219,18 @@ def is_accum_population_universe_id(universe_id: str) -> bool:
     return _UNIVERSE_MEMBERSHIP_DIGEST_RE.fullmatch(universe_id) is not None
 
 
+def _normalize_ticker_set(tickers: Sequence[str] | Any, *, field: str) -> tuple[str, ...]:
+    """Sort/unique/uppercase ticker set; empty after normalize is a contract error."""
+    if not isinstance(tickers, Sequence) or isinstance(tickers, (str, bytes)):
+        raise LearningContractError(
+            f"population_binding.{field} must be a non-empty ticker sequence"
+        )
+    normalized = tuple(sorted({str(t).strip().upper() for t in tickers if str(t).strip()}))
+    if not normalized:
+        raise LearningContractError(f"population_binding.{field} must be non-empty")
+    return normalized
+
+
 @dataclass(frozen=True)
 class AccumPopulationBinding:
     """Typed producer-attested population binding (Option A, schema-10 payload).
@@ -226,6 +238,10 @@ class AccumPopulationBinding:
     Population meaning: current configured LQ45 roster intersected with
     candle-active PIT tradability for the observation session. Not historical
     LQ45 index constituency reconstruction.
+
+    Attested ticker sets are part of the authority surface so readiness can
+    recompute membership_count / membership_digest / named_universe_digest
+    without live config I/O. Shape-only digests and counts are never sufficient.
     """
 
     schema_version: int
@@ -239,6 +255,8 @@ class AccumPopulationBinding:
     pit_tradable_lookback_sessions: int
     benchmark_symbol: str
     producer_source_revision: str
+    membership_tickers: tuple[str, ...]
+    named_universe_tickers: tuple[str, ...]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -253,6 +271,8 @@ class AccumPopulationBinding:
             "pit_tradable_lookback_sessions": self.pit_tradable_lookback_sessions,
             "benchmark_symbol": self.benchmark_symbol,
             "producer_source_revision": self.producer_source_revision,
+            "membership_tickers": list(self.membership_tickers),
+            "named_universe_tickers": list(self.named_universe_tickers),
         }
 
     @classmethod
@@ -296,16 +316,8 @@ class AccumPopulationBinding:
                 f"population_name={ACCUM_POPULATION_NAME!r} "
                 f"(contract={ACCUM_POPULATION_AUTHORITY_CONTRACT})"
             )
-        membership = tuple(
-            sorted({str(t).strip().upper() for t in membership_tickers if str(t).strip()})
-        )
-        named = tuple(
-            sorted({str(t).strip().upper() for t in named_universe_tickers if str(t).strip()})
-        )
-        if not membership:
-            raise LearningContractError("membership_tickers must be non-empty")
-        if not named:
-            raise LearningContractError("named_universe_tickers must be non-empty")
+        membership = _normalize_ticker_set(membership_tickers, field="membership_tickers")
+        named = _normalize_ticker_set(named_universe_tickers, field="named_universe_tickers")
         membership_digest = stamp_universe_membership_id(membership)
         named_digest = stamp_universe_membership_id(named)
         return cls(
@@ -320,6 +332,8 @@ class AccumPopulationBinding:
             pit_tradable_lookback_sessions=int(pit_tradable_lookback_sessions),
             benchmark_symbol=benchmark_symbol,
             producer_source_revision=producer_source_revision.strip(),
+            membership_tickers=membership,
+            named_universe_tickers=named,
         )
 
     @classmethod
@@ -351,6 +365,14 @@ class AccumPopulationBinding:
                 raise LearningContractError(f"population_binding missing field {key!r}")
             if not isinstance(raw[key], str) or not str(raw[key]).strip():
                 raise LearningContractError(f"population_binding.{key} must be non-empty string")
+        # Attested ticker sets are required for count/digest cross-checks.
+        # Shape-only digests without tickers are incomplete authority.
+        membership = _normalize_ticker_set(
+            raw.get("membership_tickers"), field="membership_tickers"
+        )
+        named = _normalize_ticker_set(
+            raw.get("named_universe_tickers"), field="named_universe_tickers"
+        )
         return cls(
             schema_version=schema_version,
             contract_id=str(raw["contract_id"]).strip(),
@@ -363,6 +385,8 @@ class AccumPopulationBinding:
             pit_tradable_lookback_sessions=lookback,
             benchmark_symbol=str(raw["benchmark_symbol"]).strip(),
             producer_source_revision=str(raw["producer_source_revision"]).strip(),
+            membership_tickers=membership,
+            named_universe_tickers=named,
         )
 
 
@@ -372,7 +396,12 @@ def validate_accum_population_binding(
     outer_universe_id: str,
     economic_session: date | str | None,
 ) -> None:
-    """Fail-closed validation of every exact Option A field and cross-link."""
+    """Fail-closed validation of every exact Option A field and cross-link.
+
+    Recomputes membership_count, membership_digest, and named_universe_digest
+    from the attested ticker sets. Positive count and hash shape alone never
+    grant authority.
+    """
     from datetime import date as date_cls
 
     if binding.schema_version != ACCUM_POPULATION_BINDING_SCHEMA_VERSION:
@@ -401,10 +430,6 @@ def validate_accum_population_binding(
             f"population_binding.benchmark_symbol={binding.benchmark_symbol!r}"
             f"!=expected:{ACCUM_POPULATION_BENCHMARK_SYMBOL!r}"
         )
-    if binding.membership_count < 1:
-        raise LearningContractError(
-            f"population_binding.membership_count must be positive, got {binding.membership_count}"
-        )
     if binding.pit_tradable_lookback_sessions < 1:
         raise LearningContractError(
             "population_binding.pit_tradable_lookback_sessions must be >= 1, "
@@ -412,6 +437,41 @@ def validate_accum_population_binding(
         )
     if not binding.producer_source_revision.strip():
         raise LearningContractError("population_binding.producer_source_revision must be non-empty")
+
+    membership = _normalize_ticker_set(binding.membership_tickers, field="membership_tickers")
+    named = _normalize_ticker_set(binding.named_universe_tickers, field="named_universe_tickers")
+    # Canonical order is part of the stamp surface; reject unsorted/duplicate
+    # attestations that would otherwise re-normalize into a matching digest.
+    if tuple(binding.membership_tickers) != membership:
+        raise LearningContractError(
+            "population_binding.membership_tickers must be sorted unique uppercase"
+        )
+    if tuple(binding.named_universe_tickers) != named:
+        raise LearningContractError(
+            "population_binding.named_universe_tickers must be sorted unique uppercase"
+        )
+
+    expected_count = len(membership)
+    if binding.membership_count != expected_count:
+        raise LearningContractError(
+            "population_binding.membership_count does not match attested membership "
+            f"(count={binding.membership_count}, expected={expected_count})"
+        )
+    expected_membership_digest = stamp_universe_membership_id(membership)
+    if binding.membership_digest != expected_membership_digest:
+        raise LearningContractError(
+            "population_binding.membership_digest does not match attested membership_tickers "
+            f"(binding={binding.membership_digest!r}, "
+            f"recomputed={expected_membership_digest!r})"
+        )
+    expected_named_digest = stamp_universe_membership_id(named)
+    if binding.named_universe_digest != expected_named_digest:
+        raise LearningContractError(
+            "population_binding.named_universe_digest does not match "
+            "attested named_universe_tickers "
+            f"(binding={binding.named_universe_digest!r}, "
+            f"recomputed={expected_named_digest!r})"
+        )
     if not is_accum_population_universe_id(binding.membership_digest):
         raise LearningContractError(
             f"population_binding.membership_digest shape invalid: {binding.membership_digest!r}"
