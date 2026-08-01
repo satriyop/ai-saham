@@ -1502,25 +1502,28 @@ class CockpitApp(App[None]):
             pass
 
     def _open_ticker_job(self, job: str, stock: str) -> None:
-        """Load CLI-path job body in-place under ticker chip bar (no board flash)."""
+        """Load job under chip bar — quiet in-place (no plain-text loading dump).
+
+        Design: chip is-on immediately · hold show/prior body until structured
+        payload ready · meta may say loading · never unmask board under click.
+        """
         self._ticker_job = job
+        # Drop stale desk so chrome cannot re-apply the previous job under new chip
+        self._ticker_job_text = None
         # Stay on detail instrument — never global loading+keep_board (chip click safe)
         self._stage = "detail"
         self._board_title = f"View · ticker · {stock} · {job}"
         self._meta = f"{job} · loading · local cache"
         self._status_note = f"view ticker {job}"
-        loading_body = (
-            f"Loading {job}…\n"
-            f"saham view ticker {job} {stock}\n\n"
-            "Local cache · not hung · esc show · chips switch job"
-        )
         try:
             desk = self.query_one("#ticker-desk")
             if hasattr(desk, "set_job_view"):
+                # Pending: job chip is-on, empty body/desk → hold show surface (no essay)
                 desk.set_job_view(  # type: ignore[attr-defined]
                     job,
                     title=f"View · ticker · {stock} · {job}",
-                    body=loading_body,
+                    body="",
+                    desk=None,
                 )
         except Exception:
             pass

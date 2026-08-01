@@ -143,6 +143,14 @@ def test_ticker_job_open_stays_detail_never_judge_or_board_table():
             desk = app.query_one("#ticker-desk", TickerDesk)
             assert desk.display is True
             assert desk._active_job == "flow"
+            # Quiet in-place load: no plain-text "Loading flow…" dump
+            job_body = desk.query_one("#td-job-body")
+            plain = getattr(job_body.render(), "plain", str(job_body.render()))
+            assert "Loading flow" not in plain
+            assert "saham view ticker flow" not in plain
+            # Pending: hold show (job sec not forced with essay)
+            assert desk._job_desk is None
+            assert not (desk._job_body or "").strip()
 
             for _ in range(40):
                 await pilot.pause(0.05)
@@ -159,6 +167,14 @@ def test_ticker_job_open_stays_detail_never_judge_or_board_table():
                 pass
             assert isinstance(app._ticker_job_text, TickerJobText)
             assert "Foreign flow" in (app._ticker_job_text.body or "")
+            # Ready: structured job, still no loading essay residue
+            assert desk._job_desk is not None or (desk._job_body or "").strip()
+            ready_plain = getattr(
+                desk.query_one("#td-job-body").render(),
+                "plain",
+                "",
+            )
+            assert "Loading flow" not in str(ready_plain)
 
     asyncio.run(scenario())
 

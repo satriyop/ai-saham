@@ -152,7 +152,8 @@ Date        ████████        −27.8B   …
 **Lock (2026-08-01):** power key is **visible on the chip** — bold brass `[k]` leading the product word.  
 **Lock (2026-08-01):** **in-stage chip navigation** is mandatory for every multi-chip stage (see below).  
 **Lock (2026-08-01):** **keycap = real binding only** — never decorative brackets.  
-**Lock (2026-08-01):** **binary toggles** (exactly two modes) use one dedicated power letter each · **flip label** · not a universal `[t]` · not `q` · density stays `[d] detail`.
+**Lock (2026-08-01):** **binary toggles** (exactly two modes) use one dedicated power letter each · **flip label** · not a universal `[t]` · not `q` · density stays `[d] detail`.  
+**Lock (2026-08-01):** **quiet in-place load** for every chip / job / instrument surface — no plain-text “Loading…” dump flash (see below).
 
 ### Vocabulary (use these terms)
 
@@ -188,6 +189,30 @@ Whenever a stage has **more than one chip** (or a density + job set), this is **
 | 5 | **Close in place** — Second press same job **or** `esc` → stage default body (e.g. ticker show) |
 | 6 | **Power letter = keycap** — Brass `[k]` matches the **actually bound** letter; stage-local only · **never decoration** |
 | 7 | **Drill-in is separate** — e.g. Enter desk home may leave for a **nested** instrument; `esc` returns to **same stage + job** (or show), not a third parallel stage invented by the chip |
+| 8 | **Quiet in-place load** — Chip / job activate never flashes a monospaced “Loading job…” essay (see **Quiet in-place load**) |
+
+### Quiet in-place load (**mandatory · all chip-bar + instrument stages**)
+
+**One-line rule:**
+
+> **While a chip, job, or instrument surface loads: set selection immediately, stay on the same stage, never unmask the board under the click, and never replace the body with a plain-text loading dump.**
+
+Applies to: **View ticker jobs**, **broker home jobs**, density/option toggles that re-fetch, and any future chip-bar stage. Board-level first entry (accum / pre-open first paint) may use a dedicated loading stage — that is **not** chip nav.
+
+| # | Rule |
+|---|------|
+| 1 | **Chip / selection first** — Target chip is **`is-on`** (and focus may move) **immediately** on activate |
+| 2 | **Same stage** — Stay on instrument stage (`detail` / desk shell). **Never** `stage=loading` + keep_board that unmasks accum under a chip click |
+| 3 | **Hold body until ready** — Keep **show** (or prior honest surface) visible until the new structured payload is ready · **or** a quiet skeleton that matches the final desk chrome |
+| 4 | **Meta may say loading** — Status / meta / crumb may include `loading` · not a full-body monospaced essay |
+| 5 | **No plain-text load dump** — **Forbidden** as interim UI: `Loading flow…\nsaham view ticker flow …` (or any CLI paste) as the main body |
+| 6 | **Swap once** — When ready, paint structured desk (hero · pulses · body) in one update · no intermediate plain-text frame |
+| 7 | **Clear stale job payload** — On job switch, drop previous job payload so chrome cannot re-apply the wrong desk under the new chip |
+| 8 | **Slow loads only** — Optional delayed cue (e.g. after ~150–200ms) may dim body or show skeleton · still not a text dump |
+
+**Reject:** interim monospaced “Loading {job}…” walls.  
+**Reject:** unmasking board table under chip click (accidental Judge).  
+**Reject:** inventing fake metrics while loading.
 
 **Canonical shape (View ticker):**
 
@@ -555,8 +580,8 @@ footer: esc show · chips switch · CLI verb · browse only
 | Pulses | Metric cards (`oc-metrics` / `oc-metric`) — not essays |
 | Body | Table or dual column · density/magnitude bars only as scalar sugar **with mandatory %** (Scalar bar contract) |
 | Empty | Honest empty + fetch hint in hero sub or body |
-| Loading | In-place body only · never unmask accum board |
-| Reject | Flat monospaced dump as product UI · charts · Action invent |
+| Loading | **Quiet in-place load** (chip is-on · hold show/prior · meta may say loading · **no plain-text dump**) · never unmask accum board |
+| Reject | Flat monospaced dump as product UI · interim “Loading job…” essay · charts · Action invent |
 
 ### `flow` · `view ticker flow`
 
@@ -765,7 +790,9 @@ Not a 3-row mini top table. Chip **brokers** / `b` opens radar **under the ticke
 - Universal **`[t]`** for all binary toggles · **`[t](A/B)`** parentheses dual walls  
 - **`q`** for quarterly · **`p`** for period grain (plan owns `p`)  
 - Density rewritten as `[t](Detail/Brief)`  
-- **Period `[y]` always on the bar** (even dim) when fin is not selected — **fin sub-chip only**
+- **Period `[y]` always on the bar** (even dim) when fin is not selected — **fin sub-chip only**  
+- **Plain-text “Loading {job}…” dump** as interim body on chip / job activate  
+- Unmasking accum board under chip click  
 
 ---
 

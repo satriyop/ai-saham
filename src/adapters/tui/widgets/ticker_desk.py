@@ -745,10 +745,16 @@ class TickerDesk(Vertical):
             | None
         ) = None,
     ) -> None:
-        """Show/hide job body under chip bar (browse-only CLI sibling)."""
+        """Show/hide job body under chip bar (browse-only CLI sibling).
+
+        Pending load (job set, empty body, no desk): chip ``is-on`` only and
+        **hold show panels** until structured ``desk`` arrives — no plain-text
+        “Loading…” dump (quiet in-place load contract).
+        """
         self._active_job = job
         self._job_title = title or ""
         self._job_body = body or ""
+        # Never keep a previous job's structured desk under a different chip
         self._job_desk = desk if job else None
         if self._model is not None:
             self.paint(self._model, detail_open=self._detail_all, sync_from_detail=False)
@@ -825,17 +831,20 @@ class TickerDesk(Vertical):
             open_flags |= self._available_panels(model)
         detail_open = self._detail_all or bool(open_flags)
         # Density state = [d] is-on only — never restate brief/detail in crumb
+        job_ready = bool(self._job_body or self._job_desk is not None)
         if self._active_job:
+            load_bit = "" if job_ready else " · loading"
             self.query_one("#td-crumb", Static).update(
                 f"View · ticker · [bold #e8e8e8]{model.ticker}[/]   "
-                f"[#555555]{self._active_job} · local cache · browse[/]"
+                f"[#555555]{self._active_job}{load_bit} · local cache · browse[/]"
             )
         else:
             self.query_one("#td-crumb", Static).update(
                 f"View · ticker · [bold #e8e8e8]{model.ticker}[/]   "
                 f"[#555555]local cache · browse[/]"
             )
-        job_mode = bool(self._active_job and (self._job_body or self._job_desk is not None))
+        # Pending job (chip is-on, no payload yet): hold show · no plain-text dump
+        job_mode = bool(self._active_job and job_ready)
         self._set_show_panels_visible(not job_mode)
         if job_mode:
             job_sec = self.query_one("#td-job-sec", Vertical)
@@ -1507,10 +1516,14 @@ class TickerDesk(Vertical):
                 body.update(f"[#555555]{card.empty_hint or 'not cached'}[/]")
 
     def _paint_job_and_chips_only(self) -> None:
-        """When model not yet painted, still show job body + chips."""
+        """When model not yet painted, still show ready job body + chips.
+
+        Pending (job without body/desk): chips only — hold show panels.
+        """
         try:
             job_sec = self.query_one("#td-job-sec", Vertical)
-            if self._active_job and (self._job_body or self._job_desk is not None):
+            ready = bool(self._job_body or self._job_desk is not None)
+            if self._active_job and ready:
                 job_sec.display = True
                 self.query_one("#td-job-head", Static).update(
                     (self._job_title or self._active_job or "job").upper()
