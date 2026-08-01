@@ -231,6 +231,43 @@ def format_signed_flow_markup(value: str, *, width: int | None = None) -> str:
     return f"[{color}]{body}[/]"
 
 
+def clamp_of_max_pct(bar_pct: int | None) -> int:
+    """0–100 of-max share used for bar width and % label (same number)."""
+    try:
+        return max(0, min(100, int(bar_pct or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def format_of_max_pct_label(bar_pct: int | None) -> str:
+    """Plain of-max label, e.g. ``42%`` — Scalar bar contract."""
+    return f"{clamp_of_max_pct(bar_pct)}%"
+
+
+def format_of_max_pct_markup(bar_pct: int | None, *, width: int = 4) -> str:
+    """Mute of-max % for Static tables (never omit when a bar is shown)."""
+    label = format_of_max_pct_label(bar_pct)
+    return f"[{_MIST}]{label:>{width}}[/]"
+
+
+def format_scalar_bar_markup(
+    bar_pct: int | None,
+    *,
+    width: int = 8,
+    tone: str | None = None,
+) -> str:
+    """Magnitude track: filled tone + residual ash · width always ``width``.
+
+    Pair with :func:`format_of_max_pct_markup` — bar alone is forbidden (design).
+    """
+    pct = clamp_of_max_pct(bar_pct)
+    if pct <= 0:
+        return f"[{_ASH}]{'░' * width}[/]"
+    n = max(1, min(width, int(round(width * pct / 100.0))))
+    fill_c = tone or _FOG
+    return f"[{fill_c}]{'█' * n}[/][{_ASH}]{'░' * (width - n)}[/]"
+
+
 def format_broker_list_cells(row: Any) -> tuple[Text | str, ...]:
     """Broker list: Code Type AsOf DayNet Net3/5/7/10/20 Stk Δ1 # Top."""
     return (

@@ -142,6 +142,9 @@ def test_broker_list_cells_contract_and_sign_tint():
     assert "6.2B" in neg.plain
 
     from src.adapters.tui.board_cell_markup import (
+        format_of_max_pct_label,
+        format_of_max_pct_markup,
+        format_scalar_bar_markup,
         format_signed_flow_markup,
         signed_flow_color,
     )
@@ -152,6 +155,16 @@ def test_broker_list_cells_contract_and_sign_tint():
     assert signed_flow_color("12.88B") == "#6fbf8a"
     assert format_signed_flow_markup("+9.45B", width=8) == "[#6fbf8a]  +9.45B[/]"
     assert format_signed_flow_markup("-1.61B", width=8) == "[#c97a72]  -1.61B[/]"
+
+    # Scalar bar contract: bar fill and % label share the same of-max number
+    assert format_of_max_pct_label(42) == "42%"
+    assert format_of_max_pct_label(100) == "100%"
+    assert format_of_max_pct_markup(42, width=4) == "[#7a7a7a] 42%[/]"
+    bar42 = format_scalar_bar_markup(42, width=10, tone="#6fbf8a")
+    assert "█" in bar42 and "░" in bar42
+    assert "#6fbf8a" in bar42
+    empty_bar = format_scalar_bar_markup(0, width=8)
+    assert empty_bar.count("░") == 8
 
 
 def test_harga_mast_never_action():

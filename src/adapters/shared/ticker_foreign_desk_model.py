@@ -70,12 +70,15 @@ class TickerForeignDeskModel:
             "",
             "  ".join(f"{p.label} {p.value}" for p in self.pulses),
             "",
-            f"{'Date':12}  {'Source':10}  {'Net':>12}  {'Lot':>10}  {'Avg':>10}",
-            "─" * 58,
+            # of-max % pairs with bar_pct (Scalar bar contract · design §foreign)
+            f"{'Date':12}  {'OfMax':>5}  {'Source':10}  {'Net':>12}  {'Lot':>10}  {'Avg':>10}",
+            "─" * 66,
         ]
         for d in self.days:
+            of_max = f"{max(0, min(100, int(d.bar_pct or 0)))}%"
             lines.append(
-                f"{d.date_s:12}  {d.source:10}  {d.net_s:>12}  {d.lot_s:>10}  {d.avg_s:>10}"
+                f"{d.date_s:12}  {of_max:>5}  {d.source:10}  {d.net_s:>12}  "
+                f"{d.lot_s:>10}  {d.avg_s:>10}"
             )
         lines.append("")
         lines.append(self.footer)

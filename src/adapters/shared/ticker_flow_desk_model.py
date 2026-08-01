@@ -70,12 +70,15 @@ class TickerFlowDeskModel:
             "",
             "  ".join(f"{p.label} {p.value}" for p in self.pulses),
             "",
-            f"{'Date':12}  {'Net':>12}  {'Ratio':>8}  {'Buyer':>6}  {'Seller':>6}",
-            "─" * 52,
+            # of-max % pairs with bar_pct (Scalar bar contract · design §flow)
+            f"{'Date':12}  {'OfMax':>5}  {'Net':>12}  {'Ratio':>8}  {'Buyer':>6}  {'Seller':>6}",
+            "─" * 60,
         ]
         for d in self.days:
+            of_max = f"{max(0, min(100, int(d.bar_pct or 0)))}%"
             lines.append(
-                f"{d.date_s:12}  {d.net_s:>12}  {d.ratio_s:>8}  {d.buyer:>6}  {d.seller:>6}"
+                f"{d.date_s:12}  {of_max:>5}  {d.net_s:>12}  {d.ratio_s:>8}  "
+                f"{d.buyer:>6}  {d.seller:>6}"
             )
         lines.append("")
         lines.append(self.footer)

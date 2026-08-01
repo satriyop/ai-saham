@@ -533,14 +533,25 @@ class TickerDesk(Vertical):
             | None
         ) = None
 
+    def on_mount(self) -> None:
+        # Fin sub-chip starts hidden until [n] fin is selected
+        try:
+            period = self.query_one("#td-flag-period", FlagChip)
+            period.display = False
+            period.can_focus = False
+        except Exception:
+            pass
+
     def compose(self) -> ComposeResult:
         yield Static("", classes="td-crumb", id="td-crumb")
 
-        # Chip bar first under crumb: jobs + density · no row label (bible §2)
+        # Chip bar: jobs + density. [y] period mounts in bar but paints only when fin front.
         yield ChipBar(
             id="td-flags",
             chips=TICKER_JOB_CHIPS,
             chip_id_prefix="td-flag",
+            include_fin_period=True,
+            period_id="td-flag-period",
             include_detail=True,
             detail_id="td-flag-detail",
         )
@@ -691,6 +702,15 @@ class TickerDesk(Vertical):
                 return
             if hasattr(app, "action_ticker_job"):
                 app.action_ticker_job(key)  # type: ignore[attr-defined]
+            return
+        if key == "period":
+            # Binary toggle [y] · quarterly ↔ annual · only armed on fin
+            try:
+                app = self.app
+            except Exception:
+                return
+            if hasattr(app, "action_toggle_fin_period"):
+                app.action_toggle_fin_period()  # type: ignore[attr-defined]
             return
         if self._model is None:
             return
@@ -1043,7 +1063,10 @@ class TickerDesk(Vertical):
         foot = model.footer or ""
         foot = foot.replace("d detail", "d detail").replace("d collapse", "d detail")
         if "d detail" not in foot and "b f o x n" not in foot:
-            foot = f"b f o x n jobs · d detail · {foot}".strip(" ·")
+            if self._active_job == "fin":
+                foot = f"b f o x n jobs · y period · d detail · {foot}".strip(" ·")
+            else:
+                foot = f"b f o x n jobs · d detail · {foot}".strip(" ·")
         if self._detail_all:
             foot = foot.replace("d detail", "d brief", 1)
         self.query_one("#td-footer", Static).update(
@@ -1056,9 +1079,36 @@ class TickerDesk(Vertical):
             on_keys.add("detail")
         if self._active_job:
             on_keys.add(self._active_job)
+
+        # Fin period grain: **only in fin job context** (not dim-on-bar for other jobs).
+        # Hidden when fin not front · flip label · is-on when annual · y unbound off fin.
+        fin_period = "quarterly"
+        try:
+            app = self.app
+            fin_period = (
+                str(getattr(app, "_ticker_fin_period", "quarterly") or "quarterly").strip().lower()
+            )
+        except Exception:
+            pass
+        if fin_period not in {"quarterly", "annual"}:
+            fin_period = "quarterly"
+        period_word = "annual" if fin_period == "annual" else "quarterly"
+        fin_front = self._active_job == "fin"
+        if fin_front and fin_period == "annual":
+            on_keys.add("period")
+
         try:
             bar = self.query_one("#td-flags", ChipBar)
+            period_chip = bar.chip("period")
+            if period_chip is not None and fin_front:
+                period_chip.set_word(period_word)
+            # paint_states first; then enforce fin-only visibility (not dim-on-bar)
             bar.paint_states(on_keys=on_keys)
+            if period_chip is not None:
+                period_chip.display = bool(fin_front)
+                period_chip.can_focus = bool(fin_front)
+                if not fin_front:
+                    period_chip.set_chip_state(available=False, expanded=False)
         except Exception:
             try:
                 self.query_one("#td-flag-detail", FlagChip).set_chip_state(
@@ -1197,7 +1247,16 @@ class TickerDesk(Vertical):
         self._set_job_body_mode("dist" if visible else "days")
 
     def _paint_flow_desk(self, desk: TickerFlowDeskModel) -> None:
-        """Design lock: hero · 4 pulses · sessions table · real nets only."""
+        """Design lock: sessions · of-max bar + % · Net · Ratio · desks.
+
+        Scalar bar contract: bar width and % label are the same of-max number.
+        Ratio is foreign-flow ratio — not the bar label.
+        """
+        from src.adapters.tui.board_cell_markup import (
+            format_of_max_pct_markup,
+            format_scalar_bar_markup,
+        )
+
         self._set_job_body_mode("days")
         self._paint_job_hero_pulses(desk)
 
@@ -1208,28 +1267,46 @@ class TickerDesk(Vertical):
             )
             return
 
+        n = len(desk.days)
         self.query_one("#td-flow-days-head", Static).update(
-            f"SESSIONS · {len(desk.days)} · NEWEST FIRST"
+            f"SESSIONS · {n} · of max |net| in window · NEWEST FIRST"
         )
+        mute = "#555555"
+        bar_w = 10
         head = (
-            f"[#555555]{'Date':10}[/]  {'':10}  [#555555]{'Net':>10}[/]  "
-            f"[#555555]{'Ratio':>7}[/]  [#555555]{'Buyer':>6}[/]  [#555555]{'Seller':>6}[/]"
+            f"[{mute}]{'Date':10}[/]  "
+            f"[{mute}]{'':{bar_w}}[/] "
+            f"[{mute}]{'%':>4}[/]  "
+            f"[{mute}]{'Net':>10}[/]  "
+            f"[{mute}]{'Ratio':>7}[/]  "
+            f"[{mute}]{'Buyer':>6}[/]  "
+            f"[{mute}]{'Seller':>6}[/]"
         )
         lines = [head]
         for d in desk.days:
             tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#a0a0a0")
-            bar = bar_glyphs(d.bar_pct, width=10, hollow=False)
-            pad = max(0, 10 - len(bar))
-            bar_s = f"[{tone}]{bar}[/]{' ' * pad}" if bar else f"{'':10}"
+            bar_s = format_scalar_bar_markup(d.bar_pct, width=bar_w, tone=tone)
+            pct_s = format_of_max_pct_markup(d.bar_pct, width=4)
             lines.append(
-                f"[#d8d8d8]{d.date_s:10}[/]  {bar_s}  [{tone}]{d.net_s:>10}[/]  "
-                f"[#7a7a7a]{d.ratio_s:>7}[/]  [#c8c8c8]{d.buyer:>6}[/]  "
+                f"[#d8d8d8]{d.date_s:10}[/]  "
+                f"{bar_s} {pct_s}  "
+                f"[{tone}]{d.net_s:>10}[/]  "
+                f"[#7a7a7a]{d.ratio_s:>7}[/]  "
+                f"[#c8c8c8]{d.buyer:>6}[/]  "
                 f"[#c8c8c8]{d.seller:>6}[/]"
             )
         self.query_one("#td-flow-days", Static).update("\n".join(lines))
 
     def _paint_foreign_desk(self, desk: TickerForeignDeskModel) -> None:
-        """Design lock: hero · 5d/20d/days/source · daily points (net · lot · avg)."""
+        """Design lock: daily points · of-max bar + % · Source · Net · Lot · Avg.
+
+        Scalar bar contract: never solid blocks without a clear of-max % label.
+        """
+        from src.adapters.tui.board_cell_markup import (
+            format_of_max_pct_markup,
+            format_scalar_bar_markup,
+        )
+
         self._set_job_body_mode("days")
         self._paint_job_hero_pulses(desk)
 
@@ -1240,22 +1317,32 @@ class TickerDesk(Vertical):
             )
             return
 
+        n = len(desk.days)
         self.query_one("#td-flow-days-head", Static).update(
-            f"DAILY POINTS · {len(desk.days)} · NEWEST FIRST"
+            f"DAILY POINTS · {n} · of max |net| in window · NEWEST FIRST"
         )
+        mute = "#555555"
+        bar_w = 8
         head = (
-            f"[#555555]{'Date':10}[/]  {'':8}  [#555555]{'Source':10}[/]  "
-            f"[#555555]{'Net':>10}[/]  [#555555]{'Lot':>10}[/]  [#555555]{'Avg':>8}[/]"
+            f"[{mute}]{'Date':10}[/]  "
+            f"[{mute}]{'':{bar_w}}[/] "
+            f"[{mute}]{'%':>4}[/]  "
+            f"[{mute}]{'Source':10}[/]  "
+            f"[{mute}]{'Net':>10}[/]  "
+            f"[{mute}]{'Lot':>10}[/]  "
+            f"[{mute}]{'Avg':>8}[/]"
         )
         lines = [head]
         for d in desk.days:
             tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#a0a0a0")
-            bar = bar_glyphs(d.bar_pct, width=8, hollow=False)
-            pad = max(0, 8 - len(bar))
-            bar_s = f"[{tone}]{bar}[/]{' ' * pad}" if bar else f"{'':8}"
+            bar_s = format_scalar_bar_markup(d.bar_pct, width=bar_w, tone=tone)
+            pct_s = format_of_max_pct_markup(d.bar_pct, width=4)
             lines.append(
-                f"[#d8d8d8]{d.date_s:10}[/]  {bar_s}  [#7a7a7a]{d.source:10}[/]  "
-                f"[{tone}]{d.net_s:>10}[/]  [#c8c8c8]{d.lot_s:>10}[/]  "
+                f"[#d8d8d8]{d.date_s:10}[/]  "
+                f"{bar_s} {pct_s}  "
+                f"[#7a7a7a]{d.source:10}[/]  "
+                f"[{tone}]{d.net_s:>10}[/]  "
+                f"[#c8c8c8]{d.lot_s:>10}[/]  "
                 f"[#c8c8c8]{d.avg_s:>8}[/]"
             )
         self.query_one("#td-flow-days", Static).update("\n".join(lines))

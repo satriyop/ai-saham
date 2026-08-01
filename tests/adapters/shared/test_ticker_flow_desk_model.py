@@ -76,6 +76,9 @@ def test_flow_desk_hero_pulses_days_from_real_summaries():
     text = desk.as_text()
     assert "Action" not in text
     assert "ENTER" not in text
+    # Scalar bar contract: of-max % label present (same basis as bar_pct)
+    assert "OfMax" in text
+    assert "100%" in text
 
 
 def test_flow_desk_empty_honest():
