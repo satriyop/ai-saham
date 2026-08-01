@@ -219,10 +219,11 @@ Applies to: **View ticker jobs**, **broker home jobs**, density/option toggles t
 ```text
 Stage: View · ticker · UNVR
 Show bar:  [b] brokers  [f] flow  [o] foreign  [x] dist  [n] fin  [d] detail
-Fin bar:   [b] brokers  [f] flow  [o] foreign  [x] dist  [n] fin*  [y] quarterly  [d] detail
+Job bar:   [b] brokers* [f] flow  [o] foreign  [x] dist  [n] fin          ← no [d]
+Fin bar:   [b] brokers  [f] flow  [o] foreign  [x] dist  [n] fin*  [y] quarterly
                                                               │         ↑ fin sub-chip only
-                                                              └─ fin is-on
-esc / second press → show body · [y] removed from bar
+                                                              └─ fin is-on · no [d] on jobs
+esc / second press → show body · [y] removed · [d] returns on show
 ```
 
 **Anti-pattern (forbidden):**
@@ -434,17 +435,17 @@ Power keys are **stage-local** (only while that stage owns input).
 | **`[x] dist`** | job | **`x`** | `view ticker distribution` |
 | **`[n] fin`** | job | **`n`** | `view ticker financials` |
 | **`[y] quarterly`** / **`[y] annual`** | binary toggle · **fin sub-chip** | **`y`** | period grain · **painted only while fin `is-on`** · CLI `--period` |
-| **`[d] detail`** | density | **`d`** | toggle detail on **show** body (`is-on` = detail) |
+| **`[d] detail`** | density · **show-only** | **`d`** | toggle detail on **show** body (`is-on` = detail) · **hidden on every job surface** |
 
 - **All five jobs** are **job surfaces under this stage** — never leave for an independent stage.  
 - Word **`flow`** kept (CLI verb); keycap **`[f]`** is the scan target.  
 - Job → body under bar · `is-on` · switch via chip or letter · `esc` / second press → show.  
-- **`d` only when show body is visible** (not while a job surface is front). Prefer: `esc` first, then `d`.  
+- **`[d] detail` is show-context only:** paint **only when no job is front** (show body). Hide (not dim) + unbind `d` while any job surface is front — density expands show panels that are not mounted under jobs.  
 - **`[y]` is fin context only:** paint the sub-chip **only when `[n] fin` is selected**; hide (not dim) + unbind `y` on show and every other job.  
 - **Drill-in:** brokers job · Enter desk home may nest; `esc` desk → **brokers job again** (not a third stage).  
 - Also: `p` plan · `esc` trail to board · **`p` never means period**.  
-- Nav: click · Tab · Enter/Space · **`b f o x n`** · **`y` only with fin front** · **`d`** (show).  
-- **No** density / period meta text after bar. Footer: brass `b f o x n · d · p plan · esc` on show; add **`y` period** only while fin front.
+- Nav: click · Tab · Enter/Space · **`b f o x n`** · **`y` only with fin front** · **`d` only on show**.  
+- **No** density / period meta text after bar. Footer: brass `b f o x n · d · p plan · esc` on **show**; on **jobs** omit `d`; add **`y` period** only while fin front.
 
 ### Pre-open inspect · **in-stage · conforming**
 
@@ -560,8 +561,9 @@ Brokers = stock desks radar **body** · **not** an independent `ticker-desks` st
 
 ```text
 View · ticker · BBCA · {job}          {job} · local cache
-# fin job front only — [y] absent on show / other jobs
-[ [b] brokers ][ [f] flow ][ [o] foreign ][ [x] dist ][ [n] fin* ][ [y] quarterly ][ [d] detail ]
+# job front — no [d] detail (show-only density)
+# fin job front only — [y] period; still no [d]
+[ [b] brokers ][ [f] flow ][ [o] foreign ][ [x] dist ][ [n] fin* ][ [y] quarterly ]
 
 ┌─ HERO (elevated · peach left accent) ──────────────────┐
 │  LAB (uppercase job story)                              │
@@ -570,12 +572,12 @@ View · ticker · BBCA · {job}          {job} · local cache
 └─────────────────────────────────────────────────────────┘
 ┌ pulse ┐ ┌ pulse ┐ ┌ pulse ┐ ┌ pulse ┐   (3–4 scalars)
 SECTION · table or dual heat
-footer: esc show · chips switch · CLI verb · browse only
+footer: esc show · chips switch · CLI verb · browse only  (no d)
 ```
 
 | Layer | Spec |
 |-------|------|
-| Chip bar | Same as show · active job `is-on` · `d` does not apply on job body · fin arms **`[y]`** period dual |
+| Chip bar | Jobs + fin **`[y]`** when armed · **no `[d] detail`** while any job is front · density returns on show |
 | Hero | One story · mint/coral for signed values |
 | Pulses | Metric cards (`oc-metrics` / `oc-metric`) — not essays |
 | Body | Table or dual column · density/magnitude bars only as scalar sugar **with mandatory %** (Scalar bar contract) |
@@ -741,11 +743,12 @@ Not a 3-row mini top table. Chip **brokers** / `b` opens radar **under the ticke
 - Chip bar options: why · auction+ · warn (Tab / click; no power letters)  
 
 ### Ticker (`v t` · multi-surface with `view ticker *`)
-- **Brief (default)** / **Detail (`d`)** — same dual as Judge  
+- **Show density:** brief (default) / detail (`d`) — same dual as Judge · **show body only**  
 - Freshness: Price · Flow · Bandar · Earn · Fund · Analyst · Own · IEV · Insider — **no `Sent`**  
-- Chip bar jobs: **`[b] brokers` · `[f] flow` · `[o] foreign` · `[x] dist` · `[n] fin`** + **`[d] detail`**  
+- Chip bar jobs: **`[b] brokers` · `[f] flow` · `[o] foreign` · `[x] dist` · `[n] fin`**  
+- **`[d] detail`:** painted **only on show** · **hidden on every job surface** (not dim) · `d` unbound while job front  
 - Fin sub-chip: **`[y] quarterly|annual`** **only while fin is selected** (hidden otherwise — not dim)  
-- Power: **`b f o x n`** · **`y` only with fin front** · **`d`** (show density) · **`p` plan** · `esc` trail  
+- Power: **`b f o x n`** · **`y` only with fin front** · **`d` only on show** · **`p` plan** · `esc` trail  
 - Keycap honesty: **`[k]` only when bound and painted** · never decorative · never dim fake presence  
 - Price mast: last · local close · chg **baseline-aligned**  
 - **Job desks:** shared hero · pulses · body (§3) — not monospaced dump  

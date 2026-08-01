@@ -460,6 +460,11 @@ class CockpitApp(App[None]):
             )
         if self._stage == "detail" and self._status_note == "view ticker":
             return "↑↓ scroll · b f o x n jobs · d detail · p plan · esc trail · Ctrl+P · Tab chips"
+        if self._stage == "detail" and str(self._status_note or "").startswith("view ticker "):
+            # Job surface: density not contextual — no d in footer strip
+            job = str(self._ticker_job or "").strip()
+            y_bit = " · y period" if job == "fin" else ""
+            return f"↑↓ · b f o x n jobs{y_bit} · p plan · esc show · Ctrl+P · Tab chips"
         if self._stage == "detail" and self._status_note in {"judge", "re-judging"}:
             if self._judge_limited:
                 return (

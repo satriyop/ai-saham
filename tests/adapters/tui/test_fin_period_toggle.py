@@ -129,6 +129,16 @@ def test_fin_period_chip_flip_label_and_is_on_annual():
             assert period.display is False
             assert "is-context-off" in period.classes
 
+            # Density [d] returns on show; hidden under any job
+            detail = app.query_one("#td-flag-detail", FlagChip)
+            assert detail.display is True
+            assert "is-context-off" not in detail.classes
+            td.set_job_view("brokers", title="brokers", body="radar")
+            await pilot.pause(0.05)
+            assert detail.display is False
+            assert "is-context-off" in detail.classes
+            assert period.display is False
+
     asyncio.run(scenario())
 
 

@@ -2868,7 +2868,7 @@
  <div class="stage-block is-hidden" id="detailView" style="display:none">
 <div class="section-label">View · ticker · <span id="detailTicker">BBCA</span></div>
 
- <!-- Chip bar · jobs + density · [y] fin sub-chip only while fin is-on (hidden otherwise, not dim) -->
+ <!-- Chip bar · jobs + show density · [d] only on show · [y] only while fin is-on -->
  <div class="flag-row" data-flag-group="ticker" id="tickerJobFlags" style="margin-bottom:12px" role="toolbar" aria-label="Ticker chips">
    <button type="button" class="flag-chip" data-deep="brokers" title="[b] brokers · view ticker top-brokers"><span class="chip-key">[b]</span><span class="chip-lab">brokers</span></button>
    <button type="button" class="flag-chip" data-deep="flow" title="[f] flow · view ticker flow"><span class="chip-key">[f]</span><span class="chip-lab">flow</span></button>
@@ -4677,6 +4677,9 @@
  if ($("detailTicker")) $("detailTicker").textContent = f.t;
  if ($("detailMark")) $("detailMark").textContent = f.t;
  setModeLocal();
+ // Density chip only on show; job surfaces hide [d]
+ if (typeof syncTickerDetailChipArmed === "function") syncTickerDetailChipArmed();
+ if (typeof syncFinPeriodChipArmed === "function") syncFinPeriodChipArmed();
  } else if (frame === "broker") {
  const bv = $("brokerView");
  bv.classList.remove("is-hidden");
@@ -5409,8 +5412,8 @@
     }
 
     function toggleTickerDetail() {
-      // d / [d] detail is-on toggle — same pattern as Judge
-      if (state.tickerDeep) closeTickerDeep(false);
+      // d / [d] detail is-on toggle — show body only (not on job surfaces)
+      if (state.tickerDeep) return;
       setTickerDetailOpen(!state.tickerDetailOpen);
       toast(state.tickerDetailOpen ? "Ticker detail on" : "Ticker detail off");
     }
@@ -5480,6 +5483,19 @@
       if (armed) setFinPeriod(state.finPeriod, false);
     }
 
+    function syncTickerDetailChipArmed() {
+      // Density [d] detail: show body only — hidden on every job surface (not dim)
+      const btn = $("tickerDetailAll");
+      if (!btn) return;
+      const showBody = state.frame === "detail" && !state.tickerDeep;
+      btn.hidden = !showBody;
+      btn.style.display = showBody ? "" : "none";
+      btn.classList.toggle("is-hidden", !showBody);
+      btn.setAttribute("aria-hidden", showBody ? "false" : "true");
+      btn.tabIndex = showBody ? 0 : -1;
+      if (!showBody) btn.classList.remove("is-on");
+    }
+
     function showTickerJobDesk(job) {
       document.querySelectorAll("#tickerDeepStage .tj-desk").forEach((el) => {
         el.classList.toggle("is-on", el.dataset.job === job);
@@ -5539,6 +5555,7 @@
         b.classList.toggle("is-on", b.dataset.deep === job);
       });
       syncFinPeriodChipArmed();
+      syncTickerDetailChipArmed();
       updateChrome();
       toast(`${spec.cli} ${t}`);
     }
@@ -5558,6 +5575,7 @@
         b.classList.remove("is-on");
       });
       syncFinPeriodChipArmed();
+      syncTickerDetailChipArmed();
       if (state.frame === "detail") updateChrome();
       if (announce) toast("Ticker show");
     }
@@ -5589,6 +5607,7 @@
             return;
           }
           if (flag === "detail" && group === "ticker") {
+            if (state.tickerDeep) return; // density show-only
             toggleTickerDetail();
             return;
           }

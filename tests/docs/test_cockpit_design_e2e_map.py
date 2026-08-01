@@ -251,3 +251,13 @@ def test_scalar_bar_contract_flow_foreign_require_pct():
     assert "31%" in html
     # Anti-pattern notes live in design authority
     assert "bar + %" in html.lower() or "bar + clear %" in html.lower()
+
+
+def test_ticker_detail_density_is_show_only_not_on_jobs():
+    """[d] detail is show-context only; job surfaces hide density chip."""
+    html = _html()
+    md = MD.read_text(encoding="utf-8")
+    assert "syncTickerDetailChipArmed" in html
+    md_l = md.lower()
+    assert "show-only" in md_l or "show body only" in md_l or "hidden on every job" in md_l
+    assert "density only when show" in html or "show-only" in html.lower()

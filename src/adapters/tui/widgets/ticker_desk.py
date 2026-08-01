@@ -711,6 +711,9 @@ class TickerDesk(Vertical):
             return
         if key != "detail":
             return
+        # Density only on show body — job surfaces are not density stages
+        if self._active_job:
+            return
         self._detail_all = not self._detail_all
         self._open_flags = set(self._available_panels(self._model)) if self._detail_all else set()
         self.paint(self._model, detail_open=self._detail_all, sync_from_detail=False)
@@ -852,6 +855,10 @@ class TickerDesk(Vertical):
             foot = "esc show · chips switch job · b f o x n · browse only"
             if self._job_desk is not None and getattr(self._job_desk, "footer", None):
                 foot = self._job_desk.footer
+            # Strip density affordance from job footers (show-only control)
+            foot = (
+                foot.replace(" · d detail", "").replace("d detail · ", "").replace("d detail", "")
+            )
             self.query_one("#td-footer", Static).update(
                 f"[#555555]{foot}[/]\n[#d4b06a]{model.authority}[/]"
             )
@@ -1067,11 +1074,14 @@ class TickerDesk(Vertical):
         foot = model.footer or ""
         foot = foot.replace("d detail", "d detail").replace("d collapse", "d detail")
         if "d detail" not in foot and "b f o x n" not in foot:
+            # Density only on show; jobs omit d (not contextual)
             if self._active_job == "fin":
-                foot = f"b f o x n jobs · y period · d detail · {foot}".strip(" ·")
+                foot = f"b f o x n jobs · y period · {foot}".strip(" ·")
+            elif self._active_job:
+                foot = f"b f o x n jobs · {foot}".strip(" ·")
             else:
                 foot = f"b f o x n jobs · d detail · {foot}".strip(" ·")
-        if self._detail_all:
+        if self._detail_all and not self._active_job:
             foot = foot.replace("d detail", "d brief", 1)
         self.query_one("#td-footer", Static).update(
             f"[#555555]{foot}[/]\n[#d4b06a]{model.authority}[/]"
@@ -1114,6 +1124,22 @@ class TickerDesk(Vertical):
             expanded=(grain == "annual"),
         )
 
+    def _sync_detail_chip(self) -> None:
+        """Arm/disarm [d] detail — painted only on ticker **show** body.
+
+        Job surfaces (brokers/flow/foreign/dist/fin) are not density stages;
+        density would expand show panels that are not mounted under a job.
+        """
+        try:
+            detail = self.query_one("#td-flag-detail", FlagChip)
+        except Exception:
+            return
+        if self._active_job:
+            detail.set_context_visible(False)
+            return
+        detail.set_context_visible(True)
+        detail.set_chip_state(available=True, expanded=bool(self._detail_all))
+
     def _paint_chip_bar(self) -> None:
         on_keys: set[str] = set()
         if self._detail_all and not self._active_job:
@@ -1128,14 +1154,16 @@ class TickerDesk(Vertical):
 
         try:
             bar = self.query_one("#td-flags", ChipBar)
-            # Skip period in paint_states — armed only via _sync_fin_period_chip
-            bar.paint_states(on_keys=on_keys, skip_keys=("period",))
+            # period + detail are context-scoped — not dim ghosts on wrong surface
+            skip: set[str] = {"period"}
+            if self._active_job:
+                skip.add("detail")
+            bar.paint_states(on_keys=on_keys, skip_keys=skip)
             self._sync_fin_period_chip(armed=fin_front)
+            self._sync_detail_chip()
         except Exception:
             try:
-                self.query_one("#td-flag-detail", FlagChip).set_chip_state(
-                    available=True, expanded=self._detail_all and not self._active_job
-                )
+                self._sync_detail_chip()
             except Exception:
                 pass
             try:
