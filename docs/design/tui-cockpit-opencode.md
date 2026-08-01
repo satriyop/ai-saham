@@ -233,7 +233,19 @@ Honesty lives in **title + meta + footer**, not cryptic chips.
 **Reject:** operator chips named `partial_net` / `from_ticker` (code keys as chrome).  
 **Reject:** status chips that look like filters but do not change the table.
 
-### Broker home (desk)
+### Broker home (desk) — **TUI is design authority for richness**
+
+Shipped `BrokerDesk` / desk models outrank a thinner mock. Design mock must stay at least as rich as:
+
+| Block | Content (from TUI model) |
+|-------|---------------------------|
+| Identity | Code · name · **Foreign\|Local** · as of · ticker count |
+| Scope | Tracked desk only · not market foreign total |
+| Hero | **Day net** signed + unit · sub: lot · desk · tickers · tracked |
+| Side pulse | **Net5** (sessions) · **Buy streak** · **Δ1** · **Top buy** |
+| Dual heat | Top buy/sell stocks · bar + amount (mint/coral) |
+| Chip bar | buy/sell · flow · calendar · history · top 5 |
+| Legend | `t f c h m · v ticker · esc trail` |
 
 | Chip | Kind | Power | Effect |
 |------|------|-------|--------|
@@ -357,19 +369,21 @@ footer: esc show · chips switch · CLI verb · browse only
 
 | Block | Content |
 |-------|---------|
-| Hero lab | `DISTRIBUTION` |
+| Hero lab | `DISTRIBUTION · TICKER` |
 | Hero big / slogan | Only if true: `★ Foreign buying from domestic` or `● Foreign dominate buys` — else omit slogan |
 | Hero sub | `as of DATE · counterparty · local cache` |
-| Pulses | optional omit or: buy sides · sell sides · as of |
-| Body | **Dual heat columns** (broker home dual pattern): |
+| Type tags | **`F` = Foreign · `L` = Local** — never `A` (Asing) · pill badges |
+| Pulses | Buy sides · Sell sides · Top buy desk · Top sell desk |
+| Body | **Dual heat** (mint left / coral right) · rank · code · type pill · amount · CP rows with share **bars** |
 
 ```text
-TOP BUYERS (from →)          TOP SELLERS (to →)
-YP[A]  128.4B                CC[L]   41.0B
-  ← XL[L]  40.1B (31%)         → AK[A]  12.2B (30%)
+TOP BUYERS (from →)                 TOP SELLERS (to →)
+1 YP [F]              128.4B        1 CC [L]               41.0B
+  ← XL [L]  40.1B 31% ████          → YP [F]  18.2B 44% ████
+  ← CC [L]  22.0B 17% ██            → AK [F]  10.1B 25% ██
 ```
 
-Cap top 5 sides · top 4 counterparties.
+Cap top 5 sides · top 4 counterparties. Share bar = % of that side’s amount.
 
 ### `fin` · `view ticker financials`
 

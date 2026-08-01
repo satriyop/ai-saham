@@ -173,8 +173,14 @@ def format_ticker_foreign_history_job(
 
 
 def _broker_tag(code: str, btype: str) -> str:
+    """Type tags: F = Foreign (incl. asing), L = Local, G = government if ever present."""
     t = (btype or "").lower()
-    tag = "A" if t == "asing" else ("G" if t == "pemerintah" else "L")
+    if t in {"asing", "foreign", "f"}:
+        tag = "F"
+    elif t in {"pemerintah", "government", "g"}:
+        tag = "G"
+    else:
+        tag = "L"
     return f"{code}[{tag}]"
 
 

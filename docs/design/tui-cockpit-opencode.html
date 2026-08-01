@@ -6,7 +6,7 @@
  <meta http-equiv="Pragma" content="no-cache" />
  <meta http-equiv="Expires" content="0" />
  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-ticker-jobs</title>
+  <title>ai-saham · Daily Cockpit · OpenCode rev-20260801-dist-broker</title>
  <link rel="preconnect" href="https://fonts.googleapis.com" />
  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -232,11 +232,13 @@
 
  .section-label.tight { margin-top: 14px; }
 
- /* tables */
+ /* tables — polished column gutters (match TUI density, readable scan) */
  .result-table {
  width: 100%;
- border-collapse: collapse;
+ border-collapse: separate;
+ border-spacing: 0;
  font-size: 12.5px;
+ font-variant-numeric: tabular-nums;
  }
 
  .result-table.dense { font-size: 12px; }
@@ -245,8 +247,10 @@
  text-align: left;
  font-weight: 500;
  color: var(--text-mute);
- font-size: 11px;
- padding: 6px 8px;
+ font-size: 10.5px;
+ letter-spacing: 0.04em;
+ text-transform: uppercase;
+ padding: 8px 14px;
  border-bottom: 1px solid var(--border);
  position: sticky;
  top: 0;
@@ -255,12 +259,14 @@
  white-space: nowrap;
  }
 
- .result-table.dense thead th { padding: 4px 6px; font-size: 10.5px; }
+ .result-table.dense thead th { padding: 7px 14px; font-size: 10px; }
 
  .result-table thead th.num,
  .result-table td.num {
  text-align: right;
  font-variant-numeric: tabular-nums;
+ font-feature-settings: "tnum" 1;
+ padding-left: 18px;
  }
 
  .result-table tbody tr {
@@ -279,12 +285,12 @@
  }
 
  .result-table td {
- padding: 7px 8px;
+ padding: 8px 14px;
  color: var(--text);
  vertical-align: middle;
  }
 
- .result-table.dense td { padding: 4px 6px; }
+ .result-table.dense td { padding: 7px 14px; }
 
  .ticker { font-weight: 600; letter-spacing: 0.02em; color: #ececec; }
 
@@ -1217,27 +1223,43 @@
  .cli-panel .neg { color: var(--red); }
  .cli-panel .amb { color: var(--amber); }
  .cli-panel .body .line b { font-weight: 600; color: var(--text); }
- .cli-panel table.mini-tbl {
+ /* Global mini tables (job desks + CLI panels) — generous column gutters */
+ table.mini-tbl {
  width: 100%;
- border-collapse: collapse;
- font-size: 11.5px;
+ border-collapse: separate;
+ border-spacing: 0;
+ font-size: 12px;
  font-variant-numeric: tabular-nums;
  }
- .cli-panel table.mini-tbl th {
+ table.mini-tbl th {
  text-align: left;
  color: var(--text-mute);
  font-weight: 500;
- padding: 3px 6px 4px 0;
+ padding: 7px 14px 8px 0;
  border-bottom: 1px solid var(--border);
+ letter-spacing: 0.04em;
+ font-size: 10.5px;
+ text-transform: uppercase;
+ white-space: nowrap;
  }
- .cli-panel table.mini-tbl th.num,
- .cli-panel table.mini-tbl td.num { text-align: right; }
- .cli-panel table.mini-tbl td {
- padding: 3px 6px 3px 0;
+ table.mini-tbl th.num,
+ table.mini-tbl td.num {
+ text-align: right;
+ padding-left: 16px;
+ padding-right: 0;
+ font-feature-settings: "tnum" 1;
+ }
+ table.mini-tbl td {
+ padding: 7px 14px 7px 0;
  color: var(--text);
  border-bottom: 1px solid var(--border-soft);
+ vertical-align: middle;
  }
- .cli-panel table.mini-tbl tr:last-child td { border-bottom: 0; }
+ table.mini-tbl tr:last-child td { border-bottom: 0; }
+ table.mini-tbl td.dim { color: var(--text-mute); }
+ .cli-panel table.mini-tbl { font-size: 11.5px; }
+ .cli-panel table.mini-tbl th { padding: 5px 12px 6px 0; }
+ .cli-panel table.mini-tbl td { padding: 5px 12px 5px 0; }
  .cli-panel .empty-slot {
  color: var(--text-mute);
  font-size: 12px;
@@ -1345,7 +1367,8 @@
  .split-buy-sell {
  display: grid;
  grid-template-columns: 1fr 1fr;
- gap: 8px;
+ gap: 16px;
+ margin: 4px 0 14px;
  }
  @media (max-width: 800px) {
  .split-buy-sell { grid-template-columns: 1fr; }
@@ -1354,25 +1377,27 @@
  border: 1px solid var(--border);
  border-radius: var(--radius);
  background: var(--bg-panel);
- padding: 10px 12px;
+ padding: 12px 14px 14px;
  }
+ .stock-heat.buy { border-left: 3px solid var(--green); }
+ .stock-heat.sell { border-left: 3px solid var(--red); }
  .stock-heat h3 {
  font-size: 10px;
  letter-spacing: 0.1em;
  text-transform: uppercase;
  color: var(--text-mute);
  font-weight: 500;
- margin-bottom: 8px;
+ margin: 0 0 12px;
  }
  .stock-heat.buy h3 { color: var(--green); }
  .stock-heat.sell h3 { color: var(--red); }
  .stock-row {
  display: grid;
- grid-template-columns: 52px 1fr auto;
- gap: 8px;
+ grid-template-columns: 56px 1fr auto;
+ gap: 12px;
  align-items: center;
  font-size: 12px;
- padding: 3px 0;
+ padding: 5px 0;
  font-variant-numeric: tabular-nums;
  }
  .stock-row .t { font-weight: 600; color: #ececec; }
@@ -1724,7 +1749,7 @@
  .tj-dual {
    display: grid;
    grid-template-columns: 1fr 1fr;
-   gap: 12px;
+   gap: 16px;
    margin-bottom: 12px;
  }
  @media (max-width: 700px) {
@@ -1734,10 +1759,12 @@
    background: var(--bg-elevated);
    border: 1px solid var(--border);
    border-radius: var(--radius);
-   padding: 10px 12px;
+   padding: 12px 14px 14px;
  }
+ .tj-dual .col.buy-side { border-left: 3px solid var(--green); }
+ .tj-dual .col.sell-side { border-left: 3px solid var(--red); }
  .tj-dual .col h4 {
-   margin: 0 0 8px;
+   margin: 0 0 12px;
    font-size: 11px;
    letter-spacing: 0.06em;
    text-transform: uppercase;
@@ -1745,23 +1772,103 @@
    font-weight: 600;
  }
  .tj-dual .side {
-   margin-bottom: 8px;
+   margin-bottom: 14px;
    font-variant-numeric: tabular-nums;
+   padding-bottom: 12px;
+   border-bottom: 1px solid var(--border-soft);
+ }
+ .tj-dual .side:last-child {
+   margin-bottom: 0;
+   padding-bottom: 0;
+   border-bottom: 0;
  }
  .tj-dual .side .head {
    display: flex;
    justify-content: space-between;
+   align-items: baseline;
+   gap: 12px;
    font-weight: 600;
    color: var(--text);
-   margin-bottom: 2px;
+   margin-bottom: 8px;
+   font-size: 13px;
  }
- .tj-dual .side .head.buy { color: var(--green); }
- .tj-dual .side .head.sell { color: var(--red); }
+ .tj-dual .side .head .code {
+   display: inline-flex;
+   align-items: center;
+   gap: 8px;
+ }
+ .tj-dual .side .head .rank {
+   color: var(--text-mute);
+   font-weight: 500;
+   font-size: 11px;
+   min-width: 1.2em;
+ }
+ .tj-type {
+   display: inline-block;
+   font-size: 10px;
+   font-weight: 600;
+   letter-spacing: 0.04em;
+   padding: 1px 6px;
+   border-radius: 999px;
+   border: 1px solid var(--border);
+   color: var(--text-dim);
+   background: #121212;
+ }
+ .tj-type.f {
+   color: #8eb4d8;
+   border-color: #2a3a4a;
+   background: #121820;
+ }
+ .tj-type.l {
+   color: #a0a0a0;
+   border-color: #2a2a2a;
+   background: #161616;
+ }
+ .tj-dual .side .head.buy .amt { color: var(--green); }
+ .tj-dual .side .head.sell .amt { color: var(--red); }
  .tj-dual .cp {
+   display: grid;
+   grid-template-columns: 14px minmax(0, 1fr) auto;
+   gap: 8px 10px;
+   align-items: center;
    font-size: 12px;
    color: var(--text-dim);
-   padding-left: 10px;
-   margin: 1px 0;
+   margin: 5px 0;
+ }
+ .tj-dual .cp .arrow { color: var(--text-mute); font-size: 11px; }
+ .tj-dual .cp .who {
+   display: flex;
+   align-items: center;
+   gap: 6px;
+   min-width: 0;
+ }
+ .tj-dual .cp .who .name { color: var(--text); font-weight: 500; }
+ .tj-dual .cp .amt {
+   text-align: right;
+   font-weight: 500;
+   color: var(--text);
+   white-space: nowrap;
+ }
+ .tj-dual .cp .bar {
+   grid-column: 2 / -1;
+   height: 4px;
+   background: #1a1a1a;
+   border-radius: 2px;
+   overflow: hidden;
+   margin-top: -2px;
+ }
+ .tj-dual .cp .bar > i {
+   display: block;
+   height: 100%;
+   border-radius: 2px;
+   background: #3a4252;
+ }
+ .tj-dual .col.buy-side .cp .bar > i { background: color-mix(in srgb, var(--green) 55%, #2a2a2a); }
+ .tj-dual .col.sell-side .cp .bar > i { background: color-mix(in srgb, var(--red) 50%, #2a2a2a); }
+ .tj-dual .cp .pct {
+   color: var(--text-mute);
+   font-size: 11px;
+   margin-left: 6px;
  }
  .tj-fin-cards {
    display: grid;
@@ -2316,7 +2423,7 @@
         <button type="button" data-frame="empty">7 Health</button>
         <button type="button" data-frame="palette">8 Palette</button>
       </div>
-      <span class="rev" id="buildStamp">mock · 01-ticker-jobs</span>
+      <span class="rev" id="buildStamp">mock · 01-dist-broker</span>
     </div>
 
     <!-- Product shell only · OpenCode bible for shipped TUI -->
@@ -3073,48 +3180,136 @@
                 </table>
               </div>
 
-              <!-- DIST -->
+              <!-- DIST · dual heat + F/L type badges (Foreign = F, Local = L · never A) -->
               <div class="tj-desk" id="tjDeskDist" data-job="dist">
                 <div class="tj-hero">
                   <div>
-                    <div class="lab">Distribution</div>
-                    <div class="big pos" style="font-size:1.15rem">★ Foreign buying from domestic</div>
-                    <div class="sub">as of 2026-07-29 · counterparty matrix · local cache</div>
+                    <div class="lab">Distribution · BBCA</div>
+                    <div class="big pos" style="font-size:1.2rem">★ Foreign buying from domestic</div>
+                    <div class="sub">as of 2026-07-29 · counterparty matrix · local cache · not Action</div>
                   </div>
                   <div>
-                    <div class="side-lab">Honesty</div>
-                    <div class="sub" style="color:var(--text-dim);margin:0">
-                      Slogan only when true.<br />
-                      Cap top 5 sides · top 4 CPs.
+                    <div class="side-lab">Type legend</div>
+                    <div class="sub" style="color:var(--text-dim);margin:0;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                      <span class="tj-type f">F</span> Foreign
+                      <span class="tj-type l">L</span> Local
+                      <span style="width:100%;margin-top:4px">Slogan only when true · top 5 sides · top 4 CPs</span>
                     </div>
                   </div>
                 </div>
+                <div class="tj-pulses" style="margin-bottom:14px">
+                  <div class="tj-pulse"><div class="k">Buy sides</div><div class="v">5</div></div>
+                  <div class="tj-pulse"><div class="k">Sell sides</div><div class="v">5</div></div>
+                  <div class="tj-pulse"><div class="k">Top buy</div><div class="v pos">YP · 128B</div></div>
+                  <div class="tj-pulse"><div class="k">Top sell</div><div class="v neg">CC · 41B</div></div>
+                </div>
                 <div class="tj-dual">
-                  <div class="col">
-                    <h4>Top buyers (from →)</h4>
+                  <div class="col buy-side">
+                    <h4>Top buyers · bought from →</h4>
                     <div class="side">
-                      <div class="head buy"><span>YP[A]</span><span>128.4B</span></div>
-                      <div class="cp">← XL[L]  40.1B (31%)</div>
-                      <div class="cp">← CC[L]  22.0B (17%)</div>
-                      <div class="cp">← MS[L]  18.4B (14%)</div>
+                      <div class="head buy">
+                        <span class="code"><span class="rank">1</span><span class="name">YP</span><span class="tj-type f">F</span></span>
+                        <span class="amt">128.4B</span>
+                      </div>
+                      <div class="cp">
+                        <span class="arrow">←</span>
+                        <span class="who"><span class="name">XL</span><span class="tj-type l">L</span></span>
+                        <span class="amt">40.1B<span class="pct">31%</span></span>
+                        <span class="bar"><i style="width:31%"></i></span>
+                      </div>
+                      <div class="cp">
+                        <span class="arrow">←</span>
+                        <span class="who"><span class="name">CC</span><span class="tj-type l">L</span></span>
+                        <span class="amt">22.0B<span class="pct">17%</span></span>
+                        <span class="bar"><i style="width:17%"></i></span>
+                      </div>
+                      <div class="cp">
+                        <span class="arrow">←</span>
+                        <span class="who"><span class="name">MS</span><span class="tj-type l">L</span></span>
+                        <span class="amt">18.4B<span class="pct">14%</span></span>
+                        <span class="bar"><i style="width:14%"></i></span>
+                      </div>
                     </div>
                     <div class="side">
-                      <div class="head buy"><span>AK[A]</span><span>86.2B</span></div>
-                      <div class="cp">← YU[A]  30.1B (35%)</div>
-                      <div class="cp">← XL[L]  12.2B (14%)</div>
+                      <div class="head buy">
+                        <span class="code"><span class="rank">2</span><span class="name">AK</span><span class="tj-type f">F</span></span>
+                        <span class="amt">86.2B</span>
+                      </div>
+                      <div class="cp">
+                        <span class="arrow">←</span>
+                        <span class="who"><span class="name">YU</span><span class="tj-type f">F</span></span>
+                        <span class="amt">30.1B<span class="pct">35%</span></span>
+                        <span class="bar"><i style="width:35%"></i></span>
+                      </div>
+                      <div class="cp">
+                        <span class="arrow">←</span>
+                        <span class="who"><span class="name">XL</span><span class="tj-type l">L</span></span>
+                        <span class="amt">12.2B<span class="pct">14%</span></span>
+                        <span class="bar"><i style="width:14%"></i></span>
+                      </div>
+                    </div>
+                    <div class="side">
+                      <div class="head buy">
+                        <span class="code"><span class="rank">3</span><span class="name">BK</span><span class="tj-type f">F</span></span>
+                        <span class="amt">52.0B</span>
+                      </div>
+                      <div class="cp">
+                        <span class="arrow">←</span>
+                        <span class="who"><span class="name">PD</span><span class="tj-type l">L</span></span>
+                        <span class="amt">19.5B<span class="pct">38%</span></span>
+                        <span class="bar"><i style="width:38%"></i></span>
+                      </div>
                     </div>
                   </div>
-                  <div class="col">
-                    <h4>Top sellers (to →)</h4>
+                  <div class="col sell-side">
+                    <h4>Top sellers · sold to →</h4>
                     <div class="side">
-                      <div class="head sell"><span>CC[L]</span><span>41.0B</span></div>
-                      <div class="cp">→ YP[A]  18.2B (44%)</div>
-                      <div class="cp">→ AK[A]  10.1B (25%)</div>
+                      <div class="head sell">
+                        <span class="code"><span class="rank">1</span><span class="name">CC</span><span class="tj-type l">L</span></span>
+                        <span class="amt">41.0B</span>
+                      </div>
+                      <div class="cp">
+                        <span class="arrow">→</span>
+                        <span class="who"><span class="name">YP</span><span class="tj-type f">F</span></span>
+                        <span class="amt">18.2B<span class="pct">44%</span></span>
+                        <span class="bar"><i style="width:44%"></i></span>
+                      </div>
+                      <div class="cp">
+                        <span class="arrow">→</span>
+                        <span class="who"><span class="name">AK</span><span class="tj-type f">F</span></span>
+                        <span class="amt">10.1B<span class="pct">25%</span></span>
+                        <span class="bar"><i style="width:25%"></i></span>
+                      </div>
                     </div>
                     <div class="side">
-                      <div class="head sell"><span>XL[L]</span><span>22.1B</span></div>
-                      <div class="cp">→ YP[A]  9.4B (43%)</div>
-                      <div class="cp">→ RX[A]  4.1B (19%)</div>
+                      <div class="head sell">
+                        <span class="code"><span class="rank">2</span><span class="name">XL</span><span class="tj-type l">L</span></span>
+                        <span class="amt">22.1B</span>
+                      </div>
+                      <div class="cp">
+                        <span class="arrow">→</span>
+                        <span class="who"><span class="name">YP</span><span class="tj-type f">F</span></span>
+                        <span class="amt">9.4B<span class="pct">43%</span></span>
+                        <span class="bar"><i style="width:43%"></i></span>
+                      </div>
+                      <div class="cp">
+                        <span class="arrow">→</span>
+                        <span class="who"><span class="name">RX</span><span class="tj-type f">F</span></span>
+                        <span class="amt">4.1B<span class="pct">19%</span></span>
+                        <span class="bar"><i style="width:19%"></i></span>
+                      </div>
+                    </div>
+                    <div class="side">
+                      <div class="head sell">
+                        <span class="code"><span class="rank">3</span><span class="name">PD</span><span class="tj-type l">L</span></span>
+                        <span class="amt">18.6B</span>
+                      </div>
+                      <div class="cp">
+                        <span class="arrow">→</span>
+                        <span class="who"><span class="name">BK</span><span class="tj-type f">F</span></span>
+                        <span class="amt">7.2B<span class="pct">39%</span></span>
+                        <span class="bar"><i style="width:39%"></i></span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3242,9 +3437,11 @@
  </div>
  </div>
 
- <!-- 7b · Desk home (full detail · design parity) -->
+ <!-- 7b · Desk home — matches TUI BrokerDesk (hero · side pulse · dual heat · chip hub) -->
  <div class="broker-sub" id="brokerHome" data-broker-mode="home">
- <div class="section-label">Broker · <span id="brokerHomeCodeLabel">YP</span></div>
+ <div class="section-label">Broker · <span id="brokerHomeCodeLabel">YP</span>
+   <span style="font-size:11px;color:var(--text-mute);font-weight:400;margin-left:8px">desk home · local cache</span>
+ </div>
 
  <div class="desk-id">
  <div>
@@ -3260,6 +3457,7 @@
  <span id="brokerTickers">45 tickers · cache only</span>
  </div>
  </div>
+ <p style="margin:0 0 12px;font-size:12px;color:#9b8fb8" id="brokerScope">Tracked desk activity only (broker_daily_flow) · not market foreign total</p>
 
  <section class="net-hero" aria-label="Day net hero">
  <div>
@@ -3269,17 +3467,18 @@
  <span class="amt" id="brokerDayAmt">11.46</span>
  <span class="unit">B IDR</span>
  </div>
-                  <div class="net-sub" id="brokerDaySub">lot 413,768 · desk YP only · tracked activity · not full market</div>
+                  <div class="net-sub" id="brokerDaySub">lot 413,768 · desk YP only · 45 tickers · tracked activity · not full market</div>
  </div>
  <div class="side">
- <div class="stat-line"><span class="k">Net5</span><span class="v pos" id="brokerNet5">+38.2B</span></div>
+ <div class="stat-line"><span class="k">Net5</span><span class="v pos" id="brokerNet5">+38.2B (5s)</span></div>
  <div class="stat-line"><span class="k">Buy streak</span><span class="v" id="brokerStk">4 sessions</span></div>
  <div class="stat-line"><span class="k">Δ1</span><span class="v pos" id="brokerD1">+2.1B</span></div>
  <div class="stat-line"><span class="k">Top buy</span><span class="v" id="brokerTop">AMMN</span></div>
  </div>
  </section>
 
- <div class="flag-row" id="brokerHub" role="toolbar" aria-label="Broker desk chips">
+ <!-- Chip hub above dual heat (TUI order: chips then page; mock: chips then top) -->
+ <div class="flag-row" id="brokerHub" role="toolbar" aria-label="Broker desk chips" style="margin:4px 0 12px">
                 <button type="button" class="flag-chip is-on" data-deep="top" title="buy/sell · t">buy/sell</button>
                 <button type="button" class="flag-chip" data-deep="flow" title="flow · f">flow</button>
                 <button type="button" class="flag-chip" data-deep="cal" title="calendar · c">calendar</button>
