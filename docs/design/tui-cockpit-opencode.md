@@ -40,7 +40,7 @@ Put implementer notes **only in this doc** (or code comments). Never as stage bo
 |--------|-----------|---------|
 | **OpenCode taste** | **Bible for TUI visuals** | Black-on-black, peach selection, mono density, hairlines, cards/tables |
 | **Journey / desk HTML** | **Inspiration only** | Stage map, keys, Action vs browse, column contracts, hierarchy *ideas* |
-| **Shipped TUI code** | **Data richness** | Density duals **brief ↔ detail (`d`)**; chip bars open jobs / options |
+| **Shipped TUI code** | **Data richness** | Density duals **brief ↔ detail (`[d] detail`)**; chip bars open jobs / options |
 
 Ship Textual against **`.app` inside this mock**. Design-tools strip is for reviewing frames in browser only.
 
@@ -54,7 +54,7 @@ Ship Textual against **`.app` inside this mock**. Design-tools strip is for revi
 | 2 | Plan | Structure | Geometry triangle · inherit Action · `l` paper confirm |
 | 3 | Paper | Notebook | Notebook tape · write via plan `l` confirm |
 | 4 | Pre-open | Auction | IEP board → Enter **inspect** (option chips) |
-| 5 | Ticker | Browse | **brief / detail (`d`)** · job chips → CLI siblings |
+| 5 | Ticker | Browse | **brief / detail (`[d]`)** · job chips with brass keycaps → CLI siblings |
 | 6 | Broker | Browse | Radar → Enter desk home · list options · desk job chips |
 | 7 | Health | Honesty | Empty / zero / lag / ready posters |
 | 8 | Palette | Nav | Ctrl+P · peach selection |
@@ -106,7 +106,7 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 
 1. **`limited` ≠ `brief`.**  
 2. Density is **one dual per surface**: **brief (default) ↔ detail (`d`)**. Same words on Judge and Ticker.  
-3. Density control = **one** affordance: chip **`detail · d`** and/or key **`d`** — not a panel-name wall.  
+3. Density control = **one** affordance: chip **`[d] detail`** and/or key **`d`** — not a panel-name wall.  
 4. Empty sections omit or honest empty — do not invent.  
 5. Diagnostic never Action authority.  
 6. Density bars = scalar sugar only — not charts.  
@@ -118,7 +118,8 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 
 **Authority:** every stage that exposes density, jobs, or options uses **this** interaction model.  
 **Order:** implement foundation first in TUI (shared widget), then wire stage inventories.  
-**Workflow:** design + mock first · Textual only after explicit go.
+**Workflow:** design + mock first · Textual only after explicit go.  
+**Lock (2026-08-01):** power key is **visible on the chip** — bold brass `[k]` leading the product word.
 
 ### Placement & chrome
 
@@ -127,9 +128,44 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 | Placement | One horizontal row under the stage section label (or under mast if no separate title) |
 | Contents | Chips only · optional **meta** text after chips (`brief` / `detail`) — meta is status, not a chip |
 | Row labels | **Forbidden** in product UI: `Deep`, `Hub`, `Density`, `List`, `Detail`, `Flags` |
-| Chip label | Short product / CLI word only (`brokers`, `flow`, `detail · d`, `buy/sell`) |
+| Chip label | **`[k] word`** — see Keycap-in-chip (below) |
 | Order | **Jobs / options first** (left → right) · **density last** when present |
 | Missing data | Chip **dim** (still focusable) or omit — honest; never invent content |
+
+### Keycap-in-chip (locked)
+
+Every chip that has a **power letter** paints that letter **on the chip**, not only in a footer legend.
+
+| Rule | Spec |
+|------|------|
+| Pattern | **`[k] label`** — brackets + single letter, then product / CLI word |
+| Position | **Leading** only — never trailing (`foreign [o]` forbidden) |
+| Weight | **Bold** on the keycap token `[k]` only · label normal weight |
+| Color | **Brass** (`#d4b06a` / design token `--brass`) on the keycap · label mute/ash |
+| Space | One space after `]`: `[f] flow` |
+| Density | **`[d] detail`** — not `detail · d` |
+| No power key | Option chips without a letter stay **label-only** (pre-open `why` · `auction+` · `warn`) — no fake `[—]` |
+| is-on | Chip fills **peach**; keycap stays bold — use dark ink on peach so `[k]` remains readable (not brass-on-peach mud) |
+| Dim | Keycap + label both dim · still honest |
+
+**Brass = navigation language (TUI-wide):**
+
+| Token | Role | Examples |
+|-------|------|----------|
+| **Brass / amber** | “What to press” — keys, chip keycaps, footer `kbd` | `[b]`, footer `↑↓` key chips |
+| **Peach** | Selection / active surface | row select · chip `is-on` · focus ring |
+| **Mint / coral** | Data sign (pos / neg) — not navigation | nets · % · Action never from key color |
+
+Do **not** use peach for key glyphs or brass for signed data. One scan dialect: **brass means keyboard**.
+
+```text
+[ b ] brokers   [ f ] flow   [ o ] foreign   [ x ] dist   [ n ] fin   [ d ] detail
+  ^ brass bold    ^ label mute
+```
+
+**Reject:** bare product words with hidden power keys.  
+**Reject:** trailing letter soup (`detail · d` as the only teaching form).  
+**Reject:** inventing keycaps for option chips that have no power letter.
 
 ### Navigation (locked — plain Tab)
 
@@ -139,42 +175,44 @@ Not a chat bubble. Not a second palette. Free text only until hooked.
 | **Tab** | Next focusable control in the normal app/stage chain (**plain** focus chain) |
 | **Shift+Tab** | Previous focusable control |
 | **Enter** / **Space** | Activate **focused** chip |
-| **Power letter** | Stage-local shortcut when listed below — same effect as click |
+| **Power letter** | Stage-local shortcut when listed below — same effect as click · **same letter as chip keycap** |
 | **`d`** | Density only (Judge + Ticker **show**) — never a job letter |
 | **Digits `1`–`8`** | Primary frames only — **never** chips |
 | **`esc`** | Trail nested job / inspect / home; does not wipe unrelated toggles unless stage says so |
 
 **Reject:** roving ←/→ chip groups (not this product).  
-**Reject:** trapping Tab forever inside the bar — Tab may leave into body / sidebar / prompt.
+**Reject:** trapping Tab forever inside the bar — Tab may leave into body / sidebar / prompt.  
+**Reject:** digits as job shortcuts (collides with frame map).
 
 ### Visual states
 
 | State | Paint |
 |-------|--------|
-| Default | Hairline chip · mute text |
-| Hover | Brighter border (pointer) |
+| Default | Hairline chip · brass bold `[k]` · mute label |
+| Hover | Brighter border (pointer) · keycap stays brass |
 | **Focus** (Tab) | Peach outline / focus ring — keyboard-visible |
-| **Active / on** | Filled or `is-on` (job open, option open, density detail) |
+| **Active / on** | Peach fill · dark bold `[k]` · dark label |
 | Dim / unavailable | Reduced opacity · still honest |
 
 ### Semantics by chip kind
 
-| Kind | Activate means | Examples |
-|------|----------------|----------|
-| **Density** | Toggle brief ↔ detail on current stage body | `detail · d` |
-| **Job** | Open sibling CLI / desk page · `esc` trail back | ticker `brokers`… · broker `buy/sell`… |
-| **Option** | Toggle optional panel | pre-open `why` · `auction+` · `warn` |
+| Kind | Activate means | Label examples |
+|------|----------------|----------------|
+| **Density** | Toggle brief ↔ detail on current stage body | **`[d] detail`** |
+| **Job** | Open sibling CLI / desk page · `esc` trail back | **`[b] brokers`** · **`[f] flow`** · **`[t] buy/sell`** |
+| **Option** | Toggle optional panel (no power letter) | `why` · `auction+` · `warn` |
 
 Jobs never invent Action. Options never re-score.
 
 ### TUI implementer notes (later · order)
 
-1. Shared `ChipBar` + `Chip` (or equivalent) in `src/adapters/tui/` — one CSS + focus behavior.  
+1. Shared `ChipBar` + `FlagChip` — `key` + `label` → paint `[k] label` (brass bold key).  
 2. Each chip: focusable control · click + Enter/Space.  
 3. Rely on Textual **default Tab** focus chain — do not reimplement Tab.  
-4. Stage `on_key` only for **documented power letters** + global `d` / `p` / `esc`.  
+4. Stage `on_key` only for **documented power letters** + global `d` / `p` / `esc` — letter must match keycap.  
 5. Wire stages in inventory order: Judge → Ticker → Pre-open inspect → Broker list → Broker home.  
-6. Visual tokens match mock `.flag-chip` (focus ring + `is-on`).
+6. Visual tokens match mock `.flag-chip` + `.chip-key` (brass) · peach focus/`is-on`.  
+7. Footer `kbd` uses the **same brass** as chip keys (navigation dialect).
 
 ---
 
@@ -185,40 +223,41 @@ Power keys are **stage-local** (only while that stage owns input).
 
 ### Judge (nested)
 
-| Chip | Kind | Power | Effect |
-|------|------|-------|--------|
-| **detail · d** | density | `d` | brief ↔ detail |
+| Chip (paint) | Kind | Power | Effect |
+|--------------|------|-------|--------|
+| **`[d] detail`** | density | `d` | brief ↔ detail |
 
 - Meta after bar: `brief` \| `detail`.  
 - **No** multi-chip wall. Limited = **banner** only · not a chip.  
-- Nav: click · Tab · Enter/Space · `d`.
+- Nav: click · Tab · Enter/Space · `d` (keycap teaches the letter).
 
 ### Ticker show (`v t`)
 
-| Chip | Kind | Power | CLI / effect |
-|------|------|-------|----------------|
-| **brokers** | job | **`b`** | `view ticker top-brokers` |
-| **flow** | job | **`f`** | `view ticker flow` (foreign flow summary / `broker_summaries`) |
-| **foreign** | job | **`o`** | `view ticker foreign-history` |
-| **dist** | job | **`x`** | `view ticker distribution` |
-| **fin** | job | **`n`** | `view ticker financials` |
-| **detail · d** | density | **`d`** | brief ↔ detail on **show** body |
+| Chip (paint) | Kind | Power | CLI / effect |
+|--------------|------|-------|----------------|
+| **`[b] brokers`** | job | **`b`** | `view ticker top-brokers` |
+| **`[f] flow`** | job | **`f`** | `view ticker flow` (foreign flow summary / `broker_summaries`) |
+| **`[o] foreign`** | job | **`o`** | `view ticker foreign-history` |
+| **`[x] dist`** | job | **`x`** | `view ticker distribution` |
+| **`[n] fin`** | job | **`n`** | `view ticker financials` |
+| **`[d] detail`** | density | **`d`** | brief ↔ detail on **show** body |
 
-- Chip label **`flow`** kept (CLI verb). Data is a summary table; power key is still **`f`**.  
+- Word **`flow`** kept (CLI verb); keycap **`[f]`** is the scan target.  
 - Job → sub-stage titled with CLI job name · bar remains · switch via chip or letter · `esc` → show.  
 - **`d` only when show body is visible** (not while a job table is front). Prefer: `esc` first, then `d`.  
 - Also: `p` plan · `esc` trail.  
-- Nav: click · Tab · Enter/Space · **`b f o x n d`**.
+- Nav: click · Tab · Enter/Space · **`b f o x n d`** (letters match keycaps).  
+- Optional footer cue (same brass kbd): `jobs [b][f][o][x][n] · dens [d] · esc`.
 
 ### Pre-open inspect
 
-| Chip | Kind | Power | Effect |
-|------|------|-------|--------|
+| Chip (paint) | Kind | Power | Effect |
+|--------------|------|-------|--------|
 | **why** | option | — | toggle why panel |
 | **auction+** | option | — | toggle auction+ panel |
 | **warn** | option | — | toggle warn panel |
 
-- Nav: click · Tab · Enter/Space only (no letter soup).
+- Nav: click · Tab · Enter/Space only (no letter soup · **no fake keycaps**).
 
 ### Broker list / stock desks (radar) — **no chip bar**
 
@@ -244,20 +283,20 @@ Shipped `BrokerDesk` / desk models outrank a thinner mock. Design mock must stay
 | Hero | **Day net** signed + unit · sub: lot · desk · tickers · tracked |
 | Side pulse | **Net5** (sessions) · **Buy streak** · **Δ1** · **Top buy** |
 | Dual heat | Top buy/sell stocks · bar + amount (mint/coral) |
-| Chip bar | buy/sell · flow · calendar · history · top 5 |
-| Legend | `t f c h m · v ticker · esc trail` |
+| Chip bar | `[t] buy/sell` · `[f] flow` · `[c] calendar` · `[h] history` · `[m] top 5` |
+| Legend | brass kbd: `t f c h m · v ticker · esc trail` |
 
-| Chip | Kind | Power | Effect |
-|------|------|-------|--------|
-| **buy/sell** | job | **`t`** | latest session dual heat |
-| **flow** | job | **`f`** | this desk day-net series |
-| **calendar** | job | **`c`** | ~1 month desk calendar |
-| **history** | job | **`h`** | per-ticker daily for desk |
-| **top 5** | job | **`m`** | multi-window top-5 matrix |
+| Chip (paint) | Kind | Power | Effect |
+|--------------|------|-------|--------|
+| **`[t] buy/sell`** | job | **`t`** | latest session dual heat |
+| **`[f] flow`** | job | **`f`** | this desk day-net series |
+| **`[c] calendar`** | job | **`c`** | ~1 month desk calendar |
+| **`[h] history`** | job | **`h`** | per-ticker daily for desk |
+| **`[m] top 5`** | job | **`m`** | multi-window top-5 matrix |
 
-- Same chip bar model (labels speak; no “Hub” word in UI).  
+- Same chip bar model + **keycap-in-chip** (brass `[k]`); no “Hub” word in UI.  
 - `v` → view ticker for desk top (1s #1) — not a chip.  
-- Ticker `f` ≠ broker `f` (different stages — both valid).  
+- Ticker `f` ≠ broker `f` (different stages — both valid; keycaps still show `[f]`).  
 - Nav: click · Tab · Enter/Space · **`t f c h m`**.
 
 ### Stages without chip bar
@@ -277,7 +316,7 @@ Accum (source badge only) · Broker list / stock desks (honesty in meta) · Plan
 - Panel set: `BRIEF_PANEL_KEYS` via  
   `src/application/services/ticker_dashboard_layout.py` · `panel_keys_for_mode(brief=True)`.  
 - CLI: brief ≈ `saham view ticker show TICKER --brief`.  
-- **`d` / `detail · d`** → detail = `FULL_PANEL_ORDER` / full show without `--brief`.  
+- **`d` / `[d] detail`** → detail = `FULL_PANEL_ORDER` / full show without `--brief`.  
 - Meta: **`brief`** (default) · **`detail`** · local cache. Never “full”.  
 - Paint may re-group hierarchy around panel keys (multi-surface keys stay).
 
@@ -320,7 +359,7 @@ Accum (source badge only) · Broker list / stock desks (honesty in meta) · Plan
 
 ```text
 View · ticker · BBCA · {job}          {job} · local cache
-[ brokers ][ flow* ][ foreign ][ dist ][ fin ][ detail · d ]
+[ [b] brokers ][ [f] flow* ][ [o] foreign ][ [x] dist ][ [n] fin ][ [d] detail ]
 
 ┌─ HERO (elevated · peach left accent) ──────────────────┐
 │  LAB (uppercase job story)                              │
@@ -444,7 +483,7 @@ Not a 3-row mini top table. Chip **brokers** / `b` opens the **same rich radar a
 ### Judge (nested · screen-shaped)
 - **Brief (default):** Action · Gate · Signal · Accum · Authority% · Family · Why · phase timeline · primary cards  
 - **Detail (`d`):** + decision stack · phase ledger · secondary / diagnostic cards (fixed order; omit if no data)  
-- Chip bar: **`detail · d`** only · meta brief|detail  
+- Chip bar: **`[d] detail`** only · meta brief|detail  
 - CLI: without / with `--detail`  
 - **Limited:** banner + meta · `j` / `r` — not a chip  
 
@@ -459,7 +498,7 @@ Not a 3-row mini top table. Chip **brokers** / `b` opens the **same rich radar a
 ### Ticker (`v t` · multi-surface with `view ticker *`)
 - **Brief (default)** / **Detail (`d`)** — same dual as Judge  
 - Freshness: Price · Flow · Bandar · Earn · Fund · Analyst · Own · IEV · Insider — **no `Sent`**  
-- Chip bar jobs: **brokers · flow · foreign · dist · fin** + **detail · d**  
+- Chip bar jobs: **`[b] brokers` · `[f] flow` · `[o] foreign` · `[x] dist` · `[n] fin`** + **`[d] detail`**  
 - Power: **`b f o x n d`** · `p` plan · `esc` trail  
 - Price mast: last · local close · chg **baseline-aligned**  
 - **Job desks:** shared hero · pulses · body (§3) — not monospaced dump  
