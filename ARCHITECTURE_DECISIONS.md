@@ -77,7 +77,8 @@ row.
 | View browse (stock vs desk, JSON/table, TUI parity) | [044](docs/adr/ADR-044-view-subject-taxonomy-ticker-vs-desk.md), [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md), [046](docs/adr/ADR-046-cli-response-envelope.md), [018](docs/adr/ADR-018-cli-command-depth-saham-view-broker-exception.md) |
 | CLI/TUI machine JSON and response envelope | [046](docs/adr/ADR-046-cli-response-envelope.md), [045](docs/adr/ADR-045-view-browse-parity-cli-tui-json-table.md), [011](docs/adr/ADR-011-offline-capable-cli-as-primary-interface.md), [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md) |
 | Screen discovery JSON / watchlist export | [046](docs/adr/ADR-046-cli-response-envelope.md), [030](docs/adr/ADR-030-accumulation-screener-evidence-split.md), [043](docs/adr/ADR-043-score-naming-vocabulary.md), [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md) |
-| AI and sentiment | [002](docs/adr/ADR-002-rule-first-ai-optional-design.md), [013](docs/adr/ADR-013-ai-agent-governance.md), [014](docs/adr/ADR-014-full-ai-mode-explicit-bypass-mode-rejected.md), [015](docs/adr/ADR-015-sentiment-analysis-classification.md), [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) |
+| AI and sentiment | [002](docs/adr/ADR-002-rule-first-ai-optional-design.md), [013](docs/adr/ADR-013-ai-agent-governance.md), [014](docs/adr/ADR-014-full-ai-mode-explicit-bypass-mode-rejected.md), [015](docs/adr/ADR-015-sentiment-analysis-classification.md), [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md), [060](docs/adr/ADR-060-read-only-tui-context-agent.md) |
+| TUI cockpit and optional context agent | [051](docs/adr/ADR-051-tui-opencode-cockpit-clean-break.md), [060](docs/adr/ADR-060-read-only-tui-context-agent.md), [040](docs/adr/ADR-040-manual-dependency-injection-and-composition-roots.md), [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md) |
 | Learning, tuning, evaluation, ML preparation | [049](docs/adr/ADR-049-database-owned-learning-pipeline-clean-break.md), [056](docs/adr/ADR-056-accum-corpus-session-observation-and-accum-path-labels.md), [027](docs/adr/ADR-027-risk-signal-learning-loop.md), [033](docs/adr/ADR-033-workflow-composition-artifact-boundaries.md), [038](docs/adr/ADR-038-point-in-time-enrichment-and-conservative-derived-fundamentals.md), [041](docs/adr/ADR-041-canonical-signal-evidence-input-boundary.md), [042](docs/adr/ADR-042-deterministic-champion-and-optional-model-challengers.md), [048](docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md), [057](docs/adr/ADR-057-evidence-diagnostic-evidence-corpus-vocabulary.md) |
 
 ## Amendment and migration map
@@ -98,6 +99,7 @@ row.
 | ADR-023 file-owned learning paths | ADR-049 | SQLite owns all learning artifacts; opening tracks and swing patch/review files are retired without migration |
 | ADR-032/033 `analyze swing` / overloaded `analyze` family | ADR-050 | Target verbs: `plan swing` (TradeSetup), `inspect *` (lenses), `assess pre-open` (frozen confirm); `analyze` top-level retired on implementation |
 | ADR-050 `plan` as full analysis desk / `screen` discovery-only | ADR-054 | `screen` = judge candidates (universe + single-ticker deep); `plan` = trade structure (horizon/SL/TP); phased migration |
+| ADR-051 AI chat non-goal | ADR-060 | The cockpit may host one optional read-only context assistant; general chat, tools, writes, CLI passthrough, and AI decision authority remain excluded |
 
 ## High-value implementation entry points
 
@@ -180,6 +182,9 @@ row.
 | [054](docs/adr/ADR-054-screen-judge-plan-structure-contract.md) | Screen judges candidates; plan designs trade structure | Accepted; contract + phased migration S0–S5; amends 032/033/050; policy A + structure-only plan CLI |
 | [055](docs/adr/ADR-055-macro-calendar-fetch.md) | Macro economic calendar fetch | Accepted |
 | [057](docs/adr/ADR-057-evidence-diagnostic-evidence-corpus-vocabulary.md) | Evidence vs diagnostic evidence vs corpus vocabulary | Accepted; operator/agent language; amends overloaded “evidence” usage |
+| [058](docs/adr/ADR-058-setup-phase-ledger-production-memory.md) | Setup phase ledger production memory | Accepted |
+| [059](docs/adr/ADR-059-production-policy-snapshot-for-ml-challenges.md) | Production policy snapshots for ML challenges | Accepted; active v2 snapshot contract |
+| [060](docs/adr/ADR-060-read-only-tui-context-agent.md) | Optional read-only TUI context agent | Accepted; amends ADR-051 for bounded accumulation-Judge explanation |
 
 ## Adding or changing a decision
 

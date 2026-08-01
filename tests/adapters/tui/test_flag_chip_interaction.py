@@ -240,35 +240,40 @@ def test_judge_detail_density_toggle_pure():
     assert "is-on" in chip.classes
 
 
-def test_preopen_why_and_auction_flags_pure():
+def test_preopen_judge_shaped_no_option_chip_wall():
+    """Pre-open inspect: Why+AUCTION always; no why/auction+/warn chips."""
     row = SimpleNamespace(
         ticker="BBRI",
+        action="—",
         iep="4,820",
         delta_pct="+1.8",
         iev="12.4M",
-        ncp="1.34",
-        delta_iev="1.34",
-        grade="A",
-        risk="clear",
+        ncp="LOCK",
+        delta_iev="+2.1M",
+        risk="~",
         evidence="ok",
         source=SimpleNamespace(
             trend_signal="BULLISH",
             opening_broker_backing_tag="BACKED",
             opening_broker_backing_score=0.9,
             opening_broker_buy_streak=3,
+            best_bid=4800,
+            best_offer=4820,
         ),
     )
     model = build_preopen_inspect_model(row, warnings=("w1",))
     keys = {f.key for f in model.flags}
-    assert "why" in keys and "auction_plus" in keys
-    by_key = {f.key: f for f in model.flags}
-    assert by_key["why"].available is True
-    assert by_key["auction_plus"].available is True or model.has_auction
-    assert "BULLISH" in "\n".join(model.auction_lines)
-    assert EXPANDABLE_FLAGS >= {"why", "auction_plus", "warn"}
-    # Compact default: panels closed until chip (paint detail_open=False)
-    assert model.has_auction is True
+    assert "why" not in keys
+    assert "auction_plus" not in keys
+    assert "warn" not in keys
+    assert "plan" not in keys
+    # Density detail only when extra depth
+    assert keys <= {"detail"}
+    assert "BULLISH" in "\n".join(model.auction_lines) or "BACKED" in "\n".join(model.auction_lines)
+    assert EXPANDABLE_FLAGS == frozenset()
+    assert model.has_auction_depth is True
     assert model.has_warn is True
+    assert model.why  # always
 
 
 def test_judge_detail_chip_label_contract():

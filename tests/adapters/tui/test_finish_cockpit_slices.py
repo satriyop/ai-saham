@@ -178,14 +178,16 @@ def test_judge_detail_toggle_and_ticker_d_dispatch():
 
 
 def test_prompt_rail_idle_operator_copy():
-    """Prompt rail idle copy — operator chrome, no authority slogans."""
-    idle_placeholder = "prompt · idle · : or / to focus"
+    """Prompt rail idle copy — OpenCode 2-row composer · no authority slogans."""
+    idle_placeholder = "type CLI or ask agent… · : or / to focus"
     idle_mode = "idle"
+    idle_sub = "· local · design only · not wired"
     affordance = "›"
-    assert "idle" in idle_placeholder
+    assert "focus" in idle_placeholder
     assert "not action" not in idle_placeholder.lower()
-    assert "CLI" not in idle_placeholder
     assert idle_mode == "idle"
+    assert "design only" in idle_sub
+    assert "not wired" in idle_sub
     assert affordance.strip()
     assert "ENTER" not in idle_placeholder
     assert "WATCH" not in idle_placeholder

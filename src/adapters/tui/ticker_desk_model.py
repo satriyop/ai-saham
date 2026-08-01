@@ -654,7 +654,11 @@ def _earnings_rows(records: Any) -> list[EarnRow]:
 
 
 def _secondary_kv(dashboard: Any) -> list[tuple[str, str]]:
-    """Collapsed secondary — presence only, not full CLI panels."""
+    """Legacy presence inventory (model field only — TUI never paints this).
+
+    Cockpit brief has no secondary stubs; detail is the remainder card stack.
+    Kept for scrapers / as_text, not for product chrome.
+    """
     out: list[tuple[str, str]] = []
     analyst = getattr(dashboard, "analyst", None)
     out.append(("Analyst", "present" if analyst is not None else "— local"))
@@ -666,7 +670,7 @@ def _secondary_kv(dashboard: Any) -> list[tuple[str, str]]:
     out.append(("IEV / NCP", "present" if iev else "—"))
     season = getattr(dashboard, "seasonality", None)
     out.append(("Seasonality", "present" if season is not None else "—"))
-    out.append(("Depth", "d expand · local panels"))
+    out.append(("Depth", "d · panel stack"))
     return out
 
 
@@ -797,29 +801,26 @@ def _lines_analyst(ac: Any) -> tuple[str, ...]:
             upside = None
     if avg is not None:
         try:
-            t = f"Target Rp{float(avg):,.0f} avg"
+            t = f"Target  Rp{float(avg):,.0f} avg"
             if upside is not None:
                 t += f" ({float(upside):+.1f}%)"
             lines.append(t)
         except (TypeError, ValueError):
-            lines.append(f"Target {avg}")
+            lines.append(f"Target  {avg}")
     lo = getattr(ac, "price_target_low", None)
     hi = getattr(ac, "price_target_high", None)
     if lo is not None and hi is not None:
         try:
-            lines.append(f"Range Rp{float(lo):,.0f} – Rp{float(hi):,.0f}")
+            lines.append(f"Range  Rp{float(lo):,.0f} – Rp{float(hi):,.0f}")
         except (TypeError, ValueError):
             pass
     updated = getattr(ac, "last_updated", None)
     fetched = getattr(ac, "fetched_at", None)
-    meta = []
     if updated:
-        meta.append(f"Updated {updated}")
+        lines.append(f"Updated  {updated}")
     if fetched is not None:
         d = getattr(fetched, "date", None)
-        meta.append(f"Fetched {d() if callable(d) else (d or fetched)}")
-    if meta:
-        lines.append(" · ".join(str(m) for m in meta))
+        lines.append(f"Fetched  {d() if callable(d) else (d or fetched)}")
     # Full consensus facts — no artificial thin cap
     return tuple(lines)
 

@@ -59,18 +59,27 @@ Ship Textual against **`.app` inside this mock**. Design-tools strip is for revi
 | 7 | Health | Honesty | Empty / zero / lag / ready posters |
 | 8 | Palette | Nav | Ctrl+P · peach selection |
 
-### Prompt rail (footer · design only)
+### Prompt rail (footer · OpenCode 2-row composer)
+
+**Lock:** match OpenCode Zen prominence — not a 1-line hairline that vanishes into status.
 
 | Piece | Spec |
 |-------|------|
-| Placement | Row **above** status bar (OpenCode-style chrome) |
-| Affordance | `›` + mono input + mode chip (`idle` · `agent` · `cli`) |
-| Focus | click rail · `:` or `/` |
+| Placement | Row **above** status bar (shell grid: stage · **prompt** · status) |
+| Height | **2 rows + air** · ~92px mock / height **6** TUI cells · **roomy pad above/below** typed line (OpenCode, not tight) |
+| Card | Elevated composer: full border · **left brass/peach accent bar (3px)** · dark fill `#121212` · padding ≥12–14px vertical |
+| Row 1 | `›` (brass) + mono free-text input · bright caret · min-height ~28px |
+| Row 2 | **Mode** (`idle` · `agent` · `cli`) brass/mint · `local · design only · not wired` · key hints `↵ · esc · :/` · gap 8px from row 1 |
+| Focus | click rail · `:` or `/` → composer elevates (soft brass glow + stronger left bar) |
 | Keys | `↵` submit mock · `esc` blur/clear · Ctrl+P still palette |
 | Later | agent adapter · CLI passthrough · never Action authority |
 | Now | toast `prompt · design only · not wired` |
 
+**Reject:** single-line hairline strip · mode chip only on the right of a flat bar · no left accent · same bg as status with no card.
+
 Not a chat bubble. Not a second palette. Free text only until hooked.
+
+**Mock:** `#promptRail` · `.prompt-composer` · `#promptInput` · `#promptMode` · `#promptSub` in `tui-cockpit-opencode.html`.
 
 ### Nested (no tab · no digit hotkey)
 

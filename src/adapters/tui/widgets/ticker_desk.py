@@ -73,13 +73,28 @@ _DEPTH_LABELS = (
 
 
 def _paint_depth_fact_line(ln: str) -> str:
-    """OpenCode card line: mute label · fog value · mint/coral for signed/BUY/SELL."""
+    """OpenCode card line: mute label · fog value · mint/coral for signed/BUY/SELL.
+
+    Mirrors cockpit ``.cli-panel .body .line`` (dim k / bright v / pos|neg).
+    """
     s = (ln or "").strip()
     if not s:
         return ""
-    # Table / mono rows (candles, IEV, insider): keep monospaced fog
-    if s.startswith("Date ") or "  " not in s[:20] and any(ch.isdigit() for ch in s[:12]):
-        # still allow BUY/SELL tint
+
+    # Mini-table header row — mute like mock ``th``
+    if s.startswith("Date ") and any(
+        h in s for h in ("Type", "Name", "Open", "IEP", "IEV", "Detail", "Action")
+    ):
+        return f"[#555555]{s}[/]"
+
+    # Table / mono data rows (candles, IEV, insider, corp)
+    looks_table = s[:10].count("-") >= 2 or (len(s) > 12 and s[0].isdigit() and "  " in s)
+    if looks_table or (
+        "  " not in s[:20]
+        and any(ch.isdigit() for ch in s[:12])
+        and not s.startswith("Target")
+        and "→" not in s
+    ):
         if " BUY" in f" {s}" or s.endswith(" BUY") or " BUY " in s:
             return f"[#6fbf8a]{s}[/]"
         if " SELL" in f" {s}" or s.endswith(" SELL") or " SELL " in s:
@@ -97,21 +112,30 @@ def _paint_depth_fact_line(ln: str) -> str:
         lab, _, rest = s.partition("  ")
         lab, rest = lab.strip(), rest.strip()
 
-    # Consensus / signed tone on values
     tone = "#e8e8e8"
-    u = rest.upper() if rest else s.upper()
-    if any(t in u for t in ("→ BUY", " BUY", "+")) and "SELL" not in u:
-        if "→" in rest or rest.upper().endswith("BUY") or "BUY" in u:
+    u = (rest or s).upper()
+    if "→ BUY" in s.upper() or s.rstrip().upper().endswith("BUY"):
+        tone = "#6fbf8a"
+    elif "→ SELL" in s.upper() or (s.rstrip().upper().endswith("SELL") and "BUY" not in u):
+        tone = "#c97a72"
+    elif rest.startswith("+") or " +" in rest or ("(+" in rest):
+        if "SELL" not in u:
             tone = "#6fbf8a"
-        elif rest.startswith("+") or " +" in rest:
-            tone = "#6fbf8a"
-    if any(t in u for t in ("SELL", "−", " -")) or rest.startswith("-") or rest.startswith("−"):
+    elif rest.startswith(("-", "−")) or " −" in rest:
         if "BUY" not in u:
             tone = "#c97a72"
-    if "→ BUY" in s or s.rstrip().endswith("BUY"):
-        tone = "#6fbf8a"
     if lab:
         return f"[#555555]{lab:14}[/] [{tone}]{rest}[/]"
+    # Consensus e.g. "35B · 2H · 0S → BUY"
+    if "→" in s:
+        left, _, right = s.partition("→")
+        right = right.strip()
+        r_tone = (
+            "#6fbf8a"
+            if "BUY" in right.upper()
+            else ("#c97a72" if "SELL" in right.upper() else "#e8e8e8")
+        )
+        return f"[#c8c8c8]{left.strip()}[/] → [{r_tone}]{right}[/]"
     return f"[{tone}]{s}[/]"
 
 
@@ -371,7 +395,7 @@ class TickerDesk(Vertical):
         margin-top: 0;
     }
 
-    /* Earnings + secondary side-by-side */
+    /* Earnings — full width (cockpit; no secondary presence stubs) */
     TickerDesk .td-earn-row {
         height: auto;
         margin-bottom: 1;
@@ -387,15 +411,16 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-earn-panel {
-        width: 3fr;
-        margin-right: 1;
+        width: 1fr;
+        margin-right: 0;
         margin-bottom: 0;
     }
 
+    /* Secondary presence map is design-rejected thin stubs — never painted */
     TickerDesk .td-secondary-panel {
-        width: 2fr;
-        margin-bottom: 0;
-        border-left: solid #4a5568;
+        display: none;
+        width: 0;
+        height: 0;
     }
 
     TickerDesk .td-sec-head {
@@ -426,20 +451,48 @@ class TickerDesk(Vertical):
         padding-top: 1;
     }
 
+    /* Detail density: OpenCode #tickerDepthBody / .cli-stack (cockpit mock) */
+    TickerDesk #td-more-sec {
+        height: auto;
+        margin: 0 0 1 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+    }
+
+    TickerDesk #td-depth-stack {
+        height: auto;
+        width: 100%;
+    }
+
+    /* .cli-panel — elevated card · brass title bar · no dump wall */
     TickerDesk .td-depth-panel {
         background: #141414;
         border: solid #1c1c1c;
-        border-left: solid #c9a68a;
-        padding: 0 1 1 1;
+        padding: 0;
         margin: 0 0 1 0;
         height: auto;
     }
 
-    /* Full CLI show dump under detail · d (not height-capped inventory) */
-    TickerDesk #td-more-body {
+    TickerDesk .td-depth-title {
+        color: #c9a68a;
+        text-style: bold;
+        background: #121212;
+        border-bottom: solid #1c1c1c;
+        padding: 0 1;
         height: auto;
+    }
+
+    TickerDesk .td-depth-body {
         color: #c8c8c8;
-        padding: 0 0 1 0;
+        padding: 0 1 1 1;
+        height: auto;
+    }
+
+    /* Legacy dump slot — always hidden; detail is card stack only */
+    TickerDesk #td-more-body {
+        display: none;
+        height: 0;
     }
 
     /* Flow job desk (design hero · pulses · sessions) */
@@ -743,6 +796,7 @@ class TickerDesk(Vertical):
                     id="td-earn-head",
                 )
                 yield Static("", classes="td-earn", id="td-earn-body")
+            # Mounted for id stability / tests — never painted (cockpit reject stubs)
             with Vertical(classes="td-section td-secondary-panel", id="td-secondary-sec"):
                 yield Static(
                     "SECONDARY · LOCAL PANELS",
@@ -751,19 +805,18 @@ class TickerDesk(Vertical):
                 )
                 yield Static("", classes="td-secondary", id="td-secondary-body")
 
-        with Vertical(classes="td-section", id="td-more-sec"):
-            yield Static(
-                "MORE · local panels",
-                classes="td-sec-head",
-                id="td-more-head",
-            )
-            # Precomposed depth panels (mock cli-stack) — filled on paint
+        # Detail (`d`): OpenCode panel stack — cockpit #tickerDepthBody / .cli-stack
+        # No density-restating section head; cards only when detail is-on.
+        with Vertical(id="td-more-sec"):
             with Vertical(id="td-depth-stack"):
                 for key in _TICKER_PANEL_FLAGS:
                     with Vertical(classes="td-depth-panel", id=f"td-depth-{key}"):
-                        yield Static("", id=f"td-depth-t-{key}", classes="td-sec-head")
-                        yield Static("", id=f"td-depth-b-{key}", classes="td-sec-body")
-            yield Static("", classes="td-sec-body", id="td-more-body")
+                        yield Static("", id=f"td-depth-t-{key}", classes="td-depth-title")
+                        yield Static("", id=f"td-depth-b-{key}", classes="td-depth-body")
+            # Legacy dump slot — never shown (reject CLI Rich paste as product surface)
+            yield Static("", id="td-more-body")
+            # Hidden head kept for scrapers that still query id
+            yield Static("", classes="td-sec-head", id="td-more-head")
 
         yield Static("", classes="td-footer", id="td-footer")
 
@@ -1097,39 +1150,41 @@ class TickerDesk(Vertical):
                 "[#555555]no earnings rows in local cache[/]"
             )
 
-        # Secondary — presence-only inventory (design hierarchy · not CLI dump)
-        sec = self.query_one("#td-secondary-sec", Vertical)
-        sec.display = True
-        if model.secondary:
-            sec_lines = [
-                f"[#555555]{str(k):12}[/]  [#c8c8c8]{v}[/]" for k, v in model.secondary[:8]
-            ]
-            self.query_one("#td-secondary-head", Static).update("SECONDARY · LOCAL PANELS")
-            self.query_one("#td-secondary-body", Static).update("\n".join(sec_lines))
-        else:
-            self.query_one("#td-secondary-head", Static).update("SECONDARY")
-            self.query_one("#td-secondary-body", Static).update(
-                "[#555555]no secondary inventory[/]"
-            )
+        # Secondary presence inventory is design-rejected (thin stubs). Never paint.
+        try:
+            sec = self.query_one("#td-secondary-sec", Vertical)
+            sec.display = False
+            self.query_one("#td-secondary-head", Static).update("")
+            self.query_one("#td-secondary-body", Static).update("")
+        except Exception:
+            pass
 
-        # Detail = OpenCode cli-stack cards (design cockpit), not CLI Rich dump.
-        # One card per FULL_PANEL_ORDER remainder key · full fact lines · honest empty.
-        head = self.query_one("#td-more-head", Static)
+        # Detail = OpenCode cli-stack cards (cockpit #tickerDepthBody), not CLI dump.
+        # One elevated card per FULL_PANEL_ORDER remainder · full facts · honest empty.
+        # No density-restating section head — state is [d] detail chip is-on only.
         depth_open = self._detail_all or bool(open_flags)
         more_sec = self.query_one("#td-more-sec", Vertical)
-        more_body = self.query_one("#td-more-body", Static)
-        more_body.display = False
-        more_body.update("")
+        try:
+            more_body = self.query_one("#td-more-body", Static)
+            more_body.display = False
+            more_body.update("")
+        except Exception:
+            pass
+        try:
+            head = self.query_one("#td-more-head", Static)
+            head.display = False
+            head.update("")
+        except Exception:
+            pass
         by_panel = {p.key: p for p in model.detail_panels}
         if depth_open:
             more_sec.display = True
-            head.update("DETAIL · panel stack · d · local cache")
             for key in _TICKER_PANEL_FLAGS:
                 panel_el = self.query_one(f"#td-depth-{key}", Vertical)
                 p = by_panel.get(key)
                 panel_el.display = True
                 title = (p.title if p else key.replace("_", " ")).upper()
-                self.query_one(f"#td-depth-t-{key}", Static).update(f"[#c9a68a]{title}[/]")
+                self.query_one(f"#td-depth-t-{key}", Static).update(title)
                 body_el = self.query_one(f"#td-depth-b-{key}", Static)
                 if p is None or p.status == "missing" or not p.lines:
                     hint = (
@@ -1137,11 +1192,14 @@ class TickerDesk(Vertical):
                         if p is not None
                         else "not cached"
                     )
+                    # Honest empty-slot (cockpit .empty-slot) — never invent facts
                     body_el.update(f"[#555555]{hint}[/]")
                     continue
-                body_el.update("\n".join(_paint_depth_fact_line(ln) for ln in p.lines if ln))
+                body_el.update(
+                    "\n".join(line for ln in p.lines if ln and (line := _paint_depth_fact_line(ln)))
+                )
         else:
-            # Brief default: mast only — hide depth stack
+            # Brief default: mast / pulse / earnings only — depth stack closed
             more_sec.display = False
             for key in _TICKER_PANEL_FLAGS:
                 try:
@@ -1151,8 +1209,9 @@ class TickerDesk(Vertical):
 
         self._paint_chip_bar()
 
+        # Footer: fixed word "detail" (chip is-on teaches state — never flip to "brief")
         foot = model.footer or ""
-        foot = foot.replace("d detail", "d detail").replace("d collapse", "d detail")
+        foot = foot.replace("d collapse", "d detail").replace("d brief", "d detail")
         if "d detail" not in foot and "b f o x n" not in foot:
             # Density only on show; jobs omit d (not contextual)
             if self._active_job == "fin":
@@ -1161,8 +1220,6 @@ class TickerDesk(Vertical):
                 foot = f"b f o x n jobs · {foot}".strip(" ·")
             else:
                 foot = f"b f o x n jobs · d detail · {foot}".strip(" ·")
-        if self._detail_all and not self._active_job:
-            foot = foot.replace("d detail", "d brief", 1)
         self.query_one("#td-footer", Static).update(
             f"[#555555]{foot}[/]\n[#d4b06a]{model.authority}[/]"
         )

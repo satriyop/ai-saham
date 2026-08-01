@@ -152,13 +152,13 @@ def _board_judgment(row: Any | None) -> tuple[str, str, str, str, str]:
     if _is_preopen_row(row):
         from src.adapters.tui.presenters.preopen_presenter import format_preopen_why
 
-        grade = str(getattr(row, "grade", "—") or "—")
+        action = str(getattr(row, "action", "—") or "—")
         risk = str(getattr(row, "risk", "—") or "—")
         why = format_preopen_why(row) or "—"
         return (
-            "—",
+            action,
             risk,
-            grade,
+            str(getattr(row, "ncp", "—") or "—"),
             str(getattr(row, "iep", "—") or "—"),
             why,
         )
@@ -274,4 +274,6 @@ def _is_accum_row(row: Any) -> bool:
 
 
 def _is_preopen_row(row: Any) -> bool:
+    if all(hasattr(row, k) for k in ("iep", "action", "risk", "delta_pct", "ncp")):
+        return True
     return all(hasattr(row, k) for k in ("iep", "grade", "risk", "delta_pct"))

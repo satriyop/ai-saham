@@ -42,7 +42,8 @@
 
  --sidebar-w: 220px;
  --status-h: 28px;
-      --prompt-h: 34px;
+      /* OpenCode 2-row composer · roomy vertical padding (not tight) */
+      --prompt-h: 92px;
  --radius: 6px;
  --radius-sm: 4px;
  }
@@ -641,26 +642,69 @@
  font-variant-numeric: tabular-nums;
  }
 
- /* prompt rail · agent / CLI free-text (design only · not wired) */
+ /* prompt rail · OpenCode 2-row composer (prominent · design only · not wired)
+     *
+     * Match product chrome of OpenCode Zen:
+     *  - outer rail padding above status
+     *  - elevated bordered card with LEFT brass/peach accent bar
+     *  - row 1: caret + free-text input
+     *  - row 2: mode · context · keys (Plan · model analog)
+     * Reject: single-line hairline strip that disappears into the footer.
+     */
     .prompt-rail {
       display: flex;
-      align-items: center;
-      gap: 8px;
+      align-items: stretch;
       height: var(--prompt-h);
-      padding: 0 12px;
+      /* Outer gutter so card is not flush to stage/status edges */
+      padding: 10px 12px 8px;
       border-top: 1px solid var(--border);
-      background: #090909;
+      background: #080808;
       min-width: 0;
+      box-sizing: border-box;
     }
-    .prompt-rail.is-focus {
-      box-shadow: inset 0 1px 0 rgba(201, 166, 138, 0.28);
+    .prompt-composer {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      /* OpenCode: generous air above/below typed line + meta */
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+      background: #121212;
+      border: 1px solid #2a2a2a;
+      border-left: 3px solid var(--sel-bg);
+      border-radius: var(--radius-sm);
+      padding: 14px 14px 12px;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+    }
+    .prompt-rail.is-focus .prompt-composer {
+      border-color: #3a3228;
+      border-left-color: var(--sel-bg);
+      background: #161412;
+      box-shadow:
+        0 0 0 1px rgba(201, 166, 138, 0.18),
+        0 2px 8px rgba(0, 0, 0, 0.35);
+    }
+    .prompt-row-input {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      min-height: 28px;
+      padding: 2px 0;
     }
     .prompt-prefix {
-      color: var(--sel-dim);
+      color: var(--sel-bg);
       font-family: var(--font-mono);
-      font-size: 13px;
+      font-size: 15px;
+      font-weight: 600;
       flex-shrink: 0;
       user-select: none;
+      line-height: 1.2;
+    }
+    .prompt-rail.is-focus .prompt-prefix {
+      color: var(--sel-bg);
+      text-shadow: 0 0 10px rgba(201, 166, 138, 0.35);
     }
     .prompt-input {
       flex: 1;
@@ -668,37 +712,67 @@
       background: transparent;
       border: 0;
       outline: none;
-      color: var(--text);
+      color: var(--text-bright);
       font-family: var(--font-mono);
-      font-size: 12.5px;
+      font-size: 13.5px;
       caret-color: var(--sel-bg);
-      padding: 0;
+      padding: 4px 0;
+      line-height: 1.5;
     }
     .prompt-input::placeholder { color: var(--text-mute); }
-    .prompt-meta {
+    .prompt-row-meta {
       display: flex;
       align-items: center;
       gap: 6px;
-      flex-shrink: 0;
+      min-width: 0;
+      min-height: 18px;
+      padding: 2px 0 0 25px; /* align under input text (prefix width + gap) */
       color: var(--text-mute);
-      font-size: 11px;
+      font-size: 11.5px;
       font-family: var(--font-mono);
       user-select: none;
+      line-height: 1.4;
     }
-    .prompt-meta .sep { color: var(--text-faint); }
+    .prompt-row-meta .sep { color: var(--text-faint); }
     .prompt-mode {
-      color: var(--text-dim);
+      color: var(--sel-bg);
+      font-weight: 600;
+      text-transform: capitalize;
+      flex-shrink: 0;
     }
-    .prompt-mode.is-agent { color: var(--sel-dim); }
+    .prompt-mode.is-agent { color: var(--sel-bg); }
     .prompt-mode.is-cli { color: var(--green); }
-    .prompt-meta kbd {
+    .prompt-mode.is-idle,
+    .prompt-mode:not(.is-agent):not(.is-cli) {
+      color: var(--sel-dim);
+    }
+    .prompt-sub {
+      color: var(--text-dim);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .prompt-hint {
+      margin-left: auto;
+      flex-shrink: 0;
+      color: var(--text-faint);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .prompt-hint kbd,
+    .prompt-row-meta kbd {
       font-family: var(--font-mono);
       font-size: 10.5px;
       color: var(--text-mute);
       border: 1px solid var(--border);
       border-radius: 3px;
       padding: 0 4px;
+      background: #0e0e0e;
     }
+    /* legacy hook names kept for scrapers */
+    .prompt-meta { display: contents; }
 
  /* status */
  .status {
@@ -3845,23 +3919,34 @@
  </aside>
  </div>
 
-      <!-- Prompt rail · free-text for future agent / CLI · design only -->
+      <!-- Prompt rail · OpenCode 2-row composer · free-text agent/CLI · design only -->
       <div class="prompt-rail" id="promptRail">
-        <span class="prompt-prefix" aria-hidden="true">›</span>
-        <input
-          id="promptInput"
-          class="prompt-input"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="type CLI or ask agent… · design only · not wired"
-          aria-label="Agent or CLI prompt"
-        />
-        <span class="prompt-meta">
-          <span class="prompt-mode" id="promptMode">idle</span>
-          <span class="sep">·</span>
-          <kbd>↵</kbd>
-        </span>
+        <div class="prompt-composer" id="promptComposer">
+          <div class="prompt-row-input">
+            <span class="prompt-prefix" aria-hidden="true">›</span>
+            <input
+              id="promptInput"
+              class="prompt-input"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="type CLI or ask agent… · : or / to focus"
+              aria-label="Agent or CLI prompt"
+            />
+          </div>
+          <div class="prompt-row-meta" id="promptMeta">
+            <span class="prompt-mode" id="promptMode">idle</span>
+            <span class="sep">·</span>
+            <span class="prompt-sub" id="promptSub">local · design only · not wired</span>
+            <span class="prompt-hint">
+              <kbd>↵</kbd>
+              <span class="sep">·</span>
+              <kbd>esc</kbd>
+              <span class="sep">·</span>
+              <kbd>:</kbd>/<kbd>/</kbd>
+            </span>
+          </div>
+        </div>
       </div>
 
       <footer class="status">
@@ -5691,7 +5776,15 @@
       const el = $("promptMode");
       if (!el) return;
       el.textContent = mode;
-      el.className = "prompt-mode" + (mode === "agent" ? " is-agent" : mode === "cli" ? " is-cli" : "");
+      el.className =
+        "prompt-mode" +
+        (mode === "agent" ? " is-agent" : mode === "cli" ? " is-cli" : " is-idle");
+      const sub = $("promptSub");
+      if (sub) {
+        if (mode === "agent") sub.textContent = "agent path · design only · not wired";
+        else if (mode === "cli") sub.textContent = "cli path · design only · not wired";
+        else sub.textContent = "local · design only · not wired";
+      }
     }
 
     function focusPromptRail() {

@@ -194,17 +194,54 @@ Screen {
     background: #0b0b0b;
 }
 
-/* Prompt rail · OpenCode chrome (non-Action) */
+/* Prompt rail · OpenCode 2-row composer (prominent · non-Action)
+ *
+ * Design lock: docs/design/tui-cockpit-opencode.md § Prompt rail
+ * Reject: 1-line hairline · tight flush text · no left accent.
+ * Adopt: elevated card · left brass bar · roomy pad above/below · row1+row2.
+ */
 #prompt-rail {
-    height: 3;
-    border-top: solid #181818;
-    padding: 0 1;
-    background: #0e0e0e;
-    align: left middle;
+    /* 6 cells: pad · input · air · meta · pad · border air (OpenCode roomy) */
+    height: 6;
+    width: 100%;
+    margin: 0 0 0 0;
+    padding: 1 1;
+    background: #121212;
+    border-top: solid #2a2a2a;
+    border-bottom: solid #2a2a2a;
+    border-left: solid #c9a68a;
+    border-right: solid #2a2a2a;
 }
 
 #prompt-rail.is-focus {
-    border-top: solid #c9a68a;
+    background: #161412;
+    border-top: solid #3a3228;
+    border-bottom: solid #3a3228;
+    border-left: solid #c9a68a;
+    border-right: solid #3a3228;
+}
+
+#prompt-row-input {
+    height: 1;
+    width: 100%;
+    align: left middle;
+    padding: 0;
+    margin-top: 0;
+}
+
+/* Spacer between typed line and mode meta (OpenCode air) */
+#prompt-row-gap {
+    height: 1;
+    width: 100%;
+    background: transparent;
+}
+
+#prompt-row-meta {
+    height: 1;
+    width: 100%;
+    align: left middle;
+    padding: 0 0 0 2;
+    color: #555555;
 }
 
 #prompt-affordance {
@@ -215,25 +252,30 @@ Screen {
 
 #prompt-input {
     width: 1fr;
-    background: #0e0e0e;
+    background: #121212;
     /* Kill Textual Input tall border (empty green box on stage) */
     border: none !important;
-    color: #d8d8d8;
+    color: #e8e8e8;
     padding: 0 1;
     height: 1;
 }
 
 #prompt-input:focus {
-    background: #141414;
+    background: #161412;
     border: none !important;
+}
+
+#prompt-rail.is-focus #prompt-input {
+    background: #161412;
 }
 
 #prompt-mode {
     width: auto;
-    min-width: 8;
-    color: #9b8fb8;
-    text-align: right;
-    padding: 0 1;
+    min-width: 6;
+    color: #a8896f;
+    text-style: bold;
+    text-align: left;
+    padding: 0 0 0 0;
 }
 
 #prompt-mode.is-agent {
@@ -242,6 +284,12 @@ Screen {
 
 #prompt-mode.is-cli {
     color: #6fbf8a;
+}
+
+#prompt-sub {
+    width: 1fr;
+    color: #7a7a7a;
+    padding: 0 0 0 1;
 }
 
 #evidence-strip {

@@ -159,9 +159,13 @@ def test_detail_paint_uses_card_stack_not_cli_box_dump():
             await pilot.pause(0.08)
             more = app.query_one("#td-more-sec")
             assert more.display is True
-            # Structured cards visible
+            # Cockpit: no density-restating section head above stack
+            head = app.query_one("#td-more-head", Static)
+            assert head.display is False
+            # Structured cli-panel cards visible
             analyst = app.query_one("#td-depth-analyst")
             assert analyst.display is True
+            assert "td-depth-panel" in analyst.classes
             title = app.query_one("#td-depth-t-analyst", Static).render()
             title_plain = title.plain if hasattr(title, "plain") else str(title)
             assert "ANALYST" in title_plain.upper()
@@ -177,9 +181,22 @@ def test_detail_paint_uses_card_stack_not_cli_box_dump():
             )
             assert "╭" not in dump_plain
             assert "dump only" not in dump_plain
+            assert dump_el.display is False
+            # Secondary presence stubs never painted (design reject)
+            sec = app.query_one("#td-secondary-sec")
+            assert sec.display is False
+            # Footer keeps fixed word "detail" (chip is-on teaches state)
+            foot = app.query_one("#td-footer", Static).render()
+            foot_plain = foot.plain if hasattr(foot, "plain") else str(foot)
+            assert "d detail" in foot_plain
+            assert "d brief" not in foot_plain
             # Candles card has OHLC facts
             cbody = app.query_one("#td-depth-b-candles", Static).render()
             cplain = cbody.plain if hasattr(cbody, "plain") else str(cbody)
             assert "6325" in cplain or "6,325" in cplain or "Open" in cplain
+            # Brief closes the stack
+            td.paint(model, detail_open=False)
+            await pilot.pause(0.05)
+            assert app.query_one("#td-more-sec").display is False
 
     asyncio.run(scenario())

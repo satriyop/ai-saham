@@ -87,22 +87,24 @@ def test_plan_text_from_structure_fields_only():
 def test_preopen_board_cells_contract_and_delta_tint():
     row = SimpleNamespace(
         ticker="BBRI",
+        action="ENTER",
         iep="4,820",
         delta_pct="+1.8",
         iev="12.4M",
-        ncp="0.92",
+        ncp="LOCK",
         delta_iev="+2.1M",
-        grade="A",
-        risk="clear",
+        risk="~",
     )
     cells = format_preopen_board_cells(row)
     assert len(cells) == 8
     plains = [c.plain if isinstance(c, Text) else str(c) for c in cells]
     assert plains[0] == "BBRI"
-    assert plains[1] == "4,820"
-    assert "+1.8" in plains[2]
-    assert plains[6] == "A"
-    assert "clear" in plains[7].lower()
+    assert plains[1] == "ENTER"
+    assert plains[2] == "4,820"
+    assert "+1.8" in plains[3]
+    assert plains[5] == "LOCK"
+    assert "+2.1M" in plains[6]
+    assert plains[7] == "~"
     d = format_preopen_delta_cell("+1.8")
     assert isinstance(d, Text)
     assert "+1.8" in d.plain
@@ -218,21 +220,22 @@ def test_health_posters_distinct():
 
 
 def test_preopen_and_broker_board_cell_contracts():
-    """Cell contracts for preopen grade/delta and broker day-net (no app mount)."""
+    """Cell contracts for preopen Act/NCP/delta and broker day-net (no app mount)."""
     pre_row = SimpleNamespace(
         ticker="BBRI",
+        action="—",
         iep="4,820",
         delta_pct="+1.8",
         iev="12.4M",
-        ncp="0.92",
-        delta_iev="+2.1M",
-        grade="A",
-        risk="clear",
+        ncp="disc",
+        delta_iev="—",
+        risk="—",
     )
     cells = format_preopen_board_cells(pre_row)
     plains = [c.plain if isinstance(c, Text) else str(c) for c in cells]
-    assert any("A" in p for p in plains)
+    assert any("disc" in p or "—" in p for p in plains)
     assert any("1.8" in p for p in plains)
+    assert not any(p == "A" for p in plains)
 
     broker_row = SimpleNamespace(
         code="YP",

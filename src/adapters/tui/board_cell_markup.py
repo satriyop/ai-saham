@@ -145,45 +145,73 @@ def format_net_cell(net: str) -> Text:
     return Text(s, style=_FOG)
 
 
-def format_preopen_grade_cell(grade: str) -> Text:
-    g = (grade or "—").strip() or "—"
-    u = g.upper()
-    if u == "A":
-        return Text(u, style=f"bold {_MINT}")
-    if u == "B":
-        return Text(u, style="bold #7aa2c4")
-    if u == "C":
-        return Text(u, style=f"bold {_BRASS}")
-    return Text(g, style=_MIST)
+def format_preopen_action_cell(action: str) -> Text:
+    """TradeSetup Action chip (ENTER/WATCH/…); honest — when discovery-only."""
+    a = (action or "—").strip() or "—"
+    u = a.upper()
+    if u in ENTER_LIKE or u == ACTION_ENTER:
+        return Text(u if u in ENTER_LIKE else a, style=f"bold {_MINT}")
+    if u in WATCH_LIKE or u == ACTION_WATCH:
+        return Text(u if u in WATCH_LIKE else a, style=f"bold {_BRASS}")
+    if u in AVOID_LIKE or u == ACTION_AVOID or u.startswith("BLOCKED"):
+        return Text(a, style=f"bold {_CORAL}")
+    if a in {"—", "-"}:
+        return Text("—", style=_MIST)
+    return Text(a, style=_FOG)
+
+
+def format_preopen_ncp_cell(ncp: str) -> Text:
+    """Lock/phase flag only — never intensity float styling as authority."""
+    n = (ncp or "—").strip() or "—"
+    u = n.upper()
+    if u == "LOCK":
+        return Text("LOCK", style=f"bold {_MINT}")
+    if u in {"DISC", "DISCOVERY"}:
+        return Text(n if n == "disc" else "disc", style=_BRASS)
+    if n in {"—", "-"}:
+        return Text("—", style=_MIST)
+    # Reject intensity-like values in paint (defensive)
+    try:
+        float(n)
+        return Text("—", style=_MIST)
+    except ValueError:
+        pass
+    return Text(n, style=_MIST)
 
 
 def format_preopen_risk_cell(risk: str) -> Text:
     r = (risk or "—").strip() or "—"
-    u = r.upper()
-    if u in {"CLEAR", "OPEN", "PASS"}:
+    if r in {"↑"}:
         return Text(r, style=f"bold {_MINT}")
-    if u in {ACTION_BLOCK, "BLOCKED", "FAIL"}:
+    if r in {"↓"}:
         return Text(r, style=f"bold {_CORAL}")
-    if u in {ACTION_WATCH, "WARN"}:
+    if r in {"~"}:
         return Text(r, style=f"bold {_BRASS}")
+    u = r.upper()
+    if u in {ACTION_BLOCK, "BLOCKED", "FAIL", "HIGH_RISK"}:
+        return Text(r, style=f"bold {_CORAL}")
+    if u in {ACTION_WATCH, "WARN", "MEDIUM_RISK"}:
+        return Text(r, style=f"bold {_BRASS}")
+    if r in {"—", "-"}:
+        return Text("—", style=_MIST)
     return Text(r, style=_MIST)
 
 
 def format_preopen_delta_cell(delta: str) -> Text:
-    """Signed Δ% heat for pre-open board (presentation only)."""
+    """Signed Δ% / locked ΔIEV heat for pre-open board (presentation only)."""
     return format_net_cell(delta)
 
 
 def format_preopen_board_cells(row: Any) -> tuple[Text | str, ...]:
-    """Cells for pre-open contract: Tkr IEP Δ% IEV NCP ΔIEV Grd Risk."""
+    """Cells for pre-open contract: Tkr · Act · IEP · Δ% · IEV · NCP · ΔIEV · Risk."""
     return (
         format_ticker_cell(str(getattr(row, "ticker", "?") or "?")),
+        format_preopen_action_cell(str(getattr(row, "action", "—") or "—")),
         format_plain_num(str(getattr(row, "iep", "—") or "—")),
         format_preopen_delta_cell(str(getattr(row, "delta_pct", "—") or "—")),
         format_plain_num(str(getattr(row, "iev", "—") or "—")),
-        format_plain_num(str(getattr(row, "ncp", "—") or "—")),
+        format_preopen_ncp_cell(str(getattr(row, "ncp", "—") or "—")),
         format_preopen_delta_cell(str(getattr(row, "delta_iev", "—") or "—")),
-        format_preopen_grade_cell(str(getattr(row, "grade", "—") or "—")),
         format_preopen_risk_cell(str(getattr(row, "risk", "—") or "—")),
     )
 

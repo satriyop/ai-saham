@@ -88,15 +88,16 @@ def _accum_facts(row: Any) -> list[str]:
 def _preopen_facts(row: Any) -> list[str]:
     from src.adapters.tui.presenters.preopen_presenter import format_preopen_why
 
-    grade = str(getattr(row, "grade", "—") or "—")
+    action = str(getattr(row, "action", "—") or "—")
     risk = str(getattr(row, "risk", "—") or "—")
     why = format_preopen_why(row) or "—"
     return [
         "[#9b8fb8]Board context (pre-open)[/]",
-        f"  grade {grade} · risk {risk}",
+        f"  Act {action} · risk {risk}",
         (
             f"  IEP {getattr(row, 'iep', '—')} · Δ% {getattr(row, 'delta_pct', '—')} · "
-            f"IEV {getattr(row, 'iev', '—')} · NCP {getattr(row, 'ncp', '—')}"
+            f"IEV {getattr(row, 'iev', '—')} · NCP {getattr(row, 'ncp', '—')} · "
+            f"ΔIEV {getattr(row, 'delta_iev', '—')}"
         ),
         f"  [#d4b06a]Why[/]  {why}",
     ]
@@ -107,4 +108,6 @@ def _is_accum_row(row: Any) -> bool:
 
 
 def _is_preopen_row(row: Any) -> bool:
+    if all(hasattr(row, k) for k in ("iep", "action", "risk", "delta_pct", "ncp")):
+        return True
     return all(hasattr(row, k) for k in ("iep", "grade", "risk", "delta_pct"))

@@ -1,8 +1,36 @@
 # Conversational Agent Architecture
 
-**Status:** Brainstorming note — not an ADR or implementation plan
+**Status:** Historical architecture note — re-vetted 2026-08-02; implementation
+sequencing superseded by
+[`roadmap_tui_ai_agent_implementation.md`](roadmap_tui_ai_agent_implementation.md)
 
 **Date:** 2026-07-14
+
+## 2026-08-02 re-vet
+
+The core boundary in this note still holds: AI must be an optional,
+non-authoritative conversational control plane over typed application
+capabilities. It must not become an alternate scoring, risk, `TradeSetup`,
+persistence, or evidence-authority path.
+
+The implementation premise and examples no longer describe the current
+product accurately:
+
+| Earlier claim | Current-code verdict |
+|---|---|
+| The product is primarily a CLI and an interactive interface is future work | **Stale.** `saham tui` is now an implemented Textual daily cockpit under ADR-051. |
+| A conversation adapter could be CLI, web, Telegram, or mobile | **Too broad for the next slice.** The first product target is the existing TUI prompt rail. External adapters remain later possibilities. |
+| The TUI needs a place for free-form interaction | **Implemented as chrome only.** `CockpitApp.on_input_submitted()` currently shows `not wired yet`; it does not call an agent or execute commands. |
+| Typed business tools should call application use cases | **Still binding.** The shipped TUI already shares application paths with the CLI through explicit composition and the multi-surface inventory. |
+| Existing provider integrations form an agent gateway | **Not implemented.** Current AI integrations are purpose-specific explainers/translators; there is no conversation orchestrator, agent tool registry, session contract, or agent-grade model port. |
+| Read and write tools can be designed together | **Premature for v1.** The first TUI agent slice must be read-only. Refresh, paper-journal writes, preferences, config, tuning, and any other durable mutation require later explicit approval contracts. |
+
+This file remains useful as architectural rationale and a long-horizon component
+catalog. It is not implementation-ready because several example tool names
+predate the current `screen` / `inspect` / `plan` product contracts and it does
+not account for the shipped cockpit state, worker lifecycle, prompt rail, or
+CLI↔TUI parity inventory. Use the superseding roadmap for implementation order,
+exact scope, and close gates.
 
 ## Question
 

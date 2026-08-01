@@ -1,7 +1,7 @@
 """Present-only Enter inspect for pre-open board rows.
 
 Text scrapers use this module; visual paint uses PreopenInspectDesk.
-Grade and Risk are taken from the board row — never recomputed.
+Act and Risk are taken from the board row — never recomputed / re-screened.
 
 Layer: Adapter (pure display)
 """
@@ -30,7 +30,7 @@ def present_preopen_engine_inspect(
     board_meta: str = "",
     warnings: tuple[str, ...] = (),
 ) -> PreOpenEngineInspectView:
-    """Build structured inspect text from board row (present-only)."""
+    """Build structured inspect text from board row (present-only, no re-screen)."""
     from src.adapters.tui.preopen_inspect_model import build_preopen_inspect_model
 
     model = build_preopen_inspect_model(
@@ -43,35 +43,34 @@ def present_preopen_engine_inspect(
     )
     ticker = model.ticker
     lines: list[str] = [
-        f"[bold #e8e8e8]Screen · pre-open · {ticker}[/]",
+        f"[bold #e8e8e8]Pre-open · {ticker}[/]",
         f"#{model.rank}/{model.total}",
     ]
     if model.board_meta:
         lines.append(f"[dim]Board[/]  {model.board_meta}")
     lines.append("")
-    lines.append("[#d4b06a]Snapshot[/]")
-    lines.append(f"  grade {model.grade} · risk {model.risk}")
-    lines.append(f"  ← Why: {model.why}")
+    lines.append(f"[#d4b06a]Hero[/]  {model.action}  ·  risk {model.risk}  ·  present-only")
+    lines.append(f"  IEP  {model.iep}   {model.delta_pct}")
     lines.append("")
     lines.append("[#9b8fb8]Levels[/]")
-    lines.append(f"  IEP {model.iep} · Δ% {model.delta_pct} · IEV {model.iev}")
-    lines.append(f"  NCP {model.ncp} · ΔIEV {model.delta_iev}")
-    lines.append("")
-    lines.append("[#9b8fb8]Auction / broker[/]")
-    for ln in model.auction_lines:
+    lines.append(f"  IEV {model.iev} · NCP {model.ncp} · ΔIEV {model.delta_iev}")
+    for ln in model.data_lines:
         lines.append(f"  {ln}")
     lines.append("")
-    lines.append("[#9b8fb8]Data[/]")
-    for ln in model.data_lines:
+    lines.append(f"[#d4b06a]← Why:[/] {model.why}")
+    lines.append("")
+    lines.append("[#9b8fb8]AUCTION[/]")
+    for ln in model.auction_lines:
         lines.append(f"  {ln}")
     if model.warn_lines:
         lines.append("")
-        lines.append("[#9b8fb8]Warn[/]")
+        lines.append("[#d4b06a]Warn[/]")
         for ln in model.warn_lines:
             lines.append(f"  {ln}")
+    if model.has_detail:
+        lines.append("")
+        lines.append("[#9b8fb8][d] detail[/]  available")
     lines.append("")
-    lines.append("[#9b8fb8]Flags[/]  why · auction+ · warn · d detail")
-    lines.append("")
-    lines.append("[dim]esc back · p plan · Ctrl+P · d detail[/]")
+    lines.append("[dim]esc board · d detail · p plan · v ticker · Ctrl+P[/]")
 
     return PreOpenEngineInspectView(text="\n".join(lines), ticker=ticker)

@@ -24,19 +24,20 @@ from src.domain.entities.broker_flow import BrokerType
 def test_preopen_inspect_model_flags_not_action():
     row = SimpleNamespace(
         ticker="BBRI",
+        action="—",
         iep="4,820",
         delta_pct="+1.8",
         iev="12.4M",
-        ncp="1.34",
-        delta_iev="1.34",
-        grade="A",
-        risk="clear",
+        ncp="LOCK",
+        delta_iev="+2.1M",
+        risk="~",
         evidence="ok",
         source=SimpleNamespace(
             trend_signal="BULLISH",
             opening_broker_backing_tag="BACKED",
             opening_broker_backing_score=0.9,
             opening_broker_buy_streak=3,
+            best_bid=4800,
         ),
     )
     model = build_preopen_inspect_model(
@@ -47,24 +48,29 @@ def test_preopen_inspect_model_flags_not_action():
         warnings=("note: snapshot path",),
     )
     assert model.ticker == "BBRI"
-    assert model.grade == "A"
-    assert model.has_auction is True
+    assert model.action == "—"
+    assert model.has_auction_depth is True
     assert model.has_warn is True
     keys = {f.key for f in model.flags}
-    assert keys == {"detail", "why", "auction_plus", "warn"}
+    # Judge-shaped: optional detail only — no why/auction+/warn/plan wall
+    assert "why" not in keys
+    assert "auction_plus" not in keys
+    assert "warn" not in keys
+    assert "plan" not in keys
+    assert keys <= {"detail"}
     assert model.body_contains_action_authority() is False
 
 
 def test_preopen_inspect_desk_hierarchy_paint():
     row = SimpleNamespace(
         ticker="BBRI",
+        action="—",
         iep="4,820",
         delta_pct="+1.8",
         iev="12.4M",
-        ncp="1.34",
-        delta_iev="1.34",
-        grade="A",
-        risk="clear",
+        ncp="LOCK",
+        delta_iev="+2.1M",
+        risk="~",
         evidence="ok",
         source=SimpleNamespace(
             trend_signal="BULLISH",
@@ -74,17 +80,15 @@ def test_preopen_inspect_desk_hierarchy_paint():
         ),
     )
     model = build_preopen_inspect_model(row, warnings=("w1",))
-    title = f"Inspect · {model.ticker}" if hasattr(model, "ticker") else model.ticker
+    title = f"Pre-open · {model.ticker}"
     assert "BBRI" in title or model.ticker == "BBRI"
-    assert model.grade == "A"
+    assert model.action == "—"
     assert "4,820" in model.iep or model.iep == "4,820"
     by_flag = {f.key: f for f in model.flags}
-    assert "why" in by_flag
-    ap = by_flag["auction_plus"]
-    assert "auction" in ap.label or ap.key == "auction_plus"
-    # Compact: panels closed until detail_open (paint-time)
-    assert model.has_auction is True
-    assert "BULLISH" in "\n".join(model.auction_lines)
+    assert "why" not in by_flag
+    assert "auction_plus" not in by_flag
+    assert model.auction_lines  # always-on second row
+    assert "BULLISH" in "\n".join(model.auction_lines) or "BACKED" in "\n".join(model.auction_lines)
 
 
 def test_broker_home_deep_flag_chips():

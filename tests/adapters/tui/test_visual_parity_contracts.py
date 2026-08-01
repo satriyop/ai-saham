@@ -91,8 +91,17 @@ def test_opencode_tokens_locked_in_theme():
         "#board-table",
         "#prompt-input",
         "#prompt-mode",
+        "#prompt-row-input",
+        "#prompt-row-meta",
+        "#prompt-sub",
     ):
         assert region in COCKPIT_CSS, region
+    # OpenCode 2-row composer prominence (roomy pad · not 1-line hairline)
+    rail_css = COCKPIT_CSS.split("#prompt-rail")[1][:500]
+    assert "height: 6" in rail_css
+    assert "border-left: solid #c9a68a" in rail_css
+    assert "padding: 1 1" in rail_css
+    assert "#prompt-row-gap" in COCKPIT_CSS
     # Forbidden journey/night-ink product markers not used as live surfaces
     for bad in FORBIDDEN_PRODUCT_MARKERS:
         if bad.startswith("#"):
@@ -225,7 +234,9 @@ def test_product_operator_paint_path_has_no_implementer_cli_or_design_jargon():
         'placeholder="prompt · idle · not Action',
     ):
         assert ban not in main_src, f"main.py chrome noise: {ban!r}"
-    assert 'placeholder="prompt · idle · : or / to focus"' in main_src
+    assert 'placeholder="type CLI or ask agent… · : or / to focus"' in main_src
+    assert 'id="prompt-sub"' in main_src
+    assert "prompt-row-meta" in main_src
     # chrome_cues loading body specifically
     from src.adapters.tui.chrome_cues import (
         broker_list_loading_body,

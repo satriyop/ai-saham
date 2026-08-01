@@ -76,6 +76,9 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         intentional_deltas=(
             "TUI pre-open board is IEV snapshot only (no full CLI pre-open flag surface)",
             "TUI Enter = present-only preopen inspect, not re-run",
+            "TUI board columns Tkr·Act·IEP·Δ%·IEV·NCP·ΔIEV·Risk; NCP=lock flag not intensity; "
+            "Act/ΔIEV honest — when snapshot lacks TradeSetup/locked baseline; "
+            "session strip Source·Phase·Funnel·window; inspect Judge-shaped (Why+AUCTION always)",
         ),
     ),
     DualSurfaceJob(

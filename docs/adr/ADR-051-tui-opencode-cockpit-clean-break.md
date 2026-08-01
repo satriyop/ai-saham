@@ -4,6 +4,9 @@
 
 **Status:** Accepted — Phases 0–5 implemented (2026-07-28)  
 **Date:** 2026-07-28  
+**Amended by:** [ADR-060](ADR-060-read-only-tui-context-agent.md), which permits
+one bounded, optional, read-only context assistant without changing cockpit or
+deterministic decision authority
 **Depends on:** [ADR-011](ADR-011-offline-capable-cli-as-primary-interface.md),
 [ADR-040](ADR-040-manual-dependency-injection-and-composition-roots.md),
 [ADR-050](ADR-050-cli-verb-contracts.md)  
@@ -66,7 +69,8 @@ cost more than a greenfield shell that reuses application use cases.
 
 - Making Textual mandatory
 - Broker execution
-- AI chat inside the cockpit
+- General AI chat, agent tools, or AI authority inside the cockpit. ADR-060
+  permits only its bounded read-only context-assistant contract.
 - Domain/scoring semantic changes (`NON_SEMANTIC` adapter work)
 
 ## Implementation phases (summary)

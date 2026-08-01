@@ -128,6 +128,12 @@ def test_prompt_rail_design_only_above_status():
     assert "not wired" in html.lower()
     # grid has prompt + status chrome
     assert "--prompt-h" in html or "prompt-rail" in html
+    # OpenCode 2-row composer prominence (not 1-line hairline)
+    assert "prompt-composer" in html
+    assert "prompt-row-input" in html
+    assert "prompt-row-meta" in html or 'id="promptMeta"' in html
+    assert 'id="promptSub"' in html or "prompt-sub" in html
+    assert "border-left: 3px solid" in html or "border-left:3px solid" in html.replace(" ", "")
 
 
 def test_detail_flags_present_for_code_richer_fields():

@@ -209,6 +209,7 @@ class CockpitApp(App[None]):
         self._market_context: Any | None = None
         self._preopen_snapshot_date: str = ""
         self._preopen_warnings: tuple[str, ...] = ()
+        self._preopen_session_strip: Any | None = None
         self._plan_ticker: str = ""
         self._plan_result: str = ""
         self._plan_structure: Any | None = None
@@ -287,15 +288,24 @@ class CockpitApp(App[None]):
                     yield DataTable(id="board-table")
                     yield Static("", id="evidence-strip")
                     yield Static(self._footer_hint(), id="board-footer")
-                    with Horizontal(id="prompt-rail"):
-                        yield Static("›", id="prompt-affordance")
-                        # compact: no Textual tall focus border (ghost green box on accum)
-                        yield Input(
-                            placeholder="prompt · idle · : or / to focus",
-                            id="prompt-input",
-                            compact=True,
-                        )
-                        yield Static("idle", id="prompt-mode")
+                    # OpenCode 2-row composer · left brass · roomy pad above/below
+                    with Vertical(id="prompt-rail"):
+                        with Horizontal(id="prompt-row-input"):
+                            yield Static("›", id="prompt-affordance")
+                            # compact: no Textual tall focus border (ghost green box)
+                            yield Input(
+                                placeholder="type CLI or ask agent… · : or / to focus",
+                                id="prompt-input",
+                                compact=True,
+                            )
+                        # Vertical air between typed line and mode meta
+                        yield Static("", id="prompt-row-gap")
+                        with Horizontal(id="prompt-row-meta"):
+                            yield Static("idle", id="prompt-mode")
+                            yield Static(
+                                "· local · design only · not wired",
+                                id="prompt-sub",
+                            )
             with Vertical(id="sidebar"):
                 yield Static("Session", classes="side-title first")
                 yield Static("Market   IDX", classes="side-line")
@@ -1676,7 +1686,7 @@ class CockpitApp(App[None]):
         if self._modal_blocks_board_keys():
             return
         try:
-            rail = self.query_one("#prompt-rail", Horizontal)
+            rail = self.query_one("#prompt-rail", Vertical)
             rail.add_class("is-focus")
             inp = self.query_one("#prompt-input", Input)
             inp.focus()
@@ -1696,6 +1706,13 @@ class CockpitApp(App[None]):
                 chip.add_class("is-agent")
             elif mode == "cli":
                 chip.add_class("is-cli")
+            sub = self.query_one("#prompt-sub", Static)
+            if mode == "agent":
+                sub.update("· agent path · design only · not wired")
+            elif mode == "cli":
+                sub.update("· cli path · design only · not wired")
+            else:
+                sub.update("· local · design only · not wired")
         except Exception:
             pass
 
@@ -1722,7 +1739,7 @@ class CockpitApp(App[None]):
         if text:
             self.notify("prompt · not wired yet", timeout=1.5)
         try:
-            rail = self.query_one("#prompt-rail", Horizontal)
+            rail = self.query_one("#prompt-rail", Vertical)
             rail.remove_class("is-focus")
             table = self.query_one("#board-table", DataTable)
             if table.display:
@@ -1734,7 +1751,7 @@ class CockpitApp(App[None]):
         if getattr(event.input, "id", None) != "prompt-input":
             return
         try:
-            self.query_one("#prompt-rail", Horizontal).remove_class("is-focus")
+            self.query_one("#prompt-rail", Vertical).remove_class("is-focus")
         except Exception:
             pass
 
@@ -2246,23 +2263,31 @@ class CockpitApp(App[None]):
     def _on_preopen_payload(self, payload: Any) -> None:
         self._recomputing = False
         self._board_kind = "preopen"
-        self._board_source = "live"
+        self._board_source = "snapshot"
         self._snapshot_freshness = ""
-        self._preopen_snapshot_date = str(getattr(payload, "snapshot_date", "") or "")
+        snap = getattr(payload, "snapshot_date", "") or ""
+        self._preopen_snapshot_date = snap.isoformat() if hasattr(snap, "isoformat") else str(snap)
         raw_warn = getattr(payload, "warnings", ()) or ()
         self._preopen_warnings = tuple(str(w) for w in raw_warn)
+        self._preopen_session_strip = None
         if self._preopen_presenter is not None:
             view = self._preopen_presenter.present(payload)
             self._rows = list(view.rows)
             self._meta = view.meta
+            self._preopen_session_strip = getattr(view, "session_strip", None)
             self.query_one("#side-preopen", Static).update(f"Pre-open {len(self._rows)}")
         else:
             self._rows = list(payload) if payload else []
             self._meta = f"pre-open · {len(self._rows)}"
-        self._board_title = "Screen · pre-open"
+        strip = getattr(self, "_preopen_session_strip", None)
+        if strip is not None:
+            self._board_title = f"Screen · pre-open · {strip.as_title_suffix()}"
+            self._status_note = strip.as_meta_line()
+        else:
+            self._board_title = "Screen · pre-open"
+            self._status_note = f"{len(self._rows)} candidates"
         self._mode = "local-first"
         self._row_index = 0
-        self._status_note = f"{len(self._rows)} graded"
         if not self._rows:
             self._board_kind = "preopen"
             self._stage = "empty"
@@ -2277,7 +2302,8 @@ class CockpitApp(App[None]):
         self._update_preopen_evidence()
         self._refresh_chrome()
         self.query_one("#board-table", DataTable).focus()
-        self.notify(f"Pre-open · {len(self._rows)} graded (local snapshot)", timeout=2.0)
+        n = len(self._rows)
+        self.notify(f"Pre-open · {n} candidates (local snapshot)", timeout=2.0)
 
     def _try_restore_accum_snapshot(self) -> bool:
         """Paint last-run accum board if present (no network). Returns True if painted."""
@@ -2412,8 +2438,11 @@ class CockpitApp(App[None]):
         is_preopen = self._stage == "preopen" or self._board_kind == "preopen"
         if is_preopen:
             from src.adapters.tui.board_cell_markup import format_preopen_board_cells
+            from src.adapters.tui.presenters.preopen_presenter import (
+                PREOPEN_BOARD_COLUMN_LABELS,
+            )
 
-            table.add_columns("Tkr", "IEP", "Δ%", "IEV", "NCP", "ΔIEV", "Grd", "Risk")
+            table.add_columns(*PREOPEN_BOARD_COLUMN_LABELS)
             for row in self._rows:
                 table.add_row(*format_preopen_board_cells(row))
         else:
@@ -2449,6 +2478,7 @@ class CockpitApp(App[None]):
             row,
             rank=self._row_index + 1,
             total=len(self._rows),
+            session_strip=getattr(self, "_preopen_session_strip", None),
         )
         self._evidence_text = focus.strip
         ev = self.query_one("#evidence-strip", Static)
@@ -3251,6 +3281,10 @@ class CockpitApp(App[None]):
     def _is_preopen_row(row: Any) -> bool:
         if row is None:
             return False
+        # Locked pre-open row shape (Act replaces Grd theater)
+        if all(hasattr(row, k) for k in ("iep", "action", "risk", "delta_pct", "ncp")):
+            return True
+        # Legacy test doubles that still expose grade
         return all(hasattr(row, k) for k in ("iep", "grade", "risk", "delta_pct"))
 
     def _format_row_detail(self, ticker: str, row: Any) -> str:
@@ -3295,11 +3329,12 @@ class CockpitApp(App[None]):
         # Unknown row shape: lean field dump
         lines = [f"[bold #e8e8e8]{ticker}[/]", ""]
         for key, label in (
+            ("action", "Act"),
             ("iep", "IEP"),
             ("delta_pct", "Δ%"),
             ("iev", "IEV"),
             ("ncp", "NCP"),
-            ("grade", "Grade"),
+            ("delta_iev", "ΔIEV"),
             ("risk", "Risk"),
             ("name", "Name"),
         ):
