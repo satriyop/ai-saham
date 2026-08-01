@@ -29,6 +29,9 @@ from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     LearningContractId,
 )
+from src.infrastructure.persistence.ihsg_candle_session_calendar import (
+    load_ihsg_candle_session_calendar,
+)
 from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
     SQLiteCorporateActionCalendarRepository,
 )
@@ -96,11 +99,25 @@ def accumulation_labels(
         AssessmentPurpose.ACCUMULATION_DISCOVERY,
         compatibility_id,
     )
+    market = SQLiteMarketRepository(resolved)
+    # Same IHSG-candle session authority as readiness (full cached IHSG span).
+    session_calendar = None
+    for ticker in ("IHSG", "^JKSE"):
+        span = market.get_date_range(ticker)
+        if span is not None:
+            session_calendar = load_ihsg_candle_session_calendar(
+                market,
+                coverage_start=span[0],
+                coverage_end=span[1],
+            )
+            if session_calendar is not None:
+                break
     use_case = GenerateAccumulationPricePathLabelsUseCase(
         observations=repo,
         labels=repo,
-        market_data=SQLiteMarketRepository(resolved),
+        market_data=market,
         corporate_actions=SQLiteCorporateActionCalendarRepository(resolved),
+        session_calendar=session_calendar,
     )
     labeled_at = datetime.now(IDX_TIMEZONE)
 

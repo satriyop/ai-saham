@@ -21,7 +21,12 @@ from src.application.services.accumulation_production_policy_descriptors import 
 from src.application.services.lean_observation_identity import (
     POLICY_SNAPSHOT_BINDING_CONTRACT_V2,
 )
-from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
+from src.domain.services.trading_session_calendar import (
+    IDX_TRADING_SESSIONS_CONTRACT,
+    PATH_LABEL_METRICS_SCHEMA_VERSION,
+    KnownTradingSessionCalendar,
+    session_calendar_digest,
+)
 from src.domain.value_objects.learning_artifacts import (
     ACCUM_POPULATION_AUTHORITY_CONTRACT,
     ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
@@ -125,6 +130,11 @@ _AVAILABLE_METRIC_KEYS: frozenset[str] = frozenset(
         "signal_date",
         "label_window_start",
         "label_window_end",
+        "label_window_sessions",
+        "session_calendar_contract",
+        "session_calendar_revision",
+        "session_calendar_digest",
+        "path_label_metrics_schema_version",
         "entry_reference_price",
         "close_return_pct",
         "max_forward_return_pct",
@@ -1079,8 +1089,7 @@ def _path_label_semantic_reasons(
             else:
                 entry = float(raw_entry)
             # Exact first N market sessions after signal — proven via
-            # KnownTradingSessionCalendar. Weekday-length arithmetic is never
-            # authoritative (holiday-crossing and shifted exact-length windows).
+            # KnownTradingSessionCalendar + persisted label_window_sessions.
             signal_date = parse_canonical_session_date(metrics.get("signal_date"))
             win_start = parse_canonical_session_date(metrics.get("label_window_start"))
             win_end = parse_canonical_session_date(metrics.get("label_window_end"))
@@ -1089,7 +1098,55 @@ def _path_label_semantic_reasons(
                 reasons.append(f"metrics.signal_date_malformed:{metrics.get('signal_date')!r}")
             if win_start is None or win_end is None:
                 reasons.append("metrics.label_window_dates_malformed")
+            metrics_schema = metrics.get("path_label_metrics_schema_version")
+            if metrics_schema != PATH_LABEL_METRICS_SCHEMA_VERSION:
+                reasons.append(
+                    "metrics.path_label_metrics_schema_version_invalid:"
+                    f"{metrics_schema!r}!=expected:{PATH_LABEL_METRICS_SCHEMA_VERSION}"
+                )
+            raw_sessions = metrics.get("label_window_sessions")
+            parsed_sessions: list[date] | None = None
+            if not isinstance(raw_sessions, (list, tuple)):
+                reasons.append(f"metrics.label_window_sessions_invalid:{raw_sessions!r}")
             else:
+                parsed_sessions = []
+                for item in raw_sessions:
+                    session = parse_canonical_session_date(item)
+                    if session is None:
+                        reasons.append(f"metrics.label_window_sessions_malformed:{item!r}")
+                        parsed_sessions = None
+                        break
+                    parsed_sessions.append(session)
+                if parsed_sessions is not None:
+                    if len(parsed_sessions) != horizon_days:
+                        reasons.append(
+                            "metrics.label_window_sessions_length:"
+                            f"{len(parsed_sessions)}!=expected:{horizon_days}"
+                        )
+                    if len(set(parsed_sessions)) != len(parsed_sessions):
+                        reasons.append("metrics.label_window_sessions_not_unique")
+                    if list(parsed_sessions) != sorted(parsed_sessions):
+                        reasons.append("metrics.label_window_sessions_not_sorted")
+                    if (
+                        win_start is not None
+                        and win_end is not None
+                        and parsed_sessions
+                        and (parsed_sessions[0] != win_start or parsed_sessions[-1] != win_end)
+                    ):
+                        reasons.append("metrics.label_window_sessions_endpoint_mismatch")
+            contract = metrics.get("session_calendar_contract")
+            if contract != IDX_TRADING_SESSIONS_CONTRACT:
+                reasons.append(
+                    f"metrics.session_calendar_contract_invalid:{contract!r}"
+                    f"!=expected:{IDX_TRADING_SESSIONS_CONTRACT!r}"
+                )
+            revision = metrics.get("session_calendar_revision")
+            if not isinstance(revision, str) or not revision.strip():
+                reasons.append(f"metrics.session_calendar_revision_invalid:{revision!r}")
+            digest = metrics.get("session_calendar_digest")
+            if not isinstance(digest, str) or not digest.strip():
+                reasons.append(f"metrics.session_calendar_digest_invalid:{digest!r}")
+            if win_start is not None and win_end is not None:
                 if win_start > win_end:
                     reasons.append("metrics.label_window_inverted")
                 if signal_date is not None and win_start <= signal_date:
@@ -1106,13 +1163,22 @@ def _path_label_semantic_reasons(
                             "metrics.label_window_sessions_unproven:"
                             f"signal={signal_date.isoformat()},n={horizon_days}"
                         )
-                    elif win_start != expected[0] or win_end != expected[-1]:
-                        reasons.append(
-                            "metrics.label_window_not_first_n_sessions:"
-                            f"got={win_start.isoformat()}..{win_end.isoformat()},"
-                            f"expected={expected[0].isoformat()}..{expected[-1].isoformat()},"
-                            f"n={horizon_days}"
-                        )
+                    else:
+                        if win_start != expected[0] or win_end != expected[-1]:
+                            reasons.append(
+                                "metrics.label_window_not_first_n_sessions:"
+                                f"got={win_start.isoformat()}..{win_end.isoformat()},"
+                                f"expected={expected[0].isoformat()}.."
+                                f"{expected[-1].isoformat()},n={horizon_days}"
+                            )
+                        if parsed_sessions is not None and tuple(parsed_sessions) != expected:
+                            reasons.append("metrics.label_window_sessions_not_first_n")
+                        expected_digest = session_calendar_digest(session_calendar)
+                        if isinstance(digest, str) and digest != expected_digest:
+                            reasons.append(
+                                "metrics.session_calendar_digest_mismatch:"
+                                f"stored={digest!r},expected={expected_digest!r}"
+                            )
             if observation is not None:
                 obs_session = observation_session_date(observation)
                 if (

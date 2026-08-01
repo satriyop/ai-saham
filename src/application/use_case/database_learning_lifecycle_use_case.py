@@ -14,6 +14,13 @@ from src.domain.ports.learning_artifact_repositories import (
     LearningOutcomeLabelRepository,
     LearningTrackSnapshotRepository,
 )
+from src.domain.services.trading_session_calendar import (
+    IDX_TRADING_SESSIONS_CONTRACT,
+    PATH_LABEL_METRICS_SCHEMA_VERSION,
+    KnownTradingSessionCalendar,
+    session_calendar_digest,
+    session_calendar_revision,
+)
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     EvaluationMethod,
@@ -192,10 +199,14 @@ class GenerateAccumulationPricePathLabelsUseCase:
     - AVAILABLE outcomes (SUCCESS/FAILURE/NEUTRAL)
     - UNAVAILABLE when a mechanical corporate action invalidates the window
 
-    Provisional conditions (missing entry, incomplete horizon, missing corporate-
-    action coverage) skip without writing a row so a later run can insert the
-    terminal label when data is ready. That avoids immutable UNAVAILABLE rows
-    permanently blocking AVAILABLE outcomes for the same observation/contract.
+    Provisional conditions (missing entry, incomplete horizon, missing session
+    calendar, missing ticker candle on a market session, missing corporate-action
+    coverage) skip without writing a row so a later run can insert the terminal
+    label when data is ready.
+
+    Session axis: inject the same KnownTradingSessionCalendar authority used by
+    readiness. First N market sessions after signal; one ticker candle required
+    per exact session date — never skip a hole to a later ticker candle.
     """
 
     def __init__(
@@ -205,11 +216,13 @@ class GenerateAccumulationPricePathLabelsUseCase:
         labels: LearningOutcomeLabelRepository,
         market_data: LearningMarketDataRepository,
         corporate_actions: LearningCorporateActionCalendarRepository,
+        session_calendar: KnownTradingSessionCalendar | None = None,
     ) -> None:
         self._observations = observations
         self._labels = labels
         self._market = market_data
         self._corporate_actions = corporate_actions
+        self._session_calendar = session_calendar
 
     def execute(self, request: GenerateLearningLabelsRequest) -> GenerateLearningLabelsResult:
         if request.purpose is not AssessmentPurpose.ACCUMULATION_DISCOVERY:
@@ -287,19 +300,33 @@ class GenerateAccumulationPricePathLabelsUseCase:
         if entry is None:
             # Provisional: capture bug or incomplete payload — do not lock a row.
             return None
-        candles = self._market.get_candles(ticker, start_date=signal_date)
-        forward = sorted(
-            (c for c in candles if c.date > signal_date),
-            key=lambda candle: candle.date,
-        )
-        if len(forward) < horizon_days:
-            # Provisional: wait for more sessions.
-            return None
-        window = forward[:horizon_days]
         if not coverage_available:
-            # Provisional: calendar may appear later.
+            # Provisional: corporate-action calendar may appear later.
             return None
-        if self._has_mechanical_corporate_action(ticker, window[0].date, window[-1].date):
+        if self._session_calendar is None:
+            # Provisional: market-session calendar required for first-N windows.
+            return None
+        expected_sessions = self._session_calendar.first_n_sessions_after(signal_date, horizon_days)
+        if expected_sessions is None:
+            # Provisional: insufficient proven market sessions after signal.
+            return None
+        candles = self._market.get_candles(
+            ticker,
+            start_date=expected_sessions[0],
+            end_date=expected_sessions[-1],
+        )
+        by_date = {c.date: c for c in candles}
+        window: list[Any] = []
+        for session in expected_sessions:
+            candle = by_date.get(session)
+            if candle is None:
+                # Missing ticker candle on a valid market session: provisional.
+                # Do not skip forward to a later candle.
+                return None
+            window.append(candle)
+        if self._has_mechanical_corporate_action(
+            ticker, expected_sessions[0], expected_sessions[-1]
+        ):
             return self._unavailable(
                 observation,
                 contract_id,
@@ -320,11 +347,17 @@ class GenerateAccumulationPricePathLabelsUseCase:
             outcome = "FAILURE"
         else:
             outcome = "NEUTRAL"
+        session_isos = [session.isoformat() for session in expected_sessions]
         metrics = {
             "ticker": ticker,
             "signal_date": signal_date.isoformat(),
-            "label_window_start": window[0].date.isoformat(),
-            "label_window_end": window[-1].date.isoformat(),
+            "label_window_start": expected_sessions[0].isoformat(),
+            "label_window_end": expected_sessions[-1].isoformat(),
+            "label_window_sessions": session_isos,
+            "session_calendar_contract": IDX_TRADING_SESSIONS_CONTRACT,
+            "session_calendar_revision": session_calendar_revision(self._session_calendar),
+            "session_calendar_digest": session_calendar_digest(self._session_calendar),
+            "path_label_metrics_schema_version": PATH_LABEL_METRICS_SCHEMA_VERSION,
             "entry_reference_price": float(entry),
             "close_return_pct": close_return,
             "max_forward_return_pct": max_forward,
