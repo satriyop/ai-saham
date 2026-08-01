@@ -123,14 +123,18 @@ def test_chip_bar_fin_period_between_jobs_and_density():
             period = app.query_one("#td-flag-period", FlagChip)
             assert period.power_key == "y"
             assert period.word == "quarterly"
+            # Starts context-off (hidden) until fin job arms it
+            assert "is-context-off" in period.classes
             period.set_word("annual")
             assert period.word == "annual"
-            # is-on only for annual when fin arms it
+            # Arm as fin sub-chip, then paint is-on for annual
+            period.set_context_visible(True)
             bar.paint_states(on_keys=("fin", "period"))
             assert "is-on" in period.classes
-            # Product rule: hide (not dim) when not fin — parent TickerDesk sets display
-            period.display = False
+            # Product rule: hide (not dim) when not fin
+            period.set_context_visible(False)
             assert period.display is False
+            assert "is-context-off" in period.classes
 
     asyncio.run(scenario())
 

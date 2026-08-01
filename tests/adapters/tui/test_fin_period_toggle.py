@@ -95,13 +95,17 @@ def test_fin_period_chip_flip_label_and_is_on_annual():
             # Off fin: fin sub-chip hidden (not dim-on-bar)
             assert period.power_key == "y"
             assert period.display is False
+            assert "is-context-off" in period.classes
+            assert period.size.width == 0
 
             desk_q = build_ticker_fin_desk_model("BBCA", _fin_results(period_type="quarter"))
             td.set_job_view("fin", title=desk_q.title, body=desk_q.as_text(), desk=desk_q)
             await pilot.pause(0.05)
             assert period.display is True
+            assert "is-context-off" not in period.classes
             assert period.word == "quarterly"
             assert "is-on" not in period.classes
+            assert period.size.width > 0
 
             app._ticker_fin_period = "annual"
             desk_a = build_ticker_fin_desk_model("BBCA", _fin_results(period_type="annual"))
@@ -116,11 +120,14 @@ def test_fin_period_chip_flip_label_and_is_on_annual():
             td.set_job_view("flow", title="flow", body="flow body")
             await pilot.pause(0.05)
             assert period.display is False
+            assert "is-context-off" in period.classes
+            assert period.size.width == 0
 
             # Leave fin → still hidden
             td.set_job_view(None)
             await pilot.pause(0.05)
             assert period.display is False
+            assert "is-context-off" in period.classes
 
     asyncio.run(scenario())
 

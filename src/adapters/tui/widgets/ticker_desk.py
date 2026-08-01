@@ -534,18 +534,13 @@ class TickerDesk(Vertical):
         ) = None
 
     def on_mount(self) -> None:
-        # Fin sub-chip starts hidden until [n] fin is selected
-        try:
-            period = self.query_one("#td-flag-period", FlagChip)
-            period.display = False
-            period.can_focus = False
-        except Exception:
-            pass
+        # Fin sub-chip must not paint until [n] fin is selected (design lock)
+        self._sync_fin_period_chip(armed=False)
 
     def compose(self) -> ComposeResult:
         yield Static("", classes="td-crumb", id="td-crumb")
 
-        # Chip bar: jobs + density. [y] period mounts in bar but paints only when fin front.
+        # Chip bar: jobs + density. [y] period is fin-context only (hidden until fin is-on).
         yield ChipBar(
             id="td-flags",
             chips=TICKER_JOB_CHIPS,
@@ -1082,6 +1077,43 @@ class TickerDesk(Vertical):
             f"[#555555]{foot}[/]\n[#d4b06a]{model.authority}[/]"
         )
 
+    def _fin_period_grain(self) -> str:
+        """CLI-parity grain from app · quarterly (default) | annual."""
+        fin_period = "quarterly"
+        try:
+            fin_period = (
+                str(getattr(self.app, "_ticker_fin_period", "quarterly") or "quarterly")
+                .strip()
+                .lower()
+            )
+        except Exception:
+            pass
+        if fin_period not in {"quarterly", "annual"}:
+            return "quarterly"
+        return fin_period
+
+    def _sync_fin_period_chip(self, *, armed: bool | None = None) -> None:
+        """Arm/disarm [y] period — painted only while fin job is front.
+
+        Design: hide (is-context-off), never dim-on-bar for show/other jobs.
+        """
+        fin_front = self._active_job == "fin" if armed is None else bool(armed)
+        grain = self._fin_period_grain()
+        period_word = "annual" if grain == "annual" else "quarterly"
+        try:
+            period = self.query_one("#td-flag-period", FlagChip)
+        except Exception:
+            return
+        if not fin_front:
+            period.set_context_visible(False)
+            return
+        period.set_word(period_word)
+        period.set_context_visible(True)
+        period.set_chip_state(
+            available=True,
+            expanded=(grain == "annual"),
+        )
+
     def _paint_chip_bar(self) -> None:
         on_keys: set[str] = set()
         if self._detail_all and not self._active_job:
@@ -1090,39 +1122,24 @@ class TickerDesk(Vertical):
             on_keys.add(self._active_job)
 
         # Fin period grain: **only in fin job context** (not dim-on-bar for other jobs).
-        # Hidden when fin not front · flip label · is-on when annual · y unbound off fin.
-        fin_period = "quarterly"
-        try:
-            app = self.app
-            fin_period = (
-                str(getattr(app, "_ticker_fin_period", "quarterly") or "quarterly").strip().lower()
-            )
-        except Exception:
-            pass
-        if fin_period not in {"quarterly", "annual"}:
-            fin_period = "quarterly"
-        period_word = "annual" if fin_period == "annual" else "quarterly"
         fin_front = self._active_job == "fin"
-        if fin_front and fin_period == "annual":
+        if fin_front and self._fin_period_grain() == "annual":
             on_keys.add("period")
 
         try:
             bar = self.query_one("#td-flags", ChipBar)
-            period_chip = bar.chip("period")
-            if period_chip is not None and fin_front:
-                period_chip.set_word(period_word)
-            # paint_states first; then enforce fin-only visibility (not dim-on-bar)
-            bar.paint_states(on_keys=on_keys)
-            if period_chip is not None:
-                period_chip.display = bool(fin_front)
-                period_chip.can_focus = bool(fin_front)
-                if not fin_front:
-                    period_chip.set_chip_state(available=False, expanded=False)
+            # Skip period in paint_states — armed only via _sync_fin_period_chip
+            bar.paint_states(on_keys=on_keys, skip_keys=("period",))
+            self._sync_fin_period_chip(armed=fin_front)
         except Exception:
             try:
                 self.query_one("#td-flag-detail", FlagChip).set_chip_state(
                     available=True, expanded=self._detail_all and not self._active_job
                 )
+            except Exception:
+                pass
+            try:
+                self._sync_fin_period_chip(armed=self._active_job == "fin")
             except Exception:
                 pass
 

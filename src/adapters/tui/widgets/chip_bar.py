@@ -136,12 +136,14 @@ class ChipBar(Horizontal):
                 id=f"{self._chip_id_prefix}-{flag_key}",
             )
         if self._include_fin_period:
-            # Binary toggle · flip label · power y · not a job
+            # Binary toggle · flip label · power y · not a job.
+            # Starts context-off (hidden) — parent arms only while fin is-on.
             yield FlagChip(
                 TICKER_FIN_PERIOD_FLAG,
                 "quarterly",
                 power_key=TICKER_FIN_PERIOD_POWER,
                 id=self._period_id,
+                classes="is-context-off",
             )
         if self._include_detail:
             # Design lock: [d] detail · is-on = detail · no brief meta
@@ -170,15 +172,22 @@ class ChipBar(Horizontal):
         dim_keys: Iterable[str] = (),
         warn_keys: Iterable[str] = (),
         available_default: bool = True,
+        skip_keys: Iterable[str] = (),
     ) -> None:
-        """Apply is-on / is-dim / warn to child chips."""
+        """Apply is-on / is-dim / warn to child chips.
+
+        ``skip_keys``: leave those chips alone (e.g. context-off fin period).
+        """
         on = set(on_keys)
         dim = set(dim_keys)
         warn = set(warn_keys)
+        skip = set(skip_keys)
         for child in self.children:
             if not isinstance(child, FlagChip):
                 continue
             key = child.flag_key
+            if key in skip or child.has_class("is-context-off"):
+                continue
             child.set_chip_state(
                 available=available_default and key not in dim,
                 expanded=key in on,

@@ -101,6 +101,18 @@ class FlagChip(Static):
         border: solid #d4b06a;
         text-style: none;
     }
+    /* Context sub-chips (e.g. fin [y] period): not painted outside parent job */
+    FlagChip.is-context-off {
+        display: none !important;
+        visibility: hidden;
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+    }
     """
 
     can_focus = True
@@ -153,6 +165,21 @@ class FlagChip(Static):
             warn=self.has_class("warn"),
         )
 
+    def set_context_visible(self, visible: bool) -> None:
+        """Show/hide job-local sub-chips (fin period). Hidden = not painted, not dim.
+
+        Design: hide/unmount context — never permanent dim-on-bar for other jobs.
+        """
+        if visible:
+            self.remove_class("is-context-off")
+            self.display = True
+            self.can_focus = True
+        else:
+            self.add_class("is-context-off")
+            self.display = False
+            self.can_focus = False
+            self.set_chip_state(available=False, expanded=False)
+
     def set_chip_state(
         self,
         *,
@@ -177,7 +204,9 @@ class FlagChip(Static):
         if warn:
             self.add_class("warn")
         if not available:
-            self.add_class("is-dim")
+            # Dim only when still painted; context-off chips stay fully hidden
+            if not self.has_class("is-context-off"):
+                self.add_class("is-dim")
             return
         if expanded:
             self.add_class("is-on")
