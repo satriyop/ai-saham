@@ -218,13 +218,17 @@ def format_signed_flow_cell(value: str) -> Text:
 
 
 def format_broker_list_cells(row: Any) -> tuple[Text | str, ...]:
-    """Broker list contract: Code Type AsOf DayNet Net5 Stk Δ1 # Top."""
+    """Broker list: Code Type AsOf DayNet Net3/5/7/10/20 Stk Δ1 # Top."""
     return (
         format_ticker_cell(str(getattr(row, "code", "?") or "?")),
         Text(str(getattr(row, "type_label", "—") or "—"), style=_MIST),
         format_plain_num(str(getattr(row, "as_of", "—") or "—")),
         format_signed_flow_cell(str(getattr(row, "day_net", "—") or "—")),
+        format_signed_flow_cell(str(getattr(row, "net3", "—") or "—")),
         format_signed_flow_cell(str(getattr(row, "net5", "—") or "—")),
+        format_signed_flow_cell(str(getattr(row, "net7", "—") or "—")),
+        format_signed_flow_cell(str(getattr(row, "net10", "—") or "—")),
+        format_signed_flow_cell(str(getattr(row, "net20", "—") or "—")),
         format_plain_num(str(getattr(row, "streak", "—") or "—")),
         format_signed_flow_cell(str(getattr(row, "delta1", "—") or "—")),
         format_plain_num(str(getattr(row, "tickers", "—") or "—")),

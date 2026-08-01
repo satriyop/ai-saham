@@ -30,7 +30,7 @@ Put implementer notes **only in this doc** (or code comments). Never as stage bo
 |-------|------------------|
 | Accum | `Ticker · Signal · Accum · Action · Phase · Streak · RSI · Net% · Disc% · Price · Gate` (`BOARD_COLUMN_LABELS`) |
 | Pre-open | `Tkr · IEP · Δ% · IEV · NCP · ΔIEV · Grd · Risk` |
-| Broker list | `Code · Type · AsOf · DayNet · Net5 · Stk · Δ1 · # · Top` |
+| Broker list | `Code · Type · AsOf · DayNet · Net3 · Net5 · Net7 · Net10 · Net20 · Stk · Δ1 · # · Top` |
 
 ---
 
@@ -349,7 +349,8 @@ Honesty lives in **title + meta + footer**, not cryptic chips. List *is* the sta
 | Surface | Title | Meta / footer honesty |
 |---------|-------|------------------------|
 | Tracked radar (`v b`) | `View · broker list` | `{n} desks · tracked · Enter home` |
-| Thin Net windows | (same title) | append **`· thin NetX (partial sessions)`** when any desk lacks full Net3/5/… sample |
+| Columns | (table) | `Code · Type · AsOf · DayNet · **Net3 · Net5 · Net7 · Net10 · Net20** · Stk · Δ1 · # · Top` — same Net ladder as stock desks |
+| Thin Net windows | (same title) | append **`· thin NetX (partial sessions)`** when any desk lacks full Net3/5/… sample · row values may show `*(used/X)` |
 
 Stock-scoped desks from ticker **`[b] brokers`** are **not** this list — they are an **on-ticker job surface** (see §3 · brokers).
 

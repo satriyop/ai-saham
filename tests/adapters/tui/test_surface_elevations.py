@@ -114,19 +114,28 @@ def test_broker_list_cells_contract_and_sign_tint():
         type_label="Local",
         as_of="07-29",
         day_net="+11.5B",
+        net3="+10.0B",
         net5="+38.2B",
+        net7="+40.0B",
+        net10="+50.0B",
+        net20="+60.0B",
         streak="4",
         delta1="+2.1B",
         tickers="18",
         top_buy="AMMN",
     )
     cells = format_broker_list_cells(row)
-    assert len(cells) == 9
+    # Code Type AsOf DayNet Net3 Net5 Net7 Net10 Net20 Stk Δ1 # Top
+    assert len(cells) == 13
     plains = [c.plain if isinstance(c, Text) else str(c) for c in cells]
     assert plains[0] == "YP"
     assert plains[3] == "+11.5B"
-    assert plains[4] == "+38.2B"
-    assert plains[8] == "AMMN"
+    assert plains[4] == "+10.0B"  # Net3
+    assert plains[5] == "+38.2B"  # Net5
+    assert plains[6] == "+40.0B"  # Net7
+    assert plains[7] == "+50.0B"  # Net10
+    assert plains[8] == "+60.0B"  # Net20
+    assert plains[12] == "AMMN"
     pos = format_signed_flow_cell("+11.5B")
     neg = format_signed_flow_cell("−6.2B")
     assert "+11.5B" in pos.plain

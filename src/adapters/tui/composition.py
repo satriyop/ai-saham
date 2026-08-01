@@ -538,16 +538,16 @@ def _broker_repo_and_foreign(db_path: Path):
     return SQLiteBrokerRepository(db_path), foreign
 
 
-# List radar only needs recent sessions (Net5 / streak / Δ1). Full history
-# was ~500k rows × N desks (~25s). ~45 calendar days ≈ enough trading sessions
-# for Net5 + a meaningful buy-streak without hydrating half the table.
-_BROKER_LIST_FLOW_LOOKBACK_DAYS = 45
+# List radar needs Net3–20 + streak. Full history was ~500k rows × N desks.
+# ~60 calendar days ≈ enough sessions for Net20 without hydrating the whole table.
+_BROKER_LIST_FLOW_LOOKBACK_DAYS = 60
 
 
 class _BrokerListLoader:
     """Tracked desks + multi-session pulse from broker_daily_flow (cache-only).
 
-    Radar columns: AsOf, DayNet, Net5, Streak, #, Top — not config codes only.
+    Radar columns: AsOf, DayNet, Net3/5/7/10/20, Streak, #, Top
+    (same Net ladder as stock desks / ticker brokers job).
 
     Performance: one batch query for all tracked codes, date-bounded lookback,
     and idx_bdf_broker_date (broker_code, date).
@@ -564,7 +564,12 @@ class _BrokerListLoader:
             from types import SimpleNamespace
 
             from src.adapters.shared.view_number_format import format_value
+            from src.adapters.shared.view_ticker_top_brokers_rows import (
+                STOCK_DESK_DISPLAY_NET_WINDOWS,
+                format_netx_display,
+            )
             from src.application.services.broker_desk_from_daily_flow import (
+                STOCK_DESK_NET_WINDOWS,
                 classify_desk_type,
                 desk_session_pulse,
             )
@@ -582,6 +587,7 @@ class _BrokerListLoader:
             flows_by_code = (
                 repo.get_broker_daily_flows_for_codes(codes, start_date=start) if codes else {}
             )
+            net_windows = STOCK_DESK_NET_WINDOWS  # 3, 5, 7, 10, 20
 
             rows: list[Any] = []
             for code_u in codes:
@@ -594,7 +600,8 @@ class _BrokerListLoader:
                     label = "unknown"
 
                 flows = flows_by_code.get(code_u, [])
-                pulse = desk_session_pulse(flows) if flows else None
+                pulse = desk_session_pulse(flows, net_windows=net_windows) if flows else None
+                empty_nets = {f"net{w}": "—" for w in STOCK_DESK_DISPLAY_NET_WINDOWS}
                 if pulse is None:
                     rows.append(
                         SimpleNamespace(
@@ -603,7 +610,7 @@ class _BrokerListLoader:
                             name="—",
                             as_of="—",
                             day_net="—",
-                            net5="—",
+                            **empty_nets,
                             streak="—",
                             delta1="—",
                             day_net_sort=Decimal("0"),
@@ -611,6 +618,7 @@ class _BrokerListLoader:
                             tickers="—",
                             top_buy="—",
                             has_data=False,
+                            has_partial_netx=False,
                         )
                     )
                     continue
@@ -637,6 +645,18 @@ class _BrokerListLoader:
                     sign = "+" if pulse.delta1 > 0 else ""
                     delta1_s = f"{sign}{format_value(pulse.delta1)}"
 
+                nets: dict[str, str] = {}
+                partial = False
+                for w in STOCK_DESK_DISPLAY_NET_WINDOWS:
+                    used = int(pulse.sessions_for(w) or 0)
+                    nets[f"net{w}"] = format_netx_display(
+                        pulse.net_for(w),
+                        sessions_used=used,
+                        window=w,
+                    )
+                    if 0 < used < w:
+                        partial = True
+
                 rows.append(
                     SimpleNamespace(
                         code=code_u,
@@ -644,7 +664,7 @@ class _BrokerListLoader:
                         name=str(name)[:16],
                         as_of=as_of.isoformat(),
                         day_net=format_value(pulse.day_net),
-                        net5=format_value(pulse.net5),
+                        **nets,
                         streak=str(pulse.buy_streak),
                         delta1=delta1_s,
                         day_net_sort=pulse.day_net,
@@ -652,6 +672,7 @@ class _BrokerListLoader:
                         tickers=str(ticker_n),
                         top_buy=top_buy,
                         has_data=True,
+                        has_partial_netx=partial,
                     )
                 )
 

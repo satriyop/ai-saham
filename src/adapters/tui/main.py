@@ -2288,10 +2288,24 @@ class CockpitApp(App[None]):
         table = self.query_one("#board-table", DataTable)
         table.clear(columns=True)
         if self._stage == "broker-list":
-            # Desk radar: DayNet + Net5 + buy-streak (+ Δ1) from cache
+            # Desk radar: DayNet + Net3/5/7/10/20 + streak (+ Δ1) — same ladder as stock desks
             from src.adapters.tui.board_cell_markup import format_broker_list_cells
 
-            table.add_columns("Code", "Type", "AsOf", "DayNet", "Net5", "Stk", "Δ1", "#", "Top")
+            table.add_columns(
+                "Code",
+                "Type",
+                "AsOf",
+                "DayNet",
+                "Net3",
+                "Net5",
+                "Net7",
+                "Net10",
+                "Net20",
+                "Stk",
+                "Δ1",
+                "#",
+                "Top",
+            )
             for row in self._broker_rows:
                 table.add_row(*format_broker_list_cells(row))
             if self._broker_rows:
