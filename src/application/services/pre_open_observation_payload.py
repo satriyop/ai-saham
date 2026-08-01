@@ -25,7 +25,7 @@ from src.domain.value_objects.pre_open_signal_evidence import (
 )
 from src.domain.value_objects.signal_artifact_identity import SemanticCompatibilityId
 from src.domain.value_objects.signal_artifact_schema import (
-    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    PRE_OPEN_OBSERVATION_PAYLOAD_SCHEMA_VERSION,
 )
 from src.domain.value_objects.signal_assessment import (
     PRE_OPEN_AUCTION_DIRECTION_IDENTITY,
@@ -168,7 +168,7 @@ def build_pre_open_observation_payload(
         regime_payload = str(market_regime)
 
     return {
-        "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+        "schema_version": PRE_OPEN_OBSERVATION_PAYLOAD_SCHEMA_VERSION,
         "artifact_type": "pre_open_candidate_observation",
         "signal_assessment_identity": (
             signal_summary.identity.to_dict() if signal_summary is not None else None
