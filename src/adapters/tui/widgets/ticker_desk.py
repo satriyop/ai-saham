@@ -1258,25 +1258,27 @@ class TickerDesk(Vertical):
             pass
 
     def _paint_brokers_desk(self, desk: TickerBrokersDeskModel) -> None:
-        """On-ticker stock desks radar · same chip shell as flow/foreign/dist."""
+        """On-ticker stock desks radar · Net3/5/7/10/20 · no hero essay noise."""
         self._set_dist_dual_visible(False)
         self._paint_job_hero_pulses(desk)
 
         if desk.empty or not desk.rows:
-            self.query_one("#td-flow-days-head", Static).update("STOCK DESKS · RADAR")
+            self.query_one("#td-flow-days-head", Static).update("STOCK DESKS")
             self.query_one("#td-flow-days", Static).update(
                 f"[#555555]no top desks · {desk.fetch_hint}[/]"
             )
             return
 
         self.query_one("#td-flow-days-head", Static).update(
-            f"STOCK DESKS · {len(desk.rows)} · ↑↓ · ENTER HOME"
+            f"RADAR · {len(desk.rows)} · DayNet · Net3/5/7/10/20"
         )
+        # Compact headers — full Net ladder (design / ticker-desks parity)
         head = (
-            f"[#555555]{'':1}{'Code':5}[/]  [#555555]{'Type':8}[/]  "
-            f"[#555555]{'Role':5}[/]  [#555555]{'DayNet':>10}[/]  "
-            f"[#555555]{'Net5':>10}[/]  [#555555]{'Stk':>4}[/]  "
-            f"[#555555]{'Δ1':>10}[/]"
+            f"[#555555]{'':1}{'Code':4}[/] [#555555]{'Type':7}[/] [#555555]{'R':3}[/] "
+            f"[#555555]{'Day':>8}[/] "
+            f"[#555555]{'N3':>7}[/] [#555555]{'N5':>7}[/] [#555555]{'N7':>7}[/] "
+            f"[#555555]{'N10':>7}[/] [#555555]{'N20':>7}[/] "
+            f"[#555555]{'St':>3}[/] [#555555]{'Δ1':>7}[/]"
         )
         lines = [head]
         sel = int(desk.selected_index or 0)
@@ -1288,15 +1290,18 @@ class TickerDesk(Vertical):
                 else ("#d4b06a" if r.type_label.lower().startswith("g") else "#a0a0a0")
             )
             role_c = "#6fbf8a" if r.role.lower() == "buy" else "#c97a72"
-            partial = " *" if r.has_partial else ""
+            role_s = (r.role or "—")[:3]
+            type_s = (r.type_label or "—")[:7]
+            partial = "*" if r.has_partial else " "
             lines.append(
-                f"{mark}[#e8e8e8]{r.code:5}[/]  [{type_c}]{r.type_label:8}[/]  "
-                f"[{role_c}]{r.role:5}[/]  [#c8c8c8]{r.day_net:>10}[/]  "
-                f"[#c8c8c8]{r.net5:>10}[/]  [#a0a0a0]{r.streak:>4}[/]  "
-                f"[#c8c8c8]{r.delta1:>10}[/]{partial}"
+                f"{mark}[#e8e8e8]{r.code:4}[/] [{type_c}]{type_s:7}[/] "
+                f"[{role_c}]{role_s:3}[/] "
+                f"[#c8c8c8]{r.day_net:>8}[/] "
+                f"[#c8c8c8]{r.net3:>7}[/] [#c8c8c8]{r.net5:>7}[/] "
+                f"[#c8c8c8]{r.net7:>7}[/] [#c8c8c8]{r.net10:>7}[/] "
+                f"[#c8c8c8]{r.net20:>7}[/] "
+                f"[#a0a0a0]{r.streak:>3}[/] [#c8c8c8]{r.delta1:>7}[/]{partial}"
             )
-        if any(r.has_partial for r in desk.rows):
-            lines.append("[#555555]* partial NetX — cached sessions only[/]")
         self.query_one("#td-flow-days", Static).update("\n".join(lines))
 
     def _paint_job_and_chips_only(self) -> None:

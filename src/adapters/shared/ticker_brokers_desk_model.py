@@ -3,6 +3,9 @@
 Same data as ``view ticker top-brokers`` / ticker-desks radar, but **on-ticker**
 job shell (not an independent stage). Esc → ticker show · chips switch jobs.
 
+Radar columns: DayNet · Net3/5/7/10/20 · Stk · Δ1.
+No implementer noise in hero sub (no tops_scope_note essays).
+
 Layer: Adapter shared (pure presentation · CLI + TUI)
 """
 
@@ -11,6 +14,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
+
+# Match STOCK_DESK_NET_WINDOWS / ticker-desks radar
+_NET_WINDOWS: tuple[int, ...] = (3, 5, 7, 10, 20)
 
 
 @dataclass(frozen=True)
@@ -28,7 +34,11 @@ class BrokersDeskRow:
     role: str
     as_of: str
     day_net: str
+    net3: str
     net5: str
+    net7: str
+    net10: str
+    net20: str
     streak: str
     delta1: str
     has_partial: bool = False
@@ -62,18 +72,18 @@ class TickerBrokersDeskModel:
             self.title,
             "",
             f"{self.hero_lab}  {self.hero_big}",
-            self.hero_sub,
             "",
-            "  ".join(f"{p.label} {p.value}" for p in self.pulses),
-            "",
-            f"{'Code':6} {'Type':8} {'Role':5} {'DayNet':>10} {'Net5':>10} {'Stk':>4} {'Δ1':>10}",
-            "─" * 58,
+            f"{'Code':5} {'Type':8} {'Role':4} {'Day':>8} "
+            f"{'N3':>8} {'N5':>8} {'N7':>8} {'N10':>8} {'N20':>8} "
+            f"{'Stk':>3} {'Δ1':>8}",
+            "─" * 72,
         ]
         for i, r in enumerate(self.rows):
             mark = "›" if i == self.selected_index else " "
             lines.append(
-                f"{mark}{r.code:5} {r.type_label:8} {r.role:5} "
-                f"{r.day_net:>10} {r.net5:>10} {r.streak:>4} {r.delta1:>10}"
+                f"{mark}{r.code:4} {r.type_label[:8]:8} {r.role:4} "
+                f"{r.day_net:>8} {r.net3:>8} {r.net5:>8} {r.net7:>8} "
+                f"{r.net10:>8} {r.net20:>8} {r.streak:>3} {r.delta1:>8}"
             )
         lines.append("")
         lines.append(self.footer)
@@ -93,11 +103,9 @@ def build_ticker_brokers_desk_model(
     ticker_u = str(ticker).upper()
     hint = fetch_hint or f"saham fetch market {ticker_u}"
     title = f"View · ticker · {ticker_u} · brokers"
-    footer = (
-        "↑↓ select · Enter desk home · esc show · chips switch · "
-        "CLI · saham view ticker top-brokers · browse only"
-    )
-    story = "Stock desks radar · top brokers for this ticker.\nEnter opens desk home · not Action."
+    footer = "↑↓ · Enter desk · esc show · chips switch · browse only"
+    # Empty story — no essay under radar (design: reject noise)
+    story = ""
     raw = list(rows or ())
     desk_rows: list[BrokersDeskRow] = []
     for r in raw:
@@ -108,7 +116,11 @@ def build_ticker_brokers_desk_model(
                 role=str(getattr(r, "role", "—") or "—"),
                 as_of=str(getattr(r, "as_of", "—") or "—")[:10],
                 day_net=str(getattr(r, "day_net", "—") or "—"),
+                net3=str(getattr(r, "net3", "—") or "—"),
                 net5=str(getattr(r, "net5", "—") or "—"),
+                net7=str(getattr(r, "net7", "—") or "—"),
+                net10=str(getattr(r, "net10", "—") or "—"),
+                net20=str(getattr(r, "net20", "—") or "—"),
                 streak=str(getattr(r, "streak", "—") or "—"),
                 delta1=str(getattr(r, "delta1", "—") or "—"),
                 has_partial=bool(
@@ -126,6 +138,7 @@ def build_ticker_brokers_desk_model(
     elif desk_rows:
         as_of_s = desk_rows[0].as_of
 
+    # Keep note only for internal/meta callers — never paint as hero essay
     note_s = (note or "").strip()
     n = len(desk_rows)
     sel = max(0, min(int(selected_index), n - 1)) if n else 0
@@ -133,7 +146,6 @@ def build_ticker_brokers_desk_model(
 
     foreign_n = sum(1 for r in desk_rows if r.type_label.lower().startswith("f"))
     buy_n = sum(1 for r in desk_rows if r.role.lower() == "buy")
-    partial_n = sum(1 for r in desk_rows if r.has_partial)
 
     if empty:
         return TickerBrokersDeskModel(
@@ -145,12 +157,12 @@ def build_ticker_brokers_desk_model(
             hero_lab=f"STOCK DESKS · {ticker_u}",
             hero_big="—",
             hero_tone="neutral",
-            hero_sub=f"not cached · no top desks · Hint: {hint}",
+            hero_sub=f"Hint: {hint}",
             story=story,
             pulses=(
                 BrokersPulse("n", "Desks", "—"),
                 BrokersPulse("f", "Foreign", "—"),
-                BrokersPulse("buy", "Buy role", "—"),
+                BrokersPulse("buy", "Buy", "—"),
                 BrokersPulse("asof", "As of", "—"),
             ),
             rows=(),
@@ -160,16 +172,13 @@ def build_ticker_brokers_desk_model(
             selected_index=0,
         )
 
+    # Hero: lab + N desks only — no tops_scope_note / Net window essay (noise)
     hero_big = f"{n} desks"
-    hero_sub = (
-        f"as of {as_of_s} · top brokers · local cache"
-        + (f" · {note_s}" if note_s else "")
-        + (f" · {partial_n} partial NetX" if partial_n else "")
-    )
+    hero_sub = ""
     pulses = (
         BrokersPulse("n", "Desks", str(n)),
         BrokersPulse("f", "Foreign", str(foreign_n)),
-        BrokersPulse("buy", "Buy role", str(buy_n)),
+        BrokersPulse("buy", "Buy", str(buy_n)),
         BrokersPulse("asof", "As of", as_of_s),
     )
     return TickerBrokersDeskModel(

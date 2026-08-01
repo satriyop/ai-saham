@@ -459,14 +459,15 @@ Not a 3-row mini top table. Chip **brokers** / `b` opens radar **under the ticke
 | Piece | Spec |
 |-------|------|
 | Title | `View · ticker · TICKER · brokers` (job title · chip shell) |
-| Hero | `STOCK DESKS · TICKER` · N desks · as of · top brokers · local cache |
-| Meta | `view ticker top-brokers · local cache` · **partial NetX** when any desk partial |
-| Body | Radar rows: `Code · Type · Role · DayNet · Net5 · Stk · Δ1` (richer NetX ok) |
+| Hero | `STOCK DESKS · TICKER` · **N desks** only |
+| Hero sub | **Empty** when data present — no `tops_scope_note` / “Tracked brokers…” / Net window essay |
+| Pulses | Desks · Foreign · Buy · As of (scalars only) |
+| Body | Radar: `Code · Type · Role · DayNet · **Net3 · Net5 · Net7 · Net10 · Net20** · Stk · Δ1` |
 | Type | **Foreign** / **Local** (words; not cryptic A) |
 | Role | `buy` / `sell` from top-brokers ranking |
-| NetX | Stock-scoped multi-session · partial marked |
+| NetX | Stock-scoped multi-session · all five windows · partial marked on row (`*`) not in hero |
 | Keys | `↑↓` select · **Enter** desk home · **esc** ticker show · **chips switch job** |
-| Reject | Independent `ticker-desks` stage that drops the chip bar · “leaves shell” |
+| Reject | Independent `ticker-desks` stage · hero noise essays · Net5-only table |
 
 ### TUI implement order (after design accept)
 
