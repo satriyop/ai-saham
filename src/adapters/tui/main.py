@@ -2124,8 +2124,7 @@ class CockpitApp(App[None]):
         self._refresh_chrome()
         table = self.query_one("#board-table", DataTable)
         table.focus()
-        note = summary if summary else f"{len(self._rows)} candidates"
-        self.notify(f"Accumulation · {note}", timeout=2.5)
+        # No toast on open/recompute ready — chrome (meta/footer/badge) carries state
         if view is not None:
             self._persist_accum_snapshot(payload, view)
 
@@ -2210,7 +2209,7 @@ class CockpitApp(App[None]):
             self.query_one("#board-table", DataTable).focus()
         except Exception:
             pass
-        self.notify(f"Restored snapshot · {len(self._rows)} names · recomputing…", timeout=2.0)
+        # Silent restore — badge/meta already show snapshot · recomputing
         return True
 
     def _persist_accum_snapshot(self, payload: Any, view: Any) -> None:

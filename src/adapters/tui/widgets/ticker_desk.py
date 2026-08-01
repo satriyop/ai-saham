@@ -431,6 +431,47 @@ class TickerDesk(Vertical):
         margin-top: 1;
     }
 
+    /* Dist dual heat — design: two columns mint | coral (off until job=dist) */
+    TickerDesk #td-dist-dual {
+        display: none;
+    }
+
+    TickerDesk .td-dist-dual {
+        height: auto;
+        margin-top: 0;
+        margin-bottom: 0;
+    }
+
+    TickerDesk .td-dist-col {
+        width: 1fr;
+        height: auto;
+        background: #101010;
+        border: solid #1c1c1c;
+        padding: 0 1 1 1;
+        margin-right: 1;
+    }
+
+    TickerDesk .td-dist-col.buy {
+        border-left: solid #6fbf8a;
+    }
+
+    TickerDesk .td-dist-col.sell {
+        border-left: solid #c97a72;
+        margin-right: 0;
+    }
+
+    TickerDesk .td-dist-col-head {
+        color: #6b6b6b;
+        text-style: bold;
+        height: auto;
+        margin-bottom: 0;
+    }
+
+    TickerDesk .td-dist-col-body {
+        color: #a0a0a0;
+        height: auto;
+    }
+
     """
 
     def __init__(self, *, id: str | None = None) -> None:
@@ -471,6 +512,22 @@ class TickerDesk(Vertical):
                             yield Static("", classes="td-flow-pv", id=f"td-flow-pv-{i}")
                 yield Static("SESSIONS", classes="td-sec-head", id="td-flow-days-head")
                 yield Static("", classes="td-flow-days", id="td-flow-days")
+                # Dist dual heat (hidden unless job=dist)
+                with Horizontal(classes="td-dist-dual", id="td-dist-dual"):
+                    with Vertical(classes="td-dist-col buy", id="td-dist-buy"):
+                        yield Static(
+                            "TOP BUYERS · BOUGHT FROM →",
+                            classes="td-dist-col-head",
+                            id="td-dist-buy-head",
+                        )
+                        yield Static("", classes="td-dist-col-body", id="td-dist-buy-body")
+                    with Vertical(classes="td-dist-col sell", id="td-dist-sell"):
+                        yield Static(
+                            "TOP SELLERS · SOLD TO →",
+                            classes="td-dist-col-head",
+                            id="td-dist-sell-head",
+                        )
+                        yield Static("", classes="td-dist-col-body", id="td-dist-sell-body")
                 yield Static("", classes="td-flow-story", id="td-flow-story")
             yield Static("", classes="td-sec-body", id="td-job-body")
 
@@ -1025,8 +1082,21 @@ class TickerDesk(Vertical):
         story = (desk.story or "").replace("\n", " · ")
         self.query_one("#td-flow-story", Static).update(f"[#555555]{story}[/]" if story else "")
 
+    def _set_dist_dual_visible(self, visible: bool) -> None:
+        """Show dual-heat columns for dist; hide for flow/foreign."""
+        try:
+            self.query_one("#td-dist-dual", Horizontal).display = visible
+        except Exception:
+            pass
+        try:
+            self.query_one("#td-flow-days-head", Static).display = not visible
+            self.query_one("#td-flow-days", Static).display = not visible
+        except Exception:
+            pass
+
     def _paint_flow_desk(self, desk: TickerFlowDeskModel) -> None:
         """Design lock: hero · 4 pulses · sessions table · real nets only."""
+        self._set_dist_dual_visible(False)
         self._paint_job_hero_pulses(desk)
 
         if desk.empty or not desk.days:
@@ -1058,6 +1128,7 @@ class TickerDesk(Vertical):
 
     def _paint_foreign_desk(self, desk: TickerForeignDeskModel) -> None:
         """Design lock: hero · 5d/20d/days/source · daily points (net · lot · avg)."""
+        self._set_dist_dual_visible(False)
         self._paint_job_hero_pulses(desk)
 
         if desk.empty or not desk.days:
@@ -1088,68 +1159,81 @@ class TickerDesk(Vertical):
         self.query_one("#td-flow-days", Static).update("\n".join(lines))
 
     def _paint_dist_desk(self, desk: TickerDistDeskModel) -> None:
-        """Design lock: hero · pulses · dual heat buyers/sellers · F/L tags · share bars."""
+        """Design lock: hero · pulses · true dual-column heat · F/L pills · horizontal CP bars."""
+        self._set_dist_dual_visible(True)
         self._paint_job_hero_pulses(desk)
 
-        if desk.empty and not desk.buyers and not desk.sellers:
-            self.query_one("#td-flow-days-head", Static).update("DUAL HEAT · COUNTERPARTIES")
-            self.query_one("#td-flow-days", Static).update(
-                f"[#555555]no distribution · {desk.fetch_hint}[/]"
-            )
-            return
-
-        self.query_one("#td-flow-days-head", Static).update(
-            "DUAL HEAT · TOP BUYERS / TOP SELLERS · F=Foreign L=Local"
-        )
         mint = "#6fbf8a"
         coral = "#c97a72"
-        lines: list[str] = []
+        track_w = 14
 
-        def _side_block(
-            title: str,
+        def _pill(tag: str) -> str:
+            # Round-ish type badge · F Foreign · L Local · G gov — never A
+            c = {"F": "#7aa2c4", "L": "#8a8a8a", "G": "#d4b06a"}.get(tag, "#8a8a8a")
+            return f"([{c}]{tag}[/])"
+
+        def _side_text(
             sides: tuple[DistSideRow, ...],
             *,
             arrow: str,
             head_color: str,
-        ) -> None:
-            lines.append(f"[{head_color}]{title}[/]")
+            empty_hint: str,
+        ) -> str:
             if not sides:
-                lines.append("[#555555]  — empty side[/]")
-                lines.append("")
-                return
+                return f"[#555555]{empty_hint}[/]"
+            lines: list[str] = []
             for s in sides:
-                tag_c = {"F": "#7aa2c4", "L": "#a0a0a0", "G": "#d4b06a"}.get(s.type_tag, "#a0a0a0")
+                # Side header: rank · code · pill · amount (right-ish)
                 lines.append(
-                    f"  [#e8e8e8]{s.rank}[/] [bold #d8d8d8]{s.code}[/]"
-                    f"[{tag_c}]\\[{s.type_tag}][/]  [{head_color}]{s.amount_s}[/]"
+                    f"[#6b6b6b]{s.rank}[/] [bold #e8e8e8]{s.code}[/] {_pill(s.type_tag)}  "
+                    f"[{head_color}]{s.amount_s}[/]"
                 )
                 for cp in s.cps:
-                    bar = bar_glyphs(cp.bar_pct, width=8, hollow=False)
-                    pad = max(0, 8 - len(bar))
-                    bar_s = f"[{head_color}]{bar}[/]{' ' * pad}" if bar else f"{'':8}"
-                    ctag_c = {"F": "#7aa2c4", "L": "#a0a0a0", "G": "#d4b06a"}.get(
-                        cp.type_tag, "#a0a0a0"
-                    )
+                    # CP row: arrow · code · pill · amount · %
                     lines.append(
-                        f"    [#555555]{arrow}[/] [#c8c8c8]{cp.code}[/]"
-                        f"[{ctag_c}]\\[{cp.type_tag}][/]  "
-                        f"[#c8c8c8]{cp.amount_s}[/]  [#7a7a7a]{cp.pct}%[/]  {bar_s}"
+                        f"  [#555555]{arrow}[/] [#c8c8c8]{cp.code}[/] {_pill(cp.type_tag)}  "
+                        f"[#a0a0a0]{cp.amount_s}[/]  [#6b6b6b]{cp.pct}%[/]"
                     )
-            lines.append("")
+                    # Horizontal share track under CP (design heat bar — not a side tower)
+                    bar = bar_glyphs(cp.bar_pct, width=track_w, hollow=True)
+                    if bar:
+                        lines.append(f"    [{head_color}]{bar}[/]")
+                    else:
+                        lines.append(f"    [#2a2a2a]{'░' * track_w}[/]")
+                lines.append("")  # space between sides
+            return "\n".join(lines).rstrip()
 
-        _side_block(
-            "TOP BUYERS · bought FROM →",
-            desk.buyers,
-            arrow="←",
-            head_color=mint,
-        )
-        _side_block(
-            "TOP SELLERS · sold TO →",
-            desk.sellers,
-            arrow="→",
-            head_color=coral,
-        )
-        self.query_one("#td-flow-days", Static).update("\n".join(lines))
+        try:
+            self.query_one("#td-dist-buy-head", Static).update(
+                f"[{mint}]TOP BUYERS · BOUGHT FROM →[/]"
+            )
+            self.query_one("#td-dist-sell-head", Static).update(
+                f"[{coral}]TOP SELLERS · SOLD TO →[/]"
+            )
+            if desk.empty and not desk.buyers and not desk.sellers:
+                hint = f"[#555555]no distribution · {desk.fetch_hint}[/]"
+                self.query_one("#td-dist-buy-body", Static).update(hint)
+                self.query_one("#td-dist-sell-body", Static).update(hint)
+            else:
+                self.query_one("#td-dist-buy-body", Static).update(
+                    _side_text(
+                        desk.buyers,
+                        arrow="←",
+                        head_color=mint,
+                        empty_hint="— no buy sides",
+                    )
+                )
+                self.query_one("#td-dist-sell-body", Static).update(
+                    _side_text(
+                        desk.sellers,
+                        arrow="→",
+                        head_color=coral,
+                        empty_hint="— no sell sides",
+                    )
+                )
+        except Exception:
+            # Fallback: keep dual mounted; never invent sides
+            pass
 
     def _paint_job_and_chips_only(self) -> None:
         """When model not yet painted, still show job body + chips."""
