@@ -8,13 +8,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, timedelta
-from typing import Any, Protocol, Sequence
+from datetime import date
+from typing import Any, Mapping, Protocol, Sequence
 
 from src.application.services.accumulation_producer_readiness import (
     CohortProducerReadiness,
-    bound_economic_session,
     cohort_to_dict,
+    parse_canonical_session_date,
     project_cohort_readiness,
 )
 from src.application.services.lean_observation_identity import (
@@ -28,16 +28,15 @@ from src.domain.ports.learning_artifact_repositories import (
 from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
+    LabelAvailability,
     LearningContractId,
     LearningObservation,
+    LearningOutcomeLabel,
     ProductionPolicySnapshot,
 )
 from src.domain.value_objects.signal_observation_contracts import (
     ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
 )
-
-# H20 horizon + weekend slack so first-N proof can reach label endpoints.
-_SESSION_CALENDAR_FORWARD_BUFFER_DAYS = 40
 
 SessionCalendarLoader = Callable[[date, date], KnownTradingSessionCalendar | None]
 
@@ -73,11 +72,36 @@ class AccumulationProducerReadinessReport:
         }
 
 
+def coverage_from_available_labels(
+    labels: Sequence[LearningOutcomeLabel],
+) -> tuple[date, date] | None:
+    """Coverage for session-calendar load from AVAILABLE labels only.
+
+    coverage_start = min signal_date; coverage_end = max label_window_end.
+    No AVAILABLE labels → None (no calendar required yet; COLLECTING path).
+    """
+    starts: list[date] = []
+    ends: list[date] = []
+    for label in labels:
+        if label.availability is not LabelAvailability.AVAILABLE:
+            continue
+        metrics = label.metrics if isinstance(label.metrics, Mapping) else {}
+        signal = parse_canonical_session_date(metrics.get("signal_date"))
+        win_end = parse_canonical_session_date(metrics.get("label_window_end"))
+        if signal is None or win_end is None:
+            continue
+        starts.append(signal)
+        ends.append(win_end)
+    if not starts:
+        return None
+    return min(starts), max(ends)
+
+
 class GetAccumulationProducerReadinessUseCase:
     """Project producer readiness for ACCUMULATION_DISCOVERY cohorts.
 
     Read-only: lists observations/labels/snapshots and classifies. Must not call
-    add_* repository methods.
+    add_* repository methods. Session calendar loaders must also be read-only.
     """
 
     def __init__(
@@ -92,8 +116,6 @@ class GetAccumulationProducerReadinessUseCase:
         self._observations = observations
         self._labels = labels
         self._policy_snapshots = policy_snapshots
-        # Authoritative market sessions for path-label window proof (fail closed
-        # when absent — never fall back to weekday-length arithmetic).
         self._session_calendar = session_calendar
         self._session_calendar_loader = session_calendar_loader
 
@@ -109,9 +131,8 @@ class GetAccumulationProducerReadinessUseCase:
 
         observations = tuple(self._observations.list_observations(purpose))
         labels = tuple(self._labels.list_labels([o.observation_id for o in observations]))
-        session_calendar = self._resolve_session_calendar(observations)
 
-        by_compat: dict[str, list] = {}
+        by_compat: dict[str, list[LearningObservation]] = {}
         for obs in observations:
             key = obs.compatibility_id or ""
             by_compat.setdefault(key, []).append(obs)
@@ -121,6 +142,8 @@ class GetAccumulationProducerReadinessUseCase:
             cohort_obs = tuple(by_compat[compatibility_id])
             obs_ids = {o.observation_id for o in cohort_obs}
             cohort_labels = tuple(lb for lb in labels if lb.observation_id in obs_ids)
+            # Per-cohort coverage from AVAILABLE labels only (never newest obs + 40d).
+            session_calendar = self._resolve_session_calendar_for_labels(cohort_labels)
             if compatibility_id:
                 snapshots = tuple(
                     self._policy_snapshots.list_policy_snapshots(
@@ -155,22 +178,16 @@ class GetAccumulationProducerReadinessUseCase:
             cohorts=tuple(cohorts),
         )
 
-    def _resolve_session_calendar(
+    def _resolve_session_calendar_for_labels(
         self,
-        observations: Sequence[LearningObservation],
+        labels: Sequence[LearningOutcomeLabel],
     ) -> KnownTradingSessionCalendar | None:
-        """Prefer an explicit calendar; else load a proven span covering labels."""
         if self._session_calendar is not None:
             return self._session_calendar
-        if self._session_calendar_loader is None or not observations:
+        if self._session_calendar_loader is None:
             return None
-        sessions: list[date] = []
-        for obs in observations:
-            bound = bound_economic_session(obs)
-            if bound is not None:
-                sessions.append(bound[1])
-        if not sessions:
+        coverage = coverage_from_available_labels(labels)
+        if coverage is None:
             return None
-        coverage_start = min(sessions)
-        coverage_end = max(sessions) + timedelta(days=_SESSION_CALENDAR_FORWARD_BUFFER_DAYS)
+        coverage_start, coverage_end = coverage
         return self._session_calendar_loader(coverage_start, coverage_end)

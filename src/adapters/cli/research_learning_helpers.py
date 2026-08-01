@@ -22,15 +22,12 @@ from src.application.use_case.get_accumulation_producer_readiness_use_case impor
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import AssessmentPurpose
 from src.infrastructure.config.app_config import load_app_config
-from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
-    IHSGTradingSessionCalendarProvider,
+from src.infrastructure.persistence.sqlite_ihsg_trading_session_calendar_read_repository import (
+    SQLiteIHSGTradingSessionCalendarReadRepository,
 )
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
     SQLiteLearningArtifactReadRepository,
     SQLiteLearningArtifactRepository,
-)
-from src.infrastructure.persistence.sqlite_market_repository import (
-    SQLiteMarketRepository,
 )
 
 
@@ -162,15 +159,13 @@ def status_cohort(
             resolved_db, read_repo = read_only_repository(db_path)
         except FileNotFoundError as exc:
             raise typer.BadParameter(str(exc)) from exc
-        # Authoritative IHSG sessions for path-label first-N proof (fail closed
-        # when the loader cannot prove coverage — never weekday arithmetic).
-        market_repo = SQLiteMarketRepository(resolved_db)
-        calendar_provider = IHSGTradingSessionCalendarProvider(market_repo)
+        # Read-only IHSG session calendar (mode=ro, no schema ensure / writes).
+        calendar_repo = SQLiteIHSGTradingSessionCalendarReadRepository(resolved_db)
         report = GetAccumulationProducerReadinessUseCase(
             observations=read_repo,
             labels=read_repo,
             policy_snapshots=read_repo,
-            session_calendar_loader=lambda start, end: calendar_provider.load(
+            session_calendar_loader=lambda start, end: calendar_repo.load_calendar(
                 coverage_start=start,
                 coverage_end=end,
             ),
