@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 
 from src.application.services.accumulation_producer_readiness import (
     LabelCohortValidation,
@@ -11,6 +11,7 @@ from src.application.services.accumulation_producer_readiness import (
     ObservationCohortValidation,
     ProducerReadinessStatus,
     classify_producer_status,
+    count_labels_by_horizon,
     extract_action_from_payload,
     extract_setup_readiness_status_from_payload,
     observation_session_date,
@@ -20,9 +21,13 @@ from src.application.services.accumulation_producer_readiness import (
 from src.application.services.accumulation_production_policy_descriptors import (
     ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2,
 )
+from src.domain.services.trading_calendar import (
+    first_weekday_session_after,
+    inclusive_weekday_sessions,
+    nth_weekday_session_on_or_after,
+)
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
-    LEARNING_SCHEMA_VERSION,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     PRODUCTION_POLICY_ID_HARD_FILTERS,
     AccumPopulationBinding,
@@ -101,9 +106,7 @@ def _payload(
     signal = {"setup_readiness": {"status": readiness}} if readiness is not None else {}
     shared: dict = {"current_price": 100.0}
     cap = captured_at or (
-        datetime.fromisoformat(f"{session_date}T12:00:00+00:00")
-        if session_date
-        else NOW
+        datetime.fromisoformat(f"{session_date}T12:00:00+00:00") if session_date else NOW
     )
     if with_provenance and session_date is not None:
         shared["provenance"] = {
@@ -239,14 +242,28 @@ def _available_metrics(
     signal_date: str,
     horizon_days: int = 10,
     entry_price: float = 100.0,
+    label_window_start: str | None = None,
+    label_window_end: str | None = None,
 ) -> dict:
-    start = date.fromisoformat(signal_date) + timedelta(days=1)
-    end = start + timedelta(days=horizon_days - 1)
+    """Build AVAILABLE path metrics with an exact N weekday-session window.
+
+    Default endpoints are the first weekday after ``signal_date`` through the
+    ``horizon_days``-th inclusive weekday session (not bare calendar-day spans).
+    """
+    if label_window_start is None or label_window_end is None:
+        signal = date.fromisoformat(signal_date)
+        start = first_weekday_session_after(signal)
+        end = nth_weekday_session_on_or_after(start, horizon_days)
+        start_s = start.isoformat()
+        end_s = end.isoformat()
+    else:
+        start_s = label_window_start
+        end_s = label_window_end
     return {
         "ticker": ticker.upper(),
         "signal_date": signal_date,
-        "label_window_start": start.isoformat(),
-        "label_window_end": end.isoformat(),
+        "label_window_start": start_s,
+        "label_window_end": end_s,
         "entry_reference_price": entry_price,
         "close_return_pct": 3.5,
         "max_forward_return_pct": 5.0,
@@ -278,9 +295,11 @@ def _label(
             session = observation_session_date(observation)
             sd = session.isoformat() if session else "2026-07-01"
             ticker = str(observation.decision_payload.get("ticker", "BBCA"))
-            horizon = {LearningContractId.ACCUM_3D_LABEL: 3,
-                       LearningContractId.ACCUM_10D_LABEL: 10,
-                       LearningContractId.ACCUM_20D_LABEL: 20}.get(contract, 10)
+            horizon = {
+                LearningContractId.ACCUM_3D_LABEL: 3,
+                LearningContractId.ACCUM_10D_LABEL: 10,
+                LearningContractId.ACCUM_20D_LABEL: 20,
+            }.get(contract, 10)
             metrics = _available_metrics(ticker=ticker, signal_date=sd, horizon_days=horizon)
     else:
         observation_id = observation
@@ -1534,6 +1553,7 @@ def test_missing_features_window_blocks_ready() -> None:
         "features_by_window_keys" in r for r in cohort.observation_validation.invalid_reasons
     )
 
+
 def test_schema9_without_binding_is_legacy_raw_only_even_with_snapshots() -> None:
     """Schema-9 historical rows never grant CHALLENGE_INPUT_READY (Option A)."""
     obs = [
@@ -1568,9 +1588,7 @@ def test_schema10_missing_population_binding_is_blocked_not_ready() -> None:
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
-    assert "population_authority_unbound" in " ".join(
-        cohort.observation_validation.invalid_reasons
-    )
+    assert "population_authority_unbound" in " ".join(cohort.observation_validation.invalid_reasons)
     assert cohort.session_count == 0
 
 
@@ -1604,9 +1622,7 @@ def test_bad_decision_at_does_not_inflate_session_count_or_ready() -> None:
     )
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
     assert cohort.session_count == 0
-    assert any(
-        "decision_at" in r for r in cohort.observation_validation.invalid_reasons
-    )
+    assert any("decision_at" in r for r in cohort.observation_validation.invalid_reasons)
 
 
 def test_captured_at_mismatch_blocks_ready() -> None:
@@ -1716,9 +1732,7 @@ def test_incompatible_preopen_label_family_blocks_cohort() -> None:
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
-    assert any(
-        "incompatible_label_family" in r for r in cohort.label_validation.invalid_reasons
-    )
+    assert any("incompatible_label_family" in r for r in cohort.label_validation.invalid_reasons)
 
 
 def test_snapshot_schema_version_999_fails_active_set_verified() -> None:
@@ -1793,3 +1807,117 @@ def test_build_session_observation_payload_requires_population_binding() -> None
     )
     assert payload["schema_version"] == 10
     assert payload["population_binding"]["membership_session"] == "2026-07-01"
+
+
+def test_overlong_h10_label_window_rejected_not_challenge_input_ready() -> None:
+    """Adversarial: multi-month H10 window must not grant AVAILABLE H10 authority.
+
+    P0: readiness previously accepted any ordered window after signal with
+    days_to_* in 1..N. An H10 span 2026-07-20..2026-12-31 must fail exact
+    session-window proof and cannot alone elevate the cohort to READY.
+    """
+    obs = [
+        _observation(day=1, action="WATCH", readiness=None),
+        _observation(day=2, ticker="BBRI", action="ENTER", readiness="INCOMPLETE"),
+    ]
+    metrics = _available_metrics(
+        ticker="BBCA",
+        signal_date="2026-07-01",
+        horizon_days=10,
+        label_window_start="2026-07-20",
+        label_window_end="2026-12-31",
+    )
+    overlong = _label(obs[0], metrics=metrics)
+    counts = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[overlong],
+        observations_by_id={o.observation_id: o for o in obs},
+    )
+    assert counts.counts_by_horizon["H10"].available == 0
+    assert counts.invalid_label_count >= 1
+    assert any("label_window_not_exact_sessions" in r for r in counts.invalid_reasons)
+
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[overlong],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.labels_by_horizon["H10"].available == 0
+    assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    assert any(
+        "label_window_not_exact_sessions" in r for r in cohort.label_validation.invalid_reasons
+    )
+
+
+def test_exact_n_session_windows_accepted_for_h3_h10_h20() -> None:
+    """Exact 3/10/20 weekday-session endpoints pass the window gate."""
+    obs = [
+        _observation(day=1, action="WATCH", readiness=None),
+        _observation(day=2, ticker="BBRI", action="ENTER", readiness="INCOMPLETE"),
+    ]
+    contracts = (
+        (LearningContractId.ACCUM_3D_LABEL, 3, "H3"),
+        (LearningContractId.ACCUM_10D_LABEL, 10, "H10"),
+        (LearningContractId.ACCUM_20D_LABEL, 20, "H20"),
+    )
+    labels: list[LearningOutcomeLabel] = []
+    for contract, horizon, _key in contracts:
+        metrics = _available_metrics(
+            ticker="BBCA",
+            signal_date="2026-07-01",
+            horizon_days=horizon,
+        )
+        start = date.fromisoformat(metrics["label_window_start"])
+        end = date.fromisoformat(metrics["label_window_end"])
+        assert inclusive_weekday_sessions(start, end) == horizon
+        labels.append(_label(obs[0], contract=contract, metrics=metrics))
+
+    counts = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=labels,
+        observations_by_id={o.observation_id: o for o in obs},
+    )
+    for _contract, _horizon, key in contracts:
+        assert counts.counts_by_horizon[key].available == 1, key
+    assert counts.invalid_label_count == 0
+    assert not any(
+        "label_window_not_exact_sessions" in r or "label_window_non_session_endpoint" in r
+        for r in counts.invalid_reasons
+    )
+
+    # Primary H10 alone still enables READY when other gates pass.
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[labels[1]],  # H10
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.labels_by_horizon["H10"].available == 1
+    assert cohort.producer_status is ProducerReadinessStatus.CHALLENGE_INPUT_READY
+
+
+def test_weekend_label_window_endpoint_rejected() -> None:
+    """Endpoints that land on weekends are not market sessions."""
+    obs = [_observation(day=1), _observation(day=2, ticker="BBRI")]
+    # 2026-07-02 (Thu) .. 2026-07-11 (Sat) is the old calendar-day H10 shortcut.
+    metrics = _available_metrics(
+        ticker="BBCA",
+        signal_date="2026-07-01",
+        horizon_days=10,
+        label_window_start="2026-07-02",
+        label_window_end="2026-07-11",
+    )
+    label = _label(obs[0], metrics=metrics)
+    counts = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[label],
+        observations_by_id={o.observation_id: o for o in obs},
+    )
+    assert counts.counts_by_horizon["H10"].available == 0
+    joined = " ".join(counts.invalid_reasons)
+    assert (
+        "label_window_non_session_endpoint" in joined or "label_window_not_exact_sessions" in joined
+    )

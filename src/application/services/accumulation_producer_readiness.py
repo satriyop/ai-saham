@@ -21,6 +21,10 @@ from src.application.services.accumulation_production_policy_descriptors import 
 from src.application.services.lean_observation_identity import (
     POLICY_SNAPSHOT_BINDING_CONTRACT_V2,
 )
+from src.domain.services.trading_calendar import (
+    inclusive_weekday_sessions,
+    is_weekday_session,
+)
 from src.domain.value_objects.learning_artifacts import (
     ACCUM_POPULATION_AUTHORITY_CONTRACT,
     ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
@@ -690,9 +694,7 @@ def _production_payload_semantic_reasons(
 
     # Option A population binding (schema-10 current authority only).
     if require_current_payload_schema:
-        reasons.extend(
-            _population_binding_reasons(observation, session=session, payload=payload)
-        )
+        reasons.extend(_population_binding_reasons(observation, session=session, payload=payload))
 
     # Optional payload contract fields: if present, must match active producer contract.
     for key in ("observation_contract", "producer_observation_contract"):
@@ -867,9 +869,7 @@ def validate_observation_cohort(
 
     # Readiness session depth uses current-authority sessions only when present;
     # otherwise report legacy diagnostic sessions (LEGACY_RAW_ONLY path).
-    report_sessions = (
-        current_session_dates if current_authority_count > 0 else legacy_session_dates
-    )
+    report_sessions = current_session_dates if current_authority_count > 0 else legacy_session_dates
 
     return ObservationCohortValidation(
         expected_learning_observation_contract_id=expected_learning_observation_contract_id,
@@ -1024,7 +1024,9 @@ def _path_label_semantic_reasons(
                     reasons.append(
                         f"metrics.{day_key}_outside_horizon:{day_v}not_in_1..{horizon_days}"
                     )
-            # Exact 3/10/20-session window: signal_date + inclusive session span.
+            # Exact 3/10/20 market-session window (weekday-session calendar).
+            # Authority: inclusive Mon–Fri span between endpoints must equal the
+            # contract horizon. Ordering + days_to_* alone are not sufficient.
             signal_date = parse_canonical_session_date(metrics.get("signal_date"))
             win_start = parse_canonical_session_date(metrics.get("label_window_start"))
             win_end = parse_canonical_session_date(metrics.get("label_window_end"))
@@ -1040,6 +1042,22 @@ def _path_label_semantic_reasons(
                     reasons.append(
                         "metrics.label_window_not_after_signal:"
                         f"start={win_start.isoformat()},signal={signal_date.isoformat()}"
+                    )
+                session_count = inclusive_weekday_sessions(win_start, win_end)
+                if session_count is None:
+                    # Inverted already reported; non-session endpoints fail closed.
+                    if win_start <= win_end and (
+                        not is_weekday_session(win_start) or not is_weekday_session(win_end)
+                    ):
+                        reasons.append(
+                            "metrics.label_window_non_session_endpoint:"
+                            f"start={win_start.isoformat()},end={win_end.isoformat()}"
+                        )
+                elif session_count != horizon_days:
+                    reasons.append(
+                        "metrics.label_window_not_exact_sessions:"
+                        f"count={session_count},expected={horizon_days},"
+                        f"start={win_start.isoformat()},end={win_end.isoformat()}"
                     )
             if observation is not None:
                 obs_session = observation_session_date(observation)
@@ -1068,11 +1086,7 @@ def _path_label_semantic_reasons(
                     if frozen is None or frozen <= 0:
                         reasons.append(f"entry_reference_no_frozen_price:{raw_price!r}")
                     elif abs(entry - frozen) > 1e-9:
-                        reasons.append(
-                            f"entry_reference_mismatch:entry={entry},frozen={frozen}"
-                        )
-            # Horizon identity is the contract (3/10/20); days_to_* already gated.
-            _ = horizon_days
+                        reasons.append(f"entry_reference_mismatch:entry={entry},frozen={frozen}")
     elif label.availability is LabelAvailability.UNAVAILABLE:
         metrics = label.metrics if isinstance(label.metrics, Mapping) else {}
         reason = metrics.get("unavailable_reason")

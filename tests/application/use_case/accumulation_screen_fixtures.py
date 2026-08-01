@@ -1,4 +1,3 @@
-from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
 """Shared fixtures and mocks for accumulation screen tests."""
 
 from datetime import date, timedelta
@@ -20,6 +19,7 @@ from src.domain.entities.candle import Candle
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
 from src.infrastructure.config.ticker_profile_config_loader import (
     create_ticker_profile_classifier,
 )

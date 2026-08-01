@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
-from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
 from src.application.services.accumulation_screen_factory import (
     AccumulationScreenUseCaseBundle,
     create_accumulation_screen_use_case,
@@ -18,6 +17,7 @@ from src.application.use_case.record_accumulation_observations_use_case import (
     RecordAccumulationObservationsUseCase,
 )
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
+from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 from tests.application.use_case.accumulation_screen_fixtures import (
     FakeRulesLoader,

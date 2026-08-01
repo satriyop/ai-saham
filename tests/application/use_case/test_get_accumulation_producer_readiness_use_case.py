@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Sequence
 
 import pytest
@@ -13,6 +13,10 @@ from src.application.services.accumulation_production_policy_descriptors import 
 )
 from src.application.use_case.get_accumulation_producer_readiness_use_case import (
     GetAccumulationProducerReadinessUseCase,
+)
+from src.domain.services.trading_calendar import (
+    first_weekday_session_after,
+    nth_weekday_session_on_or_after,
 )
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
@@ -131,8 +135,8 @@ def _observation(
 
 def _label(observation: LearningObservation) -> LearningOutcomeLabel:
     session = date.fromisoformat(str(observation.decision_payload["session_date"]))
-    start = session + timedelta(days=1)
-    end = start + timedelta(days=9)
+    start = first_weekday_session_after(session)
+    end = nth_weekday_session_on_or_after(start, 10)
     metrics = {
         "ticker": observation.decision_payload["ticker"],
         "signal_date": session.isoformat(),

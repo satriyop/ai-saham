@@ -20,8 +20,8 @@ from src.application.services.effective_market_session_resolver import (
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.signal_engine import SignalEngine
 from src.application.services.signal_engine_config import SignalEngineConfig
-from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
 from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityId,
 )

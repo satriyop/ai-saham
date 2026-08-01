@@ -16,9 +16,7 @@ LEARNING_SCHEMA_VERSION = 1
 
 # Option A population authority (typed binding on decision_payload). A 64-hex
 # universe_id alone is never sufficient for challenge readiness.
-ACCUM_POPULATION_AUTHORITY_CONTRACT = (
-    "population.accum.lq45_current_roster_pit_tradable.v1"
-)
+ACCUM_POPULATION_AUTHORITY_CONTRACT = "population.accum.lq45_current_roster_pit_tradable.v1"
 ACCUM_POPULATION_BINDING_SCHEMA_VERSION = 1
 ACCUM_POPULATION_NAME = "lq45"
 ACCUM_TRADABLE_MEMBERSHIP_CONTRACT = "pit_tradable.candle_presence.v1"
@@ -281,14 +279,15 @@ class AccumPopulationBinding:
             raise LearningContractError("membership_session must be non-empty")
         if pit_tradable_lookback_sessions < 1:
             raise LearningContractError(
-                "pit_tradable_lookback_sessions must be >= 1, "
-                f"got {pit_tradable_lookback_sessions}"
+                f"pit_tradable_lookback_sessions must be >= 1, got {pit_tradable_lookback_sessions}"
             )
         _require_non_empty("producer_source_revision", producer_source_revision)
         _require_non_empty("population_name", population_name)
         _require_non_empty("benchmark_symbol", benchmark_symbol)
         _require_non_empty("tradable_membership_contract", tradable_membership_contract)
-        membership = tuple(sorted({str(t).strip().upper() for t in membership_tickers if str(t).strip()}))
+        membership = tuple(
+            sorted({str(t).strip().upper() for t in membership_tickers if str(t).strip()})
+        )
         named = tuple(
             sorted({str(t).strip().upper() for t in named_universe_tickers if str(t).strip()})
         )
@@ -442,7 +441,9 @@ def recompute_path_label_fingerprint(
 ) -> str:
     """Producer fingerprint: digest(observation_id, decision_digest, label_contract)."""
     contract_value = (
-        label_contract.value if isinstance(label_contract, LearningContractId) else str(label_contract)
+        label_contract.value
+        if isinstance(label_contract, LearningContractId)
+        else str(label_contract)
     )
     return artifact_digest(
         {
