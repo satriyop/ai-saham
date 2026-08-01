@@ -1841,6 +1841,152 @@ def test_analysis_as_of_mismatch_blocks_ready() -> None:
     )
 
 
+def test_available_h10_metrics_ticker_mismatch_blocks_not_challenge_input_ready() -> None:
+    """P0: AVAILABLE H10 with metrics.ticker ≠ observation ticker is corruption.
+
+    Adversarial: BBCA observation + full READY shape except H10 metrics.ticker=TLKM.
+    Must not stay CHALLENGE_INPUT_READY; available tally must not include the row.
+    """
+    obs = [
+        _observation(day=1, ticker="BBCA", action="WATCH", readiness=None),
+        _observation(day=2, ticker="BBRI", action="ENTER", readiness="INCOMPLETE"),
+    ]
+    assert obs[0].decision_payload["ticker"] == "BBCA"
+    session = observation_session_date(obs[0])
+    assert session is not None
+    mismatched = _available_metrics(
+        ticker="TLKM",
+        signal_date=session.isoformat(),
+        horizon_days=10,
+    )
+    assert mismatched["ticker"] == "TLKM"
+    bad_label = _label(obs[0], outcome="SUCCESS", metrics=mismatched)
+    assert bad_label.availability is LabelAvailability.AVAILABLE
+    assert bad_label.metrics["ticker"] == "TLKM"
+
+    # Direct label counting path used by projection.
+    from src.application.services.accumulation_producer_readiness import (
+        count_labels_by_horizon,
+    )
+
+    counts = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[bad_label],
+        observations_by_id={o.observation_id: o for o in obs},
+    )
+    assert counts.has_integrity_corruption is True
+    assert counts.invalid_label_count == 1
+    assert counts.counts_by_horizon["H10"].available == 0
+    assert any("metrics.ticker_mismatch" in r for r in counts.invalid_reasons)
+
+    # Solo mismatched H10: READY-shaped cohort must not become CHALLENGE_INPUT_READY.
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[bad_label],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.label_validation.has_integrity_corruption is True
+    assert cohort.labels_by_horizon["H10"].available == 0
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    assert any("metrics.ticker_mismatch" in r for r in cohort.label_validation.invalid_reasons)
+
+    # Co-present valid H10 on the other observation: only the valid row tallies.
+    good = _label(obs[1], outcome="SUCCESS")
+    assert good.metrics["ticker"] == "BBRI"
+    mixed = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[bad_label, good],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert mixed.label_validation.has_integrity_corruption is True
+    assert mixed.labels_by_horizon["H10"].available == 1
+    assert mixed.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert mixed.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+
+
+def test_unavailable_invented_reason_is_corruption_not_valid_unavailable() -> None:
+    """P0: invented unavailable_reason is integrity corruption, not a valid UNAVAILABLE.
+
+    Control: corporate_action_in_window (production terminal) still tallies unavailable.
+    """
+    from src.application.services.accumulation_producer_readiness import (
+        count_labels_by_horizon,
+    )
+
+    obs = [
+        _observation(day=1, ticker="BBCA"),
+        _observation(day=2, ticker="BBRI"),
+    ]
+    invented = _label(
+        obs[0],
+        availability=LabelAvailability.UNAVAILABLE,
+        outcome=None,
+        metrics={"unavailable_reason": "invented_reason"},
+    )
+    assert invented.availability is LabelAvailability.UNAVAILABLE
+    assert invented.metrics["unavailable_reason"] == "invented_reason"
+
+    counts = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[invented],
+        observations_by_id={o.observation_id: o for o in obs},
+    )
+    assert counts.has_integrity_corruption is True
+    assert counts.counts_by_horizon["H10"].unavailable == 0
+    assert counts.counts_by_horizon["H10"].available == 0
+    assert any("metrics.unavailable_reason_unsupported" in r for r in counts.invalid_reasons)
+
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[invented],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.label_validation.has_integrity_corruption is True
+    assert cohort.labels_by_horizon["H10"].unavailable == 0
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert any(
+        "metrics.unavailable_reason_unsupported" in r
+        for r in cohort.label_validation.invalid_reasons
+    )
+
+    # Control: production terminal reason still counts as unavailable when otherwise valid.
+    supported = _label(
+        obs[0],
+        availability=LabelAvailability.UNAVAILABLE,
+        outcome=None,
+        metrics={"unavailable_reason": "corporate_action_in_window"},
+    )
+    control_counts = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[supported],
+        observations_by_id={o.observation_id: o for o in obs},
+    )
+    assert control_counts.has_integrity_corruption is False
+    assert control_counts.counts_by_horizon["H10"].unavailable == 1
+    assert control_counts.invalid_label_count == 0
+
+    control = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=obs,
+        labels=[supported],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert control.label_validation.has_integrity_corruption is False
+    assert control.labels_by_horizon["H10"].unavailable == 1
+    # Zero AVAILABLE H10 → not READY; corporate-action unavailable alone is COLLECTING.
+    assert control.producer_status is ProducerReadinessStatus.COLLECTING
+    assert control.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
+    assert control.producer_status is not ProducerReadinessStatus.BLOCKED_POLICY
+
+
 def test_label_schema_999_and_banana_outcome_and_invented_fingerprint_block() -> None:
     obs = [_observation(day=1), _observation(day=2, ticker="BBRI")]
     valid = _label(obs[0], outcome="SUCCESS")

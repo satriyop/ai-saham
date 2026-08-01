@@ -103,6 +103,13 @@ _PATH_LABEL_HORIZON_DAYS: Mapping[LearningContractId, int] = {
     LearningContractId.ACCUM_20D_LABEL: 20,
 }
 _ALLOWED_PATH_OUTCOMES: frozenset[str] = frozenset({"SUCCESS", "FAILURE", "NEUTRAL"})
+# Production ACCUM path-label generator emits this exact terminal UNAVAILABLE reason
+# (database_learning_lifecycle_use_case). Not free-form; not parameterized CA strings.
+_SUPPORTED_PATH_UNAVAILABLE_REASONS: frozenset[str] = frozenset(
+    {
+        "corporate_action_in_window",
+    }
+)
 _AVAILABLE_METRIC_KEYS: frozenset[str] = frozenset(
     {
         "ticker",
@@ -1090,6 +1097,22 @@ def _path_label_semantic_reasons(
                         "metrics.signal_date_session_mismatch:"
                         f"signal={signal_date.isoformat()},session={obs_session.isoformat()}"
                     )
+                # metrics.ticker must equal parent observation ticker (case-normalized).
+                # Presence alone is not authority — BBCA obs + TLKM metrics is corruption.
+                obs_ticker = _parent_observation_ticker(observation)
+                raw_metric_ticker = metrics.get("ticker")
+                if not isinstance(raw_metric_ticker, str) or not raw_metric_ticker.strip():
+                    # Missing key already reported via metrics_missing_fields; invalid
+                    # non-string / blank values fail closed here when key is present.
+                    if "ticker" in metrics:
+                        reasons.append(f"metrics.ticker_invalid:{raw_metric_ticker!r}")
+                elif obs_ticker is not None:
+                    metric_ticker = raw_metric_ticker.strip().upper()
+                    if metric_ticker != obs_ticker:
+                        reasons.append(
+                            "metrics.ticker_mismatch:"
+                            f"metrics={metric_ticker},observation={obs_ticker}"
+                        )
                 # Entry reference equals frozen shared.current_price.
                 payload = observation.decision_payload
                 shared = payload.get("shared") if isinstance(payload, Mapping) else None
@@ -1112,8 +1135,27 @@ def _path_label_semantic_reasons(
         reason = metrics.get("unavailable_reason")
         if not isinstance(reason, str) or not reason.strip():
             reasons.append("metrics.unavailable_reason_missing")
+        elif reason.strip() not in _SUPPORTED_PATH_UNAVAILABLE_REASONS:
+            # Closed production vocabulary — invented non-empty strings are corruption.
+            reasons.append(f"metrics.unavailable_reason_unsupported:{reason.strip()!r}")
 
     return reasons
+
+
+def _parent_observation_ticker(observation: LearningObservation) -> str | None:
+    """Authoritative observation ticker (window/payload bound), case-normalized."""
+    bound = bound_economic_session(observation)
+    if bound is not None:
+        return bound[0]
+    payload = observation.decision_payload
+    if isinstance(payload, Mapping):
+        raw = payload.get("ticker")
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip().upper()
+    window = parse_window_id(observation.window_id)
+    if window is not None:
+        return window[0]
+    return None
 
 
 def count_labels_by_horizon(
