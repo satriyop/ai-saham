@@ -188,10 +188,12 @@ Do not add a second independently parsed market-cap field for this slice.
 
 ### Sector breadth and historical cohorts
 
-Sector breadth remains out of the closed score_weights snapshot. Historical
-cohorts without the required active snapshot set remain raw corpus and
-ineligible for verified production-policy challenges. No fabricated snapshot
-backfill onto old rows.
+The legacy conglomerate-group breadth bonus is retired from production policy
+by [ADR-062](ADR-062-retire-accum-group-breadth-production-bonus.md). It remains
+out of the closed score_weights snapshot; its dormant configuration and
+isolated applier grant no authority. Historical cohorts without the required
+active snapshot set remain raw corpus and ineligible for verified
+production-policy challenges. No fabricated snapshot backfill onto old rows.
 
 ### ML consumer
 

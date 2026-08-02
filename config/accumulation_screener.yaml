@@ -8,18 +8,21 @@ accumulation_screener:
     min_market_cap_idr: 0
 
   sector_breadth:
-    # Set to false to disable sector breadth bonus entirely.
+    # Legacy, dormant group-breadth score-bonus configuration. Production
+    # composition deliberately supplies no group mapping, so this block does
+    # not authorize or activate scoring. ADR-062 retires this production-policy
+    # concept; a clean-removal task owns deleting the residual fields.
+    # Do not wire idx_groups.yaml into accumulation scoring.
     enabled: true
 
-    # If >= this fraction of sector peers show positive net_buy_ratio over
-    # the screening window, apply a rotation bonus to all tickers in that sector.
+    # Historical isolated-applier semantics only: if this fraction of mapped
+    # group peers shows positive net_buy_ratio, the dormant applier adds points.
     breadth_threshold: 0.60
 
-    # Bonus points awarded when breadth threshold is met.
+    # Historical dormant bonus; not production authority.
     bonus_pts: 10
 
-    # Minimum tickers from the same idx_groups.yaml group that must appear
-    # in the screened result set for breadth calculation to apply.
+    # Historical minimum support used by isolated tests only.
     min_tickers_for_breadth: 3
 
   broker_quality:

@@ -310,7 +310,7 @@ mark P1 operationally complete merely because code/tests pass. Record live
 session/label growth until the companion ml task reports at least two valid
 post-embargo OOS folds for the explicit cohort.
 
-### P2 - blocked architecture decision; no snapshot implementation here
+### P2 - decided: retire production bonus; no snapshot implementation here
 
 The current executable production contract is:
 
@@ -328,16 +328,17 @@ The current executable production contract is:
   wired its current mutation would alter displayed/ranking Accum score without
   recomputing the already-produced signal assessment.
 
-These facts make P2 a live semantic-design question, not a missing snapshot row.
-This task must record the finding in its completion record and stop there.
+These facts made P2 a semantic-design question, not a missing snapshot row.
+ADR-062 resolves it by retiring the current conglomerate-group breadth bonus
+from production policy. The seven-row v2 snapshot stays exact, and this corpus
+task must not add, infer, or backfill a breadth policy row.
 
-If the product owner later chooses to activate group breadth, create a separate
-architecture task that first locks the actual concept (conglomerate-group vs
-sector breadth), membership source and PIT identity, overlap rule, population,
-scoring order, Signal/Action interaction, unavailable behavior, and every live
-composition root. Only after that behavior lands may a follow-up snapshot task
-choose the new artifact/lean IDs, closed-set cardinality, policy ID/payload,
-and migration number. Do not reserve or implement v3 strings speculatively.
+Any future group/sector breadth diagnostic is a new contract, not activation of
+the retired bonus. It must first lock the actual concept, membership source and
+PIT identity, overlap rule, population, unavailable behavior, and corpus
+provenance. It remains diagnostic-only until separate out-of-sample evidence
+and an explicit promotion decision exist. Do not reserve or implement v3
+strings speculatively.
 
 Architecture decision task:
 
