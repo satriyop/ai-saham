@@ -1,6 +1,6 @@
 # Implement TUI Agent Phase 2 — Allowlisted Read-Tool Orchestration
 
-Status: `IN PROGRESS — EPIC (foundation and 8.1 complete; 8.2–8.4 pending)`
+Status: `IN PROGRESS — EPIC (foundation and 8.1–8.2 complete; 8.3–8.4 pending)`
 
 Activated on 2026-08-02 from `parked_tui_agent_read_tools_phase2.md`. The two
 activation triggers are now satisfied:
@@ -218,6 +218,10 @@ commit `b8b60d06`.
 
 ### 8.2 Tool — `get_ticker_dashboard`
 
+Status: **IMPLEMENTED** on 2026-08-02 in
+[`implement_tui_agent_ticker_dashboard_phase2_2.md`](implement_tui_agent_ticker_dashboard_phase2_2.md),
+commit `e964f48f`.
+
 - Schemas: `agent_tool.ticker_dashboard.args.v1` (`ticker: str`, canonical
   application form; suffixes/free-form/extra fields rejected) →
   `agent_tool.ticker_dashboard.result.v1`.
@@ -368,9 +372,12 @@ git diff --check
 - Tool subtasks (8.1–8.4):
   - 8.1 `get_visible_cockpit_result`: implemented and registered by `b8b60d06`;
     exact turn-local projection, no recompute/read/write, ordered TUI trace.
-  - 8.2–8.4: pending independent task activation and proof.
+  - 8.2 `get_ticker_dashboard`: implemented and registered by `e964f48f`;
+    bounded typed cache projection through the shared use case, with constructor
+    schema initialization disabled and live DB no-write proof.
+  - 8.3–8.4: pending independent task activation and proof.
 - Completed date:
-- Commits: foundation `825ce241`; tool 8.1 `b8b60d06`.
-- Verification for 8.1: 67 agent tests; 56 TUI tests with 1 skipped;
-  full suite 6155 passed with 1 skipped; architecture, inventory, Ruff, and diff
-  gates passed on 2026-08-02.
+- Commits: foundation `825ce241`; tool 8.1 `b8b60d06`; tool 8.2 `e964f48f`.
+- Verification through 8.2: 87 agent tests; 56 TUI tests with 1 skipped;
+  full suite 6176 passed with 1 skipped; data audits, live DB no-write proof,
+  architecture, inventory, Ruff, and diff gates completed on 2026-08-02.

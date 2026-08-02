@@ -1,6 +1,6 @@
 # Implement TUI Agent Phase 2.2 — Cache-Only Ticker Dashboard Tool
 
-Status: `IN PROGRESS`
+Status: `IMPLEMENTED` — verified on 2026-08-02
 
 Source:
 
@@ -171,15 +171,15 @@ the dashboard and all deterministic workflows behave exactly as before.
 
 ## 13. Acceptance Criteria
 
-- [ ] Exact contracts and negative tests above are implemented.
-- [ ] Registered set is exactly visible cockpit + ticker dashboard when the DB
+- [x] Exact contracts and negative tests above are implemented.
+- [x] Registered set is exactly visible cockpit + ticker dashboard when the DB
       seam is available; other tools remain absent.
-- [ ] Existing CLI/TUI dashboard composition and behavior remain green.
-- [ ] Application imports no infrastructure/adapter module.
-- [ ] Dedicated tests carry `pytest.mark.agent`.
-- [ ] Data audits, agent, TUI, parity, architecture, full suite, Ruff, and diff
+- [x] Existing CLI/TUI dashboard composition and behavior remain green.
+- [x] Application imports no infrastructure/adapter module.
+- [x] Dedicated tests carry `pytest.mark.agent`.
+- [x] Data audits, agent, TUI, parity, architecture, full suite, Ruff, and diff
       gates pass or pre-existing data warnings are explicitly recorded.
-- [ ] Implementation commit and verification are recorded below.
+- [x] Implementation commit and verification are recorded below.
 
 ## 14. Testing Expectations
 
@@ -213,6 +213,32 @@ TUI/infrastructure, or activating another tool.
 ## 17. Completion Record
 
 - Base commit: `cc57d081`
-- Implemented date:
-- Commit:
+- Implemented date: 2026-08-02
+- Commit: `e964f48f`
 - Verification:
+  - `pytest -m "agent and not tui" -q`: 83 passed
+  - `pytest -m "agent and tui" -q`: 4 passed
+  - `pytest -m agent -q`: 87 passed
+  - architecture + multi-surface inventory: 10 passed
+  - focused dashboard/composition/persistence checks: passed
+  - `pytest -m tui -q`: 56 passed, 1 skipped
+  - `pytest -q`: 6176 passed, 1 skipped
+  - `ruff check src/ tests/`: passed
+  - `ruff format --check src/ tests/`: passed
+  - `git diff --check`: passed
+- Live DB proof:
+  - BBCA full cache dashboard loaded as-of 2026-07-31 with zero panel errors.
+  - DB SHA-256 remained
+    `7f2450968b3ceea8ad37f502a839d7b47f344927ec6aa9e190c80b1e0c4a8a30`
+    before and after construction/execution.
+  - Agent projection was `PARTIAL`, 3981 bytes, with four honest branch warnings.
+- Data-contract audit gate (all commands exit 0):
+  - manifest: zero warnings; DB identity above.
+  - source contracts: `WARN`, 62 warnings and 1 info finding, all pre-existing
+    optional-field coverage findings.
+  - reconciliation: `WARN`, 5 warnings and 3 info findings. Task-relevant
+    existing findings are partial cross-source foreign-flow coverage, 22
+    all-null forward-estimate cache rows, and current-cache-only ticker notation.
+  - No source swap, canonical/PIT promotion claim, schema change, or audit
+    regression was introduced. All-null forward estimates explicitly project as
+    missing rather than neutral facts.
