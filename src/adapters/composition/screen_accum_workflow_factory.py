@@ -16,6 +16,7 @@ from src.adapters.composition.accumulation_risk_workflow_factory import (
 )
 from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
+    create_read_only_stock_analysis_workflow_dependencies,
     create_stock_analysis_workflow_dependencies,
 )
 from src.application.services.accumulation_production_policy_bundle import (
@@ -58,6 +59,7 @@ from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
     SQLiteMacroCalendarRepository,
 )
 from src.infrastructure.persistence.sqlite_setup_phase_ledger_repository import (
+    SQLiteSetupPhaseLedgerReadRepository,
     SQLiteSetupPhaseLedgerRepository,
 )
 from src.infrastructure.persistence.sqlite_watchlist_repository import (
@@ -83,6 +85,7 @@ def create_accumulation_screen_workflow(
     with_risk: bool = True,
     swing_policy: Any | None = None,
     dependencies: StockAnalysisWorkflowDependencies | None = None,
+    read_only: bool = False,
 ) -> AccumulationScreenWorkflow:
     """Build accumulation screen workflow dependencies for reconciliation."""
     deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
@@ -99,6 +102,11 @@ def create_accumulation_screen_workflow(
     )
     signal_engine = deps.create_signal_engine()
 
+    phase_history_repository = (
+        SQLiteSetupPhaseLedgerReadRepository(db_path)
+        if read_only
+        else _setup_phase_history_repo(db_path)
+    )
     use_case = create_accumulation_screen_use_case(
         broker_repository=deps.broker_repository,
         market_repository=deps.market_repository,
@@ -106,8 +114,11 @@ def create_accumulation_screen_workflow(
         stockbit_providers=deps.stockbit_providers,
         risk_use_case=risk_use_case,
         signal_engine=signal_engine,
-        candidate_observations_repository=deps.learning_artifact_repository,
-        setup_phase_history_repository=_setup_phase_history_repo(db_path),
+        candidate_observations_repository=(
+            None if read_only else deps.learning_artifact_repository
+        ),
+        setup_phase_history_repository=phase_history_repository,
+        record_setup_phase=not read_only,
         accum_score_policy=screener_config.accum_score_policy,
         derived_feature_policy=screener_config.derived_features,
         swing_setup_catalog=swing_setup_catalog,
@@ -117,7 +128,10 @@ def create_accumulation_screen_workflow(
         sector_context_builder_factory=deps.sector_context_builder_factory,
         sector_macro_context_builder_factory=deps.sector_macro_context_builder_factory,
         company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
-        macro_calendar_repository=SQLiteMacroCalendarRepository(db_path),
+        macro_calendar_repository=SQLiteMacroCalendarRepository(
+            db_path,
+            initialize_schema=not read_only,
+        ),
     )
 
     return AccumulationScreenWorkflow(
@@ -235,6 +249,7 @@ def create_run_accumulation_screen_workflow_use_case(
     screener_config: AccumulationScreenerConfig,
     swing_policy: Any,
     dependencies: StockAnalysisWorkflowDependencies | None = None,
+    read_only: bool = False,
 ) -> RunAccumulationScreenWorkflowUseCase:
     """Build the accumulation screen workflow use case with all dependencies wired."""
     deps = dependencies or create_stock_analysis_workflow_dependencies(db_path)
@@ -243,6 +258,7 @@ def create_run_accumulation_screen_workflow_use_case(
         screener_config=screener_config,
         swing_policy=swing_policy,
         dependencies=deps,
+        read_only=read_only,
     )
 
     def _evaluate_display_market_context(
@@ -258,9 +274,13 @@ def create_run_accumulation_screen_workflow_use_case(
             universe=universe,
         )
 
-    collect_diagnostic = _build_diagnostic_evidence_collector(
-        deps=deps,
-        swing_policy=swing_policy,
+    collect_diagnostic = (
+        None
+        if read_only
+        else _build_diagnostic_evidence_collector(
+            deps=deps,
+            swing_policy=swing_policy,
+        )
     )
 
     return RunAccumulationScreenWorkflowUseCase(
@@ -274,9 +294,29 @@ def create_run_accumulation_screen_workflow_use_case(
         live_signal_evidence_context_use_case=(
             create_live_signal_evidence_execution_context_use_case(deps.market_repository)
         ),
-        save_watchlist_use_case=SaveScreenWatchlistUseCase(SQLiteWatchlistRepository(db_path)),
-        evaluate_market_context=_evaluate_display_market_context,
+        save_watchlist_use_case=(
+            None if read_only else SaveScreenWatchlistUseCase(SQLiteWatchlistRepository(db_path))
+        ),
+        evaluate_market_context=(None if read_only else _evaluate_display_market_context),
         collect_diagnostic_evidence=collect_diagnostic,
+    )
+
+
+def create_read_only_accumulation_judge_workflow_use_case(
+    *,
+    db_path: Path,
+    screener_config: AccumulationScreenerConfig,
+    swing_policy: Any,
+) -> RunAccumulationScreenWorkflowUseCase:
+    """Build canonical single-ticker judgment with every write seam disabled."""
+    resolved = Path(db_path).expanduser()
+    dependencies = create_read_only_stock_analysis_workflow_dependencies(resolved)
+    return create_run_accumulation_screen_workflow_use_case(
+        db_path=resolved,
+        screener_config=screener_config,
+        swing_policy=swing_policy,
+        dependencies=dependencies,
+        read_only=True,
     )
 
 

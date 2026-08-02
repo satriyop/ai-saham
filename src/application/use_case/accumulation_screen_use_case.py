@@ -173,6 +173,7 @@ class AccumulationScreenUseCase:
         risk_use_case: "AssessRiskUseCase | None" = None,
         candidate_observations_repository: "LearningObservationRepository | None" = None,
         setup_phase_history_repository: "SetupPhaseHistoryRepository | None" = None,
+        record_setup_phase: bool = True,
         accum_score_use_case: ScoreAccumUseCase | None = None,
         derived_feature_policy: accumulation_dto.AccumulationDerivedFeaturePolicy | None = None,
         swing_setup_catalog: "SwingSetupCatalogConfig | None" = None,
@@ -209,6 +210,7 @@ class AccumulationScreenUseCase:
         self._signal_engine = signal_engine
         self._candidate_observations_repo = candidate_observations_repository
         self._setup_phase_history_repo = setup_phase_history_repository
+        self._record_setup_phase = record_setup_phase
         self._accum_score_uc = accum_score_use_case or ScoreAccumUseCase()
         self._derived_features = (
             derived_feature_policy or accumulation_dto.AccumulationDerivedFeaturePolicy()
@@ -298,6 +300,7 @@ class AccumulationScreenUseCase:
             candidate_evidence_builder=self._candidate_evidence_builder,
             accum_score_uc=self._accum_score_uc,
             setup_phase_history_repository=self._setup_phase_history_repo,
+            record_setup_phase=self._record_setup_phase,
             pipeline=self._assessment_pipeline,
         )
 

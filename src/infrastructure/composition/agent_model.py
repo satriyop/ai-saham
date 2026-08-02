@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from src.application.dto.accumulation_agent import (
     AgentTurnPolicy,
 )
 from src.application.dto.agent_tools import AgentToolName, AgentToolTurnPolicy
+from src.application.services.agent_accumulation_judge_tool import AccumulationJudgeTool
 from src.application.services.agent_ticker_dashboard_tool import TickerDashboardTool
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_visible_cockpit_tool import VisibleCockpitResultTool
@@ -41,6 +43,7 @@ def build_agent_composition(
     *,
     provider: str | None = None,
     db_path: Path | str | None = None,
+    accumulation_judge_factory: Callable[[], Callable] | None = None,
 ) -> AgentComposition:
     explicit = provider
     if explicit is None and not os.getenv("AI_PROVIDER"):
@@ -83,6 +86,13 @@ def build_agent_composition(
                 dashboard = None
             if dashboard is not None:
                 tools.append(TickerDashboardTool(dashboard))
+        if accumulation_judge_factory is not None:
+            try:
+                judge_ticker = accumulation_judge_factory()
+            except (OSError, ValueError):
+                judge_ticker = None
+            if judge_ticker is not None:
+                tools.append(AccumulationJudgeTool(judge_ticker))
         registered_tools = tuple(tool.definition.name for tool in tools)
         use_case = AgentTurnOrchestrator(
             model,

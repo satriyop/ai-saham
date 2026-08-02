@@ -24,7 +24,11 @@ from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
 from src.infrastructure.browser.stockbit_ticker_notation import StockbitTickerNotationProvider
 
 
-def create_readonly_stockbit_providers(db_path: Path) -> StockbitProviders:
+def create_readonly_stockbit_providers(
+    db_path: Path,
+    *,
+    initialize_schema: bool = True,
+) -> StockbitProviders:
     """Return Stockbit providers backed by SQLite cache only.
 
     `api_client=None` keeps this bundle read-only: providers return cached
@@ -33,7 +37,9 @@ def create_readonly_stockbit_providers(db_path: Path) -> StockbitProviders:
     Loads `StockbitConfig` once and passes the same instance into every
     provider constructed here, instead of each provider loading its own copy.
     """
-    connection_provider = StockbitSQLiteConnectionProvider()
+    connection_provider = StockbitSQLiteConnectionProvider(
+        initialize_schema=initialize_schema,
+    )
     stockbit_config = load_stockbit_provider_config()
     return StockbitProviders(
         corp_repo=StockbitCorporateActionRepository(

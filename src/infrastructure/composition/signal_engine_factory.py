@@ -40,6 +40,7 @@ def create_signal_engine(
     with_enrichment: bool = False,
     *,
     config: SignalEngineConfig | None = None,
+    initialize_schema: bool = True,
 ) -> "SignalEngine":
     """
     Create a fully-configured SignalEngine.
@@ -55,6 +56,9 @@ def create_signal_engine(
         config: Optional pre-resolved ``SignalEngineConfig``. When provided, it
             is used by identity (no second YAML resolve). Required for corpus
             capture so snapshots and engines share the same typed policy object.
+        initialize_schema: Whether cache adapters may initialize schemas. The
+            default preserves normal workflow behavior; proven read-only
+            compositions disable it explicitly.
     """
     if config is not None:
         signal_config = config
@@ -65,7 +69,10 @@ def create_signal_engine(
         return SignalEngine(config=signal_config)
 
     resolved = Path(db_path)
-    market_repository = SQLiteMarketRepository(db_path=resolved)
+    market_repository = SQLiteMarketRepository(
+        db_path=resolved,
+        initialize_schema=initialize_schema,
+    )
 
     def _latest_close(ticker: str) -> float | None:
         candles = market_repository.get_candles(ticker)
@@ -73,7 +80,9 @@ def create_signal_engine(
             return None
         return float(candles[-1].close)
 
-    connection_provider = StockbitSQLiteConnectionProvider()
+    connection_provider = StockbitSQLiteConnectionProvider(
+        initialize_schema=initialize_schema,
+    )
     stockbit_config = load_stockbit_provider_config()
     return SignalEngine(
         bandar_provider=StockbitBandarDetectorProvider(

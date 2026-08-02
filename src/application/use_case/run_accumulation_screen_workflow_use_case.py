@@ -145,9 +145,10 @@ class RunAccumulationScreenWorkflowUseCase:
         self._evaluate_market_context = evaluate_market_context
         # Optional ADR-054 S1 diagnostic evidence (must not mutate Action).
         self._collect_diagnostic_evidence = collect_diagnostic_evidence
-        # Every mode here (single-window and --multi) is diagnostic/read-only.
         # Canonical observation recording is a separate, explicit workflow
-        # (signal-backfill) — see RecordAccumulationObservationsUseCase.
+        # (signal-backfill) — see RecordAccumulationObservationsUseCase. Normal
+        # production screen composition may still record setup-phase memory;
+        # proven read-only consumers must disable that separate application seam.
 
     def execute(
         self,

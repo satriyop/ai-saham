@@ -92,7 +92,7 @@ class StockAnalysisWorkflowDependencies:
     db_path: Path
     broker_repository: BrokerDataRepository
     market_repository: MarketDataRepository
-    learning_artifact_repository: SQLiteLearningArtifactRepository
+    learning_artifact_repository: SQLiteLearningArtifactRepository | None
     stockbit_providers: StockbitProviders
     rules_loader_factory: Callable[[], RulesLoader]
     indicator_registry_factory: Callable[..., IndicatorRegistry]
@@ -115,16 +115,55 @@ def create_stock_analysis_workflow_dependencies(
     factories. Config is loaded lazily inside the bound engine callables,
     not at import time.
     """
-    broker_repo = SQLiteBrokerRepository(db_path)
-    market_repo = SQLiteMarketRepository(db_path=db_path)
-    learning_repository = SQLiteLearningArtifactRepository(db_path)
-    stockbit_providers = create_readonly_stockbit_providers(db_path)
+    return _create_stock_analysis_workflow_dependencies(db_path, read_only=False)
+
+
+def create_read_only_stock_analysis_workflow_dependencies(
+    db_path: Path,
+) -> StockAnalysisWorkflowDependencies:
+    """Construct the canonical analysis graph without write-capable seams.
+
+    This narrow bundle is reserved for registered read-only consumers. It
+    requires an existing database, skips every repository/provider schema
+    initializer, exposes no learning repository, and creates enrichment signal
+    engines with query-only Stockbit cache connections.
+    """
+    resolved = Path(db_path).expanduser()
+    if not resolved.is_file():
+        raise FileNotFoundError(f"analysis database is unavailable: {resolved}")
+    return _create_stock_analysis_workflow_dependencies(resolved, read_only=True)
+
+
+def _create_stock_analysis_workflow_dependencies(
+    db_path: Path,
+    *,
+    read_only: bool,
+) -> StockAnalysisWorkflowDependencies:
+    """Shared parity construction; only persistence capability differs."""
+    broker_repo = SQLiteBrokerRepository(db_path, initialize_schema=not read_only)
+    market_repo = SQLiteMarketRepository(
+        db_path=db_path,
+        initialize_schema=not read_only,
+    )
+    learning_repository = None if read_only else SQLiteLearningArtifactRepository(db_path)
+    stockbit_providers = create_readonly_stockbit_providers(
+        db_path,
+        initialize_schema=not read_only,
+    )
 
     def _make_risk_engine() -> RiskEngine:
+        if read_only:
+            raise PermissionError(
+                "standalone risk-engine construction is disabled in the read-only judge graph"
+            )
         return create_configured_risk_engine(db_path, with_enrichment=True)
 
     def _make_signal_engine() -> SignalEngine:
-        return create_signal_engine(db_path=db_path, with_enrichment=True)
+        return create_signal_engine(
+            db_path=db_path,
+            with_enrichment=True,
+            initialize_schema=not read_only,
+        )
 
     def _make_market_context_provider() -> ConfigBackedMarketContextProvider:
         return ConfigBackedMarketContextProvider(

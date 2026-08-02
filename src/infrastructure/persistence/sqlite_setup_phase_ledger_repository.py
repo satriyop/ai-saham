@@ -224,3 +224,87 @@ class SQLiteSetupPhaseLedgerRepository:
                 ),
             )
             return SetupPhaseRecordResult.INSERTED
+
+
+class SQLiteSetupPhaseLedgerReadRepository:
+    """Fail-closed read-only setup-phase history over an existing database."""
+
+    def __init__(self, db_path: str | Path) -> None:
+        self._db_path = Path(db_path).expanduser()
+        if not self._db_path.is_file():
+            raise FileNotFoundError(
+                f"setup phase database does not exist (read-only): {self._db_path}"
+            )
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(f"file:{self._db_path}?mode=ro", uri=True)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA query_only = ON")
+        return connection
+
+    def list_rows_before(
+        self,
+        *,
+        ticker: str,
+        before_date: date,
+        limit: int | None = None,
+    ) -> Sequence[SetupPhaseLedgerRow]:
+        sql = """
+            SELECT entry_id, ticker, as_of_date, phase, setup_family,
+                   source_workflow, recorded_at, schema_version, observation_id
+            FROM setup_phase_ledger
+            WHERE ticker = ? AND as_of_date < ?
+            ORDER BY as_of_date ASC, entry_id ASC
+        """
+        params: list[object] = [ticker.upper(), before_date.isoformat()]
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(int(limit))
+        try:
+            with self._connect() as connection:
+                rows = connection.execute(sql, params).fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return ()
+            raise
+        return tuple(_row_from_db(row) for row in rows)
+
+    def list_rows_before_many(
+        self,
+        *,
+        tickers: Sequence[str],
+        before_date: date,
+    ) -> Sequence[SetupPhaseLedgerRow]:
+        normalized = sorted({str(ticker).upper() for ticker in tickers if ticker})
+        if not normalized:
+            return ()
+        placeholders = ",".join("?" for _ in normalized)
+        sql = f"""
+            SELECT entry_id, ticker, as_of_date, phase, setup_family,
+                   source_workflow, recorded_at, schema_version, observation_id
+            FROM setup_phase_ledger
+            WHERE ticker IN ({placeholders}) AND as_of_date < ?
+            ORDER BY ticker ASC, as_of_date ASC, entry_id ASC
+        """
+        params: list[object] = [*normalized, before_date.isoformat()]
+        try:
+            with self._connect() as connection:
+                rows = connection.execute(sql, params).fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return ()
+            raise
+        return tuple(_row_from_db(row) for row in rows)
+
+    def record_phase(
+        self,
+        *,
+        ticker: str,
+        as_of_date: date,
+        phase: SetupPhaseState,
+        setup_family: str | None,
+        source_workflow: str,
+        observation_id: str | None = None,
+    ) -> SetupPhaseRecordResult:
+        del ticker, as_of_date, phase, setup_family, source_workflow, observation_id
+        raise PermissionError("setup phase ledger is read-only")

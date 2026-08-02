@@ -101,6 +101,7 @@ class AccumulationCandidateSignalAssessor:
         accum_score_uc: ScoreAccumUseCase | None = None,
         setup_phase_history_repository: "SetupPhaseHistoryRepository | None" = None,
         *,
+        record_setup_phase: bool = True,
         pipeline: ScreenAssessmentPipeline | None = None,
     ) -> None:
         self._signal_engine = signal_engine
@@ -112,6 +113,7 @@ class AccumulationCandidateSignalAssessor:
             self._setup_phase_history_repo = (
                 candidate_evidence_builder.setup_phase_history_repository
             )
+        self._record_setup_phase = record_setup_phase
         self._pipeline = pipeline or ScreenAssessmentPipeline(
             policy=ScreenPolicy.accumulation(),
             signal_engine=signal_engine,
@@ -208,7 +210,7 @@ class AccumulationCandidateSignalAssessor:
             candidate, flow_ev, as_of_date, setup_family=setup_family
         )
         # Production phase memory: canonical window only (ADR-056 window 7).
-        if candidate.setup_phase is not None:
+        if self._record_setup_phase and candidate.setup_phase is not None:
             from src.application.services.setup_phase_history import (
                 record_setup_phase_for_screen,
             )

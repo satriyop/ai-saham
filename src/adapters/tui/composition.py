@@ -20,7 +20,11 @@ from src.adapters.composition.screen_accum_request import (
     DEFAULT_WINDOW,
     build_default_screen_accum_request,
 )
-from src.adapters.composition.screen_deps import ScreenDeps, build_screen_deps
+from src.adapters.composition.screen_deps import (
+    ScreenDeps,
+    build_read_only_accumulation_judge_runner,
+    build_screen_deps,
+)
 from src.adapters.tui.board_snapshot import default_accum_snapshot_path
 from src.adapters.tui.controllers.board_controller import BoardController
 from src.adapters.tui.local_cache_health import load_local_cache_health
@@ -76,7 +80,14 @@ def create_tui_app(
         paper_log_runner = _LocalPaperLogFromPlanRunner(db_path, config)
     if phase_history_loader is None:
         phase_history_loader = _LocalPhaseHistoryLoader(db_path)
-    agent_composition = build_agent_composition(config.ai, db_path=db_path)
+    agent_composition = build_agent_composition(
+        config.ai,
+        db_path=db_path,
+        accumulation_judge_factory=lambda: build_read_only_accumulation_judge_runner(
+            db_path,
+            universe=universe,
+        ),
+    )
     if agent_turn_runner is None:
         agent_turn_runner = agent_composition.use_case.execute
 

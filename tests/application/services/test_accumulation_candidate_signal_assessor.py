@@ -2,6 +2,7 @@
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from src.application.dto.accumulation_screen import (
@@ -153,6 +154,8 @@ def _make_assessor(
     signal_score: int = 60,
     setup_phase: object = None,
     accum_score: float = 50.0,
+    setup_phase_repository=None,
+    record_setup_phase: bool = True,
 ):
     """Build an AccumulationCandidateSignalAssessor with mocked dependencies."""
     from src.application.services.accumulation_candidate_signal_assessor import (
@@ -170,6 +173,7 @@ def _make_assessor(
 
     evidence_builder = MagicMock()
     evidence_builder.detect_candidate_setup_phase.return_value = setup_phase
+    evidence_builder.setup_phase_history_repository = setup_phase_repository
 
     accum_score_uc = MagicMock()
     accum_score_uc.execute.return_value.evidence = _foreign_flow_breakdown(accum_score)
@@ -179,7 +183,35 @@ def _make_assessor(
         flow_confirmation_builder=flow_builder,
         candidate_evidence_builder=evidence_builder,
         accum_score_uc=accum_score_uc,
+        setup_phase_history_repository=setup_phase_repository,
+        record_setup_phase=record_setup_phase,
     )
+
+
+def test_read_only_mode_preserves_phase_but_skips_ledger_recording() -> None:
+    from src.domain.value_objects.setup_phase import SetupPhaseState
+
+    phase = SimpleNamespace(current_phase=SetupPhaseState.ACCUMULATION)
+    repository = MagicMock()
+    assessor = _make_assessor(
+        setup_phase=phase,
+        setup_phase_repository=repository,
+        record_setup_phase=False,
+    )
+    candidate = _candidate()
+
+    result = assessor.assess(
+        candidate,
+        request=_request(),
+        as_of_date=date.today(),
+        consumed_broker_summaries=(),
+        consumed_broker_daily_flows=(),
+        effective_session=_effective_session(),
+        source_availability_use_case=None,
+    )
+
+    assert result.candidate.setup_phase is phase
+    repository.record_phase.assert_not_called()
 
 
 def _candidate(accum_score: float = 50.0) -> AccumulationCandidate:

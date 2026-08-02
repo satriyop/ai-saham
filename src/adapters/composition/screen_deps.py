@@ -12,8 +12,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.adapters.composition.screen_accum_request import (
+    build_default_screen_accum_request,
+)
 from src.adapters.composition.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow,
+    create_read_only_accumulation_judge_workflow_use_case,
     create_run_accumulation_screen_workflow_use_case,
 )
 from src.adapters.composition.stock_analysis_workflow_dependencies import (
@@ -83,6 +87,21 @@ class ScreenDeps:
         )
 
 
+@dataclass(frozen=True)
+class ReadOnlyAccumulationJudgeRunner:
+    """Thin canonical-request runner for the registered agent read tool."""
+
+    use_case: RunAccumulationScreenWorkflowUseCase
+    universe: str
+
+    def __call__(self, ticker: str):
+        request = build_default_screen_accum_request(
+            tickers=[ticker],
+            universe=self.universe,
+        )
+        return self.use_case.execute(request)
+
+
 def build_screen_deps(db_path: Path | str | None = None) -> ScreenDeps:
     """Construct screen discovery dependencies for one database path."""
     cfg = load_app_config()
@@ -101,4 +120,25 @@ def build_screen_deps(db_path: Path | str | None = None) -> ScreenDeps:
             Path(cfg.config_paths.accumulation_screener)
         ),
         swing_policy=load_swing_policy_config(),
+    )
+
+
+def build_read_only_accumulation_judge_runner(
+    db_path: Path | str,
+    *,
+    universe: str,
+) -> ReadOnlyAccumulationJudgeRunner:
+    """Construct the canonical single-ticker runner without writable dependencies."""
+    cfg = load_app_config()
+    resolved = Path(db_path).expanduser()
+    use_case = create_read_only_accumulation_judge_workflow_use_case(
+        db_path=resolved,
+        screener_config=load_accumulation_screener_config(
+            Path(cfg.config_paths.accumulation_screener)
+        ),
+        swing_policy=load_swing_policy_config(),
+    )
+    return ReadOnlyAccumulationJudgeRunner(
+        use_case=use_case,
+        universe=(universe or "lq45").strip().lower(),
     )

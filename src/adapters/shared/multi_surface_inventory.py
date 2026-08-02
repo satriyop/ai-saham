@@ -56,7 +56,8 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         tui_surface="s a / palette screen-accum · accum board",
         shared_application_path=(
             "src.adapters.composition.screen_accum_request.build_default_screen_accum_request "
-            "+ RunAccumulationScreenWorkflowUseCase; board fields via "
+            "+ RunAccumulationScreenWorkflowUseCase; agent re-judge uses "
+            "build_read_only_accumulation_judge_runner over the same pair; board fields via "
             "screen_accum_board_fields + decision_display"
         ),
         intentional_deltas=(
@@ -65,6 +66,8 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
             "decision_display); not CLI view ticker show; not CLI --full diagnostic suite",
             "TUI j on Judge = optional single-ticker local re-screen (same request builder); "
             "full-board r stays separate; snapshot-restored rows are limited judge until j",
+            "Agent judge_accumulation_ticker = bounded typed context projection over an "
+            "explicit no-refresh/no-persistence composition",
         ),
     ),
     DualSurfaceJob(

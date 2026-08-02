@@ -89,6 +89,61 @@ def test_existing_db_registers_visible_and_ticker_dashboard_tools(
     )
 
 
+def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_path) -> None:
+    db_path = tmp_path / "dashboard.db"
+    db_path.touch()
+
+    def sentinel_judge(ticker):
+        return ticker
+
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(agent_model, "DeepSeekAgentModel", lambda key: object())
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_ticker_dashboard_use_case",
+        lambda path: object(),
+    )
+
+    result = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
+        db_path=db_path,
+        accumulation_judge_factory=lambda: sentinel_judge,
+    )
+
+    assert result.registered_tools == (
+        AgentToolName.GET_VISIBLE_COCKPIT_RESULT,
+        AgentToolName.GET_TICKER_DASHBOARD,
+        AgentToolName.JUDGE_ACCUMULATION_TICKER,
+    )
+
+
+def test_judge_factory_is_lazy_and_fail_soft(monkeypatch) -> None:
+    calls = []
+
+    def broken_factory():
+        calls.append(True)
+        raise OSError("read-only composition unavailable")
+
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    disabled = build_agent_composition(
+        AiConfig(enabled=False, provider="deepseek", tools_enabled=True),
+        accumulation_judge_factory=broken_factory,
+    )
+    assert disabled.registered_tools == ()
+    assert calls == []
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(agent_model, "DeepSeekAgentModel", lambda key: object())
+    enabled = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
+        accumulation_judge_factory=broken_factory,
+    )
+    assert enabled.registered_tools == (AgentToolName.GET_VISIBLE_COCKPIT_RESULT,)
+    assert calls == [True]
+
+
 def test_missing_db_keeps_visible_tool_and_does_not_create_file(
     monkeypatch,
     tmp_path,
