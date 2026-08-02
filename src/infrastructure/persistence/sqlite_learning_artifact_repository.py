@@ -30,6 +30,7 @@ from src.domain.value_objects.learning_artifacts import (
     canonical_json,
     stable_learning_id,
     validate_artifact_integrity,
+    validate_label_identity,
     validate_observation_identity,
     validate_policy_snapshot_integrity,
 )
@@ -1383,43 +1384,47 @@ def _list_policy_snapshots_with_identity_discovery(
     )
 
 
+def _scan_all_labels_integrity(
+    connect: Callable[[], sqlite3.Connection],
+) -> tuple[LearningOutcomeLabel, ...]:
+    """Global read-only label pass: recon + digest + label_id identity for every row.
+
+    Selector-bound discovery cannot hide coordinated observation_id/label_id
+    rewrites. Corrupt labels fail closed before parent filtering.
+    """
+    with connect() as connection:
+        rows = connection.execute(
+            f"SELECT {_LABEL_SELECT} FROM learning_outcome_labels "
+            "ORDER BY observation_id, contract_id, label_id"
+        ).fetchall()
+    out: list[LearningOutcomeLabel] = []
+    for row in rows:
+        label = _load_label_row(row)
+        try:
+            validate_artifact_integrity(label, id_field="label_id")
+            validate_label_identity(label)
+        except LearningContractError as exc:
+            raise LearningArtifactReadIntegrityError(
+                f"learning label integrity failed for label_id={label.label_id!r}: {exc}"
+            ) from exc
+        out.append(label)
+    return tuple(out)
+
+
 def _list_labels_with_identity_discovery(
     connect: Callable[[], sqlite3.Connection],
     observation_ids: Sequence[str],
 ) -> Sequence[LearningOutcomeLabel]:
-    """Discover labels by parent observation_id OR expected label_id identity.
+    """Integrity-scan every label, then filter by requested parent observation IDs.
 
-    Dual observation_id (column / JSON) alone is insufficient: a coherent relink
-    that rewrites both representations can hide a row. Expected label_id is
-    derived solely from the requested parent observation_id + contract and still
-    finds the original row when the stored linkage was corrupted.
+    Dual observation_id and dual label_id rewrites cannot hide corrupt rows: the
+    global pass validates every stored label before parent filtering.
     """
     if not observation_ids:
         return ()
-    obs_ids = tuple(observation_ids)
-    label_ids = expected_label_ids_for_observations(obs_ids)
-    obs_ph = ",".join("?" for _ in obs_ids)
-    if label_ids:
-        label_ph = ",".join("?" for _ in label_ids)
-        sql = f"""
-            SELECT {_LABEL_SELECT} FROM learning_outcome_labels
-            WHERE observation_id IN ({obs_ph})
-               OR json_extract(artifact_json, '$.observation_id') IN ({obs_ph})
-               OR label_id IN ({label_ph})
-            ORDER BY observation_id, contract_id
-            """  # noqa: S608
-        params: tuple[Any, ...] = obs_ids + obs_ids + label_ids
-    else:
-        sql = f"""
-            SELECT {_LABEL_SELECT} FROM learning_outcome_labels
-            WHERE observation_id IN ({obs_ph})
-               OR json_extract(artifact_json, '$.observation_id') IN ({obs_ph})
-            ORDER BY observation_id, contract_id
-            """  # noqa: S608
-        params = obs_ids + obs_ids
-    with connect() as connection:
-        rows = connection.execute(sql, params).fetchall()
-    return tuple(_load_label_row(row) for row in rows)
+    requested = frozenset(observation_ids)
+    all_labels = _scan_all_labels_integrity(connect)
+    return tuple(label for label in all_labels if label.observation_id in requested)
 
 
 class SQLiteLearningArtifactReadRepository:

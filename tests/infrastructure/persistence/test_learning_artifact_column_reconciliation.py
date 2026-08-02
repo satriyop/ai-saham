@@ -12,7 +12,6 @@ import pytest
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     LabelAvailability,
-    LearningContractError,
     LearningContractId,
     LearningObservation,
     LearningOutcomeLabel,
@@ -435,19 +434,13 @@ def test_relinked_label_both_observation_ids_still_discovered(tmp_path: Path) ->
         )
         conn.commit()
 
-    # Discovered via expected label_id. Coherent dual-link rewrite loads, but
-    # label_id no longer matches recomputed identity from ghost parent.
-    from src.domain.value_objects.learning_artifacts import validate_label_identity
-
-    rows = list(repo.list_labels([obs.observation_id]))
-    assert len(rows) == 1
-    with pytest.raises(LearningContractError, match="label_id"):
-        validate_label_identity(rows[0])
+    # Global integrity pass fails closed (digest/identity mismatch) rather than
+    # returning zero labels for the original parent.
+    with pytest.raises(LearningArtifactReadIntegrityError):
+        list(repo.list_labels([obs.observation_id]))
 
 
 def test_relinked_label_is_not_invisible_to_list_labels(tmp_path: Path) -> None:
-    from src.domain.value_objects.learning_artifacts import validate_label_identity
-
     db = tmp_path / "relink2.db"
     repo = SQLiteLearningArtifactRepository(db)
     obs = _observation()
@@ -467,11 +460,9 @@ def test_relinked_label_is_not_invisible_to_list_labels(tmp_path: Path) -> None:
             ("ghost", json.dumps(raw, sort_keys=True, separators=(",", ":")), label.label_id),
         )
         conn.commit()
-    # Without expected-label_id discovery this returns []. Must remain visible.
-    rows = list(repo.list_labels([obs.observation_id]))
-    assert len(rows) == 1
-    with pytest.raises(LearningContractError, match="label_id"):
-        validate_label_identity(rows[0])
+    # Without global integrity this returns []. Must fail closed, not vanish.
+    with pytest.raises(LearningArtifactReadIntegrityError):
+        list(repo.list_labels([obs.observation_id]))
 
 
 def test_dual_snapshot_compat_drift_fails_global_integrity(tmp_path: Path) -> None:
@@ -613,3 +604,38 @@ def test_combined_anchor_snapshot_compat_and_id_fails_closed(tmp_path: Path) -> 
                 compatibility_id="compat-1",
             )
         )
+
+
+def test_combined_anchor_label_obs_and_id_fails_closed(tmp_path: Path) -> None:
+    """Dual observation_id + dual label_id rewrite fails global integrity, not vanish."""
+    db = tmp_path / "label-anchors.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    obs = _observation()
+    repo.add_observation(obs)
+    label = _label(obs.observation_id, obs.artifact_digest)
+    repo.add_label(label)
+    with sqlite3.connect(db) as conn:
+        raw = json.loads(
+            conn.execute(
+                "SELECT artifact_json FROM learning_outcome_labels WHERE label_id = ?",
+                (label.label_id,),
+            ).fetchone()[0]
+        )
+        raw["observation_id"] = "ghost-parent"
+        raw["label_id"] = "0" * 64
+        conn.execute(
+            """
+            UPDATE learning_outcome_labels
+            SET observation_id = ?, label_id = ?, artifact_json = ?
+            WHERE label_id = ?
+            """,
+            (
+                "ghost-parent",
+                "0" * 64,
+                json.dumps(raw, sort_keys=True, separators=(",", ":")),
+                label.label_id,
+            ),
+        )
+        conn.commit()
+    with pytest.raises(LearningArtifactReadIntegrityError):
+        list(repo.list_labels([obs.observation_id]))

@@ -456,3 +456,51 @@ def test_dual_observation_purpose_drift_raises_integrity_not_empty(tmp_path) -> 
             policy_snapshots=repo,
             session_snapshot_lookup=_snapshot_lookup,
         ).execute()
+
+
+def test_combined_label_anchor_mutation_raises_integrity(tmp_path) -> None:
+    """Dual observation_id + dual label_id rewrite fails readiness closed."""
+    import json
+    import sqlite3
+
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        LearningArtifactReadIntegrityError,
+    )
+
+    db = tmp_path / "label-drift.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    o1 = _observation(day=1, compatibility_id=COMPAT_B, ticker="BBCA")
+    o2 = _observation(day=2, compatibility_id=COMPAT_B, ticker="BBRI")
+    for o in (o1, o2):
+        repo.add_observation(o)
+        repo.add_label(_label(o))
+    _seed_full_v2(repo, COMPAT_B)
+
+    with sqlite3.connect(db) as conn:
+        for i, (lid, aj) in enumerate(
+            conn.execute("SELECT label_id, artifact_json FROM learning_outcome_labels")
+        ):
+            raw = json.loads(aj)
+            ghost_parent = f"ghost-parent-{i}"
+            ghost_label = f"{i:064x}"
+            raw["observation_id"] = ghost_parent
+            raw["label_id"] = ghost_label
+            conn.execute(
+                "UPDATE learning_outcome_labels SET observation_id=?, label_id=?, artifact_json=? "
+                "WHERE label_id=?",
+                (
+                    ghost_parent,
+                    ghost_label,
+                    json.dumps(raw, sort_keys=True, separators=(",", ":")),
+                    lid,
+                ),
+            )
+        conn.commit()
+
+    with pytest.raises(LearningArtifactReadIntegrityError):
+        GetAccumulationProducerReadinessUseCase(
+            observations=repo,
+            labels=repo,
+            policy_snapshots=repo,
+            session_snapshot_lookup=_snapshot_lookup,
+        ).execute()
