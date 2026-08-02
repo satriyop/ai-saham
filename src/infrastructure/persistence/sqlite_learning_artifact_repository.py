@@ -27,8 +27,17 @@ from src.domain.value_objects.learning_artifacts import (
     ProductionPolicySnapshot,
     ValidationStatus,
     canonical_json,
+    stable_learning_id,
     validate_artifact_integrity,
     validate_policy_snapshot_integrity,
+)
+
+# Label contracts whose identity is discoverable from a parent observation_id.
+_LABEL_DISCOVERY_CONTRACTS: tuple[LearningContractId, ...] = (
+    LearningContractId.ACCUM_3D_LABEL,
+    LearningContractId.ACCUM_10D_LABEL,
+    LearningContractId.ACCUM_20D_LABEL,
+    LearningContractId.PRE_OPEN_LABEL,
 )
 
 LEARNING_MIGRATION_NAMESPACE = "database_owned_learning"
@@ -889,21 +898,7 @@ class SQLiteLearningArtifactRepository:
             )
 
     def list_labels(self, observation_ids: Sequence[str]) -> Sequence[LearningOutcomeLabel]:
-        if not observation_ids:
-            return ()
-        placeholders = ",".join("?" for _ in observation_ids)
-        ids = tuple(observation_ids)
-        with self._connect() as connection:
-            rows = connection.execute(
-                f"""
-                SELECT {_LABEL_SELECT} FROM learning_outcome_labels
-                WHERE observation_id IN ({placeholders})
-                   OR json_extract(artifact_json, '$.observation_id') IN ({placeholders})
-                ORDER BY observation_id, contract_id
-                """,  # noqa: S608
-                ids + ids,
-            ).fetchall()
-        return tuple(_load_label_row(row) for row in rows)
+        return _list_labels_with_identity_discovery(self._connect, observation_ids)
 
     def add_evaluation(self, artifact: LearningEvaluation) -> bool:
         validate_artifact_integrity(artifact, id_field="evaluation_id")
@@ -1266,6 +1261,59 @@ def connect_learning_database_readonly(db_path: Path) -> sqlite3.Connection:
     return connection
 
 
+def expected_label_ids_for_observations(observation_ids: Sequence[str]) -> tuple[str, ...]:
+    """Deterministic label_id candidates for each observation × label contract."""
+    out: list[str] = []
+    for observation_id in observation_ids:
+        for contract in _LABEL_DISCOVERY_CONTRACTS:
+            out.append(
+                stable_learning_id(
+                    contract,
+                    {"observation_id": observation_id, "contract_id": contract},
+                )
+            )
+    return tuple(out)
+
+
+def _list_labels_with_identity_discovery(
+    connect: Callable[[], sqlite3.Connection],
+    observation_ids: Sequence[str],
+) -> Sequence[LearningOutcomeLabel]:
+    """Discover labels by parent observation_id OR expected label_id identity.
+
+    Dual observation_id (column / JSON) alone is insufficient: a coherent relink
+    that rewrites both representations can hide a row. Expected label_id is
+    derived solely from the requested parent observation_id + contract and still
+    finds the original row when the stored linkage was corrupted.
+    """
+    if not observation_ids:
+        return ()
+    obs_ids = tuple(observation_ids)
+    label_ids = expected_label_ids_for_observations(obs_ids)
+    obs_ph = ",".join("?" for _ in obs_ids)
+    if label_ids:
+        label_ph = ",".join("?" for _ in label_ids)
+        sql = f"""
+            SELECT {_LABEL_SELECT} FROM learning_outcome_labels
+            WHERE observation_id IN ({obs_ph})
+               OR json_extract(artifact_json, '$.observation_id') IN ({obs_ph})
+               OR label_id IN ({label_ph})
+            ORDER BY observation_id, contract_id
+            """  # noqa: S608
+        params: tuple[Any, ...] = obs_ids + obs_ids + label_ids
+    else:
+        sql = f"""
+            SELECT {_LABEL_SELECT} FROM learning_outcome_labels
+            WHERE observation_id IN ({obs_ph})
+               OR json_extract(artifact_json, '$.observation_id') IN ({obs_ph})
+            ORDER BY observation_id, contract_id
+            """  # noqa: S608
+        params = obs_ids + obs_ids
+    with connect() as connection:
+        rows = connection.execute(sql, params).fetchall()
+    return tuple(_load_label_row(row) for row in rows)
+
+
 class SQLiteLearningArtifactReadRepository:
     """Read-only learning projections for status / research (no schema ensure).
 
@@ -1304,21 +1352,7 @@ class SQLiteLearningArtifactReadRepository:
         return tuple(_load_observation_row(row) for row in rows)
 
     def list_labels(self, observation_ids: Sequence[str]) -> Sequence[LearningOutcomeLabel]:
-        if not observation_ids:
-            return ()
-        placeholders = ",".join("?" for _ in observation_ids)
-        ids = tuple(observation_ids)
-        with self._connect() as connection:
-            rows = connection.execute(
-                f"""
-                SELECT {_LABEL_SELECT} FROM learning_outcome_labels
-                WHERE observation_id IN ({placeholders})
-                   OR json_extract(artifact_json, '$.observation_id') IN ({placeholders})
-                ORDER BY observation_id, contract_id
-                """,  # noqa: S608
-                ids + ids,
-            ).fetchall()
-        return tuple(_load_label_row(row) for row in rows)
+        return _list_labels_with_identity_discovery(self._connect, observation_ids)
 
     def list_policy_snapshots(
         self,

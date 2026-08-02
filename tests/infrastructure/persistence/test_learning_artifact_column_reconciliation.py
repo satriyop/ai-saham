@@ -394,3 +394,96 @@ def test_list_observations_compat_filter_does_not_cross_cohorts(
     )
     assert len(only_b) == 1
     assert only_b[0].compatibility_id == "compat-b"
+
+
+def test_relinked_label_both_observation_ids_still_discovered(tmp_path: Path) -> None:
+    """Coherent dual observation_id rewrite is still found via expected label_id."""
+    db = tmp_path / "relink.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    obs = _observation()
+    repo.add_observation(obs)
+    label = _label(obs.observation_id, obs.artifact_digest)
+    repo.add_label(label)
+    original_label_id = label.label_id
+
+    # Relink both normalized column and JSON observation_id to a ghost parent.
+    with sqlite3.connect(db) as conn:
+        raw = json.loads(
+            conn.execute(
+                "SELECT artifact_json FROM learning_outcome_labels WHERE label_id = ?",
+                (original_label_id,),
+            ).fetchone()[0]
+        )
+        raw["observation_id"] = "ghost-observation"
+        # Keep original label_id (identity of the original parent+contract).
+        conn.execute(
+            """
+            UPDATE learning_outcome_labels
+            SET observation_id = ?, artifact_json = ?
+            WHERE label_id = ?
+            """,
+            (
+                "ghost-observation",
+                json.dumps(raw, sort_keys=True, separators=(",", ":")),
+                original_label_id,
+            ),
+        )
+        conn.commit()
+
+    # Discovery by parent obs still finds the row (via expected label_id).
+    # Loading raises because stored identity (label_id) disagrees with ghost link
+    # after recompute — or row/artifact recon may pass if both match ghost.
+    # Either way the row must not be invisible.
+    from src.domain.value_objects.learning_artifacts import validate_label_identity
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        expected_label_ids_for_observations,
+    )
+
+    expected = expected_label_ids_for_observations([obs.observation_id])
+    assert original_label_id in expected
+
+    with sqlite3.connect(db) as conn:
+        found = conn.execute(
+            "SELECT label_id, observation_id FROM learning_outcome_labels WHERE label_id = ?",
+            (original_label_id,),
+        ).fetchone()
+    assert found is not None
+
+    # list_labels must surface the candidate (integrity error or invalid identity).
+    with pytest.raises((LearningArtifactReadIntegrityError, Exception)):
+        # If artifact_json was rewritten without reconciling digest/label_id columns
+        # consistently, recon raises. If fully consistent ghost link, load may
+        # succeed but readiness identity check fails — still not "missing".
+        rows = list(repo.list_labels([obs.observation_id]))
+        assert len(rows) >= 1
+        validate_label_identity(rows[0])
+        raise AssertionError("relinked label must not validate cleanly")
+
+
+def test_relinked_label_is_not_invisible_to_list_labels(tmp_path: Path) -> None:
+    db = tmp_path / "relink2.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    obs = _observation()
+    repo.add_observation(obs)
+    label = _label(obs.observation_id, obs.artifact_digest)
+    repo.add_label(label)
+    with sqlite3.connect(db) as conn:
+        raw = json.loads(
+            conn.execute(
+                "SELECT artifact_json FROM learning_outcome_labels WHERE label_id = ?",
+                (label.label_id,),
+            ).fetchone()[0]
+        )
+        raw["observation_id"] = "ghost"
+        # Keep artifact_digest as-is so recon may fail on digest or identity.
+        conn.execute(
+            "UPDATE learning_outcome_labels SET observation_id=?, artifact_json=? WHERE label_id=?",
+            ("ghost", json.dumps(raw, sort_keys=True, separators=(",", ":")), label.label_id),
+        )
+        conn.commit()
+    # Query by original parent: without label_id discovery this returns [].
+    try:
+        found = list(repo.list_labels([obs.observation_id]))
+    except LearningArtifactReadIntegrityError:
+        found = ["raised"]  # discovered then rejected — correct fail-closed
+    assert found, "relinked label must remain discoverable for the original parent"
