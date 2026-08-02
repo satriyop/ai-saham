@@ -559,73 +559,38 @@ contract after product-owner approval.
 ## 13. Completion Record
 
 ```text
-Completed date (code gate): REOPENED 2026-08-02
+Completed date (code gate): REOPENED 2026-08-02 (still open)
 Task status: IN_PROGRESS_CONTRACT_HARDENING
-  (reopened: normalized-column reconciliation, strict authority parsers,
-   lookback Option A cohort consistency, label invalid≠insufficient,
-   ml-saham baseline_id fallback — must close with mutation tests before
-   CODE_COMPLETE_AWAITING_DATA)
-Commits (calendar authority / readiness hardening chain, main):
-  9642980c feat(accum): sync-session-calendar use case, CLI, and selector
-  ca9b53ff fix(cron): sync-session-calendar before labels
-  85d77b0c fix(calendar): fail closed on source conflicts; fix auto no-op order
-  109dcfb7 fix(calendar): enforce unique authority index and harden CLI verticals
-  c869bc0c fix(calendar): map sync migration conflicts to controlled CLI diagnostic
-  0d8f13af docs(backlog): record calendar authority commits and verification evidence
-P0/P1/P3 code checkpoint status: CODE_COMPLETE_AWAITING_DATA (2026-08-02)
-  - P0: readiness + authoritative snapshot descriptors + observation contract validation
-  - P0: status uses SQLiteLearningArtifactReadRepository (no schema ensure / no create)
-  - P0: readiness authority is signal.setup_readiness only (no fingerprint fallback)
-  - P0: path labels bind immutable TradingSessionCalendarSnapshot (Stockbit IHSG history v1)
-  - P1: cron wrapper + shared producer contracts; sync-session-calendar before labels
-  - P1: unique natural-key index + IntegrityError race reconciliation on snapshots
-  - P1: auto no-op before Stockbit auth; invalid manual dates create no DB
-  - P3: root-cause note; no transport synthesis
-  - ml-saham: promote require authoritative DB verify of production_snapshot_digest
-  - Authority-matrix cells: no unresolved P0 blockers remaining for this task scope
+  Historical CODE_COMPLETE_AWAITING_DATA claims below are SUPERSEDED.
+  Do not treat them as current; reopen findings remain open until closed
+  with mutation tests.
+
+Open reopen findings (must close before CODE_COMPLETE_AWAITING_DATA):
+  - P0 exact read-side canonicality (no strip/upper/Z aliases on session/ticker/timestamps)
+  - P0 exact ml-saham promote identity (no strip/lower/case rewrite)
+  - P1 dual-key observation query parentheses (compat filter)
+  - P1 complete per-column mutation matrix + naive created_at active-set proof
+
+Landed (partial — not sufficient alone for CODE_COMPLETE):
+  - Shadow-column reconciliation + dual-key discovery (query paren fix required)
+  - Strict population binding parser + Option A lookback cohort consistency
+  - Snapshot material hash + timezone-aware created_at validation (code)
+  - Missing promotion baseline_id fallback removed
+  - Invalid path-label vs insufficient horizon separation
+  - Calendar snapshot natural-key uniqueness + CLI verticals
+
+Commits (selected chain, main — incomplete vs reopen list):
+  733e3116 fix(persistence): reconcile learning rows with artifact authority
+  17b0d23e fix(corpus): reject noncanonical accumulation authority fields
+  ff356787 fix(readiness): Option A population invariants and distinct label states
+  9d8127f  (ml-saham) fix(promote): reject missing baseline identity
+
 P1 operational status: AWAITING_DATA (separate from code gate)
-  - live DB has no trading_session_calendar_snapshots table yet
-  - accumulation cohorts remain BLOCKED_POLICY until ops calendar sync + labels
-  - multi-session cohort growth and ml-saham ≥2 post-embargo OOS folds still required
-    for operational DONE / move to tasks/done/
+  - live cohorts BLOCKED_POLICY / LEGACY_RAW_ONLY until ops calendar sync + growth
+  - multi-session LQ45 + ml-saham ≥2 post-embargo OOS folds required for operational DONE
+
 P2 configured-but-unwired finding recorded: YES (no v3)
-Verification (2026-08-02, post-c869bc0c review):
-  - Focused calendar/readiness tests: 44 passed
-  - Concurrency tests ×20: 120 passed
-  - Non-TUI suite: 5942 passed (3 pre-existing unrelated failures)
-  - Whole-repo ruff check + format --check: passed
-  - git diff --check: passed
-  - Worktree clean for this task scope
-  - Data audits: exit 0; manifest clean; source/reconciliation WARN (unrelated data)
-Review fixes closed:
-  1. snapshot descriptors + common material_config_hash enforced
-  2. observation purpose/contract/session_date validated; corruption → BLOCKED_POLICY
-  3. ml-saham promote verifies digest against learning_policy_snapshots
-  4. status read-only repository
-  5. fingerprint fallback removed from readiness presence
-  6. calendar natural-key uniqueness (unique index + race recovery)
-  7. CLI vertical exact CHALLENGE_INPUT_READY including --auto
-  8. invalid manual sync args do not create a database
-  9. sync CLI controlled diagnostic for migration/source LearningContractError
-Second-pass hardening (2026-08-01):
-  - observation + label artifact digests validated fail-closed before classification
-  - session_date requires exact YYYY-MM-DD (no prefix slice)
-  - artifact_type must be exactly accumulation_session_observation
-  - ml-saham: validate_verified_production_identity requires conn; format-only
-    is validate_production_identity_format
-  - observation policy_contract/horizon_contract must match production write locks
-  - path labels require outcome_basis=PRICE_PATH_ONLY
-  - observation_id/label_id recompute integrity (typed validators)
-  - session_date bound to window_id/ticker (+ provenance when present); unbound dates cannot manufacture depth
-  - outer/payload schema_version, workflow, horizon_primary, multi-window envelope, required provenance enforced
-Authority-matrix review (2026-08-01 + calendar authority lock 2026-08-02/03):
-  - mandatory task-specific matrix and full DTO field classification added
-  - population authority locked to typed persisted Option A; no B/C or warehouse
-  - schema-11 population binding (schema-2 + attested tickers) is current-only; schema-9/10 rows remain non-current LEGACY_RAW_ONLY
-  - every matrix check is a P0 blocker; H3/H10/H20 conflicts all block the cohort
-  - market-session authority: Stockbit-attested immutable snapshots + unique natural key
-  - matrix implementation + mutation/focused gates treated complete for code merge gate
-CODE_COMPLETE_AWAITING_DATA: code/matrix/tests/commits gate met (this status)
-Operational DONE: still requires live multi-session LQ45 growth + ml-saham report
-  with at least two valid post-embargo OOS folds before tasks/done/
+
+CODE_COMPLETE_AWAITING_DATA: NOT claimed while reopen findings above remain open
+Operational DONE: still requires live multi-session growth + ml-saham OOS folds
 ```
