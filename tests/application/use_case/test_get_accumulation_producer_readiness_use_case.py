@@ -504,3 +504,95 @@ def test_combined_label_anchor_mutation_raises_integrity(tmp_path) -> None:
             policy_snapshots=repo,
             session_snapshot_lookup=_snapshot_lookup,
         ).execute()
+
+
+def test_invalid_pre_open_label_does_not_block_accum_status(tmp_path) -> None:
+    """Corrupt PRE_OPEN label must not abort ACCUM readiness (purpose isolation)."""
+    import sqlite3
+
+    db = tmp_path / "preopen-isolation.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    o1 = _observation(day=1, compatibility_id=COMPAT_B, ticker="BBCA")
+    o2 = _observation(day=2, compatibility_id=COMPAT_B, ticker="BBRI")
+    for o in (o1, o2):
+        repo.add_observation(o)
+        repo.add_label(_label(o))
+    _seed_full_v2(repo, COMPAT_B)
+
+    # Insert a PRE_OPEN observation + corrupt PRE_OPEN label (digest mismatch).
+    pre_at = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)
+    pre_obs = LearningObservation.create(
+        purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+        policy_contract="pre_open.v1",
+        horizon_contract="open_30m",
+        compatibility_id="preopen-compat",
+        cutoff_at=pre_at,
+        universe_id=UNIVERSE_ID,
+        window_id="BBCA:2026-07-05",
+        decision_payload={"ticker": "BBCA", "session_date": "2026-07-05"},
+        captured_at=pre_at,
+    )
+    repo.add_observation(pre_obs)
+    pre_label = LearningOutcomeLabel.create(
+        contract_id=LearningContractId.PRE_OPEN_LABEL,
+        observation_id=pre_obs.observation_id,
+        outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
+        availability=LabelAvailability.AVAILABLE,
+        outcome="UP",
+        metrics={"return": 0.1},
+        fingerprint="fp-preopen",
+        labeled_at=NOW,
+    )
+    repo.add_label(pre_label)
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "UPDATE learning_outcome_labels SET artifact_digest = ? WHERE label_id = ?",
+            ("0" * 64, pre_label.label_id),
+        )
+        conn.commit()
+
+    report = GetAccumulationProducerReadinessUseCase(
+        observations=repo,
+        labels=repo,
+        policy_snapshots=repo,
+        session_snapshot_lookup=_snapshot_lookup,
+    ).execute()
+    # ACCUM cohort still evaluates (PRE_OPEN corruption is isolated).
+    assert report.observation_count == 2
+    assert report.cohort_count == 1
+    assert report.cohorts[0].compatibility_id == COMPAT_B
+    assert report.cohorts[0].producer_status is ProducerReadinessStatus.CHALLENGE_INPUT_READY
+
+
+def test_invalid_accum_label_still_fails_closed(tmp_path) -> None:
+    """Corrupt ACCUM label still fails readiness (not purpose-isolated away)."""
+    import sqlite3
+
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        LearningArtifactReadIntegrityError,
+    )
+
+    db = tmp_path / "accum-label-corrupt.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    o1 = _observation(day=1, compatibility_id=COMPAT_B, ticker="BBCA")
+    o2 = _observation(day=2, compatibility_id=COMPAT_B, ticker="BBRI")
+    for o in (o1, o2):
+        repo.add_observation(o)
+        repo.add_label(_label(o))
+    _seed_full_v2(repo, COMPAT_B)
+
+    with sqlite3.connect(db) as conn:
+        lid = conn.execute("SELECT label_id FROM learning_outcome_labels LIMIT 1").fetchone()[0]
+        conn.execute(
+            "UPDATE learning_outcome_labels SET artifact_digest = ? WHERE label_id = ?",
+            ("0" * 64, lid),
+        )
+        conn.commit()
+
+    with pytest.raises(LearningArtifactReadIntegrityError):
+        GetAccumulationProducerReadinessUseCase(
+            observations=repo,
+            labels=repo,
+            policy_snapshots=repo,
+            session_snapshot_lookup=_snapshot_lookup,
+        ).execute()
