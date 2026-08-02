@@ -1,7 +1,9 @@
 import pytest
 
+from src.infrastructure.composition import agent_model
 from src.infrastructure.composition.agent_model import build_agent_composition
 from src.infrastructure.config.app_config import AiConfig
+from src.infrastructure.config.local_env import read_local_env_value
 
 pytestmark = pytest.mark.agent
 
@@ -17,6 +19,7 @@ def test_disabled_composition_does_not_construct_provider(monkeypatch) -> None:
 def test_enabled_missing_key_is_fail_soft(monkeypatch) -> None:
     monkeypatch.delenv("AI_PROVIDER", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(agent_model, "read_local_env_value", lambda name: None)
     result = build_agent_composition(AiConfig(enabled=True, provider="deepseek"))
     assert result.provider_available is False
     assert result.configured_provider == "deepseek"
@@ -35,3 +38,43 @@ def test_explicit_provider_overrides_environment(monkeypatch) -> None:
     result = build_agent_composition(AiConfig(enabled=True, provider="deepseek"), provider="gemini")
     assert result.configured_provider == "gemini"
     assert result.provider_available is False
+
+
+def test_local_env_reader_supports_export_quotes_and_last_value(tmp_path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text(
+        "# local only\nexport DEEPSEEK_API_KEY='first'\nOTHER=value\nDEEPSEEK_API_KEY=\"second\"\n",
+        encoding="utf-8",
+    )
+
+    assert read_local_env_value("DEEPSEEK_API_KEY", path=env_path) == "second"
+    assert read_local_env_value("MISSING", path=env_path) is None
+
+
+def test_composition_uses_local_env_when_process_key_is_absent(monkeypatch) -> None:
+    sentinel_model = object()
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(agent_model, "read_local_env_value", lambda name: "local-key")
+    monkeypatch.setattr(agent_model, "DeepSeekAgentModel", lambda key: sentinel_model)
+
+    result = build_agent_composition(AiConfig(enabled=True, provider="deepseek"))
+
+    assert result.provider_available is True
+    assert result.use_case.provider_available is True
+
+
+def test_process_key_takes_precedence_over_local_env(monkeypatch) -> None:
+    seen: list[str] = []
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "process-key")
+    monkeypatch.setattr(agent_model, "read_local_env_value", lambda name: "local-key")
+    monkeypatch.setattr(
+        agent_model,
+        "DeepSeekAgentModel",
+        lambda key: seen.append(key) or object(),
+    )
+
+    build_agent_composition(AiConfig(enabled=True, provider="deepseek"))
+
+    assert seen == ["process-key"]

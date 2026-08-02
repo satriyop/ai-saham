@@ -35,6 +35,25 @@ saham strategy create "RSI oversold strategy" --name my_rsi
 saham strategy backtest BBCA --strategy my_rsi
 ```
 
+### Optional TUI agent
+
+Enable the agent in the git-ignored `config/user.yaml` and place the credential
+in the git-ignored project `.env`:
+
+```yaml
+ai:
+  enabled: true
+  provider: deepseek
+```
+
+```dotenv
+DEEPSEEK_API_KEY=your-key
+```
+
+Then launch normally with `saham tui`. The TUI agent reads only this credential
+from `.env`; an already-exported `DEEPSEEK_API_KEY` takes precedence. Other CLI
+workflows do not implicitly import the project environment file.
+
 ---
 
 ## Documentation

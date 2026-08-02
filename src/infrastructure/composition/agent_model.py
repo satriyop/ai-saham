@@ -14,6 +14,7 @@ from src.application.use_case.explain_accumulation_candidate_use_case import (
 )
 from src.infrastructure.ai.deepseek_agent_model import DeepSeekAgentModel
 from src.infrastructure.ai.provider_config import resolve_ai_provider
+from src.infrastructure.config.local_env import read_local_env_value
 
 
 @dataclass(frozen=True)
@@ -36,7 +37,10 @@ def build_agent_composition(ai_config: object, *, provider: str | None = None) -
     elif configured != "deepseek":
         reason = AgentModelUnavailableReason.UNSUPPORTED_PROVIDER
     else:
-        api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+        api_key = (
+            os.getenv("DEEPSEEK_API_KEY", "").strip()
+            or (read_local_env_value("DEEPSEEK_API_KEY") or "").strip()
+        )
         if not api_key:
             reason = AgentModelUnavailableReason.MISSING_CREDENTIAL
         else:
