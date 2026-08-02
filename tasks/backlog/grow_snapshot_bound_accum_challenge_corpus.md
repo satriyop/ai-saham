@@ -566,24 +566,24 @@ Task status: IN_PROGRESS_CONTRACT_HARDENING
   with mutation tests.
 
 Open reopen findings (must close before CODE_COMPLETE_AWAITING_DATA):
-  - P0 exact read-side canonicality (no strip/upper/Z aliases on session/ticker/timestamps)
-  - P0 exact ml-saham promote identity (no strip/lower/case rewrite)
-  - P1 dual-key observation query parentheses (compat filter)
-  - P1 complete per-column mutation matrix + naive created_at active-set proof
+  - P0 ml-saham challenge evidence sealing (schema v4 content_digest/artifact_id;
+    exact status/against/primary_horizon; v3 historical-only) — in flight this pass
+  - P0 label dual-observation_id relink discovery via expected label_id — in flight
+  - P1 malformed optional producer-contract presence blocks — in flight
+  - P1 exact policy/calendar source_revision (no strip) — in flight
 
-Landed (partial — not sufficient alone for CODE_COMPLETE):
-  - Shadow-column reconciliation + dual-key discovery (query paren fix required)
-  - Strict population binding parser + Option A lookback cohort consistency
-  - Snapshot material hash + timezone-aware created_at validation (code)
-  - Missing promotion baseline_id fallback removed
-  - Invalid path-label vs insufficient horizon separation
-  - Calendar snapshot natural-key uniqueness + CLI verticals
+Closed since prior reopen (do not re-list as open):
+  - Exact observation/label ticker, session, timestamp parsing
+  - Exact ml-saham promote production identity strings
+  - Dual-key observation SQL parentheses
+  - Expanded reconciliation mutations + naive created_at active-set proof
+  - Shadow-column reconciliation, Option A lookback, material hash, baseline fallback,
+    invalid≠insufficient labels, calendar natural-key uniqueness
 
-Commits (selected chain, main — incomplete vs reopen list):
-  733e3116 fix(persistence): reconcile learning rows with artifact authority
-  17b0d23e fix(corpus): reject noncanonical accumulation authority fields
-  ff356787 fix(readiness): Option A population invariants and distinct label states
-  9d8127f  (ml-saham) fix(promote): reject missing baseline identity
+Commits (selected; incomplete vs open list until this pass lands):
+  bcd4cd55 fix(readiness): require exact canonical observation and label strings
+  85939db7 fix(persistence): parenthesize dual-key observation filters
+  dcd4610  (ml-saham) fix(promote): require exact identity strings without rewrite
 
 P1 operational status: AWAITING_DATA (separate from code gate)
   - live cohorts BLOCKED_POLICY / LEGACY_RAW_ONLY until ops calendar sync + growth
