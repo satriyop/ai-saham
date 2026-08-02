@@ -100,7 +100,7 @@ row.
 | ADR-032/033 `analyze swing` / overloaded `analyze` family | ADR-050 | Target verbs: `plan swing` (TradeSetup), `inspect *` (lenses), `assess pre-open` (frozen confirm); `analyze` top-level retired on implementation |
 | ADR-050 `plan` as full analysis desk / `screen` discovery-only | ADR-054 | `screen` = judge candidates (universe + single-ticker deep); `plan` = trade structure (horizon/SL/TP); phased migration |
 | ADR-051 AI chat non-goal | ADR-060 and ADR-061 | The cockpit may host one optional context assistant; Phase 1 is zero-tool, while a separately gated closed read-tool subset is allowed; general chat, writes, CLI passthrough, open-ended tools, and AI decision authority remain excluded |
-| ADR-059 sector-breadth exclusion | ADR-062 | The dormant conglomerate-group breadth bonus is retired from production policy; snapshot v2 remains exact, and any future diagnostic is a new PIT-governed evidence contract rather than activation of the old rule |
+| ADR-059 sector-breadth exclusion | ADR-062 | The dormant conglomerate-group breadth bonus is retired from production policy; snapshot v2 remains exact (seven rows); lean **contract ID** stays `lean_accumulation_compatibility.v2` while observation schema 11→12 **forks compatibility values**; any future diagnostic is a new PIT-governed evidence contract rather than activation of the old rule |
 
 ## High-value implementation entry points
 
@@ -187,7 +187,7 @@ row.
 | [059](docs/adr/ADR-059-production-policy-snapshot-for-ml-challenges.md) | Production policy snapshots for ML challenges | Accepted; active v2 snapshot contract |
 | [060](docs/adr/ADR-060-read-only-tui-context-agent.md) | Optional read-only TUI context agent | Accepted; amends ADR-051 for bounded accumulation-Judge explanation |
 | [061](docs/adr/ADR-061-closed-read-tool-orchestration-for-context-agent.md) | Closed read-tool orchestration for the context agent | Accepted architecture; amends ADR-060; runtime activation remains gated |
-| [062](docs/adr/ADR-062-retire-accum-group-breadth-production-bonus.md) | Retire accumulation group-breadth production bonus | Accepted; no production wiring; snapshot v2 unchanged; diagnostic exploration requires a new PIT-governed contract |
+| [062](docs/adr/ADR-062-retire-accum-group-breadth-production-bonus.md) | Retire accumulation group-breadth production bonus | Accepted; live scoring NON_SEMANTIC (golden); CONFIG_MATERIAL + OBSERVATION_SCHEMA clean-break; schema 11→12 forks compatibility; lean contract ID remains v2; targeted YAML reject; research + ml-saham companions mandatory |
 
 ## Adding or changing a decision
 
