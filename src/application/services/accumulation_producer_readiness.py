@@ -642,15 +642,13 @@ def _production_payload_semantic_reasons(
     if horizon_primary != ACTIVE_SESSION_HORIZON_PRIMARY:
         reasons.append(f"horizon_primary:{horizon_primary!r}")
 
-    try:
-        canonical_window = int(payload.get("canonical_window"))
-    except (TypeError, ValueError):
-        reasons.append(f"canonical_window:{payload.get('canonical_window')!r}")
-    else:
-        if canonical_window != ACTIVE_CANONICAL_WINDOW:
-            reasons.append(
-                f"canonical_window:{canonical_window}!=expected:{ACTIVE_CANONICAL_WINDOW}"
-            )
+    raw_canonical_window = payload.get("canonical_window")
+    if type(raw_canonical_window) is not int:
+        reasons.append(f"canonical_window:{raw_canonical_window!r}")
+    elif raw_canonical_window != ACTIVE_CANONICAL_WINDOW:
+        reasons.append(
+            f"canonical_window:{raw_canonical_window}!=expected:{ACTIVE_CANONICAL_WINDOW}"
+        )
 
     features = payload.get("features_by_window")
     if not isinstance(features, Mapping):
@@ -682,12 +680,18 @@ def _production_payload_semantic_reasons(
         reasons.append("shared_missing")
     else:
         raw_price = shared.get("current_price")
-        try:
-            price_ok = raw_price is not None and float(raw_price) > 0
-        except (TypeError, ValueError):
-            price_ok = False
-        if not price_ok:
+        # Exact int/float only — reject bool/string/non-finite/non-positive.
+        if type(raw_price) is bool or type(raw_price) not in (int, float):
             reasons.append(f"shared.current_price:{raw_price!r}")
+        else:
+            try:
+                price_ok = (
+                    raw_price > 0 and raw_price == raw_price and abs(raw_price) != float("inf")
+                )
+            except (TypeError, ValueError):
+                price_ok = False
+            if not price_ok:
+                reasons.append(f"shared.current_price:{raw_price!r}")
 
         # Active ACCUM path always stamps provenance; required for challenge readiness.
         provenance = shared.get("provenance")
@@ -923,9 +927,31 @@ def validate_observation_cohort(
             f"mixed_schema_cohort:legacy={legacy_count},current={current_authority_count}"
         )
 
+    # Option A: producer-attested cohort invariants (not reverse of compatibility hash).
+    # Current-authority rows in one compatibility cohort must share lookback and
+    # named-roster identity material.
+    cohort_invariant_reasons = _cohort_population_invariant_reasons(
+        [
+            o
+            for o in observations
+            if o.observation_id in validated_ids
+            and isinstance(o.decision_payload, Mapping)
+            and o.decision_payload.get("schema_version") == ACTIVE_PAYLOAD_SCHEMA_VERSION
+        ]
+    )
+    if cohort_invariant_reasons:
+        reasons.extend(cohort_invariant_reasons)
+        # Cohort-invariant split: no row remains authoritative under this cohort.
+        invalid += current_authority_count
+        valid = 0
+        validated_ids = []
+        current_session_dates = set()
+        current_authority_count = 0
+
     # Readiness session depth uses current-authority sessions only when present;
     # otherwise report legacy diagnostic sessions (LEGACY_RAW_ONLY path).
     report_sessions = current_session_dates if current_authority_count > 0 else legacy_session_dates
+    has_corruption = invalid > 0 or mixed_schema_cohort or bool(cohort_invariant_reasons)
 
     return ObservationCohortValidation(
         expected_learning_observation_contract_id=expected_learning_observation_contract_id,
@@ -937,11 +963,58 @@ def validate_observation_cohort(
         # Current-authority corruption, digest/identity failures, or mixed
         # non-current + current coexistence block. Pure non-current alone
         # is not contract corruption.
-        has_contract_corruption=invalid > 0 or mixed_schema_cohort,
+        has_contract_corruption=has_corruption,
         has_current_population_authority=current_authority_count > 0,
         legacy_observation_count=legacy_count,
         validated_observation_ids=tuple(validated_ids),
     )
+
+
+def _cohort_population_invariant_reasons(
+    current_observations: Sequence[LearningObservation],
+) -> list[str]:
+    """Require equal cohort-invariant population fields across current rows.
+
+    Option A (producer attestation): compatibility_id does not cryptographically
+    prove lookback; typed equality of attested invariants is the authority.
+    """
+    if len(current_observations) < 2:
+        return []
+    fingerprints: list[tuple[str, tuple[Any, ...]]] = []
+    for obs in current_observations:
+        payload = obs.decision_payload
+        if not isinstance(payload, Mapping):
+            continue
+        raw = payload.get("population_binding")
+        if not isinstance(raw, Mapping):
+            continue
+        try:
+            binding = AccumPopulationBinding.from_mapping(raw)
+        except LearningContractError as exc:
+            return [f"cohort_population_invariant:{exc}"]
+        fp = (
+            binding.schema_version,
+            binding.contract_id,
+            binding.population_name,
+            binding.named_universe_digest,
+            binding.named_universe_tickers,
+            binding.tradable_membership_contract,
+            binding.pit_tradable_lookback_sessions,
+            binding.benchmark_symbol,
+        )
+        fingerprints.append((obs.observation_id, fp))
+    if len(fingerprints) < 2:
+        return []
+    reference = fingerprints[0][1]
+    for obs_id, fp in fingerprints[1:]:
+        if fp != reference:
+            return [
+                "cohort_population_invariant_mismatch:"
+                f"lookback/named_roster disagree under compatibility cohort "
+                f"(ref_obs={fingerprints[0][0]}, other_obs={obs_id}, "
+                f"ref={reference!r}, other={fp!r})"
+            ]
+    return []
 
 
 def _canonical_window_key(payload: Mapping[str, Any]) -> str:
@@ -1409,6 +1482,15 @@ def count_labels_by_horizon(
         if label.contract_id in by_contract:
             by_contract[label.contract_id].append(label)
 
+    # Track any supported-contract terminal presence (valid or invalid) per
+    # horizon so malformed H10 rows are invalid-only, never also insufficient.
+    terminal_presence: dict[LearningContractId, set[str]] = {c: set() for c in PATH_LABEL_CONTRACTS}
+    for label in labels:
+        if label.observation_id not in obs_set:
+            continue
+        if label.contract_id in PATH_LABEL_CONTRACTS:
+            terminal_presence[label.contract_id].add(label.observation_id)
+
     out: dict[str, LabelHorizonCounts] = {}
     total_conflict = 0
     for contract in PATH_LABEL_CONTRACTS:
@@ -1420,9 +1502,7 @@ def count_labels_by_horizon(
         available = 0
         unavailable = 0
         conflict = 0
-        labeled_obs: set[str] = set()
         for obs_id, group in by_obs.items():
-            labeled_obs.add(obs_id)
             if len(group) > 1:
                 # Authority-bearing multi-row path-label conflict (same observation
                 # + horizon). Do not count as AVAILABLE/UNAVAILABLE; fail closed.
@@ -1436,7 +1516,9 @@ def count_labels_by_horizon(
                 available += 1
             elif label.availability is LabelAvailability.UNAVAILABLE:
                 unavailable += 1
-        insufficient = max(0, len(obs_set) - len(labeled_obs))
+        # Insufficient = validated obs with no supported-contract terminal row
+        # (valid or invalid). Malformed supported rows already occupy presence.
+        insufficient = max(0, len(obs_set) - len(terminal_presence[contract]))
         horizon = _HORIZON_KEY_BY_CONTRACT[contract]
         out[horizon] = LabelHorizonCounts(
             available=available,

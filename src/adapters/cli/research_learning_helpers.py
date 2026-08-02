@@ -20,9 +20,13 @@ from src.application.use_case.get_accumulation_producer_readiness_use_case impor
     GetAccumulationProducerReadinessUseCase,
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
-from src.domain.value_objects.learning_artifacts import AssessmentPurpose
+from src.domain.value_objects.learning_artifacts import (
+    AssessmentPurpose,
+    LearningContractError,
+)
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+    LearningArtifactReadIntegrityError,
     SQLiteLearningArtifactReadRepository,
     SQLiteLearningArtifactRepository,
 )
@@ -161,12 +165,17 @@ def status_cohort(
             raise typer.BadParameter(str(exc)) from exc
         # Read-only calendar snapshots by label-bound ID (mode=ro; never Stockbit).
         snapshot_repo = SQLiteTradingSessionCalendarSnapshotReadRepository(resolved_db)
-        report = GetAccumulationProducerReadinessUseCase(
-            observations=read_repo,
-            labels=read_repo,
-            policy_snapshots=read_repo,
-            session_snapshot_lookup=snapshot_repo.get_snapshot,
-        ).execute(purpose)
+        try:
+            report = GetAccumulationProducerReadinessUseCase(
+                observations=read_repo,
+                labels=read_repo,
+                policy_snapshots=read_repo,
+                session_snapshot_lookup=snapshot_repo.get_snapshot,
+            ).execute(purpose)
+        except (LearningArtifactReadIntegrityError, LearningContractError) as exc:
+            # Storage authority corruption: controlled diagnostic, not traceback.
+            typer.echo(f"learning artifact integrity error: {exc}", err=True)
+            raise typer.Exit(1) from exc
         payload = report.to_dict()
         if fmt != "json":
             _echo_producer_readiness_table(payload)

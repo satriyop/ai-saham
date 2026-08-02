@@ -2628,3 +2628,190 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
     )
     assert counts_rev.counts_by_horizon["H10"].available == 0
     assert any("calendar_source_revision_mismatch" in r for r in counts_rev.invalid_reasons)
+
+
+# --- 2026-08-02 authority strictness / Option A / label class separation ---
+
+
+def _ready_obs_pair() -> list[LearningObservation]:
+    return [
+        _observation(day=1, ticker="BBCA", action="WATCH", readiness="READY"),
+        _observation(day=2, ticker="BBRI", action="WATCH", readiness="READY"),
+    ]
+
+
+def _path_label_for(obs: LearningObservation) -> LearningOutcomeLabel:
+    return _label(observation=obs, contract=LearningContractId.ACCUM_10D_LABEL)
+
+
+def test_string_canonical_window_and_price_block_ready() -> None:
+    obs = _ready_obs_pair()
+    # Mutate first observation payload with string authorities, rehash.
+    payload = dict(obs[0].decision_payload)
+    payload["canonical_window"] = "7"
+    shared = dict(payload["shared"])
+    shared["current_price"] = "100.0"
+    payload["shared"] = shared
+    bad = replace(
+        obs[0],
+        decision_payload=payload,
+        artifact_digest=artifact_digest(
+            _artifact_payload(
+                replace(obs[0], decision_payload=payload),
+                id_field="observation_id",
+                digest_field="artifact_digest",
+            )
+        ),
+    )
+    # Parent digest changed → label fingerprint for bad may mismatch; use fresh labels
+    # only for the good obs; still assert observation corruption blocks READY.
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[bad, obs[1]],
+        labels=[_path_label_for(obs[1])],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert cohort.session_count == 0
+    # Invalid obs contributes zero; remaining valid may still be counted
+    # diagnostically but cannot unlock READY.
+    assert cohort.observation_validation.invalid_observation_count >= 1
+
+
+def test_population_binding_string_lookback_blocks() -> None:
+    obs = _ready_obs_pair()
+    binding = dict(obs[0].decision_payload["population_binding"])
+    binding["pit_tradable_lookback_sessions"] = "10"
+    payload = dict(obs[0].decision_payload)
+    payload["population_binding"] = binding
+    bad = replace(
+        obs[0],
+        decision_payload=payload,
+        artifact_digest=artifact_digest(
+            _artifact_payload(
+                replace(obs[0], decision_payload=payload),
+                id_field="observation_id",
+                digest_field="artifact_digest",
+            )
+        ),
+    )
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[bad, obs[1]],
+        labels=[_path_label_for(obs[1])],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert cohort.session_count == 0
+    assert cohort.observation_validation.invalid_observation_count >= 1
+
+
+def test_population_binding_lowercase_tickers_block() -> None:
+    obs = _ready_obs_pair()
+    binding = dict(obs[0].decision_payload["population_binding"])
+    binding["membership_tickers"] = [t.lower() for t in binding["membership_tickers"]]
+    binding["named_universe_tickers"] = list(reversed(binding["named_universe_tickers"]))
+    payload = dict(obs[0].decision_payload)
+    payload["population_binding"] = binding
+    bad = replace(
+        obs[0],
+        decision_payload=payload,
+        artifact_digest=artifact_digest(
+            _artifact_payload(
+                replace(obs[0], decision_payload=payload),
+                id_field="observation_id",
+                digest_field="artifact_digest",
+            )
+        ),
+    )
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[bad, obs[1]],
+        labels=[_path_label_for(obs[1])],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert cohort.session_count == 0
+
+
+def test_cohort_lookback_mismatch_blocks_ready() -> None:
+    """Option A: same compatibility_id with different lookback is cohort corruption."""
+    o1 = _observation(day=1, ticker="BBCA", action="WATCH", readiness="READY")
+    o2_base = _observation(day=2, ticker="BBRI", action="WATCH", readiness="READY")
+    b = AccumPopulationBinding.create(
+        membership_tickers=MEMBERSHIP_TICKERS,
+        named_universe_tickers=NAMED_ROSTER,
+        membership_session="2026-07-02",
+        pit_tradable_lookback_sessions=999,
+        producer_source_revision=PRODUCER_REV,
+    )
+    payload = dict(o2_base.decision_payload)
+    payload["population_binding"] = b.to_dict()
+    o2 = replace(
+        o2_base,
+        decision_payload=payload,
+        artifact_digest=artifact_digest(
+            _artifact_payload(
+                replace(o2_base, decision_payload=payload),
+                id_field="observation_id",
+                digest_field="artifact_digest",
+            )
+        ),
+    )
+    labels = [_path_label_for(o1), _path_label_for(o2)]
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[o1, o2],
+        labels=labels,
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert any(
+        "cohort_population_invariant" in r for r in cohort.observation_validation.invalid_reasons
+    )
+    assert cohort.session_count == 0
+    assert cohort.setup_readiness_present == 0
+
+
+def test_malformed_h10_label_not_also_insufficient() -> None:
+    obs = _ready_obs_pair()
+    good = _path_label_for(obs[0])
+    # Malformed: wrong outcome_basis after rehash.
+    bad = replace(
+        _path_label_for(obs[1]),
+        outcome_basis=OutcomeBasis.SIMULATED_NET_EXECUTION,
+    )
+    bad = replace(
+        bad,
+        artifact_digest=artifact_digest(
+            _artifact_payload(bad, id_field="label_id", digest_field="artifact_digest")
+        ),
+    )
+    counts = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[good, bad],
+        observations_by_id={o.observation_id: o for o in obs},
+    )
+    h10 = counts.counts_by_horizon["H10"]
+    assert counts.invalid_label_count == 1
+    assert h10.available == 1
+    assert h10.unavailable == 0
+    assert h10.insufficient_horizon == 0  # malformed occupies presence
+    assert h10.conflict == 0
+
+
+def test_policy_bad_material_hash_blocks_active_set() -> None:
+    snaps = list(_full_v2_set())
+    bad = replace(snaps[0], material_config_hash="not-a-sha256")
+    result = verify_snapshot_binding(
+        [bad, *snaps[1:]],
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+        compatibility_id=COMPAT,
+        expected_learning_observation_contract_id=OBS_CONTRACT,
+        expected_producer_observation_contract=PRODUCER_CONTRACT,
+    )
+    assert result.active_set_verified is False
