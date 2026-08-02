@@ -301,6 +301,10 @@ composition root. Only after that behavior lands may a follow-up snapshot task
 choose the new artifact/lean IDs, closed-set cardinality, policy ID/payload,
 and migration number. Do not reserve or implement v3 strings speculatively.
 
+Architecture decision task:
+
+- `tasks/backlog/decide_accum_group_breadth_production_authority.md`
+
 ### P3 - diagnose Action/readiness coverage and repair transport only
 
 First prove why readiness is absent on current rows using the production call
@@ -566,30 +570,28 @@ Task status: IN_PROGRESS_CONTRACT_HARDENING
   with mutation tests.
 
 Open reopen findings (must close before CODE_COMPLETE_AWAITING_DATA):
-  - (none from the 2026-08-02 sealing/relink reopen — pending independent review)
   - Operational AWAITING_DATA still open (live multi-session + OOS folds)
+  - Pending independent review of latest selector-discovery + pack-binding seals
 
-Closed this pass:
-  - P0 ml-saham challenge evidence sealing (schema v4 content_digest/artifact_id;
-    exact status/against/primary_horizon; v3 historical-only) — 5278a90
-  - P0 label dual-observation_id relink discovery via expected label_id — 7f53b462
-  - P1 malformed optional producer-contract presence blocks — 07717aa1
-  - P1 exact policy/calendar source_revision (no strip) — 07717aa1
+Closed this pass (selector discovery + pack seal hardening):
+  - P0 expected snapshot_id discovery + observation contract dual-key discovery
+  - P0 required pack_binding.json, field equality, atomic writer
+  - P1 gate_off:<key> resolves real adapter components; champions score-kind only
+  - P1 display writers stay schema v3; promote-evidence sealed as v4 only
+  - P1 calendar closed keys + exact isoform + artifact_json byte recon
+  - P2 exact relink/integrity exceptions; create() type errors → LearningContractError
 
 Closed earlier reopen (do not re-list as open):
   - Exact observation/label ticker, session, timestamp parsing
-  - Exact ml-saham promote production identity strings
-  - Dual-key observation SQL parentheses
-  - Expanded reconciliation mutations + naive created_at active-set proof
+  - Exact ml-saham promote production identity strings + unsealed export mutation blocks
+  - Dual-key observation SQL parentheses; label expected-ID discovery
+  - Optional producer-contract presence; padded source_revision rejection
   - Shadow-column reconciliation, Option A lookback, material hash, baseline fallback,
     invalid≠insufficient labels, calendar natural-key uniqueness
 
-Commits (selected chain):
-  bcd4cd55 / 85939db7 / dcd4610 — prior exactness pass
-  5278a90 (ml-saham) fix(promote): seal challenge evidence with schema v4 digests
-  7f53b462 fix(persistence): discover labels by expected identity
-  07717aa1 fix(corpus): reject padded provenance and malformed optional contracts
-  156fca9c docs(backlog): refresh open findings
+Commits (selected chain; SHAs land with this pass):
+  prior: bcd4cd55 / 85939db7 / dcd4610 / 5278a90 / 7f53b462 / 07717aa1
+  this pass: expected-ID discovery, pack seal fail-closed, calendar wire, docs
 
 P1 operational status: AWAITING_DATA (separate from code gate)
   - live cohorts BLOCKED_POLICY / LEGACY_RAW_ONLY until ops calendar sync + growth
