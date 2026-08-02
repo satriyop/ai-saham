@@ -5,6 +5,10 @@
 **Status:** Accepted — 2026-08-02  
 **Date:** 2026-08-02  
 **Amends:** [ADR-051](ADR-051-tui-opencode-cockpit-clean-break.md)  
+**Amended by:**
+[ADR-061](ADR-061-closed-read-tool-orchestration-for-context-agent.md) for a
+separately gated closed read-tool phase
+
 **Depends on:** [ADR-002](ADR-002-rule-first-ai-optional-design.md),
 [ADR-003](ADR-003-hexagonal-ports-adapters-architecture.md),
 [ADR-040](ADR-040-manual-dependency-injection-and-composition-roots.md), and
@@ -48,6 +52,10 @@ It may:
 
 It may not call tools in this first slice. It may not fetch, recompute, query a
 repository, execute a CLI command, persist a conversation, or perform a write.
+
+ADR-061 authorizes a later, independently gated closed read-tool orchestrator.
+That amendment does not weaken this Phase 1 zero-tool contract and does not
+activate a tool by itself.
 
 Pre-open, ticker browse, broker browse, plan, paper, and other cockpit surfaces
 remain unchanged until separately activated by a follow-up task using the same
