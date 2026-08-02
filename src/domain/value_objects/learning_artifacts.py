@@ -28,6 +28,24 @@ ACCUM_POPULATION_BENCHMARK_SYMBOL = "IHSG"
 # Legacy shape-only contract retained for documentation of pre-schema-10 rows.
 LEGACY_ACCUM_POPULATION_AUTHORITY_CONTRACT = "capture_universe_membership_digest.v1"
 _UNIVERSE_MEMBERSHIP_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
+_MATERIAL_CONFIG_HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_ACCUM_POPULATION_BINDING_KEYS: frozenset[str] = frozenset(
+    {
+        "schema_version",
+        "contract_id",
+        "population_name",
+        "membership_session",
+        "membership_digest",
+        "membership_count",
+        "named_universe_digest",
+        "tradable_membership_contract",
+        "pit_tradable_lookback_sessions",
+        "benchmark_symbol",
+        "producer_source_revision",
+        "membership_tickers",
+        "named_universe_tickers",
+    }
+)
 
 
 class LearningContractError(ValueError):
@@ -351,55 +369,85 @@ class AccumPopulationBinding:
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any]) -> AccumPopulationBinding:
-        """Parse a stored binding mapping; raises LearningContractError on malformation."""
+        """Parse stored binding without normalizing authority fields.
+
+        Read-side authority: preserve exact persisted types and string forms.
+        Producer ``create()`` may normalize; this path must not coerce strings
+        to ints, strip whitespace, uppercase tickers, or re-sort arrays before
+        validation can see the original corruption.
+        """
         if not isinstance(raw, Mapping):
             raise LearningContractError(
                 f"population_binding must be a mapping, got {type(raw).__name__}"
             )
-        try:
-            schema_version = int(raw["schema_version"])
-            membership_count = int(raw["membership_count"])
-            lookback = int(raw["pit_tradable_lookback_sessions"])
-        except (KeyError, TypeError, ValueError) as exc:
+        keys = frozenset(raw.keys())
+        if keys != _ACCUM_POPULATION_BINDING_KEYS:
+            missing = sorted(_ACCUM_POPULATION_BINDING_KEYS - keys)
+            extra = sorted(keys - _ACCUM_POPULATION_BINDING_KEYS)
             raise LearningContractError(
-                f"population_binding has malformed numeric fields: {exc}"
-            ) from exc
-        for key in (
-            "contract_id",
-            "population_name",
-            "membership_session",
-            "membership_digest",
-            "named_universe_digest",
-            "tradable_membership_contract",
-            "benchmark_symbol",
-            "producer_source_revision",
-        ):
-            if key not in raw:
-                raise LearningContractError(f"population_binding missing field {key!r}")
-            if not isinstance(raw[key], str) or not str(raw[key]).strip():
-                raise LearningContractError(f"population_binding.{key} must be non-empty string")
-        # Attested ticker sets are required for count/digest cross-checks.
-        # Shape-only digests without tickers are incomplete authority.
-        membership = _normalize_ticker_set(
-            raw.get("membership_tickers"), field="membership_tickers"
-        )
-        named = _normalize_ticker_set(
-            raw.get("named_universe_tickers"), field="named_universe_tickers"
-        )
+                f"population_binding key set mismatch missing={missing!r} extra={extra!r}"
+            )
+
+        def _exact_int(field: str) -> int:
+            value = raw[field]
+            if type(value) is not int:
+                raise LearningContractError(
+                    f"population_binding.{field} must be exact int, "
+                    f"got {type(value).__name__}={value!r}"
+                )
+            return value
+
+        def _exact_str(field: str) -> str:
+            value = raw[field]
+            if type(value) is not str:
+                raise LearningContractError(
+                    f"population_binding.{field} must be exact str, "
+                    f"got {type(value).__name__}={value!r}"
+                )
+            if value != value.strip() or not value:
+                raise LearningContractError(
+                    f"population_binding.{field} must be non-empty without "
+                    f"surrounding whitespace, got {value!r}"
+                )
+            return value
+
+        def _exact_tickers(field: str) -> tuple[str, ...]:
+            value = raw[field]
+            if not isinstance(value, list):
+                raise LearningContractError(
+                    f"population_binding.{field} must be a JSON array of strings"
+                )
+            out: list[str] = []
+            for i, item in enumerate(value):
+                if type(item) is not str:
+                    raise LearningContractError(
+                        f"population_binding.{field}[{i}] must be str, "
+                        f"got {type(item).__name__}={item!r}"
+                    )
+                if not item or item != item.strip():
+                    raise LearningContractError(
+                        f"population_binding.{field}[{i}] must be non-empty "
+                        f"without surrounding whitespace, got {item!r}"
+                    )
+                out.append(item)
+            if not out:
+                raise LearningContractError(f"population_binding.{field} must be non-empty")
+            return tuple(out)
+
         return cls(
-            schema_version=schema_version,
-            contract_id=str(raw["contract_id"]).strip(),
-            population_name=str(raw["population_name"]).strip(),
-            membership_session=str(raw["membership_session"]).strip(),
-            membership_digest=str(raw["membership_digest"]).strip(),
-            membership_count=membership_count,
-            named_universe_digest=str(raw["named_universe_digest"]).strip(),
-            tradable_membership_contract=str(raw["tradable_membership_contract"]).strip(),
-            pit_tradable_lookback_sessions=lookback,
-            benchmark_symbol=str(raw["benchmark_symbol"]).strip(),
-            producer_source_revision=str(raw["producer_source_revision"]).strip(),
-            membership_tickers=membership,
-            named_universe_tickers=named,
+            schema_version=_exact_int("schema_version"),
+            contract_id=_exact_str("contract_id"),
+            population_name=_exact_str("population_name"),
+            membership_session=_exact_str("membership_session"),
+            membership_digest=_exact_str("membership_digest"),
+            membership_count=_exact_int("membership_count"),
+            named_universe_digest=_exact_str("named_universe_digest"),
+            tradable_membership_contract=_exact_str("tradable_membership_contract"),
+            pit_tradable_lookback_sessions=_exact_int("pit_tradable_lookback_sessions"),
+            benchmark_symbol=_exact_str("benchmark_symbol"),
+            producer_source_revision=_exact_str("producer_source_revision"),
+            membership_tickers=_exact_tickers("membership_tickers"),
+            named_universe_tickers=_exact_tickers("named_universe_tickers"),
         )
 
 
@@ -1242,6 +1290,11 @@ class ProductionPolicySnapshot:
             ("source_revision", source_revision),
         ):
             _require_non_empty(name, value)
+        if _MATERIAL_CONFIG_HASH_RE.fullmatch(material_config_hash) is None:
+            raise LearningContractError(
+                "material_config_hash must match ^sha256:[0-9a-f]{64}$, "
+                f"got {material_config_hash!r}"
+            )
         if not isinstance(canonical_payload, Mapping) or not canonical_payload:
             raise LearningContractError("canonical_payload must be a non-empty mapping")
         if created_at.tzinfo is None or created_at.utcoffset() is None:
@@ -1326,8 +1379,17 @@ def validate_policy_snapshot_integrity(snapshot: ProductionPolicySnapshot) -> No
 
     if snapshot.contract_id not in _ALLOWED_PRODUCTION_POLICY_SNAPSHOT_CONTRACTS:
         raise LearningContractError("policy snapshot contract_id mismatch")
-    if not snapshot.source_revision.strip():
+    if type(snapshot.source_revision) is not str or not snapshot.source_revision.strip():
         raise LearningContractError("source_revision must be non-empty provenance")
+    if type(snapshot.material_config_hash) is not str or (
+        _MATERIAL_CONFIG_HASH_RE.fullmatch(snapshot.material_config_hash) is None
+    ):
+        raise LearningContractError(
+            "material_config_hash must match ^sha256:[0-9a-f]{64}$, "
+            f"got {snapshot.material_config_hash!r}"
+        )
+    if snapshot.created_at.tzinfo is None or snapshot.created_at.utcoffset() is None:
+        raise LearningContractError("created_at must be timezone-aware")
     expected_id = stable_learning_id(
         snapshot.contract_id,
         {
