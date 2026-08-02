@@ -50,13 +50,19 @@ from src.domain.value_objects.alpha_trigger_score import (
 )
 
 # Purpose-specific observation payload versions (do not silent-share bumps).
-# Accumulation current: typed population binding + attested ticker sets.
-ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 11
+# Accumulation current: ADR-062 retired group-breadth config/payload surfaces.
+# Schema 12 drops material sector_breadth config-hash inputs and candidate
+# payload keys; live scoring is unchanged (bonus was never production-wired).
+# New captures mint a new compatibility_id; schema-11 rows stay historical.
+ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 12
 # Pre-open remains on the pre-attested-ticker shared era; accumulation-only
 # population fields must not fork pre-open compatibility by accident.
 PRE_OPEN_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 10
 # Back-compat alias used by lean ACCUM compatibility material and shared tests.
 CANDIDATE_OBSERVATION_SCHEMA_VERSION = ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION
+# Schema-11 = last version that still carried retired breadth config/payload
+# material in the producer identity surface (historical corpus only).
+HISTORICAL_GROUP_BREADTH_ERA_CANDIDATE_OBSERVATION_SCHEMA_VERSION = 11
 # Schema-10 claimed Option A population binding but predates required attested
 # membership_tickers / named_universe_tickers. Not reinterpreted as current.
 INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION = 10

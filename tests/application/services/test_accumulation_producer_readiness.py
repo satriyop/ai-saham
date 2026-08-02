@@ -2296,7 +2296,7 @@ def _rehash_snapshot(snap: ProductionPolicySnapshot) -> ProductionPolicySnapshot
     return snap
 
 
-def test_candidate_observation_schema_version_is_11_with_attested_tickers() -> None:
+def test_candidate_observation_schema_version_is_12_with_attested_tickers() -> None:
     from src.domain.value_objects.learning_artifacts import (
         ACCUM_POPULATION_BINDING_SCHEMA_VERSION,
         LEGACY_ACCUM_POPULATION_BINDING_SCHEMA_VERSION,
@@ -2305,13 +2305,13 @@ def test_candidate_observation_schema_version_is_11_with_attested_tickers() -> N
         INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     )
 
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 11
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 12
     assert INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 10
     assert LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 9
     assert ACCUM_POPULATION_BINDING_SCHEMA_VERSION == 2
     assert LEGACY_ACCUM_POPULATION_BINDING_SCHEMA_VERSION == 1
     o = _observation(day=1)
-    assert o.decision_payload["schema_version"] == 11
+    assert o.decision_payload["schema_version"] == 12
     assert "population_binding" in o.decision_payload
     binding = AccumPopulationBinding.from_mapping(o.decision_payload["population_binding"])
     assert binding.schema_version == 2
@@ -2350,7 +2350,7 @@ def test_build_session_observation_payload_requires_population_binding() -> None
         shared=shared,
         population_binding=_binding_for_session("2026-07-01"),
     )
-    assert payload["schema_version"] == 11
+    assert payload["schema_version"] == 12
     assert payload["population_binding"]["membership_session"] == "2026-07-01"
     assert payload["population_binding"]["schema_version"] == 2
     assert "membership_tickers" in payload["population_binding"]

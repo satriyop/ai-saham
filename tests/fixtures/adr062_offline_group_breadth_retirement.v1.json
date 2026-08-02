@@ -1,0 +1,147 @@
+{
+  "as_of_date": "2026-06-19",
+  "candidate_observation_schema_version": 12,
+  "candidates": [
+    {
+      "accum_score": 40.0,
+      "included": false,
+      "net_buy_days": 3,
+      "net_buy_ratio": 0.4,
+      "serialized_accum_score": 40.0,
+      "serialized_forbidden_keys_absent": true,
+      "ticker": "BBCA"
+    },
+    {
+      "accum_score": 47.5,
+      "included": true,
+      "net_buy_days": 4,
+      "net_buy_ratio": 0.45,
+      "serialized_accum_score": 47.5,
+      "serialized_forbidden_keys_absent": true,
+      "ticker": "BBRI"
+    },
+    {
+      "accum_score": 55.0,
+      "included": true,
+      "net_buy_days": 5,
+      "net_buy_ratio": 0.5,
+      "serialized_accum_score": 55.0,
+      "serialized_forbidden_keys_absent": true,
+      "ticker": "BMRI"
+    },
+    {
+      "accum_score": 62.5,
+      "included": true,
+      "net_buy_days": 3,
+      "net_buy_ratio": 0.55,
+      "serialized_accum_score": 62.5,
+      "serialized_forbidden_keys_absent": true,
+      "ticker": "TLKM"
+    },
+    {
+      "accum_score": 70.0,
+      "included": true,
+      "net_buy_days": 4,
+      "net_buy_ratio": 0.6000000000000001,
+      "serialized_accum_score": 70.0,
+      "serialized_forbidden_keys_absent": true,
+      "ticker": "ASII"
+    }
+  ],
+  "config_hash": "f601e8ef75611c70",
+  "description": "Offline deterministic synthetic golden for ADR-062. Live scoring is unchanged (group breadth never production-wired). New producers omit retired payload keys; config hash excludes retired knobs; schema is 12.",
+  "exclusion_order": [
+    "BBCA"
+  ],
+  "fixture_id": "adr062.offline_group_breadth_retirement.v1",
+  "forbidden_payload_keys": [
+    "sector_breadth_pct",
+    "sector_breadth_bonus"
+  ],
+  "forbidden_request_attrs": [
+    "sector_breadth_enabled",
+    "sector_breadth_threshold",
+    "sector_breadth_bonus_pts",
+    "sector_breadth_min_tickers"
+  ],
+  "inclusion_order": [
+    "BBRI",
+    "BMRI",
+    "TLKM",
+    "ASII"
+  ],
+  "lean_contract_id": "lean_accumulation_compatibility.v2",
+  "min_accum_score": 45.0,
+  "notes": [
+    "Not a live LQ45 run.",
+    "Timestamps excluded from the frozen projection.",
+    "Schema-11 corpus remains immutable historical; this golden is schema-12."
+  ],
+  "risk_projection": {
+    "results": {
+      "ASII": {
+        "gates": [],
+        "status": "OPEN"
+      },
+      "BBRI": {
+        "gates": [
+          "liquidity"
+        ],
+        "status": "BLOCKED"
+      },
+      "BMRI": {
+        "gates": [],
+        "status": "OPEN"
+      },
+      "TLKM": {
+        "gates": [],
+        "status": "OPEN"
+      }
+    }
+  },
+  "setup_projection": {
+    "ASII": {
+      "phase": "BUILDING",
+      "readiness": "READY"
+    },
+    "BBRI": {
+      "phase": "EARLY",
+      "readiness": "PARTIAL"
+    },
+    "BMRI": {
+      "phase": "EARLY",
+      "readiness": "PARTIAL"
+    },
+    "TLKM": {
+      "phase": "BUILDING",
+      "readiness": "READY"
+    }
+  },
+  "signal_projection": {
+    "actions": {
+      "ASII": "ENTER",
+      "BBRI": "WATCH",
+      "BMRI": "ENTER",
+      "TLKM": "ENTER"
+    },
+    "exact_scores": {
+      "ASII": 62.0,
+      "BBRI": 57.5,
+      "BMRI": 59.0,
+      "TLKM": 60.5
+    },
+    "raw_scores": {
+      "ASII": 64.0,
+      "BBRI": 59.5,
+      "BMRI": 61.0,
+      "TLKM": 62.5
+    }
+  },
+  "tickers_ordered": [
+    "BBCA",
+    "BBRI",
+    "BMRI",
+    "TLKM",
+    "ASII"
+  ]
+}

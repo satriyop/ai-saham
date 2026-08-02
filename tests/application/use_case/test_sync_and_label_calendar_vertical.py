@@ -133,7 +133,7 @@ def _observation(*, day: int, ticker: str = "BBCA") -> LearningObservation:
         universe_id=UNIVERSE,
         window_id=f"{ticker}:{sd}",
         decision_payload={
-            "schema_version": 11,
+            "schema_version": 12,
             "artifact_type": "accumulation_session_observation",
             "ticker": ticker,
             "session_date": sd,

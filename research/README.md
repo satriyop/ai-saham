@@ -22,7 +22,7 @@ research/
     factor_card_vwap_buckets.py      # Package A — VWAP depth
     factor_card_bci_flow_sign.py     # Package A2 — BCI × flow sign
     factor_card_accum_components.py  # Package A1 — Accum component ablation
-    factor_card_sector_breadth.py    # Package A3 — retired group bonus (ADR-062) + DIAG sc_sector_breadth
+    factor_card_sector_breadth.py    # RETIRED (ADR-062) — non-executable stub
     factor_card_broker_lists.py      # Package A4 — Tier1/smart/noise list quality
     factor_card_setup_gates.py       # Package B2 — named setup gate thresholds
     factor_card_regime_policy.py     # Package B6 — DecisionPolicy regime floors
@@ -85,7 +85,7 @@ A green factor card has **no** authority.
 .venv/bin/python research/scripts/factor_card_vwap_buckets.py
 .venv/bin/python research/scripts/factor_card_bci_flow_sign.py
 .venv/bin/python research/scripts/factor_card_accum_components.py
-.venv/bin/python research/scripts/factor_card_sector_breadth.py
+# retired ADR-062: research/scripts/factor_card_sector_breadth.py (exits 2)
 .venv/bin/python research/scripts/factor_card_broker_lists.py
 .venv/bin/python research/scripts/factor_card_setup_gates.py
 .venv/bin/python research/scripts/factor_card_regime_policy.py

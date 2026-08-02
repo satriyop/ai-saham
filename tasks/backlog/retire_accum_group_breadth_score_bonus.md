@@ -2,6 +2,10 @@
 
 Status: `DONE`
 
+Lock close-out (2026-08-02): schema **11→12**, offline golden fixture + SHA-256,
+research feeder retired, snapshot exclusion prose, lean golden vector fork,
+and ml-saham companion removal of static +10 sleeve aliases.
+
 Authority: [ADR-062](../../docs/adr/ADR-062-retire-accum-group-breadth-production-bonus.md)
 
 ## 1. Task Metadata
@@ -14,11 +18,13 @@ Authority: [ADR-062](../../docs/adr/ADR-062-retire-accum-group-breadth-productio
 
 | Surface | Classification |
 |---------|----------------|
-| Live Accum / Signal / Risk / Action / order | `NON_SEMANTIC` — production never applied the bonus |
-| Material config path set + request config-hash fields | `CONFIG_MATERIAL` — new observation identity only; historical rows unchanged |
-| Candidate payload keys drop on new producers | no `OBSERVATION_SCHEMA` bump — optional residual keys; old rows immutable |
+| Live Accum / Signal / Risk / Action / order | `NON_SEMANTIC` — offline golden; production never applied the bonus |
+| Material config path set + request config-hash fields | `CONFIG_MATERIAL` — forks compatibility for new captures |
+| Candidate payload keys drop on new producers | `OBSERVATION_SCHEMA` — schema 11→12; old rows immutable |
 | Semantic engine version | unchanged |
-| Snapshot / lean contract IDs | unchanged (`production_policy_snapshot.v2`, lean v2) |
+| Snapshot contract | `production_policy_snapshot.v2` seven rows unchanged |
+| Lean contract ID | `lean_accumulation_compatibility.v2` unchanged ID; **values fork** |
+| Compatibility value | must fork (schema-12 + config-hash material change) |
 
 ## 2. Chosen Decision
 
@@ -154,3 +160,20 @@ No new dependency, provider, UI, CLI command, database write, or AI behavior.
 - [x] Focused, architecture, full-suite, diff, and Ruff gates pass after final edits.
 - [x] ai-saham changes are committed with a scoped commit (`8ba2548a`).
 - [x] ml-saham companion references are updated without adding a breadth baseline.
+
+## 11. Completion Record (lock close-out)
+
+```text
+Contract lock: 8ec502a0 (docs ADR-062 schema-12 fork)
+Prior implementation: 8ba2548a (removal without schema-12)
+Lock close-out implementation: fix(accum): close ADR-062 lock with schema-12 and offline golden
+Golden fixture path: tests/fixtures/adr062_offline_group_breadth_retirement.v1.json
+Golden fixture SHA-256: 9173ec86de75f7700c480b2ca2c2397b3a3c7bc481c41f632ee2b789d8d4a167
+Schema versions: 11 (historical breadth era) → 12 (current)
+Lean contract ID: lean_accumulation_compatibility.v2
+Lean golden vector: sha256:19488deb57c0240f3e9e580a4dd50bb0dbaa9baba70e91c22e265589f50d9fb2
+ai-saham full suite: 6113 passed, 1 skipped
+ml-saham companion: c6a9ebb
+ml-saham challenge-focused: 110 passed, 2 skipped (companion)
+```
+

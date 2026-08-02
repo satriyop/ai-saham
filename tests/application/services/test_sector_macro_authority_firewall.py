@@ -11,7 +11,7 @@ from src.domain.value_objects.signal_artifact_schema import (
 
 
 def test_observation_schema_is_v9():
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 11
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 12
 
 
 def test_alpha_trigger_projection_does_not_import_sector_macro():

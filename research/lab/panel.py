@@ -12,12 +12,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.application.services.mce_observation_identity import build_mce_observation_identity
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
 )
-from src.application.services.mce_observation_identity import build_mce_observation_identity
 from src.infrastructure.config.market_context_config import default_market_context_config_path
-
 
 DEFAULT_DB = Path("data/db/data.db")
 
@@ -52,9 +51,6 @@ class PanelRow:
     score_without_rsi: float | None = None
     score_without_flow: float | None = None
     score_without_inst: float | None = None
-    # Historical residual only (ADR-062); new producers omit these keys.
-    sector_breadth_pct: float | None = None
-    sector_breadth_bonus: float | None = None
     # Broker-list inputs (Package A4)
     window_days: int | None = None
     bci_tier1_count: int | None = None
@@ -318,11 +314,7 @@ def load_swing10d_panel(
     if not path.exists():
         raise FileNotFoundError(f"Database not found: {path}")
 
-    cohort_id = (
-        resolve_default_regime_cohort_id()
-        if regime_cohort_id is None
-        else regime_cohort_id
-    )
+    cohort_id = resolve_default_regime_cohort_id() if regime_cohort_id is None else regime_cohort_id
 
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
@@ -378,8 +370,6 @@ def load_swing10d_panel(
                 score_without_rsi=_without(total, points.get("rsi")),
                 score_without_flow=_without(total, points.get("flow")),
                 score_without_inst=_without(total, points.get("inst")),
-                sector_breadth_pct=_as_float(cand.get("sector_breadth_pct")),
-                sector_breadth_bonus=_as_float(cand.get("sector_breadth_bonus")),
                 window_days=_as_int(cand.get("window_days")),
                 bci_tier1_count=_as_int(cand.get("bci_tier1_count")),
                 institutional_flag=_as_bool(cand.get("institutional_flag")),
@@ -390,9 +380,7 @@ def load_swing10d_panel(
                 signal_score=_as_float(decision.get("signal_score")),
                 entry_quality=_as_upper(decision.get("entry_quality")),
                 trade_setup_action=_as_upper(decision.get("trade_setup_action")),
-                signal_authority_coverage=_as_float(
-                    decision.get("signal_authority_coverage")
-                ),
+                signal_authority_coverage=_as_float(decision.get("signal_authority_coverage")),
                 gate_tightening=_as_bool(decision.get("gate_tightening")),
                 decision_regime=_as_upper(decision.get("decision_regime")),
                 risk_status=risk.get("risk_status"),

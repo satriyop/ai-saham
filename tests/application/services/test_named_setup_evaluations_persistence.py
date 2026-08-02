@@ -66,7 +66,7 @@ def _catalog_match_coiled() -> SwingSetupCatalogConfig:
 
 
 def test_schema_version_is_8():
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 11
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 12
 
 
 def test_fingerprint_serializes_named_setup_evaluations_lean_dict():
