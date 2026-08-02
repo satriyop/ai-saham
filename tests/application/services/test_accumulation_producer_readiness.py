@@ -2815,3 +2815,164 @@ def test_policy_bad_material_hash_blocks_active_set() -> None:
         expected_producer_observation_contract=PRODUCER_CONTRACT,
     )
     assert result.active_set_verified is False
+
+
+def test_lowercase_payload_ticker_blocks_ready() -> None:
+    obs = _ready_obs_pair()
+    payload = dict(obs[0].decision_payload)
+    payload["ticker"] = "bbca"
+    bad = replace(
+        obs[0],
+        decision_payload=payload,
+        artifact_digest=artifact_digest(
+            _artifact_payload(
+                replace(obs[0], decision_payload=payload),
+                id_field="observation_id",
+                digest_field="artifact_digest",
+            )
+        ),
+    )
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[bad, obs[1]],
+        labels=[_path_label_for(obs[1])],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert cohort.session_count == 0
+
+
+def test_whitespace_padded_session_date_blocks_ready() -> None:
+    obs = _ready_obs_pair()
+    payload = dict(obs[0].decision_payload)
+    payload["session_date"] = " 2026-07-01 "
+    bad = replace(
+        obs[0],
+        decision_payload=payload,
+        artifact_digest=artifact_digest(
+            _artifact_payload(
+                replace(obs[0], decision_payload=payload),
+                id_field="observation_id",
+                digest_field="artifact_digest",
+            )
+        ),
+    )
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[bad, obs[1]],
+        labels=[_path_label_for(obs[1])],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+
+
+def test_whitespace_padded_payload_captured_at_blocks_ready() -> None:
+    obs = _ready_obs_pair()
+    payload = dict(obs[0].decision_payload)
+    payload["captured_at"] = f" {obs[0].captured_at.isoformat()} "
+    bad = replace(
+        obs[0],
+        decision_payload=payload,
+        artifact_digest=artifact_digest(
+            _artifact_payload(
+                replace(obs[0], decision_payload=payload),
+                id_field="observation_id",
+                digest_field="artifact_digest",
+            )
+        ),
+    )
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[bad, obs[1]],
+        labels=[_path_label_for(obs[1])],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+
+
+def test_z_suffix_captured_at_alias_blocks_ready() -> None:
+    obs = _ready_obs_pair()
+    # Writer form uses +00:00; Z is a non-canonical alias.
+    iso = obs[0].captured_at.isoformat()
+    z_form = iso.replace("+00:00", "Z") if iso.endswith("+00:00") else iso + "Z"
+    payload = dict(obs[0].decision_payload)
+    payload["captured_at"] = z_form
+    bad = replace(
+        obs[0],
+        decision_payload=payload,
+        artifact_digest=artifact_digest(
+            _artifact_payload(
+                replace(obs[0], decision_payload=payload),
+                id_field="observation_id",
+                digest_field="artifact_digest",
+            )
+        ),
+    )
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[bad, obs[1]],
+        labels=[_path_label_for(obs[1])],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+
+
+def test_lowercase_label_ticker_not_available() -> None:
+    obs = _ready_obs_pair()
+    good = _path_label_for(obs[0])
+    metrics = dict(good.metrics)
+    metrics["ticker"] = "bbca"
+    bad = replace(good, metrics=metrics)
+    bad = replace(
+        bad,
+        artifact_digest=artifact_digest(
+            _artifact_payload(bad, id_field="label_id", digest_field="artifact_digest")
+        ),
+    )
+    # Attach to both obs: bad for obs0, good for obs1.
+    good2 = _path_label_for(obs[1])
+    counts = count_labels_by_horizon(
+        observation_ids=[o.observation_id for o in obs],
+        labels=[bad, good2],
+        observations_by_id={o.observation_id: o for o in obs},
+    )
+    assert counts.invalid_label_count >= 1
+    assert counts.counts_by_horizon["H10"].available == 1
+
+
+def test_whitespace_padded_label_signal_date_not_available() -> None:
+    obs = _ready_obs_pair()
+    label = _path_label_for(obs[0])
+    metrics = dict(label.metrics)
+    metrics["signal_date"] = f" {metrics['signal_date']} "
+    bad = replace(label, metrics=metrics)
+    bad = replace(
+        bad,
+        artifact_digest=artifact_digest(
+            _artifact_payload(bad, id_field="label_id", digest_field="artifact_digest")
+        ),
+    )
+    counts = count_labels_by_horizon(
+        observation_ids=[obs[0].observation_id],
+        labels=[bad],
+        observations_by_id={obs[0].observation_id: obs[0]},
+    )
+    assert counts.invalid_label_count == 1
+    assert counts.counts_by_horizon["H10"].available == 0
+
+
+def test_naive_created_at_blocks_active_snapshot_set() -> None:
+    snaps = list(_full_v2_set())
+    naive = replace(snaps[0], created_at=datetime(2026, 7, 31, 12, 0))  # no tz
+    result = verify_snapshot_binding(
+        [naive, *snaps[1:]],
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+        compatibility_id=COMPAT,
+        expected_learning_observation_contract_id=OBS_CONTRACT,
+        expected_producer_observation_contract=PRODUCER_CONTRACT,
+    )
+    assert result.active_set_verified is False

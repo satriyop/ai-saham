@@ -471,23 +471,26 @@ def verify_snapshot_binding(
 
 
 def parse_canonical_session_date(raw: Any) -> date | None:
-    """Parse a complete canonical YYYY-MM-DD string; reject prefixes and junk."""
-    if not isinstance(raw, str):
+    """Parse exact YYYY-MM-DD authority string; no strip/prefix/alias acceptance."""
+    if type(raw) is not str:
         return None
-    candidate = raw.strip()
-    if not _SESSION_DATE_RE.fullmatch(candidate):
+    # Reject surrounding whitespace by requiring the raw string itself to match.
+    if not _SESSION_DATE_RE.fullmatch(raw):
         return None
     try:
-        return date.fromisoformat(candidate)
+        return date.fromisoformat(raw)
     except ValueError:
         return None
 
 
-def parse_window_id(window_id: str) -> tuple[str, date] | None:
-    """Parse production ``window_id = {TICKER}:{YYYY-MM-DD}`` (ADR-056)."""
-    if not isinstance(window_id, str):
+def parse_window_id(window_id: Any) -> tuple[str, date] | None:
+    """Parse production ``window_id = {TICKER}:{YYYY-MM-DD}`` (ADR-056).
+
+    Read-side: no strip/upper — persisted form must already be canonical.
+    """
+    if type(window_id) is not str:
         return None
-    match = _WINDOW_ID_RE.fullmatch(window_id.strip().upper())
+    match = _WINDOW_ID_RE.fullmatch(window_id)
     if match is None:
         return None
     ticker, day_s = match.group(1), match.group(2)
@@ -514,11 +517,11 @@ def bound_economic_session(
 
     Production write path (AccumulationCandidateObservationPersister):
     - ``window_id = {TICKER}:{YYYY-MM-DD}``
-    - payload ``ticker`` and ``session_date`` equal that pair
+    - payload ``ticker`` and ``session_date`` equal that pair exactly
     - optional ``shared.provenance.latest_completed_session`` when present must
       equal the economic session date
 
-    Does not invent a session from ``cutoff_at`` alone.
+    Does not invent a session from ``cutoff_at`` alone. No case/whitespace rewrite.
     """
     window = parse_window_id(observation.window_id)
     if window is None:
@@ -529,10 +532,10 @@ def bound_economic_session(
     if not isinstance(payload, Mapping):
         return None
     raw_ticker = payload.get("ticker")
-    if not isinstance(raw_ticker, str) or not raw_ticker.strip():
+    if type(raw_ticker) is not str or not raw_ticker:
         return None
-    payload_ticker = raw_ticker.strip().upper()
-    if payload_ticker != win_ticker:
+    # Exact string equality with window ticker (already uppercase in window_id).
+    if raw_ticker != win_ticker:
         return None
 
     session = parse_canonical_session_date(payload.get("session_date"))
@@ -557,37 +560,35 @@ def _session_binding_reasons(observation: LearningObservation) -> list[str]:
         return reasons
 
     raw_ticker = payload.get("ticker")
-    if not isinstance(raw_ticker, str) or not raw_ticker.strip():
+    if type(raw_ticker) is not str or not raw_ticker:
         reasons.append("payload_ticker_missing")
-    else:
-        payload_ticker = raw_ticker.strip().upper()
-        if payload_ticker != win_ticker:
-            reasons.append(f"ticker_window_mismatch:payload={payload_ticker},window={win_ticker}")
+    elif raw_ticker != win_ticker:
+        reasons.append(f"ticker_window_mismatch:payload={raw_ticker!r},window={win_ticker!r}")
 
     session = parse_canonical_session_date(payload.get("session_date"))
     if session is None:
         reasons.append("missing_or_malformed_session_date")
     elif session != win_date:
         reasons.append(
-            f"session_date_window_mismatch:payload={session.isoformat()},"
+            f"session_date_window_mismatch:payload={payload.get('session_date')!r},"
             f"window={win_date.isoformat()}"
         )
     return reasons
 
 
 def _parse_aware_datetime(raw: Any) -> datetime | None:
-    """Parse ISO datetime requiring timezone awareness; reject naive/junk."""
+    """Parse writer-canonical ISO datetime; reject strip/Z/naive aliases."""
     if isinstance(raw, datetime):
         if raw.tzinfo is None or raw.utcoffset() is None:
             return None
         return raw
-    if not isinstance(raw, str) or not raw.strip():
+    if type(raw) is not str or not raw:
         return None
-    text = raw.strip()
+    # Reject whitespace padding and Z aliases (writers use +00:00 via isoformat).
+    if raw != raw.strip() or raw.endswith("Z") or raw.endswith("z"):
+        return None
     try:
-        if text.endswith("Z"):
-            text = text[:-1] + "+00:00"
-        parsed = datetime.fromisoformat(text)
+        parsed = datetime.fromisoformat(raw)
     except ValueError:
         return None
     if parsed.tzinfo is None or parsed.utcoffset() is None:
@@ -595,9 +596,13 @@ def _parse_aware_datetime(raw: Any) -> datetime | None:
     return parsed
 
 
-def _datetimes_equal(a: datetime, b: datetime) -> bool:
-    """Timezone-aware equality via UTC instants."""
-    return a.astimezone().timestamp() == b.astimezone().timestamp()
+def _exact_iso_matches_datetime(raw: Any, expected: datetime) -> bool:
+    """Authority string must equal writer ``expected.isoformat()`` exactly."""
+    if type(raw) is not str:
+        return False
+    if expected.tzinfo is None or expected.utcoffset() is None:
+        return False
+    return raw == expected.isoformat()
 
 
 def _production_payload_semantic_reasons(
@@ -658,22 +663,16 @@ def _production_payload_semantic_reasons(
         if keys != ACTIVE_FEATURES_WINDOWS:
             reasons.append(f"features_by_window_keys:{sorted(keys)}")
 
-    # Payload captured_at must equal outer captured_at (PIT capture authority).
-    payload_captured = _parse_aware_datetime(payload.get("captured_at"))
-    if payload_captured is None:
-        reasons.append(f"payload.captured_at_malformed:{payload.get('captured_at')!r}")
-    else:
-        outer_captured = observation.captured_at
-        if (
-            outer_captured.tzinfo is None
-            or outer_captured.utcoffset() is None
-            or not _datetimes_equal(payload_captured, outer_captured)
-        ):
-            reasons.append(
-                "captured_at_mismatch:"
-                f"payload={payload.get('captured_at')!r},"
-                f"outer={outer_captured.isoformat()!r}"
-            )
+    # Payload captured_at must equal outer captured_at exactly (PIT capture authority).
+    outer_captured = observation.captured_at
+    if outer_captured.tzinfo is None or outer_captured.utcoffset() is None:
+        reasons.append(f"outer.captured_at_naive:{outer_captured!r}")
+    elif not _exact_iso_matches_datetime(payload.get("captured_at"), outer_captured):
+        reasons.append(
+            "captured_at_mismatch:"
+            f"payload={payload.get('captured_at')!r},"
+            f"outer={outer_captured.isoformat()!r}"
+        )
 
     shared = payload.get("shared")
     if not isinstance(shared, Mapping):
@@ -698,23 +697,15 @@ def _production_payload_semantic_reasons(
         if not isinstance(provenance, Mapping) or not provenance:
             reasons.append("shared.provenance_missing")
         else:
-            decision_at = _parse_aware_datetime(provenance.get("decision_at"))
-            if decision_at is None:
+            cutoff = observation.cutoff_at
+            if cutoff.tzinfo is None or cutoff.utcoffset() is None:
+                reasons.append(f"outer.cutoff_at_naive:{cutoff!r}")
+            elif not _exact_iso_matches_datetime(provenance.get("decision_at"), cutoff):
                 reasons.append(
-                    f"shared.provenance.decision_at_malformed:{provenance.get('decision_at')!r}"
+                    "decision_at_cutoff_mismatch:"
+                    f"decision_at={provenance.get('decision_at')!r},"
+                    f"cutoff_at={cutoff.isoformat()!r}"
                 )
-            else:
-                cutoff = observation.cutoff_at
-                if (
-                    cutoff.tzinfo is None
-                    or cutoff.utcoffset() is None
-                    or not _datetimes_equal(decision_at, cutoff)
-                ):
-                    reasons.append(
-                        "decision_at_cutoff_mismatch:"
-                        f"decision_at={provenance.get('decision_at')!r},"
-                        f"cutoff_at={cutoff.isoformat()!r}"
-                    )
             latest = provenance.get("latest_completed_session")
             latest_date = parse_canonical_session_date(latest)
             if latest_date is None:
@@ -744,9 +735,9 @@ def _production_payload_semantic_reasons(
     # Optional payload contract fields: if present, must match active producer contract.
     for key in ("observation_contract", "producer_observation_contract"):
         raw = payload.get(key)
-        if isinstance(raw, str) and raw.strip():
-            if raw.strip() != ACTIVE_PRODUCER_OBSERVATION_CONTRACT:
-                reasons.append(f"{key}:{raw.strip()}")
+        if type(raw) is str and raw:
+            if raw != ACTIVE_PRODUCER_OBSERVATION_CONTRACT:
+                reasons.append(f"{key}:{raw!r}")
 
     return reasons
 
@@ -1220,7 +1211,11 @@ def _path_label_semantic_reasons(
                     ):
                         reasons.append("metrics.label_window_sessions_endpoint_mismatch")
             snapshot_id = metrics.get("calendar_snapshot_id")
-            if not isinstance(snapshot_id, str) or not snapshot_id.strip():
+            if (
+                type(snapshot_id) is not str
+                or not snapshot_id
+                or snapshot_id != snapshot_id.strip()
+            ):
                 reasons.append(f"metrics.calendar_snapshot_id_invalid:{snapshot_id!r}")
                 snapshot_id = None
             contract_id = metrics.get("calendar_contract_id")
@@ -1230,10 +1225,18 @@ def _path_label_semantic_reasons(
                     f"!=expected:{STOCKBIT_TRADING_SESSIONS_CONTRACT!r}"
                 )
             stored_revision = metrics.get("calendar_source_revision")
-            if not isinstance(stored_revision, str) or not stored_revision.strip():
+            if (
+                type(stored_revision) is not str
+                or not stored_revision
+                or stored_revision != stored_revision.strip()
+            ):
                 reasons.append(f"metrics.calendar_source_revision_invalid:{stored_revision!r}")
             stored_window_digest = metrics.get("label_window_digest")
-            if not isinstance(stored_window_digest, str) or not stored_window_digest.strip():
+            if (
+                type(stored_window_digest) is not str
+                or not stored_window_digest
+                or stored_window_digest != stored_window_digest.strip()
+            ):
                 reasons.append(f"metrics.label_window_digest_invalid:{stored_window_digest!r}")
             if win_start is not None and win_end is not None:
                 if win_start > win_end:
@@ -1290,8 +1293,8 @@ def _path_label_semantic_reasons(
                         f"metrics.calendar_snapshot_benchmark_invalid:{snapshot.benchmark!r}"
                     )
                 if (
-                    isinstance(stored_revision, str)
-                    and stored_revision.strip()
+                    type(stored_revision) is str
+                    and stored_revision
                     and stored_revision != snapshot.source_revision
                 ):
                     reasons.append(
@@ -1344,58 +1347,52 @@ def _path_label_semantic_reasons(
                         "metrics.signal_date_session_mismatch:"
                         f"signal={signal_date.isoformat()},session={obs_session.isoformat()}"
                     )
-                # metrics.ticker must equal parent observation ticker (case-normalized).
+                # metrics.ticker must equal parent observation ticker exactly.
                 # Presence alone is not authority — BBCA obs + TLKM metrics is corruption.
                 obs_ticker = _parent_observation_ticker(observation)
                 raw_metric_ticker = metrics.get("ticker")
-                if not isinstance(raw_metric_ticker, str) or not raw_metric_ticker.strip():
-                    # Missing key already reported via metrics_missing_fields; invalid
-                    # non-string / blank values fail closed here when key is present.
+                if type(raw_metric_ticker) is not str or not raw_metric_ticker:
                     if "ticker" in metrics:
                         reasons.append(f"metrics.ticker_invalid:{raw_metric_ticker!r}")
-                elif obs_ticker is not None:
-                    metric_ticker = raw_metric_ticker.strip().upper()
-                    if metric_ticker != obs_ticker:
-                        reasons.append(
-                            "metrics.ticker_mismatch:"
-                            f"metrics={metric_ticker},observation={obs_ticker}"
-                        )
+                elif obs_ticker is not None and raw_metric_ticker != obs_ticker:
+                    reasons.append(
+                        "metrics.ticker_mismatch:"
+                        f"metrics={raw_metric_ticker!r},observation={obs_ticker!r}"
+                    )
                 # Entry reference equals frozen shared.current_price (when entry typed).
                 # Label entry must already be exact numeric; frozen is observation truth.
                 if entry is not None:
                     payload = observation.decision_payload
                     shared = payload.get("shared") if isinstance(payload, Mapping) else None
                     raw_price = shared.get("current_price") if isinstance(shared, Mapping) else None
-                    try:
-                        frozen = float(raw_price) if raw_price is not None else None
-                    except (TypeError, ValueError):
-                        frozen = None
-                    if frozen is None or frozen <= 0:
+                    if type(raw_price) is bool or type(raw_price) not in (int, float):
                         reasons.append(f"entry_reference_no_frozen_price:{raw_price!r}")
-                    elif abs(entry - frozen) > 1e-9:
-                        reasons.append(f"entry_reference_mismatch:entry={entry},frozen={frozen}")
+                    elif raw_price <= 0:
+                        reasons.append(f"entry_reference_no_frozen_price:{raw_price!r}")
+                    elif abs(entry - float(raw_price)) > 1e-9:
+                        reasons.append(f"entry_reference_mismatch:entry={entry},frozen={raw_price}")
     elif label.availability is LabelAvailability.UNAVAILABLE:
         metrics = label.metrics if isinstance(label.metrics, Mapping) else {}
         reason = metrics.get("unavailable_reason")
-        if not isinstance(reason, str) or not reason.strip():
+        if type(reason) is not str or not reason:
             reasons.append("metrics.unavailable_reason_missing")
-        elif reason.strip() not in _SUPPORTED_PATH_UNAVAILABLE_REASONS:
+        elif reason not in _SUPPORTED_PATH_UNAVAILABLE_REASONS:
             # Closed production vocabulary — invented non-empty strings are corruption.
-            reasons.append(f"metrics.unavailable_reason_unsupported:{reason.strip()!r}")
+            reasons.append(f"metrics.unavailable_reason_unsupported:{reason!r}")
 
     return reasons
 
 
 def _parent_observation_ticker(observation: LearningObservation) -> str | None:
-    """Authoritative observation ticker (window/payload bound), case-normalized."""
+    """Authoritative observation ticker (window/payload bound), exact form."""
     bound = bound_economic_session(observation)
     if bound is not None:
         return bound[0]
     payload = observation.decision_payload
     if isinstance(payload, Mapping):
         raw = payload.get("ticker")
-        if isinstance(raw, str) and raw.strip():
-            return raw.strip().upper()
+        if type(raw) is str and raw:
+            return raw
     window = parse_window_id(observation.window_id)
     if window is not None:
         return window[0]
