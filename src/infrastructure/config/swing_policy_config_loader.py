@@ -63,7 +63,12 @@ def load_swing_policy_config(
         corporate_actions = data.get("corporate_actions") or {}
         setup_phase = data.get("setup_phase") or {}
         sc = data.get("screener") or {}
-        sb = data.get("sector_breadth") or {}
+        if "sector_breadth" in data:
+            raise ValueError(
+                "accumulation_screener.sector_breadth is retired by ADR-062; "
+                "remove the block from config (group-breadth score bonus is not "
+                "production policy)"
+            )
 
         # Parse sections using specialized parsers
         bq_fields = parse_broker_quality_fields(data, defaults)
@@ -95,16 +100,6 @@ def load_swing_policy_config(
             coiled_spring_min_score=float_or_default(
                 vd_sig, "coiled_spring_min_score", defaults.coiled_spring_min_score
             ),
-            sector_breadth_enabled=bool_or_default(sb, "enabled", defaults.sector_breadth_enabled),
-            sector_breadth_threshold=float_or_default(
-                sb, "breadth_threshold", defaults.sector_breadth_threshold
-            ),
-            sector_breadth_bonus_pts=float_or_default(
-                sb, "bonus_pts", defaults.sector_breadth_bonus_pts
-            ),
-            sector_breadth_min_tickers=int_or_default(
-                sb, "min_tickers_for_breadth", defaults.sector_breadth_min_tickers
-            ),
             resistance_gate_enabled=bool_or_default(
                 resistance, "enabled", defaults.resistance_gate_enabled
             ),
@@ -120,7 +115,8 @@ def load_swing_policy_config(
             **family_fields,
         )
     except ValueError as exc:
-        if "invalid setup phase name" in str(exc):
+        msg = str(exc)
+        if "invalid setup phase name" in msg or "sector_breadth is retired" in msg:
             raise
         logger.warning(
             "Swing config contains invalid values; falling back to defaults",

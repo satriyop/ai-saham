@@ -33,10 +33,6 @@ class BuildSignalObservationScreenRequest:
     resistance_gate_enabled: bool
     resistance_headroom_min_pct: float
     ex_date_warning_days: int
-    sector_breadth_enabled: bool
-    sector_breadth_threshold: float
-    sector_breadth_bonus_pts: float
-    sector_breadth_min_tickers: int
     strategy_name: str | None = None
 
     @classmethod
@@ -99,10 +95,6 @@ class BuildSignalObservationScreenRequest:
             resistance_gate_enabled=bool(swing_policy.resistance_gate_enabled),
             resistance_headroom_min_pct=float(swing_policy.resistance_headroom_min_pct),
             ex_date_warning_days=int(swing_policy.ex_date_warning_days),
-            sector_breadth_enabled=bool(swing_policy.sector_breadth_enabled),
-            sector_breadth_threshold=float(swing_policy.sector_breadth_threshold),
-            sector_breadth_bonus_pts=float(swing_policy.sector_breadth_bonus_pts),
-            sector_breadth_min_tickers=int(swing_policy.sector_breadth_min_tickers),
             strategy_name=strategy_name,
         )
 
@@ -139,10 +131,6 @@ class BuildSignalObservationScreenRequest:
             resistance_gate_enabled=self.resistance_gate_enabled,
             resistance_headroom_min_pct=self.resistance_headroom_min_pct,
             ex_date_warning_days=self.ex_date_warning_days,
-            sector_breadth_enabled=self.sector_breadth_enabled,
-            sector_breadth_threshold=self.sector_breadth_threshold,
-            sector_breadth_bonus_pts=self.sector_breadth_bonus_pts,
-            sector_breadth_min_tickers=self.sector_breadth_min_tickers,
             strategy_name=self.strategy_name,
             as_of_date=as_of_date,
             market_context=market_context,

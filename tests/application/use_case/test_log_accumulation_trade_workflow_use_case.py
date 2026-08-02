@@ -81,10 +81,6 @@ def test_workflow_execution_builds_request_and_uppercases_and_lowercases(dummy_r
     log_use_case = FakeLogSwingCandidateUseCase(dummy_response)
     policy = LogAccumulationTradePolicy(
         tier1_broker_codes=frozenset({"AK", "BK"}),
-        sector_breadth_enabled=True,
-        sector_breadth_threshold=0.6,
-        sector_breadth_bonus_pts=10.0,
-        sector_breadth_min_tickers=3,
         setup_config=SwingSetupCatalogConfig(),
         resistance_gate_enabled=True,
         resistance_headroom_min_pct=5.0,
@@ -129,10 +125,6 @@ def test_workflow_execution_builds_request_and_uppercases_and_lowercases(dummy_r
     assert recorded.benchmark_ticker == "IHSG"
     assert recorded.logged_at == date(2026, 1, 1)
     assert recorded.tier1_broker_codes == policy.tier1_broker_codes
-    assert recorded.sector_breadth_enabled == policy.sector_breadth_enabled
-    assert recorded.sector_breadth_threshold == policy.sector_breadth_threshold
-    assert recorded.sector_breadth_bonus_pts == policy.sector_breadth_bonus_pts
-    assert recorded.sector_breadth_min_tickers == policy.sector_breadth_min_tickers
     assert recorded.setup_config == policy.setup_config
     assert recorded.resistance_gate_enabled == policy.resistance_gate_enabled
     assert recorded.resistance_headroom_min_pct == policy.resistance_headroom_min_pct
@@ -146,10 +138,6 @@ def test_workflow_execution_rejects_unknown_setup_when_from_analysis_is_true(dum
     log_use_case = FakeLogSwingCandidateUseCase(dummy_response)
     policy = LogAccumulationTradePolicy(
         tier1_broker_codes=frozenset(),
-        sector_breadth_enabled=True,
-        sector_breadth_threshold=0.6,
-        sector_breadth_bonus_pts=10.0,
-        sector_breadth_min_tickers=3,
         setup_config=SwingSetupCatalogConfig(),
         resistance_gate_enabled=True,
         resistance_headroom_min_pct=5.0,
@@ -187,10 +175,6 @@ def test_workflow_execution_allows_unknown_setup_when_from_analysis_is_false(dum
     log_use_case = FakeLogSwingCandidateUseCase(dummy_response)
     policy = LogAccumulationTradePolicy(
         tier1_broker_codes=frozenset(),
-        sector_breadth_enabled=True,
-        sector_breadth_threshold=0.6,
-        sector_breadth_bonus_pts=10.0,
-        sector_breadth_min_tickers=3,
         setup_config=SwingSetupCatalogConfig(),
         resistance_gate_enabled=True,
         resistance_headroom_min_pct=5.0,

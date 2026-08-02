@@ -193,10 +193,6 @@ def _make_request(
         benchmark_ticker="COMPOSITE",
         logged_at=date(2025, 1, 15),
         tier1_broker_codes=frozenset({"MS", "DB"}),
-        sector_breadth_enabled=False,
-        sector_breadth_threshold=0.6,
-        sector_breadth_bonus_pts=10.0,
-        sector_breadth_min_tickers=3,
         setup_config=SwingSetupCatalogConfig(
             foreign_bounce=ForeignBounceSetupConfig(
                 gate_min_accum_score=60.0,

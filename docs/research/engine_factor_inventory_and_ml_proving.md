@@ -91,7 +91,7 @@ Config: `config/accumulation_screener.yaml` → `evidence.components.*`
 | `bci` / institutional | CLUSTER 12.5 / STABLE 4.2 | Tier-1 broker net-buyer count → label | FEEDER → `inst` |
 | BCI label inputs | `broker_quality.tier1.*`, cluster_min=3, stable_min=1 | Count of Tier-1 desks with `net_lot > 0` | FEEDER |
 | `bci_absorption_ratio` | computed in evaluator | Tier-1 buy vs aggregate sell when window net negative | **DIAG only** (not scored) |
-| Sector breadth bonus | `sector_breadth.bonus_pts`, threshold 0.60, min peers 3 | Adds points to foreign_flow_score when peers net-buy | FEEDER (inflates score; not a Signal evidence group) |
+| Sector breadth bonus | ~~`sector_breadth.bonus_pts`~~ | Retired by ADR-062; never production baseline (no idx_groups wiring) | RETIRED — do not challenge as production policy |
 | Smart/noise broker lists | `broker_quality.smart_money` / `noise` | Used by smart-money setup gates & tracked broker display | FEEDER / DISPLAY |
 
 **Derived feature inputs** (`derived_features`): RSI(14), trend SMA(20) ±2%, BB(20)/history(60), market VWAP period(20), window net_buy_ratio / streak / avg_flow_ratio / vwap_discount_pct.
@@ -353,7 +353,7 @@ Organize work as **proving packages**, not as one mega-model.
 |----|---------------|------------|----------------|-------------|
 | A1 | consistency / streak / flow% / VWAP / BCI / RSI headroom | Marginal contribution to SWING_10D; weight necessity | `signal_forward_labels` | fingerprint + candidate payload + broker recompute |
 | A2 | BCI direction / absorption | CLUSTER conditional on aggregate flow sign | same | S6 methodology, canonical join |
-| A3 | Sector breadth bonus | Does bonus improve or dilute? | same | payload (`sector_breadth_pct` / `sector_breadth_bonus` now in `to_dict()`; re-screen for exact values) |
+| A3 | Sector breadth bonus | **Retired (ADR-062)** — historical residual only; not a production baseline | same | historical payload keys if present; no new producer fields |
 | A4 | Broker list quality | Tier1/smart/noise membership predictive? | same + broker_daily_flow | payload (`top_brokers`, BCI) + optional daily-flow recompute |
 
 **ML tools:** threshold sweeps, constrained linear models, ablation of components.

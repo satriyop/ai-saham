@@ -52,6 +52,7 @@ class PanelRow:
     score_without_rsi: float | None = None
     score_without_flow: float | None = None
     score_without_inst: float | None = None
+    # Historical residual only (ADR-062); new producers omit these keys.
     sector_breadth_pct: float | None = None
     sector_breadth_bonus: float | None = None
     # Broker-list inputs (Package A4)

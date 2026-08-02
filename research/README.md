@@ -22,7 +22,7 @@ research/
     factor_card_vwap_buckets.py      # Package A — VWAP depth
     factor_card_bci_flow_sign.py     # Package A2 — BCI × flow sign
     factor_card_accum_components.py  # Package A1 — Accum component ablation
-    factor_card_sector_breadth.py    # Package A3 — group/sector breadth bonus
+    factor_card_sector_breadth.py    # Package A3 — retired group bonus (ADR-062) + DIAG sc_sector_breadth
     factor_card_broker_lists.py      # Package A4 — Tier1/smart/noise list quality
     factor_card_setup_gates.py       # Package B2 — named setup gate thresholds
     factor_card_regime_policy.py     # Package B6 — DecisionPolicy regime floors

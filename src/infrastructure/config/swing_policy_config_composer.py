@@ -39,7 +39,13 @@ def read_split_swing_policy_config(
     accumulation_raw = _read_yaml(accumulation_screener_path)
     accumulation = accumulation_raw.get("accumulation_screener") or accumulation_raw
     if isinstance(accumulation, dict):
-        for key in ("screener", "sector_breadth", "broker_quality", "verdicts"):
+        if "sector_breadth" in accumulation:
+            raise ValueError(
+                "accumulation_screener.sector_breadth is retired by ADR-062; "
+                "remove the block from config (group-breadth score bonus is not "
+                "production policy)"
+            )
+        for key in ("screener", "broker_quality", "verdicts"):
             _merge_section(data, accumulation, key)
 
     for path, keys in (

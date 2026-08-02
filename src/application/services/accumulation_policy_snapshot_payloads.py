@@ -137,8 +137,9 @@ def build_accum_score_weights_payload(policy: AccumScorePolicy) -> dict[str, Any
             {
                 "key": "sector_breadth",
                 "reason": (
-                    "applied after signal assessment in production; out of scope "
-                    "for production_policy_snapshot.v1 (ADR-059 option C)"
+                    "retired by ADR-062; never a production baseline. Residual "
+                    "conglomerate-group score bonus removed; out of scope for "
+                    "production_policy_snapshot.v2 (ADR-059 closed set)"
                 ),
             }
         ],

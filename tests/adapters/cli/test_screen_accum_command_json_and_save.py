@@ -72,10 +72,6 @@ def _real_workflow_uc(screen_execute, broker_repo=None):
         resistance_gate_enabled=True,
         resistance_headroom_min_pct=5.0,
         ex_date_warning_days=10,
-        sector_breadth_enabled=True,
-        sector_breadth_threshold=0.60,
-        sector_breadth_bonus_pts=10.0,
-        sector_breadth_min_tickers=3,
         smart_money_brokers=("BK", "AK"),
         noise_brokers=("YP", "XC"),
     )

@@ -24,10 +24,6 @@ def _swing(*, market_cap: int = 0) -> SimpleNamespace:
         resistance_gate_enabled=False,
         resistance_headroom_min_pct=0.0,
         ex_date_warning_days=0,
-        sector_breadth_enabled=False,
-        sector_breadth_threshold=0.0,
-        sector_breadth_bonus_pts=0.0,
-        sector_breadth_min_tickers=0,
     )
 
 

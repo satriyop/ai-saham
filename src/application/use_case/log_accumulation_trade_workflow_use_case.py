@@ -49,10 +49,6 @@ class LogAccumulationTradeWorkflowRequest:
 @dataclass(frozen=True)
 class LogAccumulationTradePolicy:
     tier1_broker_codes: frozenset[str]
-    sector_breadth_enabled: bool
-    sector_breadth_threshold: float
-    sector_breadth_bonus_pts: float
-    sector_breadth_min_tickers: int
     setup_config: SwingSetupCatalogConfig
     resistance_gate_enabled: bool
     resistance_headroom_min_pct: float
@@ -98,10 +94,6 @@ def build_log_accumulation_trade_policy(
 
     return LogAccumulationTradePolicy(
         tier1_broker_codes=swing_policy.tier1_broker_codes,
-        sector_breadth_enabled=swing_policy.sector_breadth_enabled,
-        sector_breadth_threshold=swing_policy.sector_breadth_threshold,
-        sector_breadth_bonus_pts=swing_policy.sector_breadth_bonus_pts,
-        sector_breadth_min_tickers=swing_policy.sector_breadth_min_tickers,
         setup_config=setup_config,
         resistance_gate_enabled=swing_policy.resistance_gate_enabled,
         resistance_headroom_min_pct=swing_policy.resistance_headroom_min_pct,
@@ -153,10 +145,6 @@ class LogAccumulationTradeWorkflowUseCase:
             benchmark_ticker=request.benchmark,
             logged_at=request.logged_at,
             tier1_broker_codes=self._policy.tier1_broker_codes,
-            sector_breadth_enabled=self._policy.sector_breadth_enabled,
-            sector_breadth_threshold=self._policy.sector_breadth_threshold,
-            sector_breadth_bonus_pts=self._policy.sector_breadth_bonus_pts,
-            sector_breadth_min_tickers=self._policy.sector_breadth_min_tickers,
             setup_config=self._policy.setup_config,
             resistance_gate_enabled=self._policy.resistance_gate_enabled,
             resistance_headroom_min_pct=self._policy.resistance_headroom_min_pct,

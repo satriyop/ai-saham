@@ -101,11 +101,6 @@ class SwingPolicyConfig:
             "default": SetupTargetConfig(Decimal("5"), Decimal("5")),
         }
     )
-    # sector breadth confirmation (accumulation_screener.yaml)
-    sector_breadth_enabled: bool = True
-    sector_breadth_threshold: float = 0.60
-    sector_breadth_bonus_pts: float = 10.0
-    sector_breadth_min_tickers: int = 3
     # resistance/corporate-action gates
     resistance_gate_enabled: bool = True
     resistance_headroom_min_pct: float = 5.0

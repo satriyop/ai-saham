@@ -66,11 +66,6 @@ class AccumulationScreenRequest:
     regime: str | None = None  # BULLISH / SIDEWAYS / WEAK / RISK_OFF
     # Phase 3.1 — corporate action risk window
     ex_date_warning_days: int = 10  # flag risk if ex/cum/event date within this many days
-    # Phase 3.2 — sector breadth confirmation
-    sector_breadth_enabled: bool = True
-    sector_breadth_threshold: float = 0.60  # min fraction of peers with net_buy_ratio > 0
-    sector_breadth_bonus_pts: float = 10.0  # bonus pts when threshold is met
-    sector_breadth_min_tickers: int = 3  # min peers in result set to compute breadth
     # BCI — Tier 1 broker codes for Broker Concentration Index scoring.
     # Default mirrors TIER1_FOREIGN_BROKERS; override via config to tune without code change.
     tier1_broker_codes: frozenset[str] = field(default_factory=lambda: TIER1_FOREIGN_BROKERS)
@@ -103,10 +98,6 @@ class AccumulationScreenRequest:
         resistance_headroom_min_pct: float = 5.0,
         regime: str | None = None,
         ex_date_warning_days: int = 10,
-        sector_breadth_enabled: bool = True,
-        sector_breadth_threshold: float = 0.60,
-        sector_breadth_bonus_pts: float = 10.0,
-        sector_breadth_min_tickers: int = 3,
         tier1_broker_codes: frozenset[str] | None = None,
         bci_cluster_min_count: int = 3,
         bci_stable_min_count: int = 1,
@@ -132,10 +123,6 @@ class AccumulationScreenRequest:
         self.resistance_headroom_min_pct = resistance_headroom_min_pct
         self.regime = regime
         self.ex_date_warning_days = ex_date_warning_days
-        self.sector_breadth_enabled = sector_breadth_enabled
-        self.sector_breadth_threshold = sector_breadth_threshold
-        self.sector_breadth_bonus_pts = sector_breadth_bonus_pts
-        self.sector_breadth_min_tickers = sector_breadth_min_tickers
         self.tier1_broker_codes = tier1_broker_codes or TIER1_FOREIGN_BROKERS
         self.bci_cluster_min_count = bci_cluster_min_count
         self.bci_stable_min_count = bci_stable_min_count
@@ -220,9 +207,6 @@ class AccumulationCandidate:
     fundamentals: "CompanyFundamentals | None" = None
     # Ticker status / special notation — display-only Stockbit context
     ticker_notation: "TickerNotationSnapshot | None" = None
-    # Phase 3.2 — sector breadth confirmation
-    sector_breadth_pct: float | None = None  # % of group peers with positive net_buy_ratio
-    sector_breadth_bonus: float = 0.0  # bonus pts applied (0 if threshold not met)
     # Data currency — dates of the most recent loaded records; None if no data
     latest_candle_date: date | None = None
     latest_broker_date: date | None = None
@@ -328,10 +312,6 @@ class AccumulationCandidate:
             "bandar_detector": self.bandar_detector.to_dict() if self.bandar_detector else None,
             "fundamentals": self.fundamentals.to_dict() if self.fundamentals else None,
             "ticker_notation": self.ticker_notation.to_dict() if self.ticker_notation else None,
-            "sector_breadth_pct": (
-                round(self.sector_breadth_pct, 4) if self.sector_breadth_pct is not None else None
-            ),
-            "sector_breadth_bonus": round(float(self.sector_breadth_bonus), 4),
             "latest_candle_date": (
                 self.latest_candle_date.isoformat() if self.latest_candle_date else None
             ),

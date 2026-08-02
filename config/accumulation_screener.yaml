@@ -7,23 +7,9 @@ accumulation_screener:
     # Requires fundamentals_provider (Stockbit keystats) to be active.
     min_market_cap_idr: 0
 
-  sector_breadth:
-    # Legacy, dormant group-breadth score-bonus configuration. Production
-    # composition deliberately supplies no group mapping, so this block does
-    # not authorize or activate scoring. ADR-062 retires this production-policy
-    # concept; a clean-removal task owns deleting the residual fields.
-    # Do not wire idx_groups.yaml into accumulation scoring.
-    enabled: true
-
-    # Historical isolated-applier semantics only: if this fraction of mapped
-    # group peers shows positive net_buy_ratio, the dormant applier adds points.
-    breadth_threshold: 0.60
-
-    # Historical dormant bonus; not production authority.
-    bonus_pts: 10
-
-    # Historical minimum support used by isolated tests only.
-    min_tickers_for_breadth: 3
+  # sector_breadth group-score-bonus retired by ADR-062. Do not reintroduce
+  # this block; presence is a hard load error. Unrelated sector-context
+  # evidence (sc_sector_breadth / sector_context.yaml) is a different contract.
 
   broker_quality:
     # Smart-money foreign desks used for broker-quality scoring.

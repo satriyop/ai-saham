@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Factor card: Accum sector/group breadth bonus (Package A3).
+"""Factor card: retired Accum group-breadth bonus + DIAG sc_sector_breadth.
 
 Research only — authority NONE.
 
-Prefer persisted `sector_breadth_pct` / `sector_breadth_bonus` from candidate
-payloads (added to `AccumulationCandidate.to_dict()`). Fall back to
-reconstruction from same-day panel peers + `config/idx_groups.yaml` for older
-rows that lack those keys.
+ADR-062 retired the conglomerate-group score bonus from production policy.
+New producers do not emit `sector_breadth_pct` / `sector_breadth_bonus`. This
+script may still read residual keys on historical observation rows (immutable
+raw facts) and optionally reconstruct peers from `config/idx_groups.yaml` for
+offline diagnosis only — never as a production baseline.
 
 Also reports fingerprint `sc_sector_breadth` (sector-context peer return breadth)
-as a related DIAG signal — different definition from the Accum bonus.
+— a different DIAG contract from the retired Accum bonus.
 
 Usage (from repo root):
   .venv/bin/python research/scripts/factor_card_sector_breadth.py

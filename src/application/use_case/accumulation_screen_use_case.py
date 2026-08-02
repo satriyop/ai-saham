@@ -170,7 +170,6 @@ class AccumulationScreenUseCase:
         bandar_detector_provider: "BandarDetectorProvider | None" = None,
         fundamentals_provider: "FundamentalsProvider | None" = None,
         ticker_notation_provider: "TickerNotationProvider | None" = None,
-        idx_groups: "dict[str, list[str]] | None" = None,
         risk_use_case: "AssessRiskUseCase | None" = None,
         candidate_observations_repository: "LearningObservationRepository | None" = None,
         setup_phase_history_repository: "SetupPhaseHistoryRepository | None" = None,
@@ -259,11 +258,6 @@ class AccumulationScreenUseCase:
             if self._risk_use_case is not None
             else None
         )
-        self._ticker_to_group: dict[str, str] = {}
-        if idx_groups:
-            for group_name, tickers in idx_groups.items():
-                for t in tickers:
-                    self._ticker_to_group[t.upper()] = group_name
 
         from src.application.services.accumulation_candidate_enricher import (
             AccumulationCandidateEnricher,
@@ -277,17 +271,11 @@ class AccumulationScreenUseCase:
         from src.application.services.accumulation_candidate_structural_filter import (
             AccumulationCandidateStructuralFilter,
         )
-        from src.application.services.accumulation_sector_breadth import (
-            AccumulationSectorBreadthApplier,
-        )
 
         self._candidate_evaluator = AccumulationCandidateEvaluator(
             broker_repository=self._broker_repo,
             market_repository=self._market_repo,
             derived_feature_policy=self._derived_features,
-        )
-        self._sector_breadth_applier = AccumulationSectorBreadthApplier(
-            ticker_to_group=self._ticker_to_group
         )
         self._structural_filter = AccumulationCandidateStructuralFilter(
             fundamentals_provider=fundamentals_provider,
@@ -442,10 +430,6 @@ class AccumulationScreenUseCase:
             )
             if assessment.passes:
                 candidates.append(result)
-
-        # Phase 3.2: sector breadth post-processing pass
-        if request.sector_breadth_enabled and self._ticker_to_group:
-            self._sector_breadth_applier.apply(candidates, request)
 
         # Phase E (Rec 14): post-screening risk funnel — runs only on survivors,
         # not on all 800+ tickers. Reuses already-loaded fundamentals + bandar

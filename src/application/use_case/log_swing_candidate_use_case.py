@@ -58,10 +58,6 @@ class LogSwingCandidateRequest:
     logged_at: date
     # Screen config (passed from SwingPolicyConfig — adapter owns _SC)
     tier1_broker_codes: frozenset[str]
-    sector_breadth_enabled: bool
-    sector_breadth_threshold: float
-    sector_breadth_bonus_pts: float
-    sector_breadth_min_tickers: int
     setup_config: SwingSetupCatalogConfig
     resistance_gate_enabled: bool = True
     resistance_headroom_min_pct: float = 5.0
@@ -124,10 +120,6 @@ class LogSwingCandidateUseCase:
             min_accum_score_enabled=True,
             min_net_buy_days=0,
             tier1_broker_codes=request.tier1_broker_codes,
-            sector_breadth_enabled=request.sector_breadth_enabled,
-            sector_breadth_threshold=request.sector_breadth_threshold,
-            sector_breadth_bonus_pts=request.sector_breadth_bonus_pts,
-            sector_breadth_min_tickers=request.sector_breadth_min_tickers,
             resistance_gate_enabled=request.resistance_gate_enabled,
             resistance_headroom_min_pct=request.resistance_headroom_min_pct,
             ex_date_warning_days=request.ex_date_warning_days,
@@ -158,10 +150,6 @@ class LogSwingCandidateUseCase:
                         min_accum_score_enabled=True,
                         min_net_buy_days=0,
                         tier1_broker_codes=request.tier1_broker_codes,
-                        sector_breadth_enabled=request.sector_breadth_enabled,
-                        sector_breadth_threshold=request.sector_breadth_threshold,
-                        sector_breadth_bonus_pts=request.sector_breadth_bonus_pts,
-                        sector_breadth_min_tickers=request.sector_breadth_min_tickers,
                         resistance_gate_enabled=request.resistance_gate_enabled,
                         resistance_headroom_min_pct=request.resistance_headroom_min_pct,
                         ex_date_warning_days=request.ex_date_warning_days,

@@ -19,10 +19,6 @@ def test_builder_maps_swing_and_accumulation_config_to_screen_request():
         tier1_broker_codes=frozenset({"AK", "BK"}),
         bci_cluster_min_count=4,
         bci_stable_min_count=2,
-        sector_breadth_enabled=True,
-        sector_breadth_threshold=0.7,
-        sector_breadth_bonus_pts=8.0,
-        sector_breadth_min_tickers=5,
         resistance_gate_enabled=False,
         resistance_headroom_min_pct=6.5,
         ex_date_warning_days=14,
@@ -55,10 +51,6 @@ def test_builder_maps_swing_and_accumulation_config_to_screen_request():
     assert request.resistance_gate_enabled is False
     assert request.resistance_headroom_min_pct == 6.5
     assert request.ex_date_warning_days == 14
-    assert request.sector_breadth_enabled is True
-    assert request.sector_breadth_threshold == 0.7
-    assert request.sector_breadth_bonus_pts == 8.0
-    assert request.sector_breadth_min_tickers == 5
     assert request.strategy_name == "williams-r-bounce"
 
 
