@@ -1,6 +1,24 @@
 # Grow The Snapshot-Bound Accum Challenge Corpus
 
-Status: `CODE_COMPLETE_AWAITING_DATA`
+Status: `IN_PROGRESS_CONTRACT_HARDENING`
+
+## Locked design decision (2026-08-02) — lookback / compatibility identity
+
+**Option A — Producer attestation (selected for this task).**
+
+- `pit_tradable_lookback_sessions` is persisted on each observation’s typed
+  `population_binding`, validated with exact integer types (no coercion), and
+  required to be **identical across every current-authority observation in a
+  compatibility cohort**, along with other cohort-invariant population fields
+  (contract, name, named-universe identity/tickers, tradability contract,
+  benchmark, binding schema version).
+- Session-dependent fields (PIT membership digest/session/tickers) may differ.
+- Document explicitly: `compatibility_id` is an **opaque producer-fork stamp**.
+  This task does **not** cryptographically reverse or prove lookback from that
+  hash. Authority is typed producer attestation + cohort consistency, not
+  identity-material reversibility.
+- Do not hardcode lookback `10`, consult live YAML as historical authority, or
+  introduce an immutable cohort-identity artifact (Option B) in this task.
 
 ## Locked Decisions (2026-08-02/03) — market-session authority for path labels
 
@@ -541,10 +559,12 @@ contract after product-owner approval.
 ## 13. Completion Record
 
 ```text
-Completed date (code gate): 2026-08-02
-Task status: CODE_COMPLETE_AWAITING_DATA
-  (locked lifecycle §6 / §6.3: matrix + tests + commits done → this state;
-   operational DONE is separate and not claimed here)
+Completed date (code gate): REOPENED 2026-08-02
+Task status: IN_PROGRESS_CONTRACT_HARDENING
+  (reopened: normalized-column reconciliation, strict authority parsers,
+   lookback Option A cohort consistency, label invalid≠insufficient,
+   ml-saham baseline_id fallback — must close with mutation tests before
+   CODE_COMPLETE_AWAITING_DATA)
 Commits (calendar authority / readiness hardening chain, main):
   9642980c feat(accum): sync-session-calendar use case, CLI, and selector
   ca9b53ff fix(cron): sync-session-calendar before labels
