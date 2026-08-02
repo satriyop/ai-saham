@@ -157,6 +157,16 @@ ruff format src/ tests/
 - ⚠ **`-m "not tui"` excludes the ~38 full-app TUI tests.** If you touched TUI
   code, also run `pytest -m tui`, or run the full `pytest`. A partial-selector
   green is **not** a close criterion for TUI changes; CI runs the full suite.
+- **AI-agent feature slice:** mark every dedicated agent test module with
+  `pytestmark = pytest.mark.agent`, regardless of its layer directory. `agent`
+  means feature ownership, not runtime cost or network access. Use
+  `pytest -m agent` for the complete feature slice,
+  `pytest -m "agent and not tui"` for fast application/infrastructure tests,
+  and `pytest -m "agent and tui"` for full-app agent/TUI interactions. Fast
+  agent tests remain included in the normal `pytest -m "not tui"` loop; do not
+  establish `not agent` as a default exclusion. Any real-provider smoke test
+  requires a separate explicit opt-in marker and must never be inferred from
+  `agent`.
 - Writing a CLI test that does `runner.invoke(app, …)` for `screen accum` /
   `fetch market` / `today`? It leaks live Stockbit/Yahoo I/O unless you stub the
   refresh/market-status/context seams — see the `codebase-known-pitfalls` skill,

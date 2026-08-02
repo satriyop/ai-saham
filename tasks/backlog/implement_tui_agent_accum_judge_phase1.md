@@ -484,6 +484,11 @@ remains authoritative.
       outside the permitted model adapter.
 - [ ] Existing deterministic TUI/CLI behavior is unchanged without AI.
 - [ ] No direct infrastructure import exists under domain/application.
+- [ ] Every dedicated Phase 1 agent test module declares
+      `pytestmark = pytest.mark.agent`; TUI mount/drive tests also receive the
+      independent cost-based `tui` marker.
+- [ ] The `agent` slice is fully offline; no test selected only by `agent`
+      requires credentials or network access.
 - [ ] No unrelated worktree changes are touched or staged.
 - [ ] Focused tests, TUI tests, full suite, architecture tests, Ruff gates, and
       `git diff --check` pass on the final code state.
@@ -500,6 +505,9 @@ Run after the final edit:
   tests/infrastructure/composition/test_agent_model.py \
   tests/adapters/tui/test_agent_commentary.py -q
 .venv/bin/python -m pytest tests/architecture/test_layer_boundaries.py -q
+.venv/bin/python -m pytest -m "agent and not tui"
+.venv/bin/python -m pytest -m "agent and tui"
+.venv/bin/python -m pytest -m agent
 .venv/bin/python -m pytest -m tui
 .venv/bin/python -m pytest
 ruff check src/ tests/

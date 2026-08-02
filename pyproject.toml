@@ -51,6 +51,7 @@ packages = ["src"]
 testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
+    "agent: AI-agent feature tests across application, infrastructure, composition, and adapters. Feature ownership only: does not imply slow or live-network execution. Select with `-m agent`; fast slice with `-m 'agent and not tui'`.",
     "uses_live_refresh: opt out of the autouse CLI auto-refresh network stub; the test exercises the real refresh path",
     "tui: full-app Textual mount/drive test (~1.5-4.7s each; ~60% of suite wall time). Auto-applied under tests/adapters/tui to any test that uses `run_test`. Exclude the heavy slice with `-m 'not tui'`; force-include with the marker.",
     "tui_unit: force a tests/adapters/tui test OUT of the `tui` slice (a pure model/paint unit that never mounts the app); overrides the auto-tag.",
