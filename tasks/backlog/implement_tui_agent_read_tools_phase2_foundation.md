@@ -197,7 +197,7 @@ depends on the model.
 - [x] Dedicated tests are marked `pytest.mark.agent`.
 - [x] Focused agent, provider, composition, config, and architecture tests pass.
 - [x] Full agent, TUI, full-suite, and whole-repo Ruff gates pass before close.
-- [x] `git diff --check` passes; commit is pending explicit scoped commit action.
+- [x] `git diff --check` passes; implementation commit is recorded below.
 
 ## 14. Testing Expectations
 
@@ -235,7 +235,7 @@ changes and stage only owned files if committing is later requested.
 
 - Base commit: `b449d9f7`
 - Implemented date: 2026-08-02
-- Commit: pending; implementation is in the shared local worktree
+- Commit: `825ce241`
 - Focused verification:
   - `pytest -m "agent and not tui" -q`: 53 passed
   - architecture + multi-surface inventory: 9 passed

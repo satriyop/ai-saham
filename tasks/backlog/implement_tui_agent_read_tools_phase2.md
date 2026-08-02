@@ -158,8 +158,8 @@ and invisible (not advertised as unavailable).
 
 ### 8.0 Foundation — registry, orchestrator, budgets (prerequisite)
 
-Status: `IMPLEMENTED` on 2026-08-02; verified in the local worktree, commit
-pending. No production read tool is registered. Executable contract:
+Status: `IMPLEMENTED` on 2026-08-02 in `825ce241`. No production read tool is
+registered. Executable contract:
 [`implement_tui_agent_read_tools_phase2_foundation.md`](implement_tui_agent_read_tools_phase2_foundation.md).
 
 - Add frozen application DTOs from ADR-061 §Application contracts:
@@ -359,8 +359,8 @@ git diff --check
 - Activation ADR: ADR-061 (accepted 2026-08-02).
 - Base commit re-vet: `b449d9f7` plus the shared worktree; architecture and
   multi-surface inventory checks passed.
-- Foundation (8.0) commit: pending; implementation and full verification green
-  in the local worktree on 2026-08-02.
+- Foundation (8.0) commit: `825ce241`; implementation and full verification
+  green on 2026-08-02.
 - Tool subtasks (8.1–8.4):
 - Completed date:
 - Commits:
