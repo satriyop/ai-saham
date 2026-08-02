@@ -76,7 +76,7 @@ def create_tui_app(
         paper_log_runner = _LocalPaperLogFromPlanRunner(db_path, config)
     if phase_history_loader is None:
         phase_history_loader = _LocalPhaseHistoryLoader(db_path)
-    agent_composition = build_agent_composition(config.ai)
+    agent_composition = build_agent_composition(config.ai, db_path=db_path)
     if agent_turn_runner is None:
         agent_turn_runner = agent_composition.use_case.execute
 

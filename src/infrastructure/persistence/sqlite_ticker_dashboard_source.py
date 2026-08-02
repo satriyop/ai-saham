@@ -25,7 +25,7 @@ from src.domain.value_objects.insider_transaction import InsiderTransaction
 class SQLiteTickerDashboardSource(TickerDashboardSource):
     """Local-cache ticker dashboard source over SQLite + Stockbit cache tables."""
 
-    def __init__(self, db_path: Path | str) -> None:
+    def __init__(self, db_path: Path | str, *, initialize_schema: bool = True) -> None:
         from src.infrastructure.browser.stockbit_analyst import StockbitAnalystConsensusProvider
         from src.infrastructure.browser.stockbit_bandar import StockbitBandarDetectorProvider
         from src.infrastructure.browser.stockbit_company_profile import (
@@ -58,7 +58,9 @@ class SQLiteTickerDashboardSource(TickerDashboardSource):
         from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
         db = Path(db_path)
-        connection_provider = StockbitSQLiteConnectionProvider()
+        if not initialize_schema and not db.is_file():
+            raise FileNotFoundError(f"ticker dashboard database is unavailable: {db}")
+        connection_provider = StockbitSQLiteConnectionProvider(initialize_schema=initialize_schema)
         stockbit_config = load_stockbit_provider_config()
         common = dict(
             api_client=None,
@@ -78,11 +80,13 @@ class SQLiteTickerDashboardSource(TickerDashboardSource):
         self._insider = StockbitInsiderActivityProvider(**common)
         self._seasonality = StockbitSeasonalityProvider(**common)
         self._earnings = StockbitEarningsProvider(**common)
-        self._market = SQLiteMarketRepository(db)
-        self._broker = SQLiteBrokerRepository(db)
-        self._calendar = SQLiteCorporateActionCalendarRepository(db)
-        self._iev = SQLiteIEVRepository(db)
-        self._sentiment = SQLiteSentimentRepository(db)
+        self._market = SQLiteMarketRepository(db, initialize_schema=initialize_schema)
+        self._broker = SQLiteBrokerRepository(db, initialize_schema=initialize_schema)
+        self._calendar = SQLiteCorporateActionCalendarRepository(
+            db, initialize_schema=initialize_schema
+        )
+        self._iev = SQLiteIEVRepository(db, initialize_schema=initialize_schema)
+        self._sentiment = SQLiteSentimentRepository(db, initialize_schema=initialize_schema)
 
     def get_notation(self, ticker: str) -> Any | None:
         return self._notation.read_cached(ticker)

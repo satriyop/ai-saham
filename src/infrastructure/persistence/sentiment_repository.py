@@ -17,14 +17,20 @@ from src.domain.value_objects.sentiment import CatalystType, Sentiment
 class SQLiteSentimentRepository(SentimentRepository):
     """SQLite implementation of the SentimentRepository port."""
 
-    def __init__(self, db_path: str | Path = "data.db"):
+    def __init__(
+        self,
+        db_path: str | Path = "data.db",
+        *,
+        initialize_schema: bool = True,
+    ):
         """Initialize repository and ensure tables exist.
 
         Args:
             db_path: Path to the SQLite database file
         """
         self._db_path = Path(db_path)
-        self._init_db()
+        if initialize_schema:
+            self._init_db()
 
     def _init_db(self) -> None:
         """Create sentiment tables if they don't exist."""

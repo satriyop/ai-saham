@@ -50,9 +50,10 @@ class IEVSnapshot:
 class SQLiteIEVRepository:
     """Persist and query IEV/IEP snapshots in the local SQLite database."""
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db_path: str | Path, *, initialize_schema: bool = True) -> None:
         self._db_path = Path(db_path).expanduser()
-        self._ensure_schema()
+        if initialize_schema:
+            self._ensure_schema()
 
     def _get_connection(self) -> sqlite3.Connection:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)

@@ -34,8 +34,9 @@ class StockbitCachingProvider:
 
     Constructor is fixed: (api_client, db_path, *, connection_provider). Subclasses
     with extra fields (e.g. _mem_cache) must set them before calling
-    super().__init__() because the constructor calls _ensure_schema() which may
-    indirectly reference them.
+    super().__init__() because normal construction calls _ensure_schema() which
+    may indirectly reference them. A composition-owned connection provider may
+    explicitly disable schema initialization for a proven cache-read-only path.
     """
 
     def __init__(
@@ -48,7 +49,8 @@ class StockbitCachingProvider:
         self._api_client = api_client
         self._db_path = Path(db_path).expanduser()
         self._connection_provider = connection_provider or StockbitSQLiteConnectionProvider()
-        self._ensure_schema()
+        if self._connection_provider.initialize_schema:
+            self._ensure_schema()
 
     def _get_conn(self) -> "sqlite3.Connection":
         return self._connection_provider.get_connection(self._db_path)

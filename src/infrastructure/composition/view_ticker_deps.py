@@ -117,3 +117,61 @@ def build_view_ticker_deps(db_path: Path | str) -> ViewTickerDeps:
         distribution=ViewTickerDistributionUseCase(dist_provider),
         financials=ViewTickerFinancialsUseCase(financials_repo),
     )
+
+
+def build_read_only_ticker_dashboard_use_case(
+    db_path: Path | str,
+) -> GetTickerDashboardUseCase:
+    """Construct the shared dashboard path without schema initialization.
+
+    This narrow composition is reserved for side-effect-free consumers such as
+    the closed agent tool registry. It reuses the same source methods and
+    application use case as CLI/TUI view ticker, but requires an existing DB and
+    never creates or migrates cache tables.
+    """
+    from src.application.services.candidate_evidence_data_loader import (
+        CandidateEvidenceDataLoader,
+    )
+    from src.application.services.ticker_dashboard_sector_macro_loader import (
+        TickerDashboardSectorMacroLoader,
+    )
+    from src.infrastructure.config.sector_context_config_loader import (
+        create_sector_context_evidence_builder,
+    )
+    from src.infrastructure.config.sector_macro_context_config_loader import (
+        create_sector_macro_context_evidence_builder,
+    )
+    from src.infrastructure.persistence.sqlite_broker_repository import (
+        SQLiteBrokerRepository,
+    )
+    from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
+        SQLiteMacroCalendarRepository,
+    )
+    from src.infrastructure.persistence.sqlite_market_repository import (
+        SQLiteMarketRepository,
+    )
+    from src.infrastructure.persistence.sqlite_ticker_dashboard_source import (
+        SQLiteTickerDashboardSource,
+    )
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"ticker dashboard database is unavailable: {resolved}")
+    market_repo = SQLiteMarketRepository(resolved, initialize_schema=False)
+    broker_repo = SQLiteBrokerRepository(resolved, initialize_schema=False)
+    smc_loader = TickerDashboardSectorMacroLoader(
+        data_loader=CandidateEvidenceDataLoader(
+            market_repo,
+            broker_repo,
+            macro_calendar_repository=SQLiteMacroCalendarRepository(
+                resolved,
+                initialize_schema=False,
+            ),
+        ),
+        sector_macro_context_builder_factory=create_sector_macro_context_evidence_builder,
+        sector_context_builder_factory=create_sector_context_evidence_builder,
+    )
+    return GetTickerDashboardUseCase(
+        SQLiteTickerDashboardSource(resolved, initialize_schema=False),
+        sector_macro_context_loader=smc_loader,
+    )

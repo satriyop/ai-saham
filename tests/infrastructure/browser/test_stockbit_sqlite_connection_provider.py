@@ -117,3 +117,29 @@ def test_no_network_required(tmp_path):
     conn.execute("INSERT INTO demo (k) VALUES (?)", ("hello",))
     row = conn.execute("SELECT k FROM demo").fetchone()
     assert row["k"] == "hello"
+
+
+@pytest.mark.agent
+def test_schema_disabled_connection_is_query_only(tmp_path):
+    db = tmp_path / "read-only.db"
+    with sqlite3.connect(db) as connection:
+        connection.execute("CREATE TABLE demo (value TEXT)")
+    provider = StockbitSQLiteConnectionProvider(initialize_schema=False)
+    connection = provider.get_connection(db)
+
+    assert provider.initialize_schema is False
+    connection.execute("SELECT * FROM demo").fetchall()
+    with pytest.raises(sqlite3.OperationalError, match="readonly"):
+        connection.execute("INSERT INTO demo VALUES ('blocked')")
+
+
+@pytest.mark.agent
+def test_schema_disabled_connection_does_not_create_missing_database(tmp_path):
+    db = tmp_path / "missing" / "read-only.db"
+    provider = StockbitSQLiteConnectionProvider(initialize_schema=False)
+
+    with pytest.raises(FileNotFoundError, match="cache is unavailable"):
+        provider.get_connection(db)
+
+    assert not db.exists()
+    assert not db.parent.exists()

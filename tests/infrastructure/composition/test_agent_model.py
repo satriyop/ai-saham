@@ -18,6 +18,7 @@ def test_disabled_composition_does_not_construct_provider(monkeypatch) -> None:
     assert result.use_case.provider_available is False
     assert result.tools_requested is False
     assert result.tools_enabled is False
+    assert result.registered_tools == ()
 
 
 def test_tools_require_both_ai_and_tool_flags(monkeypatch) -> None:
@@ -57,9 +58,53 @@ def test_tools_register_only_visible_result_when_fully_enabled(monkeypatch) -> N
     assert result.tools_requested is True
     assert result.tools_enabled is True
     assert isinstance(result.use_case, AgentTurnOrchestrator)
-    assert tuple(item.name for item in result.use_case._registry.definitions) == (
-        AgentToolName.GET_VISIBLE_COCKPIT_RESULT,
+    assert result.registered_tools == (AgentToolName.GET_VISIBLE_COCKPIT_RESULT,)
+
+
+def test_existing_db_registers_visible_and_ticker_dashboard_tools(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    db_path = tmp_path / "dashboard.db"
+    db_path.touch()
+    sentinel_model = object()
+    sentinel_dashboard = object()
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(agent_model, "DeepSeekAgentModel", lambda key: sentinel_model)
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_ticker_dashboard_use_case",
+        lambda path: sentinel_dashboard,
     )
+
+    result = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
+        db_path=db_path,
+    )
+
+    assert result.registered_tools == (
+        AgentToolName.GET_VISIBLE_COCKPIT_RESULT,
+        AgentToolName.GET_TICKER_DASHBOARD,
+    )
+
+
+def test_missing_db_keeps_visible_tool_and_does_not_create_file(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    db_path = tmp_path / "missing" / "dashboard.db"
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(agent_model, "DeepSeekAgentModel", lambda key: object())
+
+    result = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
+        db_path=db_path,
+    )
+
+    assert result.registered_tools == (AgentToolName.GET_VISIBLE_COCKPIT_RESULT,)
+    assert not db_path.exists()
 
 
 def test_enabled_missing_key_is_fail_soft(monkeypatch) -> None:

@@ -87,12 +87,15 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         cli_surface="saham view ticker show",
         tui_surface="v t / palette view-ticker",
         shared_application_path=(
-            "GetTickerDashboardUseCase via build_view_ticker_deps; "
+            "GetTickerDashboardUseCase via build_view_ticker_deps; agent read-tool uses "
+            "build_read_only_ticker_dashboard_use_case over the same source methods; "
             "format via adapters.shared.view_ticker_dashboard_text"
         ),
         intentional_deltas=(
             "TUI detail stage chrome/actions (b desks, esc trail) vs CLI stdout",
             "JSON envelope is CLI-only (ADR-046)",
+            "Agent get_ticker_dashboard = bounded typed cache projection only; no rendered "
+            "text, raw dashboard branches, schema initialization, refresh, or write",
         ),
     ),
     DualSurfaceJob(

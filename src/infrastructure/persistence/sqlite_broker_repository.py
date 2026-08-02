@@ -39,9 +39,10 @@ class SQLiteBrokerRepository(BrokerDataRepository):
             exhaustive full-market broker composition
     """
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db_path: str | Path, *, initialize_schema: bool = True) -> None:
         self._db_path = Path(db_path).expanduser()
-        ensure_sqlite_broker_schema(self._db_path)
+        if initialize_schema:
+            ensure_sqlite_broker_schema(self._db_path)
         self._summaries = SQLiteBrokerSummaryStore(self._db_path)
         self._foreign_flow = SQLiteForeignFlowStore(self._db_path)
         self._daily_flow = SQLiteBrokerDailyFlowStore(self._db_path)

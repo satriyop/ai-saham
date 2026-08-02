@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from src.application.dto.accumulation_agent import (
     AgentModelUnavailableReason,
     AgentTurnPolicy,
 )
-from src.application.dto.agent_tools import AgentToolTurnPolicy
+from src.application.dto.agent_tools import AgentToolName, AgentToolTurnPolicy
+from src.application.services.agent_ticker_dashboard_tool import TickerDashboardTool
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_visible_cockpit_tool import VisibleCockpitResultTool
 from src.application.use_case.explain_accumulation_candidate_use_case import (
@@ -18,6 +20,9 @@ from src.application.use_case.explain_accumulation_candidate_use_case import (
 from src.application.use_case.orchestrate_agent_turn_use_case import AgentTurnOrchestrator
 from src.infrastructure.ai.deepseek_agent_model import DeepSeekAgentModel
 from src.infrastructure.ai.provider_config import resolve_ai_provider
+from src.infrastructure.composition.view_ticker_deps import (
+    build_read_only_ticker_dashboard_use_case,
+)
 from src.infrastructure.config.local_env import read_local_env_value
 
 
@@ -28,9 +33,15 @@ class AgentComposition:
     configured_provider: str
     tools_requested: bool
     tools_enabled: bool
+    registered_tools: tuple[AgentToolName, ...]
 
 
-def build_agent_composition(ai_config: object, *, provider: str | None = None) -> AgentComposition:
+def build_agent_composition(
+    ai_config: object,
+    *,
+    provider: str | None = None,
+    db_path: Path | str | None = None,
+) -> AgentComposition:
     explicit = provider
     if explicit is None and not os.getenv("AI_PROVIDER"):
         explicit = str(getattr(ai_config, "provider", "deepseek"))
@@ -62,10 +73,20 @@ def build_agent_composition(ai_config: object, *, provider: str | None = None) -
     )
     tools_enabled = tools_requested and model is not None and configured == "deepseek"
     use_case: ExplainAccumulationCandidateUseCase | AgentTurnOrchestrator
+    registered_tools: tuple[AgentToolName, ...] = ()
     if tools_enabled:
+        tools = [VisibleCockpitResultTool()]
+        if db_path is not None:
+            try:
+                dashboard = build_read_only_ticker_dashboard_use_case(db_path)
+            except (OSError, ValueError):
+                dashboard = None
+            if dashboard is not None:
+                tools.append(TickerDashboardTool(dashboard))
+        registered_tools = tuple(tool.definition.name for tool in tools)
         use_case = AgentTurnOrchestrator(
             model,
-            AgentToolRegistry((VisibleCockpitResultTool(),)),
+            AgentToolRegistry(tuple(tools)),
             AgentToolTurnPolicy(tools_enabled=True),
         )
     else:
@@ -76,4 +97,5 @@ def build_agent_composition(ai_config: object, *, provider: str | None = None) -
         configured,
         tools_requested,
         tools_enabled,
+        registered_tools,
     )

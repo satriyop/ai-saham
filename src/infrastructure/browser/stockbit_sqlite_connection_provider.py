@@ -24,17 +24,28 @@ class StockbitSQLiteConnectionProvider:
     - Same resolved path -> same connection object (within the same provider instance)
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, initialize_schema: bool = True) -> None:
         self._connections: dict[str, sqlite3.Connection] = {}
+        self._initialize_schema = initialize_schema
+
+    @property
+    def initialize_schema(self) -> bool:
+        """Whether cache providers may run constructor schema setup."""
+        return self._initialize_schema
 
     def get_connection(self, db_path: Path | str) -> sqlite3.Connection:
         path = Path(db_path).expanduser().resolve()
         key = str(path)
         conn = self._connections.get(key)
         if conn is None:
-            path.parent.mkdir(parents=True, exist_ok=True)
+            if not self._initialize_schema and not path.is_file():
+                raise FileNotFoundError(f"SQLite cache is unavailable: {path}")
+            if self._initialize_schema:
+                path.parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(str(path), check_same_thread=False)
             conn.row_factory = sqlite3.Row
+            if not self._initialize_schema:
+                conn.execute("PRAGMA query_only = ON")
             self._connections[key] = conn
         return conn
 

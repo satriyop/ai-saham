@@ -117,3 +117,10 @@ def test_tui_composition_uses_shared_formatters_and_use_cases():
     assert "view_ticker_dashboard_text" in composition
     assert "GetTickerDashboardRequest" in composition
     assert "src.adapters.cli.view_" not in composition
+
+
+def test_ticker_dashboard_inventory_records_agent_read_projection() -> None:
+    job = next(item for item in DUAL_SURFACE_JOBS if item.job_id == "view-ticker-show")
+
+    assert "build_read_only_ticker_dashboard_use_case" in job.shared_application_path
+    assert any("Agent get_ticker_dashboard" in note for note in job.intentional_deltas)
