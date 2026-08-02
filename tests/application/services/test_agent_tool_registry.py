@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from src.application.dto.agent_tool_context import AgentToolExecutionContext
 from src.application.dto.agent_tools import (
     AgentModelToolCall,
     AgentToolArgumentField,
@@ -12,11 +13,15 @@ from src.application.dto.agent_tools import (
     AgentToolName,
     AgentToolProvenance,
 )
+from src.application.services.agent_accumulation_context import (
+    build_agent_accumulation_context,
+)
 from src.application.services.agent_tool_registry import (
     AgentToolExecutionContractError,
     AgentToolRegistry,
     AgentToolValidationError,
 )
+from tests.application.services.test_agent_accumulation_context import make_candidate
 
 pytestmark = pytest.mark.agent
 
@@ -53,7 +58,7 @@ class _Tool:
     def build_arguments(self, ordered_values):
         return _Args(*ordered_values)
 
-    def execute(self, call_id, arguments):
+    def execute(self, call_id, arguments, context):
         self.executed.append(arguments.reference)
         return AgentToolExecutionResult.create(
             call_id=call_id,
@@ -70,6 +75,10 @@ def _call(arguments='{"reference":"sha256:abc"}', *, call_id="call-1", name=None
         name or AgentToolName.GET_VISIBLE_COCKPIT_RESULT.value,
         arguments,
     )
+
+
+def _context():
+    return AgentToolExecutionContext(build_agent_accumulation_context(make_candidate()))
 
 
 @pytest.mark.parametrize(
@@ -123,7 +132,7 @@ def test_registry_is_closed_deterministic_and_executes_typed_arguments() -> None
         AgentToolName.GET_TICKER_DASHBOARD,
     )
     prepared = registry.prepare_batch((_call(),), max_calls=2)
-    result = registry.execute(prepared[0])
+    result = registry.execute(prepared[0], _context())
 
     assert first.executed == ["sha256:abc"]
     assert result.status is AgentToolExecutionStatus.SUCCESS
@@ -131,7 +140,7 @@ def test_registry_is_closed_deterministic_and_executes_typed_arguments() -> None
 
 def test_registry_rejects_result_schema_drift() -> None:
     class WrongSchemaTool(_Tool):
-        def execute(self, call_id, arguments):
+        def execute(self, call_id, arguments, context):
             return AgentToolExecutionResult.create(
                 call_id=call_id,
                 name=self.definition.name,
@@ -144,4 +153,4 @@ def test_registry_rejects_result_schema_drift() -> None:
     prepared = registry.prepare_batch((_call(),), max_calls=2)
 
     with pytest.raises(AgentToolExecutionContractError, match="schema mismatch"):
-        registry.execute(prepared[0])
+        registry.execute(prepared[0], _context())

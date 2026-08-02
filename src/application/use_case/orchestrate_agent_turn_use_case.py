@@ -15,6 +15,7 @@ from src.application.dto.accumulation_agent import (
     AgentTurnResult,
     AgentTurnStatus,
 )
+from src.application.dto.agent_tool_context import AgentToolExecutionContext
 from src.application.dto.agent_tools import (
     AgentModelToolChoice,
     AgentToolExecutionResult,
@@ -86,6 +87,7 @@ class AgentTurnOrchestrator:
             return _cancelled()
 
         started = self._monotonic()
+        tool_context = AgentToolExecutionContext(visible_accumulation_context=context)
         definitions = (
             self._registry.definitions
             if self._policy.tools_enabled and not self._registry.empty
@@ -121,7 +123,7 @@ class AgentTurnOrchestrator:
         for call in prepared:
             if cancelled():
                 return _cancelled()
-            result = self._execute_tool(call, started, tool_started)
+            result = self._execute_tool(call, tool_context, started, tool_started)
             if isinstance(result, AgentTurnResult):
                 return result
             size = result.serialized_size()
@@ -183,6 +185,7 @@ class AgentTurnOrchestrator:
     def _execute_tool(
         self,
         call: PreparedAgentToolCall,
+        context: AgentToolExecutionContext,
         turn_started: float,
         tool_started: float,
     ) -> AgentToolExecutionResult | AgentTurnResult:
@@ -196,7 +199,10 @@ class AgentTurnOrchestrator:
         if timeout <= 0:
             return _failed("Agent tool execution budget exceeded")
         try:
-            return self._timed_call(lambda: self._registry.execute(call), timeout)
+            return self._timed_call(
+                lambda: self._registry.execute(call, context),
+                timeout,
+            )
         except (FutureTimeoutError, TimeoutError):
             return AgentToolExecutionResult.create(
                 call_id=call.call_id,

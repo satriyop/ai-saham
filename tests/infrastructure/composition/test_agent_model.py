@@ -1,5 +1,7 @@
 import pytest
 
+from src.application.dto.agent_tools import AgentToolName
+from src.application.use_case.orchestrate_agent_turn_use_case import AgentTurnOrchestrator
 from src.infrastructure.composition import agent_model
 from src.infrastructure.composition.agent_model import build_agent_composition
 from src.infrastructure.config.app_config import AiConfig
@@ -21,6 +23,7 @@ def test_disabled_composition_does_not_construct_provider(monkeypatch) -> None:
 def test_tools_require_both_ai_and_tool_flags(monkeypatch) -> None:
     monkeypatch.delenv("AI_PROVIDER", raising=False)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr(agent_model, "read_local_env_value", lambda name: None)
 
     disabled = build_agent_composition(
         AiConfig(enabled=False, provider="deepseek", tools_enabled=True)
@@ -37,7 +40,26 @@ def test_tools_require_both_ai_and_tool_flags(monkeypatch) -> None:
     assert enabled.tools_requested is True
     assert disabled.tools_enabled is False
     assert zero_tool.tools_enabled is False
-    assert enabled.tools_enabled is False  # no production tool is registered yet
+    assert enabled.tools_enabled is False
+
+
+def test_tools_register_only_visible_result_when_fully_enabled(monkeypatch) -> None:
+    sentinel_model = object()
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(agent_model, "DeepSeekAgentModel", lambda key: sentinel_model)
+
+    result = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", tools_enabled=True)
+    )
+
+    assert result.provider_available is True
+    assert result.tools_requested is True
+    assert result.tools_enabled is True
+    assert isinstance(result.use_case, AgentTurnOrchestrator)
+    assert tuple(item.name for item in result.use_case._registry.definitions) == (
+        AgentToolName.GET_VISIBLE_COCKPIT_RESULT,
+    )
 
 
 def test_enabled_missing_key_is_fail_soft(monkeypatch) -> None:

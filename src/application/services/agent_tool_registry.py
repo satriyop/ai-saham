@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
+from src.application.dto.agent_tool_context import AgentToolExecutionContext
 from src.application.dto.agent_tools import (
     AgentModelToolCall,
     AgentToolArguments,
@@ -100,8 +101,11 @@ class AgentToolRegistry:
         return tuple(prepared)
 
     @staticmethod
-    def execute(call: PreparedAgentToolCall) -> AgentToolExecutionResult:
-        result = call.tool.execute(call.call_id, call.arguments)
+    def execute(
+        call: PreparedAgentToolCall,
+        context: AgentToolExecutionContext,
+    ) -> AgentToolExecutionResult:
+        result = call.tool.execute(call.call_id, call.arguments, context)
         if not isinstance(result, AgentToolExecutionResult):
             raise AgentToolExecutionContractError("agent tool returned an invalid result type")
         if result.call_id != call.call_id or result.name is not call.name:

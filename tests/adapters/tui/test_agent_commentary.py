@@ -1,5 +1,5 @@
 import asyncio
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import pytest
 from textual.app import App, ComposeResult
@@ -9,6 +9,12 @@ from src.adapters.tui.main import CockpitApp
 from src.adapters.tui.presenters.accum_presenter import AccumPresenter
 from src.adapters.tui.widgets.agent_commentary import AgentCommentary
 from src.application.dto.accumulation_agent import AgentTurnResult, AgentTurnStatus
+from src.application.dto.agent_tools import (
+    AgentToolExecutionResult,
+    AgentToolExecutionStatus,
+    AgentToolName,
+    AgentToolProvenance,
+)
 from tests.adapters.tui.test_finish_cockpit_slices import _accum_payload
 
 pytestmark = pytest.mark.agent
@@ -17,6 +23,32 @@ pytestmark = pytest.mark.agent
 class _App(App[None]):
     def compose(self) -> ComposeResult:
         yield AgentCommentary(id="commentary")
+
+
+@dataclass(frozen=True)
+class _ToolPayload:
+    schema_id: str
+    value: str
+
+
+def _tool_result(call_id: str, status: AgentToolExecutionStatus):
+    kwargs = {
+        "call_id": call_id,
+        "name": AgentToolName.GET_VISIBLE_COCKPIT_RESULT,
+        "status": status,
+        "provenance": AgentToolProvenance("test-visible-result"),
+    }
+    if status is AgentToolExecutionStatus.SUCCESS:
+        return AgentToolExecutionResult.create(
+            **kwargs,
+            data=_ToolPayload("agent_tool.visible_cockpit.result.v1", call_id),
+        )
+    return AgentToolExecutionResult.create(
+        **kwargs,
+        data=None,
+        error_code="UNAVAILABLE",
+        error_message="Visible result unavailable",
+    )
 
 
 def test_commentary_renders_answer_and_context_without_action_styling() -> None:
@@ -39,6 +71,40 @@ def test_commentary_renders_answer_and_context_without_action_styling() -> None:
             assert "WATCH" in str(widget.query_one(".agent-answer").content)
             assert "sha256:abc" in str(widget.query_one(".agent-meta").content)
             assert "action-enter" not in widget.classes
+
+    asyncio.run(scenario())
+
+
+def test_partial_commentary_renders_answer_and_ordered_safe_tool_trace() -> None:
+    async def scenario() -> None:
+        app = _App()
+        async with app.run_test(size=(100, 30)) as pilot:
+            widget = app.query_one("#commentary", AgentCommentary)
+            first = _tool_result("first-secret-argument", AgentToolExecutionStatus.SUCCESS)
+            second = _tool_result("second-secret-argument", AgentToolExecutionStatus.UNAVAILABLE)
+            widget.show_result(
+                AgentTurnResult(
+                    status=AgentTurnStatus.PARTIAL,
+                    answer="Grounded answer remains available.",
+                    context_reference="sha256:context",
+                    provider="deepseek",
+                    model="deepseek-v4-flash",
+                    warnings=("One read was unavailable",),
+                    tool_results=(first, second),
+                ),
+                as_of="2026-08-01",
+            )
+            await pilot.pause()
+
+            answer = str(widget.query_one(".agent-answer").content)
+            meta = str(widget.query_one(".agent-meta").content)
+            trace = str(widget.query_one(".agent-tools").content)
+            assert "Grounded answer" in answer
+            assert "sha256:context" in meta
+            assert trace.index(first.result_reference) < trace.index(second.result_reference)
+            assert "get_visible_cockpit_result · SUCCESS" in trace
+            assert "get_visible_cockpit_result · UNAVAILABLE" in trace
+            assert "secret-argument" not in trace
 
     asyncio.run(scenario())
 

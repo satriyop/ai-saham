@@ -20,7 +20,14 @@ from src.application.dto.agent_tools import (
     AgentToolProvenance,
     AgentToolTurnPolicy,
 )
+from src.application.services.agent_accumulation_context import (
+    build_agent_accumulation_context,
+)
 from src.application.services.agent_tool_registry import AgentToolRegistry
+from src.application.services.agent_visible_cockpit_tool import (
+    VisibleCockpitResultData,
+    VisibleCockpitResultTool,
+)
 from src.application.use_case.orchestrate_agent_turn_use_case import AgentTurnOrchestrator
 from tests.application.services.test_agent_accumulation_context import make_candidate
 
@@ -61,8 +68,9 @@ class _Tool:
     def build_arguments(self, ordered_values):
         return _Args(*ordered_values)
 
-    def execute(self, call_id, arguments):
+    def execute(self, call_id, arguments, context):
         self.executed.append(arguments.reference)
+        assert context.visible_accumulation_context.context_reference.startswith("sha256:")
         if self.result_status is AgentToolExecutionStatus.SUCCESS:
             return AgentToolExecutionResult.create(
                 call_id=call_id,
@@ -152,6 +160,25 @@ def test_valid_batch_executes_sequentially_then_forces_final_answer() -> None:
     assert model.requests[1].tool_choice is AgentModelToolChoice.NONE
     assert model.requests[1].prior_tool_calls == calls
     assert tuple(item.call_id for item in result.tool_results) == ("one", "two")
+
+
+def test_visible_tool_returns_the_same_context_supplied_to_initial_model_call() -> None:
+    candidate = make_candidate()
+    expected_reference = build_agent_accumulation_context(candidate).context_reference
+    call = AgentModelToolCall(
+        "visible",
+        AgentToolName.GET_VISIBLE_COCKPIT_RESULT.value,
+        f'{{"visible_result_reference":"{expected_reference}"}}',
+    )
+    model = _Model([_tool_response(call), _answer("Exact visible result explained.")])
+
+    result = _orchestrator(model, VisibleCockpitResultTool()).execute(
+        AgentTurnRequest("explain visible result", candidate)
+    )
+
+    assert result.status is AgentTurnStatus.SUCCESS
+    assert isinstance(result.tool_results[0].data, VisibleCockpitResultData)
+    assert result.tool_results[0].data.context is model.requests[0].context
 
 
 def test_invalid_batch_executes_nothing_and_does_not_call_provider_again() -> None:

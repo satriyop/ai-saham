@@ -9,9 +9,13 @@ from src.application.dto.accumulation_agent import (
     AgentModelUnavailableReason,
     AgentTurnPolicy,
 )
+from src.application.dto.agent_tools import AgentToolTurnPolicy
+from src.application.services.agent_tool_registry import AgentToolRegistry
+from src.application.services.agent_visible_cockpit_tool import VisibleCockpitResultTool
 from src.application.use_case.explain_accumulation_candidate_use_case import (
     ExplainAccumulationCandidateUseCase,
 )
+from src.application.use_case.orchestrate_agent_turn_use_case import AgentTurnOrchestrator
 from src.infrastructure.ai.deepseek_agent_model import DeepSeekAgentModel
 from src.infrastructure.ai.provider_config import resolve_ai_provider
 from src.infrastructure.config.local_env import read_local_env_value
@@ -19,7 +23,7 @@ from src.infrastructure.config.local_env import read_local_env_value
 
 @dataclass(frozen=True)
 class AgentComposition:
-    use_case: ExplainAccumulationCandidateUseCase
+    use_case: ExplainAccumulationCandidateUseCase | AgentTurnOrchestrator
     provider_available: bool
     configured_provider: str
     tools_requested: bool
@@ -48,7 +52,7 @@ def build_agent_composition(ai_config: object, *, provider: str | None = None) -
             reason = AgentModelUnavailableReason.MISSING_CREDENTIAL
         else:
             model = DeepSeekAgentModel(api_key)
-    use_case = ExplainAccumulationCandidateUseCase(
+    phase_one_use_case = ExplainAccumulationCandidateUseCase(
         model,
         AgentTurnPolicy(
             enabled=enabled,
@@ -56,6 +60,20 @@ def build_agent_composition(ai_config: object, *, provider: str | None = None) -
             model_unavailable_reason=reason,
         ),
     )
-    # Foundation ships no registered tool. Effective enablement therefore stays
-    # false even when the independent config flag requests tools.
-    return AgentComposition(use_case, model is not None, configured, tools_requested, False)
+    tools_enabled = tools_requested and model is not None and configured == "deepseek"
+    use_case: ExplainAccumulationCandidateUseCase | AgentTurnOrchestrator
+    if tools_enabled:
+        use_case = AgentTurnOrchestrator(
+            model,
+            AgentToolRegistry((VisibleCockpitResultTool(),)),
+            AgentToolTurnPolicy(tools_enabled=True),
+        )
+    else:
+        use_case = phase_one_use_case
+    return AgentComposition(
+        use_case,
+        model is not None,
+        configured,
+        tools_requested,
+        tools_enabled,
+    )

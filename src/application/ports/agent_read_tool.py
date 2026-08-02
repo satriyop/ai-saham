@@ -2,6 +2,7 @@
 
 from typing import Protocol
 
+from src.application.dto.agent_tool_context import AgentToolExecutionContext
 from src.application.dto.agent_tools import (
     AgentToolArguments,
     AgentToolDefinition,
@@ -19,4 +20,5 @@ class AgentReadToolPort(Protocol):
         self,
         call_id: str,
         arguments: AgentToolArguments,
+        context: AgentToolExecutionContext,
     ) -> AgentToolExecutionResult: ...
