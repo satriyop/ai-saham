@@ -2976,3 +2976,53 @@ def test_naive_created_at_blocks_active_snapshot_set() -> None:
         expected_producer_observation_contract=PRODUCER_CONTRACT,
     )
     assert result.active_set_verified is False
+
+
+def test_malformed_optional_observation_contract_blocks() -> None:
+    obs = _ready_obs_pair()
+    payload = dict(obs[0].decision_payload)
+    payload["observation_contract"] = 123
+    bad = replace(
+        obs[0],
+        decision_payload=payload,
+        artifact_digest=artifact_digest(
+            _artifact_payload(
+                replace(obs[0], decision_payload=payload),
+                id_field="observation_id",
+                digest_field="artifact_digest",
+            )
+        ),
+    )
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[bad, obs[1]],
+        labels=[_path_label_for(obs[1])],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+
+
+def test_empty_optional_producer_observation_contract_blocks() -> None:
+    obs = _ready_obs_pair()
+    payload = dict(obs[0].decision_payload)
+    payload["producer_observation_contract"] = ""
+    bad = replace(
+        obs[0],
+        decision_payload=payload,
+        artifact_digest=artifact_digest(
+            _artifact_payload(
+                replace(obs[0], decision_payload=payload),
+                id_field="observation_id",
+                digest_field="artifact_digest",
+            )
+        ),
+    )
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[bad, obs[1]],
+        labels=[_path_label_for(obs[1])],
+        snapshots=_full_v2_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY

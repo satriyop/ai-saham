@@ -63,3 +63,20 @@ def test_create_rejects_blank_source_revision() -> None:
 
 def test_contract_constant_is_stockbit_ihsg_history() -> None:
     assert STOCKBIT_TRADING_SESSIONS_CONTRACT == "stockbit.trading_sessions.ihsg_history.v1"
+
+
+def test_source_revision_whitespace_rejected_on_create() -> None:
+    with pytest.raises(LearningContractError, match="whitespace"):
+        _snap(source_revision=" rev ")
+
+
+def test_from_mapping_rejects_string_coercion_and_padding() -> None:
+    snap = _snap()
+    raw = snap.to_dict()
+    raw["source_revision"] = " stockbit.test.v1 "
+    with pytest.raises(LearningContractError):
+        TradingSessionCalendarSnapshot.from_mapping(raw)
+    raw2 = snap.to_dict()
+    raw2["coverage_start"] = 20260701
+    with pytest.raises(LearningContractError):
+        TradingSessionCalendarSnapshot.from_mapping(raw2)

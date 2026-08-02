@@ -99,8 +99,12 @@ class TradingSessionCalendarSnapshot:
     ) -> TradingSessionCalendarSnapshot:
         if coverage_start > coverage_end:
             raise LearningContractError("coverage_start must not be after coverage_end")
-        if not source_revision.strip():
-            raise LearningContractError("source_revision must be non-empty")
+        if type(source_revision) is not str or not source_revision:
+            raise LearningContractError("source_revision must be non-empty str")
+        if source_revision != source_revision.strip():
+            raise LearningContractError(
+                f"source_revision must not have surrounding whitespace (got {source_revision!r})"
+            )
         if captured_at.tzinfo is None or captured_at.utcoffset() is None:
             raise LearningContractError("captured_at must be timezone-aware")
         sessions = tuple(ordered_sessions)
@@ -112,7 +116,7 @@ class TradingSessionCalendarSnapshot:
             "coverage_start": coverage_start.isoformat(),
             "coverage_end": coverage_end.isoformat(),
             "ordered_sessions": [s.isoformat() for s in sessions],
-            "source_revision": source_revision.strip(),
+            "source_revision": source_revision,
         }
         digest = artifact_digest(payload)
         # Identity excludes captured_at (operational). Digest covers content.
@@ -122,7 +126,7 @@ class TradingSessionCalendarSnapshot:
                 "coverage_start": coverage_start.isoformat(),
                 "coverage_end": coverage_end.isoformat(),
                 "ordered_sessions": [s.isoformat() for s in sessions],
-                "source_revision": source_revision.strip(),
+                "source_revision": source_revision,
                 "payload_digest": digest,
             }
         )
@@ -134,31 +138,70 @@ class TradingSessionCalendarSnapshot:
             coverage_start=coverage_start,
             coverage_end=coverage_end,
             ordered_sessions=sessions,
-            source_revision=source_revision.strip(),
+            source_revision=source_revision,
             captured_at=captured_at,
             payload_digest=digest,
         )
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any]) -> TradingSessionCalendarSnapshot:
+        """Parse stored mapping without str() coercion of authority fields."""
+        if not isinstance(raw, Mapping):
+            raise LearningContractError(
+                f"calendar snapshot must be a mapping, got {type(raw).__name__}"
+            )
+
+        def _exact_str(field: str) -> str:
+            value = raw.get(field)
+            if type(value) is not str:
+                raise LearningContractError(
+                    f"calendar snapshot.{field} must be exact str, "
+                    f"got {type(value).__name__}={value!r}"
+                )
+            if not value or value != value.strip():
+                raise LearningContractError(
+                    f"calendar snapshot.{field} must be non-empty without "
+                    f"surrounding whitespace, got {value!r}"
+                )
+            return value
+
         try:
-            coverage_start = date.fromisoformat(str(raw["coverage_start"]))
-            coverage_end = date.fromisoformat(str(raw["coverage_end"]))
-            sessions = tuple(date.fromisoformat(str(s)) for s in raw["ordered_sessions"])
-            captured_at = datetime.fromisoformat(str(raw["captured_at"]))
+            coverage_start_s = _exact_str("coverage_start")
+            coverage_end_s = _exact_str("coverage_end")
+            coverage_start = date.fromisoformat(coverage_start_s)
+            coverage_end = date.fromisoformat(coverage_end_s)
+            raw_sessions = raw["ordered_sessions"]
+            if not isinstance(raw_sessions, list):
+                raise LearningContractError("ordered_sessions must be a list of date strings")
+            sessions_list: list[date] = []
+            for i, item in enumerate(raw_sessions):
+                if type(item) is not str:
+                    raise LearningContractError(
+                        f"ordered_sessions[{i}] must be str, got {type(item).__name__}"
+                    )
+                sessions_list.append(date.fromisoformat(item))
+            sessions = tuple(sessions_list)
+            captured_at_s = _exact_str("captured_at")
+            if captured_at_s.endswith("Z") or captured_at_s.endswith("z"):
+                raise LearningContractError(
+                    f"captured_at must not use Z alias (got {captured_at_s!r})"
+                )
+            captured_at = datetime.fromisoformat(captured_at_s)
+        except LearningContractError:
+            raise
         except (KeyError, TypeError, ValueError) as exc:
             raise LearningContractError(f"calendar snapshot malformed: {exc}") from exc
         return cls(
-            snapshot_id=str(raw["snapshot_id"]),
-            contract_id=str(raw["contract_id"]),
-            source=str(raw["source"]),
-            benchmark=str(raw["benchmark"]),
+            snapshot_id=_exact_str("snapshot_id"),
+            contract_id=_exact_str("contract_id"),
+            source=_exact_str("source"),
+            benchmark=_exact_str("benchmark"),
             coverage_start=coverage_start,
             coverage_end=coverage_end,
             ordered_sessions=sessions,
-            source_revision=str(raw["source_revision"]),
+            source_revision=_exact_str("source_revision"),
             captured_at=captured_at,
-            payload_digest=str(raw["payload_digest"]),
+            payload_digest=_exact_str("payload_digest"),
         )
 
 
@@ -206,8 +249,13 @@ def validate_active_stockbit_calendar_snapshot(
         raise LearningContractError(f"calendar source must be stockbit, got {snapshot.source!r}")
     if snapshot.benchmark != TRADING_SESSION_CALENDAR_BENCHMARK_IHSG:
         raise LearningContractError(f"calendar benchmark must be IHSG, got {snapshot.benchmark!r}")
-    if not snapshot.source_revision.strip():
+    if type(snapshot.source_revision) is not str or not snapshot.source_revision:
         raise LearningContractError("calendar source_revision must be non-empty")
+    if snapshot.source_revision != snapshot.source_revision.strip():
+        raise LearningContractError(
+            "calendar source_revision must not have surrounding whitespace "
+            f"(got {snapshot.source_revision!r})"
+        )
 
 
 def _validate_sessions(

@@ -1290,6 +1290,10 @@ class ProductionPolicySnapshot:
             ("source_revision", source_revision),
         ):
             _require_non_empty(name, value)
+            if type(value) is not str or value != value.strip():
+                raise LearningContractError(
+                    f"{name} must be exact str without surrounding whitespace (got {value!r})"
+                )
         if _MATERIAL_CONFIG_HASH_RE.fullmatch(material_config_hash) is None:
             raise LearningContractError(
                 "material_config_hash must match ^sha256:[0-9a-f]{64}$, "
@@ -1379,8 +1383,13 @@ def validate_policy_snapshot_integrity(snapshot: ProductionPolicySnapshot) -> No
 
     if snapshot.contract_id not in _ALLOWED_PRODUCTION_POLICY_SNAPSHOT_CONTRACTS:
         raise LearningContractError("policy snapshot contract_id mismatch")
-    if type(snapshot.source_revision) is not str or not snapshot.source_revision.strip():
+    if type(snapshot.source_revision) is not str or not snapshot.source_revision:
         raise LearningContractError("source_revision must be non-empty provenance")
+    if snapshot.source_revision != snapshot.source_revision.strip():
+        raise LearningContractError(
+            "source_revision must not have surrounding whitespace "
+            f"(got {snapshot.source_revision!r})"
+        )
     if type(snapshot.material_config_hash) is not str or (
         _MATERIAL_CONFIG_HASH_RE.fullmatch(snapshot.material_config_hash) is None
     ):

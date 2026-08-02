@@ -732,12 +732,14 @@ def _production_payload_semantic_reasons(
     if require_current_payload_schema:
         reasons.extend(_population_binding_reasons(observation, session=session, payload=payload))
 
-    # Optional payload contract fields: if present, must match active producer contract.
+    # Optional payload contract fields: if the key exists, require exact match.
+    # Absence remains allowed; malformed presence (int, empty, wrong string) blocks.
     for key in ("observation_contract", "producer_observation_contract"):
-        raw = payload.get(key)
-        if type(raw) is str and raw:
-            if raw != ACTIVE_PRODUCER_OBSERVATION_CONTRACT:
-                reasons.append(f"{key}:{raw!r}")
+        if key not in payload:
+            continue
+        raw = payload[key]
+        if type(raw) is not str or raw != ACTIVE_PRODUCER_OBSERVATION_CONTRACT:
+            reasons.append(f"{key}:{raw!r}")
 
     return reasons
 
