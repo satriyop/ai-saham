@@ -362,6 +362,7 @@ def _reconcile_row_columns(
     snap: TradingSessionCalendarSnapshot,
 ) -> None:
     sessions_json = json.dumps([s.isoformat() for s in snap.ordered_sessions])
+    expected_artifact = json.dumps(snap.to_dict(), sort_keys=True, separators=(",", ":"))
     checks = (
         ("snapshot_id", row["snapshot_id"], snap.snapshot_id),
         ("contract_id", row["contract_id"], snap.contract_id),
@@ -373,9 +374,10 @@ def _reconcile_row_columns(
         ("source_revision", row["source_revision"], snap.source_revision),
         ("captured_at", row["captured_at"], snap.captured_at.isoformat()),
         ("payload_digest", row["payload_digest"], snap.payload_digest),
+        ("artifact_json", row["artifact_json"], expected_artifact),
     )
     for name, left, right in checks:
-        if str(left) != str(right):
+        if left != right:
             raise TradingSessionCalendarSnapshotReadError(
                 f"row/artifact mismatch on {name}: column={left!r} artifact={right!r}"
             )

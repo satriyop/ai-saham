@@ -25,6 +25,20 @@ TRADING_SESSION_CALENDAR_SOURCE_STOCKBIT = "stockbit"
 TRADING_SESSION_CALENDAR_BENCHMARK_IHSG = "IHSG"
 # Path-label metrics that bind windows to an immutable calendar snapshot.
 PATH_LABEL_METRICS_SCHEMA_VERSION = 3
+_CALENDAR_SNAPSHOT_KEYS: frozenset[str] = frozenset(
+    {
+        "snapshot_id",
+        "contract_id",
+        "source",
+        "benchmark",
+        "coverage_start",
+        "coverage_end",
+        "ordered_sessions",
+        "source_revision",
+        "captured_at",
+        "payload_digest",
+    }
+)
 
 
 def label_window_digest(
@@ -150,9 +164,16 @@ class TradingSessionCalendarSnapshot:
             raise LearningContractError(
                 f"calendar snapshot must be a mapping, got {type(raw).__name__}"
             )
+        keys = frozenset(raw.keys())
+        if keys != _CALENDAR_SNAPSHOT_KEYS:
+            raise LearningContractError(
+                "calendar snapshot key set mismatch "
+                f"missing={sorted(_CALENDAR_SNAPSHOT_KEYS - keys)!r} "
+                f"extra={sorted(keys - _CALENDAR_SNAPSHOT_KEYS)!r}"
+            )
 
         def _exact_str(field: str) -> str:
-            value = raw.get(field)
+            value = raw[field]
             if type(value) is not str:
                 raise LearningContractError(
                     f"calendar snapshot.{field} must be exact str, "
@@ -170,6 +191,14 @@ class TradingSessionCalendarSnapshot:
             coverage_end_s = _exact_str("coverage_end")
             coverage_start = date.fromisoformat(coverage_start_s)
             coverage_end = date.fromisoformat(coverage_end_s)
+            if coverage_start.isoformat() != coverage_start_s:
+                raise LearningContractError(
+                    f"coverage_start must be canonical YYYY-MM-DD (got {coverage_start_s!r})"
+                )
+            if coverage_end.isoformat() != coverage_end_s:
+                raise LearningContractError(
+                    f"coverage_end must be canonical YYYY-MM-DD (got {coverage_end_s!r})"
+                )
             raw_sessions = raw["ordered_sessions"]
             if not isinstance(raw_sessions, list):
                 raise LearningContractError("ordered_sessions must be a list of date strings")
@@ -179,7 +208,12 @@ class TradingSessionCalendarSnapshot:
                     raise LearningContractError(
                         f"ordered_sessions[{i}] must be str, got {type(item).__name__}"
                     )
-                sessions_list.append(date.fromisoformat(item))
+                session = date.fromisoformat(item)
+                if session.isoformat() != item:
+                    raise LearningContractError(
+                        f"ordered_sessions[{i}] must be canonical YYYY-MM-DD (got {item!r})"
+                    )
+                sessions_list.append(session)
             sessions = tuple(sessions_list)
             captured_at_s = _exact_str("captured_at")
             if captured_at_s.endswith("Z") or captured_at_s.endswith("z"):
@@ -187,6 +221,13 @@ class TradingSessionCalendarSnapshot:
                     f"captured_at must not use Z alias (got {captured_at_s!r})"
                 )
             captured_at = datetime.fromisoformat(captured_at_s)
+            if captured_at.tzinfo is None or captured_at.utcoffset() is None:
+                raise LearningContractError("captured_at must be timezone-aware")
+            if captured_at.isoformat() != captured_at_s:
+                raise LearningContractError(
+                    "captured_at must equal its parsed.isoformat() form "
+                    f"(got {captured_at_s!r}, canonical={captured_at.isoformat()!r})"
+                )
         except LearningContractError:
             raise
         except (KeyError, TypeError, ValueError) as exc:

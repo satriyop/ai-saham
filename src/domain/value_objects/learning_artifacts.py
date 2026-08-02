@@ -596,9 +596,16 @@ def recompute_path_label_fingerprint(
     )
 
 
-def _require_non_empty(name: str, value: str) -> None:
-    if not value.strip():
+def _require_non_empty(name: str, value: Any) -> None:
+    """Require a non-empty exact str (type-checked before strip-based emptiness)."""
+    if type(value) is not str:
+        raise LearningContractError(
+            f"{name} must be exact str, got {type(value).__name__}={value!r}"
+        )
+    if not value:
         raise LearningContractError(f"{name} must be non-empty")
+    if value != value.strip():
+        raise LearningContractError(f"{name} must not have surrounding whitespace (got {value!r})")
 
 
 def _artifact_payload(value: Any, *, id_field: str, digest_field: str) -> dict[str, Any]:
@@ -1290,10 +1297,6 @@ class ProductionPolicySnapshot:
             ("source_revision", source_revision),
         ):
             _require_non_empty(name, value)
-            if type(value) is not str or value != value.strip():
-                raise LearningContractError(
-                    f"{name} must be exact str without surrounding whitespace (got {value!r})"
-                )
         if _MATERIAL_CONFIG_HASH_RE.fullmatch(material_config_hash) is None:
             raise LearningContractError(
                 "material_config_hash must match ^sha256:[0-9a-f]{64}$, "
