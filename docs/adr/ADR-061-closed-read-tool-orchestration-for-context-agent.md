@@ -16,7 +16,8 @@
 [ADR-060](ADR-060-read-only-tui-context-agent.md)
 
 **Implementation epic:**
-[`tasks/backlog/parked_tui_agent_read_tools_phase2.md`](../../tasks/backlog/parked_tui_agent_read_tools_phase2.md)
+[`tasks/backlog/implement_tui_agent_read_tools_phase2.md`](../../tasks/backlog/implement_tui_agent_read_tools_phase2.md)
+(activated 2026-08-02)
 
 ## Context
 
