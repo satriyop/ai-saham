@@ -12,6 +12,7 @@ import pytest
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     LabelAvailability,
+    LearningContractError,
     LearningContractId,
     LearningObservation,
     LearningOutcomeLabel,
@@ -398,6 +399,10 @@ def test_list_observations_compat_filter_does_not_cross_cohorts(
 
 def test_relinked_label_both_observation_ids_still_discovered(tmp_path: Path) -> None:
     """Coherent dual observation_id rewrite is still found via expected label_id."""
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        expected_label_ids_for_observations,
+    )
+
     db = tmp_path / "relink.db"
     repo = SQLiteLearningArtifactRepository(db)
     obs = _observation()
@@ -405,6 +410,7 @@ def test_relinked_label_both_observation_ids_still_discovered(tmp_path: Path) ->
     label = _label(obs.observation_id, obs.artifact_digest)
     repo.add_label(label)
     original_label_id = label.label_id
+    assert original_label_id in expected_label_ids_for_observations([obs.observation_id])
 
     # Relink both normalized column and JSON observation_id to a ghost parent.
     with sqlite3.connect(db) as conn:
@@ -415,7 +421,6 @@ def test_relinked_label_both_observation_ids_still_discovered(tmp_path: Path) ->
             ).fetchone()[0]
         )
         raw["observation_id"] = "ghost-observation"
-        # Keep original label_id (identity of the original parent+contract).
         conn.execute(
             """
             UPDATE learning_outcome_labels
@@ -430,37 +435,19 @@ def test_relinked_label_both_observation_ids_still_discovered(tmp_path: Path) ->
         )
         conn.commit()
 
-    # Discovery by parent obs still finds the row (via expected label_id).
-    # Loading raises because stored identity (label_id) disagrees with ghost link
-    # after recompute — or row/artifact recon may pass if both match ghost.
-    # Either way the row must not be invisible.
+    # Discovered via expected label_id. Coherent dual-link rewrite loads, but
+    # label_id no longer matches recomputed identity from ghost parent.
     from src.domain.value_objects.learning_artifacts import validate_label_identity
-    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
-        expected_label_ids_for_observations,
-    )
 
-    expected = expected_label_ids_for_observations([obs.observation_id])
-    assert original_label_id in expected
-
-    with sqlite3.connect(db) as conn:
-        found = conn.execute(
-            "SELECT label_id, observation_id FROM learning_outcome_labels WHERE label_id = ?",
-            (original_label_id,),
-        ).fetchone()
-    assert found is not None
-
-    # list_labels must surface the candidate (integrity error or invalid identity).
-    with pytest.raises((LearningArtifactReadIntegrityError, Exception)):
-        # If artifact_json was rewritten without reconciling digest/label_id columns
-        # consistently, recon raises. If fully consistent ghost link, load may
-        # succeed but readiness identity check fails — still not "missing".
-        rows = list(repo.list_labels([obs.observation_id]))
-        assert len(rows) >= 1
+    rows = list(repo.list_labels([obs.observation_id]))
+    assert len(rows) == 1
+    with pytest.raises(LearningContractError, match="label_id"):
         validate_label_identity(rows[0])
-        raise AssertionError("relinked label must not validate cleanly")
 
 
 def test_relinked_label_is_not_invisible_to_list_labels(tmp_path: Path) -> None:
+    from src.domain.value_objects.learning_artifacts import validate_label_identity
+
     db = tmp_path / "relink2.db"
     repo = SQLiteLearningArtifactRepository(db)
     obs = _observation()
@@ -475,15 +462,89 @@ def test_relinked_label_is_not_invisible_to_list_labels(tmp_path: Path) -> None:
             ).fetchone()[0]
         )
         raw["observation_id"] = "ghost"
-        # Keep artifact_digest as-is so recon may fail on digest or identity.
         conn.execute(
             "UPDATE learning_outcome_labels SET observation_id=?, artifact_json=? WHERE label_id=?",
             ("ghost", json.dumps(raw, sort_keys=True, separators=(",", ":")), label.label_id),
         )
         conn.commit()
-    # Query by original parent: without label_id discovery this returns [].
-    try:
-        found = list(repo.list_labels([obs.observation_id]))
-    except LearningArtifactReadIntegrityError:
-        found = ["raised"]  # discovered then rejected — correct fail-closed
-    assert found, "relinked label must remain discoverable for the original parent"
+    # Without expected-label_id discovery this returns []. Must remain visible.
+    rows = list(repo.list_labels([obs.observation_id]))
+    assert len(rows) == 1
+    with pytest.raises(LearningContractError, match="label_id"):
+        validate_label_identity(rows[0])
+
+
+def test_dual_snapshot_compat_drift_raises_not_empty(tmp_path: Path) -> None:
+    """Changing both normalized and JSON compatibility_id still discovers snapshots."""
+    from src.domain.value_objects.learning_artifacts import validate_policy_snapshot_integrity
+
+    db = tmp_path / "snap-drift.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    snap = _policy(compatibility_id="compat-1")
+    repo.add_policy_snapshot(snap)
+    with sqlite3.connect(db) as conn:
+        raw = json.loads(
+            conn.execute(
+                "SELECT artifact_json FROM learning_policy_snapshots WHERE snapshot_id = ?",
+                (snap.snapshot_id,),
+            ).fetchone()[0]
+        )
+        raw["compatibility_id"] = "compat-mutated"
+        conn.execute(
+            """
+            UPDATE learning_policy_snapshots
+            SET compatibility_id = ?, artifact_json = ?
+            WHERE snapshot_id = ?
+            """,
+            (
+                "compat-mutated",
+                json.dumps(raw, sort_keys=True, separators=(",", ":")),
+                snap.snapshot_id,
+            ),
+        )
+        conn.commit()
+    # Expected snapshot_id for original compat still finds the row.
+    rows = list(
+        repo.list_policy_snapshots(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id="compat-1",
+        )
+    )
+    assert len(rows) == 1
+    with pytest.raises(LearningContractError, match="snapshot_id"):
+        validate_policy_snapshot_integrity(rows[0])
+
+
+def test_dual_observation_purpose_drift_still_discovered(tmp_path: Path) -> None:
+    """Changing both purpose representations still discovers via locked contract_id."""
+    db = tmp_path / "obs-drift.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    obs = _observation()
+    repo.add_observation(obs)
+    with sqlite3.connect(db) as conn:
+        raw = json.loads(
+            conn.execute(
+                "SELECT artifact_json FROM learning_observations WHERE observation_id = ?",
+                (obs.observation_id,),
+            ).fetchone()[0]
+        )
+        raw["purpose"] = AssessmentPurpose.SWING_TRADE_SETUP.value
+        conn.execute(
+            """
+            UPDATE learning_observations
+            SET purpose = ?, artifact_json = ?
+            WHERE observation_id = ?
+            """,
+            (
+                AssessmentPurpose.SWING_TRADE_SETUP.value,
+                json.dumps(raw, sort_keys=True, separators=(",", ":")),
+                obs.observation_id,
+            ),
+        )
+        conn.commit()
+    # Dual purpose rewrite is coherent → load succeeds, but purpose is no longer ACCUM.
+    # Without contract discovery this would return empty and hide the corruption.
+    rows = list(repo.list_observations(AssessmentPurpose.ACCUMULATION_DISCOVERY))
+    assert len(rows) == 1
+    assert rows[0].purpose is AssessmentPurpose.SWING_TRADE_SETUP
+    assert rows[0].contract_id is LearningContractId.ACCUMULATION_OBSERVATION

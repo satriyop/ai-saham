@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence, TypeVar
 
 from src.domain.value_objects.learning_artifacts import (
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
     AssessmentPurpose,
     EvaluationMethod,
     EvaluationReadiness,
@@ -31,6 +32,9 @@ from src.domain.value_objects.learning_artifacts import (
     validate_artifact_integrity,
     validate_policy_snapshot_integrity,
 )
+from src.domain.value_objects.signal_observation_contracts import (
+    ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
+)
 
 # Label contracts whose identity is discoverable from a parent observation_id.
 _LABEL_DISCOVERY_CONTRACTS: tuple[LearningContractId, ...] = (
@@ -39,6 +43,12 @@ _LABEL_DISCOVERY_CONTRACTS: tuple[LearningContractId, ...] = (
     LearningContractId.ACCUM_20D_LABEL,
     LearningContractId.PRE_OPEN_LABEL,
 )
+
+# Purpose → locked learning observation contract_id for dual-key discovery.
+_PURPOSE_OBSERVATION_CONTRACTS: dict[AssessmentPurpose, str] = {
+    AssessmentPurpose.ACCUMULATION_DISCOVERY: (LearningContractId.ACCUMULATION_OBSERVATION.value),
+    AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION: (LearningContractId.PRE_OPEN_OBSERVATION.value),
+}
 
 LEARNING_MIGRATION_NAMESPACE = "database_owned_learning"
 
@@ -809,23 +819,9 @@ class SQLiteLearningArtifactRepository:
     def list_observations(
         self, purpose: AssessmentPurpose, *, compatibility_id: str | None = None
     ) -> Sequence[LearningObservation]:
-        # Dual-key visibility: corrupt normalized lookup columns cannot hide rows.
-        # Parentheses required: AND binds tighter than OR.
-        sql = (
-            f"SELECT {_OBS_SELECT} FROM learning_observations "
-            "WHERE (purpose = ? OR json_extract(artifact_json, '$.purpose') = ?)"
+        return _list_observations_with_identity_discovery(
+            self._connect, purpose, compatibility_id=compatibility_id
         )
-        values: list[str] = [purpose.value, purpose.value]
-        if compatibility_id is not None:
-            sql += (
-                " AND (compatibility_id = ? OR "
-                "json_extract(artifact_json, '$.compatibility_id') = ?)"
-            )
-            values.extend([compatibility_id, compatibility_id])
-        sql += " ORDER BY cutoff_at, observation_id"
-        with self._connect() as connection:
-            rows = connection.execute(sql, values).fetchall()
-        return tuple(_load_observation_row(row) for row in rows)
 
     def add_track_snapshot(self, artifact: LearningTrackSnapshot) -> bool:
         validate_artifact_integrity(artifact, id_field="snapshot_id")
@@ -1232,20 +1228,9 @@ class SQLiteLearningArtifactRepository:
         purpose: AssessmentPurpose,
         compatibility_id: str,
     ) -> Sequence[ProductionPolicySnapshot]:
-        with self._connect() as connection:
-            rows = connection.execute(
-                f"""
-                SELECT {_POLICY_SELECT} FROM learning_policy_snapshots
-                WHERE (purpose = ? AND compatibility_id = ?)
-                   OR (
-                        json_extract(artifact_json, '$.purpose') = ?
-                        AND json_extract(artifact_json, '$.compatibility_id') = ?
-                   )
-                ORDER BY policy_id
-                """,
-                (purpose.value, compatibility_id, purpose.value, compatibility_id),
-            ).fetchall()
-        return tuple(_load_policy_row(row) for row in rows)
+        return _list_policy_snapshots_with_identity_discovery(
+            self._connect, purpose=purpose, compatibility_id=compatibility_id
+        )
 
 
 def connect_learning_database_readonly(db_path: Path) -> sqlite3.Connection:
@@ -1273,6 +1258,125 @@ def expected_label_ids_for_observations(observation_ids: Sequence[str]) -> tuple
                 )
             )
     return tuple(out)
+
+
+def expected_policy_snapshot_ids(
+    *,
+    purpose: AssessmentPurpose,
+    compatibility_id: str,
+) -> tuple[str, ...]:
+    """Expected snapshot_id set for active ACCUM closed policy set × contracts."""
+    if purpose is not AssessmentPurpose.ACCUMULATION_DISCOVERY:
+        return ()
+    if not compatibility_id:
+        return ()
+    out: list[str] = []
+    for contract in (
+        LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
+        LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
+    ):
+        for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS_V2:
+            out.append(
+                stable_learning_id(
+                    contract,
+                    {
+                        "purpose": purpose,
+                        "learning_observation_contract_id": (
+                            LearningContractId.ACCUMULATION_OBSERVATION.value
+                        ),
+                        "producer_observation_contract": (
+                            ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT
+                        ),
+                        "compatibility_id": compatibility_id,
+                        "policy_id": policy_id,
+                    },
+                )
+            )
+    return tuple(out)
+
+
+def _list_observations_with_identity_discovery(
+    connect: Callable[[], sqlite3.Connection],
+    purpose: AssessmentPurpose,
+    *,
+    compatibility_id: str | None = None,
+) -> Sequence[LearningObservation]:
+    """Discover observations by purpose dual-key OR locked contract dual-key.
+
+    Changing both purpose representations must not hide rows that still carry the
+    purpose's locked learning observation contract_id.
+    """
+    contract = _PURPOSE_OBSERVATION_CONTRACTS.get(purpose)
+    # Parentheses required: AND binds tighter than OR.
+    if contract is not None:
+        sql = (
+            f"SELECT {_OBS_SELECT} FROM learning_observations WHERE ("
+            "purpose = ? OR json_extract(artifact_json, '$.purpose') = ? "
+            "OR contract_id = ? OR json_extract(artifact_json, '$.contract_id') = ?"
+            ")"
+        )
+        values: list[str] = [purpose.value, purpose.value, contract, contract]
+    else:
+        sql = (
+            f"SELECT {_OBS_SELECT} FROM learning_observations WHERE ("
+            "purpose = ? OR json_extract(artifact_json, '$.purpose') = ?"
+            ")"
+        )
+        values = [purpose.value, purpose.value]
+    if compatibility_id is not None:
+        sql += (
+            " AND (compatibility_id = ? OR json_extract(artifact_json, '$.compatibility_id') = ?)"
+        )
+        values.extend([compatibility_id, compatibility_id])
+    sql += " ORDER BY cutoff_at, observation_id"
+    with connect() as connection:
+        rows = connection.execute(sql, values).fetchall()
+    return tuple(_load_observation_row(row) for row in rows)
+
+
+def _list_policy_snapshots_with_identity_discovery(
+    connect: Callable[[], sqlite3.Connection],
+    *,
+    purpose: AssessmentPurpose,
+    compatibility_id: str,
+) -> Sequence[ProductionPolicySnapshot]:
+    """Discover snapshots by selector dual-key OR expected snapshot_id set."""
+    expected_ids = expected_policy_snapshot_ids(purpose=purpose, compatibility_id=compatibility_id)
+    if expected_ids:
+        id_ph = ",".join("?" for _ in expected_ids)
+        sql = f"""
+            SELECT {_POLICY_SELECT} FROM learning_policy_snapshots
+            WHERE (
+                (purpose = ? AND compatibility_id = ?)
+                OR (
+                    json_extract(artifact_json, '$.purpose') = ?
+                    AND json_extract(artifact_json, '$.compatibility_id') = ?
+                )
+                OR snapshot_id IN ({id_ph})
+            )
+            ORDER BY policy_id
+            """  # noqa: S608
+        params: tuple[Any, ...] = (
+            purpose.value,
+            compatibility_id,
+            purpose.value,
+            compatibility_id,
+            *expected_ids,
+        )
+    else:
+        sql = f"""
+            SELECT {_POLICY_SELECT} FROM learning_policy_snapshots
+            WHERE (purpose = ? AND compatibility_id = ?)
+               OR (
+                    json_extract(artifact_json, '$.purpose') = ?
+                    AND json_extract(artifact_json, '$.compatibility_id') = ?
+               )
+            ORDER BY policy_id
+            """  # noqa: S608
+        params = (purpose.value, compatibility_id, purpose.value, compatibility_id)
+    with connect() as connection:
+        rows = connection.execute(sql, params).fetchall()
+    return tuple(_load_policy_row(row) for row in rows)
 
 
 def _list_labels_with_identity_discovery(
@@ -1334,22 +1438,9 @@ class SQLiteLearningArtifactReadRepository:
     def list_observations(
         self, purpose: AssessmentPurpose, *, compatibility_id: str | None = None
     ) -> Sequence[LearningObservation]:
-        # Parentheses required: AND binds tighter than OR.
-        sql = (
-            f"SELECT {_OBS_SELECT} FROM learning_observations "
-            "WHERE (purpose = ? OR json_extract(artifact_json, '$.purpose') = ?)"
+        return _list_observations_with_identity_discovery(
+            self._connect, purpose, compatibility_id=compatibility_id
         )
-        values: list[str] = [purpose.value, purpose.value]
-        if compatibility_id is not None:
-            sql += (
-                " AND (compatibility_id = ? OR "
-                "json_extract(artifact_json, '$.compatibility_id') = ?)"
-            )
-            values.extend([compatibility_id, compatibility_id])
-        sql += " ORDER BY cutoff_at, observation_id"
-        with self._connect() as connection:
-            rows = connection.execute(sql, values).fetchall()
-        return tuple(_load_observation_row(row) for row in rows)
 
     def list_labels(self, observation_ids: Sequence[str]) -> Sequence[LearningOutcomeLabel]:
         return _list_labels_with_identity_discovery(self._connect, observation_ids)
@@ -1360,17 +1451,6 @@ class SQLiteLearningArtifactReadRepository:
         purpose: AssessmentPurpose,
         compatibility_id: str,
     ) -> Sequence[ProductionPolicySnapshot]:
-        with self._connect() as connection:
-            rows = connection.execute(
-                f"""
-                SELECT {_POLICY_SELECT} FROM learning_policy_snapshots
-                WHERE (purpose = ? AND compatibility_id = ?)
-                   OR (
-                        json_extract(artifact_json, '$.purpose') = ?
-                        AND json_extract(artifact_json, '$.compatibility_id') = ?
-                   )
-                ORDER BY policy_id
-                """,
-                (purpose.value, compatibility_id, purpose.value, compatibility_id),
-            ).fetchall()
-        return tuple(_load_policy_row(row) for row in rows)
+        return _list_policy_snapshots_with_identity_discovery(
+            self._connect, purpose=purpose, compatibility_id=compatibility_id
+        )
