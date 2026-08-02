@@ -30,6 +30,7 @@ from src.domain.value_objects.learning_artifacts import (
     canonical_json,
     stable_learning_id,
     validate_artifact_integrity,
+    validate_observation_identity,
     validate_policy_snapshot_integrity,
 )
 from src.domain.value_objects.signal_observation_contracts import (
@@ -1295,43 +1296,72 @@ def expected_policy_snapshot_ids(
     return tuple(out)
 
 
+def _scan_all_observations_integrity(
+    connect: Callable[[], sqlite3.Connection],
+) -> tuple[LearningObservation, ...]:
+    """Global read-only observation pass: recon + digest + identity for every row.
+
+    Selector-bound discovery cannot hide coordinated anchor rewrites. Any corrupt
+    row fails closed before purpose/cohort classification.
+    """
+    with connect() as connection:
+        rows = connection.execute(
+            f"SELECT {_OBS_SELECT} FROM learning_observations ORDER BY cutoff_at, observation_id"
+        ).fetchall()
+    out: list[LearningObservation] = []
+    for row in rows:
+        obs = _load_observation_row(row)
+        try:
+            validate_artifact_integrity(obs, id_field="observation_id")
+            validate_observation_identity(obs)
+        except LearningContractError as exc:
+            raise LearningArtifactReadIntegrityError(
+                "learning observation integrity failed for "
+                f"observation_id={obs.observation_id!r}: {exc}"
+            ) from exc
+        out.append(obs)
+    return tuple(out)
+
+
+def _scan_all_policy_snapshots_integrity(
+    connect: Callable[[], sqlite3.Connection],
+) -> tuple[ProductionPolicySnapshot, ...]:
+    """Global read-only snapshot pass: recon + policy integrity for every row."""
+    with connect() as connection:
+        rows = connection.execute(
+            f"SELECT {_POLICY_SELECT} FROM learning_policy_snapshots "
+            "ORDER BY purpose, compatibility_id, policy_id, snapshot_id"
+        ).fetchall()
+    out: list[ProductionPolicySnapshot] = []
+    for row in rows:
+        snap = _load_policy_row(row)
+        try:
+            validate_policy_snapshot_integrity(snap)
+        except LearningContractError as exc:
+            raise LearningArtifactReadIntegrityError(
+                "learning policy snapshot integrity failed for "
+                f"snapshot_id={snap.snapshot_id!r}: {exc}"
+            ) from exc
+        out.append(snap)
+    return tuple(out)
+
+
 def _list_observations_with_identity_discovery(
     connect: Callable[[], sqlite3.Connection],
     purpose: AssessmentPurpose,
     *,
     compatibility_id: str | None = None,
 ) -> Sequence[LearningObservation]:
-    """Discover observations by purpose dual-key OR locked contract dual-key.
+    """Integrity-scan every observation, then classify by authoritative purpose.
 
-    Changing both purpose representations must not hide rows that still carry the
-    purpose's locked learning observation contract_id.
+    Dual purpose/contract rewrites cannot hide corrupt rows: the global pass
+    loads all rows and fails closed on digest/identity mismatch before filtering.
     """
-    contract = _PURPOSE_OBSERVATION_CONTRACTS.get(purpose)
-    # Parentheses required: AND binds tighter than OR.
-    if contract is not None:
-        sql = (
-            f"SELECT {_OBS_SELECT} FROM learning_observations WHERE ("
-            "purpose = ? OR json_extract(artifact_json, '$.purpose') = ? "
-            "OR contract_id = ? OR json_extract(artifact_json, '$.contract_id') = ?"
-            ")"
-        )
-        values: list[str] = [purpose.value, purpose.value, contract, contract]
-    else:
-        sql = (
-            f"SELECT {_OBS_SELECT} FROM learning_observations WHERE ("
-            "purpose = ? OR json_extract(artifact_json, '$.purpose') = ?"
-            ")"
-        )
-        values = [purpose.value, purpose.value]
+    all_obs = _scan_all_observations_integrity(connect)
+    filtered = [obs for obs in all_obs if obs.purpose is purpose]
     if compatibility_id is not None:
-        sql += (
-            " AND (compatibility_id = ? OR json_extract(artifact_json, '$.compatibility_id') = ?)"
-        )
-        values.extend([compatibility_id, compatibility_id])
-    sql += " ORDER BY cutoff_at, observation_id"
-    with connect() as connection:
-        rows = connection.execute(sql, values).fetchall()
-    return tuple(_load_observation_row(row) for row in rows)
+        filtered = [obs for obs in filtered if obs.compatibility_id == compatibility_id]
+    return tuple(filtered)
 
 
 def _list_policy_snapshots_with_identity_discovery(
@@ -1340,43 +1370,17 @@ def _list_policy_snapshots_with_identity_discovery(
     purpose: AssessmentPurpose,
     compatibility_id: str,
 ) -> Sequence[ProductionPolicySnapshot]:
-    """Discover snapshots by selector dual-key OR expected snapshot_id set."""
-    expected_ids = expected_policy_snapshot_ids(purpose=purpose, compatibility_id=compatibility_id)
-    if expected_ids:
-        id_ph = ",".join("?" for _ in expected_ids)
-        sql = f"""
-            SELECT {_POLICY_SELECT} FROM learning_policy_snapshots
-            WHERE (
-                (purpose = ? AND compatibility_id = ?)
-                OR (
-                    json_extract(artifact_json, '$.purpose') = ?
-                    AND json_extract(artifact_json, '$.compatibility_id') = ?
-                )
-                OR snapshot_id IN ({id_ph})
-            )
-            ORDER BY policy_id
-            """  # noqa: S608
-        params: tuple[Any, ...] = (
-            purpose.value,
-            compatibility_id,
-            purpose.value,
-            compatibility_id,
-            *expected_ids,
-        )
-    else:
-        sql = f"""
-            SELECT {_POLICY_SELECT} FROM learning_policy_snapshots
-            WHERE (purpose = ? AND compatibility_id = ?)
-               OR (
-                    json_extract(artifact_json, '$.purpose') = ?
-                    AND json_extract(artifact_json, '$.compatibility_id') = ?
-               )
-            ORDER BY policy_id
-            """  # noqa: S608
-        params = (purpose.value, compatibility_id, purpose.value, compatibility_id)
-    with connect() as connection:
-        rows = connection.execute(sql, params).fetchall()
-    return tuple(_load_policy_row(row) for row in rows)
+    """Integrity-scan every snapshot, then classify by purpose/compatibility.
+
+    Dual compatibility_id/snapshot_id rewrites cannot hide corrupt rows: the
+    global pass validates every stored snapshot before cohort filtering.
+    """
+    all_snaps = _scan_all_policy_snapshots_integrity(connect)
+    return tuple(
+        snap
+        for snap in all_snaps
+        if snap.purpose is purpose and snap.compatibility_id == compatibility_id
+    )
 
 
 def _list_labels_with_identity_discovery(

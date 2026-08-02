@@ -370,10 +370,14 @@ def test_use_case_rejects_non_accum_purpose(tmp_path) -> None:
         uc.execute(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION)
 
 
-def test_dual_snapshot_compat_drift_blocks_not_legacy(tmp_path) -> None:
-    """Coherent dual compatibility_id rewrite must not collapse to LEGACY/0 snapshots."""
+def test_dual_snapshot_compat_drift_raises_integrity_not_legacy(tmp_path) -> None:
+    """Dual compatibility_id rewrite fails closed on global integrity (never LEGACY)."""
     import json
     import sqlite3
+
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        LearningArtifactReadIntegrityError,
+    )
 
     db = tmp_path / "snap-drift.db"
     repo = SQLiteLearningArtifactRepository(db)
@@ -401,24 +405,23 @@ def test_dual_snapshot_compat_drift_blocks_not_legacy(tmp_path) -> None:
             )
         conn.commit()
 
-    report = GetAccumulationProducerReadinessUseCase(
-        observations=repo,
-        labels=repo,
-        policy_snapshots=repo,
-        session_snapshot_lookup=_snapshot_lookup,
-    ).execute()
-    cohort = report.cohorts[0]
-    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
-    assert cohort.snapshot.has_corruption is True
-    assert cohort.snapshot.verified_count == 0
-    assert cohort.snapshot.required_count == 7
-    assert cohort.producer_status is not ProducerReadinessStatus.LEGACY_RAW_ONLY
+    with pytest.raises(LearningArtifactReadIntegrityError):
+        GetAccumulationProducerReadinessUseCase(
+            observations=repo,
+            labels=repo,
+            policy_snapshots=repo,
+            session_snapshot_lookup=_snapshot_lookup,
+        ).execute()
 
 
-def test_dual_observation_purpose_drift_blocks_not_empty(tmp_path) -> None:
-    """Dual purpose rewrite still discovers ACCUM-contract rows; status is not empty."""
+def test_dual_observation_purpose_drift_raises_integrity_not_empty(tmp_path) -> None:
+    """Dual purpose rewrite fails closed on global integrity (never empty cohort)."""
     import json
     import sqlite3
+
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        LearningArtifactReadIntegrityError,
+    )
 
     db = tmp_path / "obs-drift.db"
     repo = SQLiteLearningArtifactRepository(db)
@@ -446,15 +449,10 @@ def test_dual_observation_purpose_drift_blocks_not_empty(tmp_path) -> None:
             )
         conn.commit()
 
-    report = GetAccumulationProducerReadinessUseCase(
-        observations=repo,
-        labels=repo,
-        policy_snapshots=repo,
-        session_snapshot_lookup=_snapshot_lookup,
-    ).execute()
-    # Purpose-hidden rows are still discovered via locked contract dual-key.
-    assert report.observation_count == 2
-    assert report.cohort_count == 1
-    cohort = report.cohorts[0]
-    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
-    assert cohort.observation_validation.invalid_observation_count == 2
+    with pytest.raises(LearningArtifactReadIntegrityError):
+        GetAccumulationProducerReadinessUseCase(
+            observations=repo,
+            labels=repo,
+            policy_snapshots=repo,
+            session_snapshot_lookup=_snapshot_lookup,
+        ).execute()

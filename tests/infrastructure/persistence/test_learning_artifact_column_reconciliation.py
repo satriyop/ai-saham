@@ -474,10 +474,8 @@ def test_relinked_label_is_not_invisible_to_list_labels(tmp_path: Path) -> None:
         validate_label_identity(rows[0])
 
 
-def test_dual_snapshot_compat_drift_raises_not_empty(tmp_path: Path) -> None:
-    """Changing both normalized and JSON compatibility_id still discovers snapshots."""
-    from src.domain.value_objects.learning_artifacts import validate_policy_snapshot_integrity
-
+def test_dual_snapshot_compat_drift_fails_global_integrity(tmp_path: Path) -> None:
+    """Changing both compatibility_id copies breaks snapshot identity — fail closed."""
     db = tmp_path / "snap-drift.db"
     repo = SQLiteLearningArtifactRepository(db)
     snap = _policy(compatibility_id="compat-1")
@@ -503,20 +501,18 @@ def test_dual_snapshot_compat_drift_raises_not_empty(tmp_path: Path) -> None:
             ),
         )
         conn.commit()
-    # Expected snapshot_id for original compat still finds the row.
-    rows = list(
-        repo.list_policy_snapshots(
-            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
-            compatibility_id="compat-1",
+    # Global integrity pass loads every row and fails before cohort filtering.
+    with pytest.raises(LearningArtifactReadIntegrityError, match="snapshot"):
+        list(
+            repo.list_policy_snapshots(
+                purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+                compatibility_id="compat-1",
+            )
         )
-    )
-    assert len(rows) == 1
-    with pytest.raises(LearningContractError, match="snapshot_id"):
-        validate_policy_snapshot_integrity(rows[0])
 
 
-def test_dual_observation_purpose_drift_still_discovered(tmp_path: Path) -> None:
-    """Changing both purpose representations still discovers via locked contract_id."""
+def test_dual_observation_purpose_drift_fails_global_integrity(tmp_path: Path) -> None:
+    """Changing both purpose copies without identity recompute fails closed."""
     db = tmp_path / "obs-drift.db"
     repo = SQLiteLearningArtifactRepository(db)
     obs = _observation()
@@ -542,9 +538,78 @@ def test_dual_observation_purpose_drift_still_discovered(tmp_path: Path) -> None
             ),
         )
         conn.commit()
-    # Dual purpose rewrite is coherent → load succeeds, but purpose is no longer ACCUM.
-    # Without contract discovery this would return empty and hide the corruption.
-    rows = list(repo.list_observations(AssessmentPurpose.ACCUMULATION_DISCOVERY))
-    assert len(rows) == 1
-    assert rows[0].purpose is AssessmentPurpose.SWING_TRADE_SETUP
-    assert rows[0].contract_id is LearningContractId.ACCUMULATION_OBSERVATION
+    with pytest.raises(LearningArtifactReadIntegrityError, match="observation"):
+        list(repo.list_observations(AssessmentPurpose.ACCUMULATION_DISCOVERY))
+
+
+def test_combined_anchor_observation_purpose_and_contract_fails_closed(
+    tmp_path: Path,
+) -> None:
+    """Coordinated purpose+contract dual rewrites still fail integrity, not vanish."""
+    db = tmp_path / "obs-anchors.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    obs = _observation()
+    repo.add_observation(obs)
+    with sqlite3.connect(db) as conn:
+        raw = json.loads(
+            conn.execute(
+                "SELECT artifact_json FROM learning_observations WHERE observation_id = ?",
+                (obs.observation_id,),
+            ).fetchone()[0]
+        )
+        raw["purpose"] = AssessmentPurpose.SWING_TRADE_SETUP.value
+        raw["contract_id"] = LearningContractId.PRE_OPEN_OBSERVATION.value
+        conn.execute(
+            """
+            UPDATE learning_observations
+            SET purpose = ?, contract_id = ?, artifact_json = ?
+            WHERE observation_id = ?
+            """,
+            (
+                AssessmentPurpose.SWING_TRADE_SETUP.value,
+                LearningContractId.PRE_OPEN_OBSERVATION.value,
+                json.dumps(raw, sort_keys=True, separators=(",", ":")),
+                obs.observation_id,
+            ),
+        )
+        conn.commit()
+    with pytest.raises(LearningArtifactReadIntegrityError):
+        list(repo.list_observations(AssessmentPurpose.ACCUMULATION_DISCOVERY))
+
+
+def test_combined_anchor_snapshot_compat_and_id_fails_closed(tmp_path: Path) -> None:
+    """Coordinated compatibility_id+snapshot_id dual rewrites fail closed."""
+    db = tmp_path / "snap-anchors.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    snap = _policy(compatibility_id="compat-1")
+    repo.add_policy_snapshot(snap)
+    with sqlite3.connect(db) as conn:
+        raw = json.loads(
+            conn.execute(
+                "SELECT artifact_json FROM learning_policy_snapshots WHERE snapshot_id = ?",
+                (snap.snapshot_id,),
+            ).fetchone()[0]
+        )
+        raw["compatibility_id"] = "compat-mutated"
+        raw["snapshot_id"] = "0" * 64
+        conn.execute(
+            """
+            UPDATE learning_policy_snapshots
+            SET compatibility_id = ?, snapshot_id = ?, artifact_json = ?
+            WHERE snapshot_id = ?
+            """,
+            (
+                "compat-mutated",
+                "0" * 64,
+                json.dumps(raw, sort_keys=True, separators=(",", ":")),
+                snap.snapshot_id,
+            ),
+        )
+        conn.commit()
+    with pytest.raises(LearningArtifactReadIntegrityError):
+        list(
+            repo.list_policy_snapshots(
+                purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+                compatibility_id="compat-1",
+            )
+        )
