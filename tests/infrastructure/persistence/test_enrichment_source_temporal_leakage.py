@@ -227,7 +227,13 @@ class TestSeasonalityCacheTemporalLeakage:
         provider = StockbitSeasonalityProvider(api_client=None, db_path=db_path)
         _insert_seasonality_row(db_path, datetime(2026, 7, 17).isoformat())
 
-        unbounded = provider.get_seasonal_edge("BBCA", year=2026, month=7)
+        # Cache-only read of the future-fetched row directly. We use read_cached
+        # (not the live get_seasonal_edge) because seasonality's unbounded path is
+        # gated by a *current calendar month* freshness TTL: once the wall clock
+        # rolls past the fetched month it correctly re-fetches, which would make
+        # this PIT-provenance assertion depend on today's date. read_cached is the
+        # public cache-only reader and isolates the timestamp under test.
+        unbounded = provider.read_cached("BBCA", year=2026, month=7)
         assert unbounded is not None
 
         use_case = AssessSourceAvailabilityUseCase(calendar=_calendar())

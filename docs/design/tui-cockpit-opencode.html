@@ -2666,6 +2666,13 @@
             <!-- Chip bar · density only · plain Tab · no row label -->
             <div class="flag-row" id="judgeFlags" data-flag-group="judge" role="toolbar" aria-label="Judge chips">
               <button type="button" class="flag-chip" data-flag="detail" id="judgeDetailAll" title="[d] detail"><span class="chip-key">[d]</span><span class="chip-lab">detail</span></button>
+              <!-- Code-richer field markers (CLI --detail analog). [d] is the master
+                   reveal; these expose the same decision stack as addressable panels. -->
+              <button type="button" class="flag-chip" data-flag="stack" title="decision stack">stack</button>
+              <button type="button" class="flag-chip" data-flag="readiness" title="signal readiness">readiness</button>
+              <button type="button" class="flag-chip" data-flag="named" title="named setups · diagnostic">named</button>
+              <button type="button" class="flag-chip" data-flag="mce" title="market context · diagnostic">mce</button>
+              <button type="button" class="flag-chip warn" data-flag="limited" id="judgeFlagLimited" title="limited judge">limited</button>
             </div>
 
             <!-- Primary cards always (brief) -->
@@ -2680,24 +2687,24 @@
 
             <!-- Detail body: fixed section order when d on (omit empty in product) -->
             <div id="judgeDetailBody" class="judge-detail-body" style="display:none;margin-top:10px">
-              <div class="card" style="margin-bottom:8px">
+              <div class="card" style="margin-bottom:8px" data-flag-panel="stack" data-flag-group="judge">
                 <div class="section-label" style="margin-top:0">Decision stack</div>
                 <div class="line"><span class="k">Action</span><span class="v">WATCH</span></div>
                 <div class="line"><span class="k">← Signal</span><span class="v">84 · MODERATE</span></div>
                 <div class="line"><span class="k">← Risk</span><span class="v">OPEN · no gate</span></div>
                 <div class="line"><span class="k">← TradeSetup</span><span class="v">WATCH · rationale ok</span></div>
               </div>
-              <div class="card" style="margin-bottom:8px">
-                <div class="section-label" style="margin-top:0">Phase ledger</div>
+              <div class="card" style="margin-bottom:8px" data-flag-panel="readiness" data-flag-group="judge">
+                <div class="section-label" style="margin-top:0">Signal readiness · phase ledger</div>
                 <div class="line"><span class="k">window</span><span class="v">7 sessions</span></div>
                 <div class="line"><span class="k">source</span><span class="v">setup_phase_ledger</span></div>
               </div>
-              <div class="card" style="margin-bottom:8px">
+              <div class="card" style="margin-bottom:8px" data-flag-panel="named" data-flag-group="judge">
                 <div class="section-label" style="margin-top:0">Named setups · diagnostic</div>
                 <div class="line"><span class="k">primary</span><span class="v">foreign-bounce</span></div>
                 <div class="line"><span class="k">note</span><span class="v">MATCH ≠ ENTER</span></div>
               </div>
-              <div class="card" style="margin-bottom:8px">
+              <div class="card" style="margin-bottom:8px" data-flag-panel="mce" data-flag-group="judge">
                 <div class="section-label" style="margin-top:0">Market context · diagnostic</div>
                 <div class="line"><span class="k">Regime</span><span class="v">risk-on · diagnostic only</span></div>
               </div>
@@ -2899,11 +2906,20 @@
               <button type="button" class="flag-chip" data-flag="detail" id="poiDetailChip" title="[d] detail">
                 <span class="chip-key">[d]</span><span class="chip-lab">detail</span>
               </button>
+              <!-- Code-richer inspect markers: evidence why-line + full auction book -->
+              <button type="button" class="flag-chip" data-flag="why" title="evidence why-line">why</button>
+              <button type="button" class="flag-chip" data-flag="auction+" title="full auction book">auction+</button>
             </div>
             <div class="flag-panel" data-flag-panel="detail" data-flag-group="poi" id="poiDetailPanel">
               <h4>Detail (optional depth)</h4>
               <p id="poiTrail" style="margin:0;color:var(--text-dim);font-size:13px;line-height:1.45">
                 Factors · full book · filter rejects when present. Plan geometry is <span class="kbd">p</span> only — not here.
+              </p>
+            </div>
+            <div class="flag-panel" data-flag-panel="why" data-flag-group="poi">
+              <h4>Why · evidence line</h4>
+              <p style="margin:0;color:var(--text-dim);font-size:13px;line-height:1.45">
+                Dir · broker backing · NCP · ΔIEV · gap source · intensity — the honest evidence trail, no invented Action authority.
               </p>
             </div>
 
@@ -2912,7 +2928,7 @@
               <span><span class="kbd">d</span> detail</span>
               <span><span class="kbd">p</span> plan</span>
               <span><span class="kbd">v</span> ticker</span>
-              <span class="dim">no why/auction+/plan chips</span>
+              <span class="dim">why/auction+ inspect · plan is <span class="kbd">p</span> only</span>
             </div>
           </div>
 

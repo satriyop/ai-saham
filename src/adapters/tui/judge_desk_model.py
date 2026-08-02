@@ -24,8 +24,10 @@ from src.adapters.shared.decision_display import (
 )
 from src.adapters.shared.screen_accum_board_fields import extract_screen_accum_board_fields
 from src.adapters.shared.trade_action_labels import (
+    ACTION_AVOID,
     ACTION_BLOCK,
     ACTION_ENTER,
+    ACTION_WATCH,
     AVOID_LIKE,
     ENTER_LIKE,
     WATCH_LIKE,
@@ -643,12 +645,12 @@ def _strip_markup(s: str) -> str:
 
 def action_css_class(action: str) -> str:
     a = (action or "").strip().upper()
-    if a in ENTER_LIKE or a.startswith("ENTER"):
+    if a in ENTER_LIKE or a.startswith(ACTION_ENTER):
         return "action-enter"
     # BLOCKED / BLOCKED(struct) / AVOID — coral like Gate block
-    if a in AVOID_LIKE or a.startswith("BLOCK") or a.startswith("AVOID"):
+    if a in AVOID_LIKE or a.startswith(ACTION_BLOCK) or a.startswith(ACTION_AVOID):
         return "action-avoid"
-    if a in WATCH_LIKE or a.startswith("WATCH"):
+    if a in WATCH_LIKE or a.startswith(ACTION_WATCH):
         return "action-watch"
     return "action-other"
 

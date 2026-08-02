@@ -17,6 +17,11 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+# Canonical Action tokens (single home outside the TUI tree). Adapters must not
+# re-literalize domain Action strings — see architecture boundary guard
+# tests/architecture/test_tui_boundaries.py.
+from src.adapters.shared.trade_action_labels import ACTION_ENTER, ACTION_WATCH
+
 # Locked board column labels (1:1 design contract).
 PREOPEN_BOARD_COLUMN_LABELS: tuple[str, ...] = (
     "Tkr",
@@ -309,7 +314,7 @@ def _risk_from_level(level: str) -> str:
         return "↑"
     if u in {"HIGH_RISK", "HIGH", "BLOCK", "BLOCKED"}:
         return "↓"
-    if u in {"MEDIUM_RISK", "MEDIUM", "MODERATE", "WATCH"}:
+    if u in {"MEDIUM_RISK", "MEDIUM", "MODERATE", ACTION_WATCH}:
         return "~"
     return "—"
 
@@ -320,14 +325,14 @@ def _normalize_risk(raw: str) -> str:
         return "—" if s == "-" else s
     u = s.upper()
     # Legacy theater tokens → honest dash (do not re-paint as authority)
-    if u in {"CLEAR", "WATCH", "BLOCK", "BLOCKED", "PASS", "FAIL", "WARN", "OPEN"}:
+    if u in {"CLEAR", ACTION_WATCH, "BLOCK", "BLOCKED", "PASS", "FAIL", "WARN", "OPEN"}:
         mapped = _risk_from_level(u)
         # CLEAR was local theater; only map real RiskEngine levels
         if u in {"CLEAR", "PASS", "OPEN"}:
             return "—"
         if u in {"BLOCK", "BLOCKED", "FAIL"}:
             return "↓"
-        if u in {"WATCH", "WARN"}:
+        if u in {ACTION_WATCH, "WARN"}:
             return "~"
         return mapped
     if u in {"LOW_RISK", "HIGH_RISK", "MEDIUM_RISK"}:
@@ -420,8 +425,8 @@ def _session_strip(
     if scanned is None:
         scanned = len(candidates)
     n_cand = len(rows)
-    enter_n = sum(1 for r in rows if r.action.upper() == "ENTER")
-    watch_n = sum(1 for r in rows if r.action.upper() == "WATCH")
+    enter_n = sum(1 for r in rows if r.action.upper() == ACTION_ENTER)
+    watch_n = sum(1 for r in rows if r.action.upper() == ACTION_WATCH)
     has_action = any(r.action != "—" for r in rows)
     if has_action:
         funnel = f"{scanned} · {n_cand} · E{enter_n}/W{watch_n}"
