@@ -801,9 +801,10 @@ class SQLiteLearningArtifactRepository:
         self, purpose: AssessmentPurpose, *, compatibility_id: str | None = None
     ) -> Sequence[LearningObservation]:
         # Dual-key visibility: corrupt normalized lookup columns cannot hide rows.
+        # Parentheses required: AND binds tighter than OR.
         sql = (
             f"SELECT {_OBS_SELECT} FROM learning_observations "
-            "WHERE purpose = ? OR json_extract(artifact_json, '$.purpose') = ?"
+            "WHERE (purpose = ? OR json_extract(artifact_json, '$.purpose') = ?)"
         )
         values: list[str] = [purpose.value, purpose.value]
         if compatibility_id is not None:
@@ -1285,9 +1286,10 @@ class SQLiteLearningArtifactReadRepository:
     def list_observations(
         self, purpose: AssessmentPurpose, *, compatibility_id: str | None = None
     ) -> Sequence[LearningObservation]:
+        # Parentheses required: AND binds tighter than OR.
         sql = (
             f"SELECT {_OBS_SELECT} FROM learning_observations "
-            "WHERE purpose = ? OR json_extract(artifact_json, '$.purpose') = ?"
+            "WHERE (purpose = ? OR json_extract(artifact_json, '$.purpose') = ?)"
         )
         values: list[str] = [purpose.value, purpose.value]
         if compatibility_id is not None:
