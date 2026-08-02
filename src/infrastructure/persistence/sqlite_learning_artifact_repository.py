@@ -7,7 +7,7 @@ import sqlite3
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Sequence, TypeVar
+from typing import Any, Callable, Mapping, Sequence, TypeVar
 
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
@@ -435,6 +435,136 @@ def _artifact_json(artifact: Any) -> str:
     return canonical_json(asdict(artifact))
 
 
+class LearningArtifactReadIntegrityError(LearningContractError):
+    """Normalized SQLite columns disagree with authoritative artifact_json."""
+
+
+_OBS_COLUMNS: tuple[str, ...] = (
+    "observation_id",
+    "artifact_digest",
+    "schema_version",
+    "contract_id",
+    "purpose",
+    "policy_contract",
+    "horizon_contract",
+    "compatibility_id",
+    "cutoff_at",
+    "universe_id",
+    "window_id",
+    "decision_payload_json",
+    "captured_at",
+    "artifact_json",
+)
+_OBS_SELECT = ", ".join(_OBS_COLUMNS)
+
+_LABEL_COLUMNS: tuple[str, ...] = (
+    "label_id",
+    "artifact_digest",
+    "schema_version",
+    "contract_id",
+    "observation_id",
+    "outcome_basis",
+    "availability",
+    "outcome",
+    "metrics_json",
+    "fingerprint",
+    "labeled_at",
+    "artifact_json",
+)
+_LABEL_SELECT = ", ".join(_LABEL_COLUMNS)
+
+_POLICY_SELECT = ", ".join(_POLICY_SNAPSHOT_COLUMNS)
+
+
+def _cell_equal(actual: Any, expected: Any) -> bool:
+    """Strict equality for normalized shadow columns (no silent string coercion)."""
+    if actual is None and expected is None:
+        return True
+    if type(actual) is int and type(expected) is int:
+        return actual == expected
+    # SQLite may surface integers as int while writers store same value.
+    if isinstance(actual, (int, float)) and isinstance(expected, (int, float)):
+        if type(actual) is bool or type(expected) is bool:
+            return actual is expected
+        return actual == expected
+    return actual == expected
+
+
+def _assert_row_matches_expected(
+    row: sqlite3.Row,
+    expected: Mapping[str, Any],
+    *,
+    table: str,
+    artifact_id: str,
+) -> None:
+    for name, want in expected.items():
+        got = row[name]
+        if not _cell_equal(got, want):
+            raise LearningArtifactReadIntegrityError(
+                f"learning row integrity error: {table}.{artifact_id} "
+                f"column {name!r} disagrees with artifact_json "
+                f"(column={got!r}, artifact={want!r})"
+            )
+
+
+def _observation_expected_columns(obs: LearningObservation) -> dict[str, Any]:
+    return {
+        "observation_id": obs.observation_id,
+        "artifact_digest": obs.artifact_digest,
+        "schema_version": obs.schema_version,
+        "contract_id": obs.contract_id.value,
+        "purpose": obs.purpose.value,
+        "policy_contract": obs.policy_contract,
+        "horizon_contract": obs.horizon_contract,
+        "compatibility_id": obs.compatibility_id,
+        "cutoff_at": obs.cutoff_at.isoformat(),
+        "universe_id": obs.universe_id,
+        "window_id": obs.window_id,
+        "decision_payload_json": canonical_json(obs.decision_payload),
+        "captured_at": obs.captured_at.isoformat(),
+        "artifact_json": _artifact_json(obs),
+    }
+
+
+def _label_expected_columns(label: LearningOutcomeLabel) -> dict[str, Any]:
+    return {
+        "label_id": label.label_id,
+        "artifact_digest": label.artifact_digest,
+        "schema_version": label.schema_version,
+        "contract_id": label.contract_id.value,
+        "observation_id": label.observation_id,
+        "outcome_basis": label.outcome_basis.value,
+        "availability": label.availability.value,
+        "outcome": label.outcome,
+        "metrics_json": canonical_json(label.metrics),
+        "fingerprint": label.fingerprint,
+        "labeled_at": label.labeled_at.isoformat(),
+        "artifact_json": _artifact_json(label),
+    }
+
+
+def _policy_expected_columns(snap: ProductionPolicySnapshot) -> dict[str, Any]:
+    return {
+        "snapshot_id": snap.snapshot_id,
+        "schema_version": snap.schema_version,
+        "contract_id": snap.contract_id.value,
+        "purpose": snap.purpose.value,
+        "learning_observation_contract_id": snap.learning_observation_contract_id,
+        "producer_observation_contract": snap.producer_observation_contract,
+        "compatibility_id": snap.compatibility_id,
+        "policy_id": snap.policy_id,
+        "policy_version": snap.policy_version,
+        "decision_type": snap.decision_type,
+        "semantic_engine_contract_id": snap.semantic_engine_contract_id,
+        "material_config_hash": snap.material_config_hash,
+        "canonical_payload_json": canonical_json(snap.canonical_payload),
+        "payload_digest": snap.payload_digest,
+        "source_revision": snap.source_revision,
+        "created_at": snap.created_at.isoformat(),
+        "artifact_json": _artifact_json(snap),
+    }
+
+
 def _immutable_insert(
     connection: sqlite3.Connection,
     *,
@@ -445,20 +575,81 @@ def _immutable_insert(
     insert_sql: str,
     values: tuple[Any, ...],
     digest_column: str = "artifact_digest",
+    column_names: Sequence[str] | None = None,
 ) -> bool:
     existing = connection.execute(
-        f"SELECT {digest_column} AS digest FROM {table} WHERE {id_column} = ?",  # noqa: S608
+        f"SELECT * FROM {table} WHERE {id_column} = ?",  # noqa: S608
         (artifact_id,),
     ).fetchone()
     if existing is not None:
-        if existing["digest"] == digest:
-            return False
-        raise LearningContractError(f"immutable artifact conflict for {table}.{artifact_id}")
+        if existing[digest_column] != digest:
+            raise LearningContractError(f"immutable artifact conflict for {table}.{artifact_id}")
+        # Matching digest alone is not enough: corrupted shadow columns must fail.
+        if column_names is not None:
+            if len(column_names) != len(values):
+                raise LearningContractError(
+                    f"immutable insert column/value arity mismatch for {table}.{artifact_id}"
+                )
+            expected = dict(zip(column_names, values, strict=True))
+            _assert_row_matches_expected(existing, expected, table=table, artifact_id=artifact_id)
+        return False
     connection.execute(insert_sql, values)
     return True
 
 
+def _load_observation_row(row: sqlite3.Row) -> LearningObservation:
+    try:
+        raw = json.loads(row["artifact_json"])
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise LearningArtifactReadIntegrityError(
+            f"learning observation artifact_json corrupt: {exc}"
+        ) from exc
+    obs = _observation_from_dict(raw)
+    _assert_row_matches_expected(
+        row,
+        _observation_expected_columns(obs),
+        table="learning_observations",
+        artifact_id=str(row["observation_id"]),
+    )
+    return obs
+
+
+def _load_label_row(row: sqlite3.Row) -> LearningOutcomeLabel:
+    try:
+        raw = json.loads(row["artifact_json"])
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise LearningArtifactReadIntegrityError(
+            f"learning label artifact_json corrupt: {exc}"
+        ) from exc
+    label = _label_from_dict(raw)
+    _assert_row_matches_expected(
+        row,
+        _label_expected_columns(label),
+        table="learning_outcome_labels",
+        artifact_id=str(row["label_id"]),
+    )
+    return label
+
+
+def _load_policy_row(row: sqlite3.Row) -> ProductionPolicySnapshot:
+    try:
+        raw = json.loads(row["artifact_json"])
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise LearningArtifactReadIntegrityError(
+            f"learning policy snapshot artifact_json corrupt: {exc}"
+        ) from exc
+    snap = _policy_snapshot_from_dict(raw)
+    _assert_row_matches_expected(
+        row,
+        _policy_expected_columns(snap),
+        table="learning_policy_snapshots",
+        artifact_id=str(row["snapshot_id"]),
+    )
+    return snap
+
+
 def _load_json(row: sqlite3.Row, loader: Callable[[dict[str, Any]], Artifact]) -> Artifact:
+    """Legacy loader for artifact types without column reconciliation yet."""
     return loader(json.loads(row["artifact_json"]))
 
 
@@ -565,6 +756,22 @@ class SQLiteLearningArtifactRepository:
 
     def add_observation(self, artifact: LearningObservation) -> bool:
         validate_artifact_integrity(artifact, id_field="observation_id")
+        values = (
+            artifact.observation_id,
+            artifact.artifact_digest,
+            artifact.schema_version,
+            artifact.contract_id.value,
+            artifact.purpose.value,
+            artifact.policy_contract,
+            artifact.horizon_contract,
+            artifact.compatibility_id,
+            artifact.cutoff_at.isoformat(),
+            artifact.universe_id,
+            artifact.window_id,
+            canonical_json(artifact.decision_payload),
+            artifact.captured_at.isoformat(),
+            _artifact_json(artifact),
+        )
         with self._connect() as connection:
             return _immutable_insert(
                 connection,
@@ -577,44 +784,38 @@ class SQLiteLearningArtifactRepository:
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                     )
                 """,
-                values=(
-                    artifact.observation_id,
-                    artifact.artifact_digest,
-                    artifact.schema_version,
-                    artifact.contract_id.value,
-                    artifact.purpose.value,
-                    artifact.policy_contract,
-                    artifact.horizon_contract,
-                    artifact.compatibility_id,
-                    artifact.cutoff_at.isoformat(),
-                    artifact.universe_id,
-                    artifact.window_id,
-                    canonical_json(artifact.decision_payload),
-                    artifact.captured_at.isoformat(),
-                    _artifact_json(artifact),
-                ),
+                values=values,
+                column_names=_OBS_COLUMNS,
             )
 
     def get_observation(self, observation_id: str) -> LearningObservation | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT artifact_json FROM learning_observations WHERE observation_id = ?",
-                (observation_id,),
+                f"SELECT {_OBS_SELECT} FROM learning_observations "
+                "WHERE observation_id = ? OR json_extract(artifact_json, '$.observation_id') = ?",
+                (observation_id, observation_id),
             ).fetchone()
-        return None if row is None else _load_json(row, _observation_from_dict)
+        return None if row is None else _load_observation_row(row)
 
     def list_observations(
         self, purpose: AssessmentPurpose, *, compatibility_id: str | None = None
     ) -> Sequence[LearningObservation]:
-        sql = "SELECT artifact_json FROM learning_observations WHERE purpose = ?"
-        values: list[str] = [purpose.value]
+        # Dual-key visibility: corrupt normalized lookup columns cannot hide rows.
+        sql = (
+            f"SELECT {_OBS_SELECT} FROM learning_observations "
+            "WHERE purpose = ? OR json_extract(artifact_json, '$.purpose') = ?"
+        )
+        values: list[str] = [purpose.value, purpose.value]
         if compatibility_id is not None:
-            sql += " AND compatibility_id = ?"
-            values.append(compatibility_id)
+            sql += (
+                " AND (compatibility_id = ? OR "
+                "json_extract(artifact_json, '$.compatibility_id') = ?)"
+            )
+            values.extend([compatibility_id, compatibility_id])
         sql += " ORDER BY cutoff_at, observation_id"
         with self._connect() as connection:
             rows = connection.execute(sql, values).fetchall()
-        return tuple(_load_json(row, _observation_from_dict) for row in rows)
+        return tuple(_load_observation_row(row) for row in rows)
 
     def add_track_snapshot(self, artifact: LearningTrackSnapshot) -> bool:
         validate_artifact_integrity(artifact, id_field="snapshot_id")
@@ -656,6 +857,20 @@ class SQLiteLearningArtifactRepository:
 
     def add_label(self, artifact: LearningOutcomeLabel) -> bool:
         validate_artifact_integrity(artifact, id_field="label_id")
+        values = (
+            artifact.label_id,
+            artifact.artifact_digest,
+            artifact.schema_version,
+            artifact.contract_id.value,
+            artifact.observation_id,
+            artifact.outcome_basis.value,
+            artifact.availability.value,
+            artifact.outcome,
+            canonical_json(artifact.metrics),
+            artifact.fingerprint,
+            artifact.labeled_at.isoformat(),
+            _artifact_json(artifact),
+        )
         with self._connect() as connection:
             return _immutable_insert(
                 connection,
@@ -668,36 +883,26 @@ class SQLiteLearningArtifactRepository:
                         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                     )
                 """,
-                values=(
-                    artifact.label_id,
-                    artifact.artifact_digest,
-                    artifact.schema_version,
-                    artifact.contract_id.value,
-                    artifact.observation_id,
-                    artifact.outcome_basis.value,
-                    artifact.availability.value,
-                    artifact.outcome,
-                    canonical_json(artifact.metrics),
-                    artifact.fingerprint,
-                    artifact.labeled_at.isoformat(),
-                    _artifact_json(artifact),
-                ),
+                values=values,
+                column_names=_LABEL_COLUMNS,
             )
 
     def list_labels(self, observation_ids: Sequence[str]) -> Sequence[LearningOutcomeLabel]:
         if not observation_ids:
             return ()
         placeholders = ",".join("?" for _ in observation_ids)
+        ids = tuple(observation_ids)
         with self._connect() as connection:
             rows = connection.execute(
                 f"""
-                SELECT artifact_json FROM learning_outcome_labels
+                SELECT {_LABEL_SELECT} FROM learning_outcome_labels
                 WHERE observation_id IN ({placeholders})
+                   OR json_extract(artifact_json, '$.observation_id') IN ({placeholders})
                 ORDER BY observation_id, contract_id
                 """,  # noqa: S608
-                tuple(observation_ids),
+                ids + ids,
             ).fetchall()
-        return tuple(_load_json(row, _label_from_dict) for row in rows)
+        return tuple(_load_label_row(row) for row in rows)
 
     def add_evaluation(self, artifact: LearningEvaluation) -> bool:
         validate_artifact_integrity(artifact, id_field="evaluation_id")
@@ -932,6 +1137,7 @@ class SQLiteLearningArtifactRepository:
                 digest_column="payload_digest",
                 insert_sql=self._POLICY_SNAPSHOT_INSERT_SQL,
                 values=self._policy_snapshot_insert_values(artifact),
+                column_names=_POLICY_SNAPSHOT_COLUMNS,
             )
 
     def add_policy_snapshots_atomic(
@@ -970,6 +1176,7 @@ class SQLiteLearningArtifactRepository:
                     digest_column="payload_digest",
                     insert_sql=self._POLICY_SNAPSHOT_INSERT_SQL,
                     values=self._policy_snapshot_insert_values(artifact),
+                    column_names=_POLICY_SNAPSHOT_COLUMNS,
                 )
                 if wrote:
                     inserted += 1
@@ -986,10 +1193,11 @@ class SQLiteLearningArtifactRepository:
     def get_policy_snapshot(self, snapshot_id: str) -> ProductionPolicySnapshot | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT artifact_json FROM learning_policy_snapshots WHERE snapshot_id = ?",
-                (snapshot_id,),
+                f"SELECT {_POLICY_SELECT} FROM learning_policy_snapshots "
+                "WHERE snapshot_id = ? OR json_extract(artifact_json, '$.snapshot_id') = ?",
+                (snapshot_id, snapshot_id),
             ).fetchone()
-        return None if row is None else _load_json(row, _policy_snapshot_from_dict)
+        return None if row is None else _load_policy_row(row)
 
     def get_policy_snapshot_by_binding(
         self,
@@ -1000,13 +1208,27 @@ class SQLiteLearningArtifactRepository:
     ) -> ProductionPolicySnapshot | None:
         with self._connect() as connection:
             row = connection.execute(
-                """
-                SELECT artifact_json FROM learning_policy_snapshots
-                WHERE purpose = ? AND compatibility_id = ? AND policy_id = ?
+                f"""
+                SELECT {_POLICY_SELECT} FROM learning_policy_snapshots
+                WHERE (
+                    (purpose = ? AND compatibility_id = ? AND policy_id = ?)
+                    OR (
+                        json_extract(artifact_json, '$.purpose') = ?
+                        AND json_extract(artifact_json, '$.compatibility_id') = ?
+                        AND json_extract(artifact_json, '$.policy_id') = ?
+                    )
+                )
                 """,
-                (purpose.value, compatibility_id, policy_id),
+                (
+                    purpose.value,
+                    compatibility_id,
+                    policy_id,
+                    purpose.value,
+                    compatibility_id,
+                    policy_id,
+                ),
             ).fetchone()
-        return None if row is None else _load_json(row, _policy_snapshot_from_dict)
+        return None if row is None else _load_policy_row(row)
 
     def list_policy_snapshots(
         self,
@@ -1016,14 +1238,18 @@ class SQLiteLearningArtifactRepository:
     ) -> Sequence[ProductionPolicySnapshot]:
         with self._connect() as connection:
             rows = connection.execute(
-                """
-                SELECT artifact_json FROM learning_policy_snapshots
-                WHERE purpose = ? AND compatibility_id = ?
+                f"""
+                SELECT {_POLICY_SELECT} FROM learning_policy_snapshots
+                WHERE (purpose = ? AND compatibility_id = ?)
+                   OR (
+                        json_extract(artifact_json, '$.purpose') = ?
+                        AND json_extract(artifact_json, '$.compatibility_id') = ?
+                   )
                 ORDER BY policy_id
                 """,
-                (purpose.value, compatibility_id),
+                (purpose.value, compatibility_id, purpose.value, compatibility_id),
             ).fetchall()
-        return tuple(_load_json(row, _policy_snapshot_from_dict) for row in rows)
+        return tuple(_load_policy_row(row) for row in rows)
 
 
 def connect_learning_database_readonly(db_path: Path) -> sqlite3.Connection:
@@ -1059,30 +1285,38 @@ class SQLiteLearningArtifactReadRepository:
     def list_observations(
         self, purpose: AssessmentPurpose, *, compatibility_id: str | None = None
     ) -> Sequence[LearningObservation]:
-        sql = "SELECT artifact_json FROM learning_observations WHERE purpose = ?"
-        values: list[str] = [purpose.value]
+        sql = (
+            f"SELECT {_OBS_SELECT} FROM learning_observations "
+            "WHERE purpose = ? OR json_extract(artifact_json, '$.purpose') = ?"
+        )
+        values: list[str] = [purpose.value, purpose.value]
         if compatibility_id is not None:
-            sql += " AND compatibility_id = ?"
-            values.append(compatibility_id)
+            sql += (
+                " AND (compatibility_id = ? OR "
+                "json_extract(artifact_json, '$.compatibility_id') = ?)"
+            )
+            values.extend([compatibility_id, compatibility_id])
         sql += " ORDER BY cutoff_at, observation_id"
         with self._connect() as connection:
             rows = connection.execute(sql, values).fetchall()
-        return tuple(_load_json(row, _observation_from_dict) for row in rows)
+        return tuple(_load_observation_row(row) for row in rows)
 
     def list_labels(self, observation_ids: Sequence[str]) -> Sequence[LearningOutcomeLabel]:
         if not observation_ids:
             return ()
         placeholders = ",".join("?" for _ in observation_ids)
+        ids = tuple(observation_ids)
         with self._connect() as connection:
             rows = connection.execute(
                 f"""
-                SELECT artifact_json FROM learning_outcome_labels
+                SELECT {_LABEL_SELECT} FROM learning_outcome_labels
                 WHERE observation_id IN ({placeholders})
+                   OR json_extract(artifact_json, '$.observation_id') IN ({placeholders})
                 ORDER BY observation_id, contract_id
                 """,  # noqa: S608
-                tuple(observation_ids),
+                ids + ids,
             ).fetchall()
-        return tuple(_load_json(row, _label_from_dict) for row in rows)
+        return tuple(_load_label_row(row) for row in rows)
 
     def list_policy_snapshots(
         self,
@@ -1092,11 +1326,15 @@ class SQLiteLearningArtifactReadRepository:
     ) -> Sequence[ProductionPolicySnapshot]:
         with self._connect() as connection:
             rows = connection.execute(
-                """
-                SELECT artifact_json FROM learning_policy_snapshots
-                WHERE purpose = ? AND compatibility_id = ?
+                f"""
+                SELECT {_POLICY_SELECT} FROM learning_policy_snapshots
+                WHERE (purpose = ? AND compatibility_id = ?)
+                   OR (
+                        json_extract(artifact_json, '$.purpose') = ?
+                        AND json_extract(artifact_json, '$.compatibility_id') = ?
+                   )
                 ORDER BY policy_id
                 """,
-                (purpose.value, compatibility_id),
+                (purpose.value, compatibility_id, purpose.value, compatibility_id),
             ).fetchall()
-        return tuple(_load_json(row, _policy_snapshot_from_dict) for row in rows)
+        return tuple(_load_policy_row(row) for row in rows)
