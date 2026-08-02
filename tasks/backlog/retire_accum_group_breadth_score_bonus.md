@@ -1,6 +1,6 @@
 # Retire Accum Group-Breadth Score Bonus
 
-Status: `IN_PROGRESS` (implementation)
+Status: `DONE`
 
 Authority: [ADR-062](../../docs/adr/ADR-062-retire-accum-group-breadth-production-bonus.md)
 
@@ -150,7 +150,7 @@ No new dependency, provider, UI, CLI command, database write, or AI behavior.
 - [x] Every retired producer/consumer surface is removed in dependency order.
 - [x] No forbidden alias, fallback, no-op transport, or production wiring remains.
 - [x] Production-output equivalence is proven independently.
-- [ ] Snapshot v2 and unrelated sector-context contracts remain green.
-- [ ] Focused, architecture, full-suite, diff, and Ruff gates pass after final edits.
-- [ ] ai-saham changes are committed with a scoped commit.
-- [ ] ml-saham companion references are updated without adding a breadth baseline.
+- [x] Snapshot v2 and unrelated sector-context contracts remain green.
+- [x] Focused, architecture, full-suite, diff, and Ruff gates pass after final edits.
+- [x] ai-saham changes are committed with a scoped commit (`8ba2548a`).
+- [x] ml-saham companion references are updated without adding a breadth baseline.
