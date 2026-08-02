@@ -47,6 +47,7 @@ PlanRunner = Callable[[str], Any]
 FetchPreviewer = Callable[[], Any]
 FetchRunner = Callable[[], Any]
 TickerDetailLoader = Callable[[str], Any]
+AgentTurnRunner = Callable[[Any], Any]
 
 BoardKind = Literal["accum", "preopen", "none"]
 DetailReturnStage = Literal["accum", "preopen", "shell", "broker-list"]
@@ -136,6 +137,9 @@ class CockpitApp(App[None]):
         cache_health_loader: Callable[[], Any] | None = None,
         paper_log_runner: Callable[[str], Any] | None = None,
         phase_history_loader: Callable[[str, Any], Any] | None = None,
+        agent_turn_runner: AgentTurnRunner | None = None,
+        agent_provider: str = "deepseek",
+        agent_provider_available: bool = False,
     ) -> None:
         super().__init__()
         self._accum_loader = accum_loader
@@ -157,6 +161,9 @@ class CockpitApp(App[None]):
         self._cache_health_loader = cache_health_loader
         self._paper_log_runner = paper_log_runner
         self._phase_history_loader = phase_history_loader
+        self._agent_turn_runner = agent_turn_runner
+        self._agent_provider = agent_provider
+        self._agent_provider_available = agent_provider_available
         self._accum_controller = accum_controller
         self._preopen_controller = preopen_controller
         self._accum_presenter = accum_presenter
@@ -224,6 +231,8 @@ class CockpitApp(App[None]):
         self._board_source: Literal["none", "live", "snapshot"] = "none"
         self._snapshot_freshness = ""
         self._judge_generation = 0
+        self._agent_generation = 0
+        self._agent_loading = False
         self._judge_ticker = ""
         self._judge_limited = False
         self._cache_health: Any | None = None
@@ -242,6 +251,7 @@ class CockpitApp(App[None]):
                 with Vertical(id="stage"):
                     with VerticalScroll(id="stage-scroll"):
                         yield Static(self._shell_body(), id="stage-body")
+                        from src.adapters.tui.widgets.agent_commentary import AgentCommentary
                         from src.adapters.tui.widgets.broker_desk import BrokerDesk
                         from src.adapters.tui.widgets.broker_flow_desk import (
                             BrokerFlowDesk,
@@ -258,6 +268,7 @@ class CockpitApp(App[None]):
                         from src.adapters.tui.widgets.ticker_desk import TickerDesk
 
                         yield JudgeDesk(id="judge-desk")
+                        yield AgentCommentary(id="agent-commentary")
                         yield PlanDesk(id="plan-desk")
                         yield TickerDesk(id="ticker-desk")
                         yield BrokerDesk(id="broker-desk")
@@ -538,6 +549,14 @@ class CockpitApp(App[None]):
         try:
             desk = self.query_one("#judge-desk")
             desk.display = False
+        except Exception:
+            pass
+
+    def _invalidate_agent_turn(self) -> None:
+        self._agent_generation += 1
+        self._agent_loading = False
+        try:
+            self.query_one("#agent-commentary").clear()
         except Exception:
             pass
 
@@ -965,6 +984,8 @@ class CockpitApp(App[None]):
         )
 
     def _refresh_chrome(self) -> None:
+        if self._stage != "detail" or self._status_note not in {"judge", "re-judging"}:
+            self._invalidate_agent_turn()
         self.query_one("#view-title", Static).update(self._board_title)
         # Single-line meta only — multi-line + header height:auto zeroed the board table.
         meta_line = f"· {self._meta}"
@@ -1250,6 +1271,7 @@ class CockpitApp(App[None]):
     def action_go_back(self) -> None:
         if self._modal_blocks_board_keys():
             return
+        self._invalidate_agent_turn()
         if self._stage == "ticker-desks":
             # Back to view ticker for the stock (preserve board return stage).
             stock = self._ticker_desks_stock
@@ -1717,7 +1739,7 @@ class CockpitApp(App[None]):
             pass
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Prompt submit is design-only: toast, never Action / agent / orders."""
+        """Submit optional agent commentary; idle and CLI remain non-executing."""
         if event.input.id != "prompt-input":
             return
         text = (event.value or "").strip()
@@ -1730,14 +1752,15 @@ class CockpitApp(App[None]):
             return
         if low in {"mode agent", "agent"}:
             self._set_prompt_mode_chip("agent")
-            self.notify("prompt · agent · not wired yet", timeout=1.5)
             return
         if low in {"mode cli", "cli"}:
             self._set_prompt_mode_chip("cli")
             self.notify("prompt · cli · not wired yet", timeout=1.5)
             return
-        if text:
-            self.notify("prompt · not wired yet", timeout=1.5)
+        if text and self._prompt_mode == "agent":
+            self._submit_agent_turn(text)
+        elif text and self._prompt_mode == "cli":
+            self.notify("prompt · cli · not wired yet", timeout=1.5)
         try:
             rail = self.query_one("#prompt-rail", Vertical)
             rail.remove_class("is-focus")
@@ -1746,6 +1769,111 @@ class CockpitApp(App[None]):
                 table.focus()
         except Exception:
             pass
+
+    def _submit_agent_turn(self, user_text: str) -> None:
+        from src.application.dto.accumulation_agent import AgentTurnRequest
+
+        if self._stage != "detail" or self._status_note not in {"judge", "re-judging"}:
+            self.notify("Agent is available only in accumulation Judge", timeout=2.0)
+            return
+        row = self._rows[self._row_index] if self._rows else None
+        source = getattr(row, "source", None)
+        if source is None:
+            self._show_agent_unavailable("Full Judge context required · press j to re-judge")
+            return
+        if self._agent_turn_runner is None:
+            self._show_agent_unavailable("Agent commentary is unavailable")
+            return
+        self._invalidate_agent_turn()
+        self._agent_generation += 1
+        generation = self._agent_generation
+        ticker = str(self._focus_ticker).upper()
+        stage_id = (self._stage, self._status_note)
+        self._agent_loading = True
+        commentary = self.query_one("#agent-commentary")
+        commentary.show_loading(provider=self._agent_provider, ticker=ticker)
+        self._set_prompt_mode_chip("agent")
+        try:
+            sub = self.query_one("#prompt-sub", Static)
+            remote = "remote" if self._agent_provider_available else "unavailable"
+            sub.update(f"· {remote} · {self._agent_provider}")
+        except Exception:
+            pass
+        self._execute_agent_turn(
+            generation,
+            stage_id,
+            ticker,
+            source,
+            AgentTurnRequest(user_text=user_text, candidate=source),
+        )
+
+    def _show_agent_unavailable(self, message: str) -> None:
+        from src.application.dto.accumulation_agent import (
+            AgentTurnResult,
+            AgentTurnStatus,
+        )
+
+        self._invalidate_agent_turn()
+        row = self._rows[self._row_index] if self._rows else None
+        source = getattr(row, "source", None)
+        as_of = str(getattr(getattr(source, "trade_setup", None), "snapshot_date", "—"))
+        self.query_one("#agent-commentary").show_result(
+            AgentTurnResult(status=AgentTurnStatus.UNAVAILABLE, error_message=message),
+            as_of=as_of,
+        )
+
+    @work(thread=True, group="agent")
+    def _execute_agent_turn(
+        self,
+        generation: int,
+        stage_id: tuple[str, str],
+        ticker: str,
+        source: Any,
+        request: Any,
+    ) -> None:
+        assert self._agent_turn_runner is not None
+        try:
+            result = self._agent_turn_runner(request)
+        except Exception:
+            from src.application.dto.accumulation_agent import (
+                AgentTurnResult,
+                AgentTurnStatus,
+            )
+
+            result = AgentTurnResult(
+                status=AgentTurnStatus.FAILED,
+                error_message="Agent commentary failed unexpectedly",
+            )
+        dispatch_if_active(
+            self,
+            self._on_agent_turn_done,
+            generation,
+            stage_id,
+            ticker,
+            source,
+            result,
+        )
+
+    def _on_agent_turn_done(
+        self,
+        generation: int,
+        stage_id: tuple[str, str],
+        ticker: str,
+        source: Any,
+        result: Any,
+    ) -> None:
+        row = self._rows[self._row_index] if self._rows else None
+        if generation != self._agent_generation:
+            return
+        if (self._stage, self._status_note) != stage_id:
+            return
+        if str(self._focus_ticker).upper() != ticker:
+            return
+        if getattr(row, "source", None) is not source:
+            return
+        self._agent_loading = False
+        as_of = str(getattr(source.trade_setup, "snapshot_date", "—"))
+        self.query_one("#agent-commentary").show_result(result, as_of=as_of)
 
     def on_input_blurred(self, event: Input.Blurred) -> None:
         if getattr(event.input, "id", None) != "prompt-input":
@@ -1762,6 +1890,7 @@ class CockpitApp(App[None]):
     def action_refresh_local(self) -> None:
         if self._modal_blocks_board_keys():
             return
+        self._invalidate_agent_turn()
         # Prefer board_kind over title heuristics (detail titles include ticker).
         kind = self._board_kind
         if self._stage == "detail":
@@ -1855,6 +1984,7 @@ class CockpitApp(App[None]):
             return
         if self._stage not in {"accum", "preopen"} or not self._rows:
             return
+        self._invalidate_agent_turn()
         self._row_index = min(len(self._rows) - 1, self._row_index + 1)
         self._sync_table_cursor()
         self._update_focus_from_row()
@@ -1874,6 +2004,7 @@ class CockpitApp(App[None]):
             return
         if self._stage not in {"accum", "preopen"} or not self._rows:
             return
+        self._invalidate_agent_turn()
         self._row_index = max(0, self._row_index - 1)
         self._sync_table_cursor()
         self._update_focus_from_row()
@@ -1963,6 +2094,7 @@ class CockpitApp(App[None]):
     # ── commands ───────────────────────────────────────────
 
     def _run_command(self, command_id: str) -> None:
+        self._invalidate_agent_turn()
         if command_id == "toggle-sidebar":
             self.action_toggle_sidebar()
             return
@@ -2533,6 +2665,7 @@ class CockpitApp(App[None]):
             self.notify("No row focused", timeout=1.5)
             return
         ticker = self._focus_ticker
+        self._invalidate_agent_turn()
         row = self._rows[self._row_index] if self._rows else None
         self._remember_return_stage()
 
@@ -2567,6 +2700,7 @@ class CockpitApp(App[None]):
         """``j``: single-ticker local re-screen for Judge stage only."""
         if self._modal_blocks_board_keys():
             return
+        self._invalidate_agent_turn()
         if self._stage != "detail" or self._status_note not in {"judge", "re-judging"}:
             return
         if self._detail_return_stage == "preopen" or self._board_kind == "preopen":

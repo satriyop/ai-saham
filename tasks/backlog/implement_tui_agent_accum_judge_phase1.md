@@ -1,6 +1,7 @@
 # Implement TUI Agent Phase 1 — Accumulation Judge Explanation
 
-Status: `READY` — re-vetted and contract-hardened on 2026-08-02
+Status: `IMPLEMENTED` — Phase 1 owned slices green on 2026-08-02; repository-wide
+baseline exceptions are recorded below
 
 Source:
 
@@ -473,23 +474,23 @@ remains authoritative.
 
 ## 14. Acceptance Criteria
 
-- [ ] ADR-060 contracts are implemented exactly.
-- [ ] A full accumulation Judge can receive one grounded agent explanation.
-- [ ] Deterministic facts and Agent commentary are visibly separate.
-- [ ] `80x24` and `120x40` headless acceptance covers loading, long answer,
+- [x] ADR-060 contracts are implemented exactly.
+- [x] A full accumulation Judge can receive one grounded agent explanation.
+- [x] Deterministic facts and Agent commentary are visibly separate.
+- [x] `80x24` and `120x40` headless acceptance covers loading, long answer,
       unavailable, and failed commentary without obscuring the Judge.
-- [ ] AI-disabled, unsupported, missing-key, limited-row, timeout, malformed,
+- [x] AI-disabled, unsupported, missing-key, limited-row, timeout, malformed,
       cancellation, and late-result behavior match the table above.
-- [ ] No tool, write, persistence, CLI, shell, SQLite, or provider access exists
+- [x] No tool, write, persistence, CLI, shell, SQLite, or provider access exists
       outside the permitted model adapter.
-- [ ] Existing deterministic TUI/CLI behavior is unchanged without AI.
-- [ ] No direct infrastructure import exists under domain/application.
-- [ ] Every dedicated Phase 1 agent test module declares
+- [x] Existing deterministic TUI/CLI behavior is unchanged without AI.
+- [x] No direct infrastructure import exists under domain/application.
+- [x] Every dedicated Phase 1 agent test module declares
       `pytestmark = pytest.mark.agent`; TUI mount/drive tests also receive the
       independent cost-based `tui` marker.
-- [ ] The `agent` slice is fully offline; no test selected only by `agent`
+- [x] The `agent` slice is fully offline; no test selected only by `agent`
       requires credentials or network access.
-- [ ] No unrelated worktree changes are touched or staged.
+- [x] No unrelated worktree changes are touched or staged.
 - [ ] Focused tests, TUI tests, full suite, architecture tests, Ruff gates, and
       `git diff --check` pass on the final code state.
 
@@ -533,13 +534,24 @@ optional and never replaces contract tests.
 
 ## 17. Completion Record
 
-- Completed date:
-- Commit:
-- Files changed:
-- Focused tests:
-- TUI tests:
-- Full suite:
-- Ruff check / format:
-- Architecture tests:
-- `git diff --check`:
-- Shared-worktree ownership resolution:
+- Completed date: 2026-08-02
+- Commit: this implementation commit
+- Files changed: application DTO/port/projection/use case; DeepSeek adapter and
+  composition; TUI runner lifecycle/commentary widget; focused tests and design
+  truth update.
+- Focused tests: `22 passed` via `pytest -m agent`; `agent and not tui` and
+  `agent and tui` slices pass independently.
+- TUI tests: Phase 1 tests pass at `80x24` and `120x40`. Full `-m tui` has two
+  unrelated existing ticker-desks journey failures because current code routes
+  `b` to the on-ticker brokers job while those tests expect the retired
+  independent `ticker-desks` stage.
+- Full suite: `6041 passed, 1 skipped, 5 failed`; all five failures are outside
+  Phase 1-owned files: the two ticker-desks expectations above, an existing TUI
+  canonical-Action-literal boundary failure, an HTML design flag mismatch, and
+  a seasonality cache temporal-leakage expectation.
+- Ruff check / format: whole-repo gates pass (`src/ tests/`).
+- Architecture tests: `test_layer_boundaries.py` passes (`4 passed`); broader
+  architecture has the unchanged canonical-Action-literal failure noted above.
+- `git diff --check`: pass.
+- Shared-worktree ownership resolution: Phase 1 files only; no unrelated file
+  was staged or modified.

@@ -28,6 +28,7 @@ from src.adapters.tui.main import CockpitApp
 from src.adapters.tui.plan_structure_result import PlanStructureResult
 from src.adapters.tui.presenters.accum_presenter import AccumPresenter
 from src.adapters.tui.presenters.preopen_presenter import PreOpenPresenter
+from src.infrastructure.composition.agent_model import build_agent_composition
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 
@@ -45,6 +46,7 @@ def create_tui_app(
     cache_health_loader: Callable[[], Any] | None = None,
     paper_log_runner: Callable[[str], Any] | None = None,
     phase_history_loader: Callable[[str, date], Any] | None = None,
+    agent_turn_runner: Callable[[Any], Any] | None = None,
 ) -> CockpitApp:
     """Build cockpit with real local loaders unless tests inject fakes."""
     config = load_app_config()
@@ -74,6 +76,9 @@ def create_tui_app(
         paper_log_runner = _LocalPaperLogFromPlanRunner(db_path, config)
     if phase_history_loader is None:
         phase_history_loader = _LocalPhaseHistoryLoader(db_path)
+    agent_composition = build_agent_composition(config.ai)
+    if agent_turn_runner is None:
+        agent_turn_runner = agent_composition.use_case.execute
 
     return CockpitApp(
         accum_loader=accum_loader,
@@ -104,6 +109,9 @@ def create_tui_app(
         preopen_presenter=PreOpenPresenter(),
         board_snapshot_path=board_snapshot_path,
         snapshot_universe=universe,
+        agent_turn_runner=agent_turn_runner,
+        agent_provider=agent_composition.configured_provider,
+        agent_provider_available=agent_composition.provider_available,
     )
 
 

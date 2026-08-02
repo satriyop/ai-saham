@@ -69,11 +69,12 @@ Ship Textual against **`.app` inside this mock**. Design-tools strip is for revi
 | Height | **2 rows + air** · ~92px mock / height **6** TUI cells · **roomy pad above/below** typed line (OpenCode, not tight) |
 | Card | Elevated composer: full border · **left brass/peach accent bar (3px)** · dark fill `#121212` · padding ≥12–14px vertical |
 | Row 1 | `›` (brass) + mono free-text input · bright caret · min-height ~28px |
-| Row 2 | **Mode** (`idle` · `agent` · `cli`) brass/mint · `local · design only · not wired` · key hints `↵ · esc · :/` · gap 8px from row 1 |
+| Row 2 | **Mode** (`idle` · `agent` · `cli`). Idle remains local/non-executing; agent identifies `remote · deepseek` before dispatch; CLI remains unwired. |
 | Focus | click rail · `:` or `/` → composer elevates (soft brass glow + stronger left bar) |
 | Keys | `↵` submit mock · `esc` blur/clear · Ctrl+P still palette |
 | Later | agent adapter · CLI passthrough · never Action authority |
-| Now | toast `prompt · design only · not wired` |
+| Agent | A non-empty question on a full accumulation Judge opens one read-only **Agent commentary** turn below Judge. Snapshot-limited rows direct the operator to `j` re-judge. |
+| Idle / CLI | Idle does not execute. CLI remains explicitly unwired. |
 
 **Reject:** single-line hairline strip · mode chip only on the right of a flat bar · no left accent · same bg as status with no card.
 

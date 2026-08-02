@@ -1,7 +1,8 @@
 # TUI AI Agent Implementation Roadmap
 
-**Status:** Approved architecture roadmap — ADR-060 accepted; Phase 1 tracked in
-`tasks/backlog/implement_tui_agent_accum_judge_phase1.md`
+**Status:** Active implementation roadmap — ADR-060 accepted; Phase 1 implemented
+on 2026-08-02 with repository-wide baseline exceptions recorded in its backlog
+completion record
 
 **Re-vetted against:** current code and tests at `588f9f6e` plus the local
 worktree on 2026-08-02
@@ -17,7 +18,7 @@ ADR-051, ADR-054, ADR-057, and ADR-060
 | Phase | Backlog contract | Status / activation |
 |---|---|---|
 | 0 — Architecture and UX contract | ADR-060 + this roadmap | Complete for the first accumulation-Judge slice |
-| 1 — One-turn visible-result assistant | [`implement_tui_agent_accum_judge_phase1.md`](../../tasks/backlog/implement_tui_agent_accum_judge_phase1.md) | Ready after shared-worktree start gate clears |
+| 1 — One-turn visible-result assistant | [`implement_tui_agent_accum_judge_phase1.md`](../../tasks/backlog/implement_tui_agent_accum_judge_phase1.md) | Implemented; owned slices green, unrelated repository baseline exceptions recorded |
 | 2 — Allowlisted read tools | [`parked_tui_agent_read_tools_phase2.md`](../../tasks/backlog/parked_tui_agent_read_tools_phase2.md) | Parked until Phase 1 closes and a tool ADR is accepted |
 | 3 — Ephemeral sessions | [`parked_tui_agent_ephemeral_sessions_phase3.md`](../../tasks/backlog/parked_tui_agent_ephemeral_sessions_phase3.md) | Parked until Phase 2 closes and session contracts are accepted |
 | 4 — Audit persistence | [`parked_tui_agent_audit_persistence_phase4.md`](../../tasks/backlog/parked_tui_agent_audit_persistence_phase4.md) | Parked; requires explicit persistence ADR |

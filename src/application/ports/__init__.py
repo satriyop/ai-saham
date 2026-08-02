@@ -17,3 +17,6 @@ __all__ = [
     "TranslatorRateLimitError",
     "TranslatorTimeoutError",
 ]
+from src.application.ports.agent_model import AgentModelPort
+
+__all__ = ["AgentModelPort"]
