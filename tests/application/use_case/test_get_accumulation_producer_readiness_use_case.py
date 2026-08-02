@@ -368,3 +368,93 @@ def test_use_case_rejects_non_accum_purpose(tmp_path) -> None:
     )
     with pytest.raises(ValueError, match="ACCUMULATION_DISCOVERY"):
         uc.execute(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION)
+
+
+def test_dual_snapshot_compat_drift_blocks_not_legacy(tmp_path) -> None:
+    """Coherent dual compatibility_id rewrite must not collapse to LEGACY/0 snapshots."""
+    import json
+    import sqlite3
+
+    db = tmp_path / "snap-drift.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    o1 = _observation(day=1, compatibility_id=COMPAT_B, ticker="BBCA")
+    o2 = _observation(day=2, compatibility_id=COMPAT_B, ticker="BBRI")
+    for o in (o1, o2):
+        repo.add_observation(o)
+        repo.add_label(_label(o))
+    _seed_full_v2(repo, COMPAT_B)
+
+    with sqlite3.connect(db) as conn:
+        for sid, aj in conn.execute(
+            "SELECT snapshot_id, artifact_json FROM learning_policy_snapshots"
+        ):
+            raw = json.loads(aj)
+            raw["compatibility_id"] = "mutated-compat"
+            conn.execute(
+                "UPDATE learning_policy_snapshots SET compatibility_id=?, artifact_json=? "
+                "WHERE snapshot_id=?",
+                (
+                    "mutated-compat",
+                    json.dumps(raw, sort_keys=True, separators=(",", ":")),
+                    sid,
+                ),
+            )
+        conn.commit()
+
+    report = GetAccumulationProducerReadinessUseCase(
+        observations=repo,
+        labels=repo,
+        policy_snapshots=repo,
+        session_snapshot_lookup=_snapshot_lookup,
+    ).execute()
+    cohort = report.cohorts[0]
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert cohort.snapshot.has_corruption is True
+    assert cohort.snapshot.verified_count == 0
+    assert cohort.snapshot.required_count == 7
+    assert cohort.producer_status is not ProducerReadinessStatus.LEGACY_RAW_ONLY
+
+
+def test_dual_observation_purpose_drift_blocks_not_empty(tmp_path) -> None:
+    """Dual purpose rewrite still discovers ACCUM-contract rows; status is not empty."""
+    import json
+    import sqlite3
+
+    db = tmp_path / "obs-drift.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    o1 = _observation(day=1, compatibility_id=COMPAT_B, ticker="BBCA")
+    o2 = _observation(day=2, compatibility_id=COMPAT_B, ticker="BBRI")
+    for o in (o1, o2):
+        repo.add_observation(o)
+        repo.add_label(_label(o))
+    _seed_full_v2(repo, COMPAT_B)
+
+    with sqlite3.connect(db) as conn:
+        for oid, aj in conn.execute(
+            "SELECT observation_id, artifact_json FROM learning_observations"
+        ):
+            raw = json.loads(aj)
+            raw["purpose"] = AssessmentPurpose.SWING_TRADE_SETUP.value
+            conn.execute(
+                "UPDATE learning_observations SET purpose=?, artifact_json=? "
+                "WHERE observation_id=?",
+                (
+                    AssessmentPurpose.SWING_TRADE_SETUP.value,
+                    json.dumps(raw, sort_keys=True, separators=(",", ":")),
+                    oid,
+                ),
+            )
+        conn.commit()
+
+    report = GetAccumulationProducerReadinessUseCase(
+        observations=repo,
+        labels=repo,
+        policy_snapshots=repo,
+        session_snapshot_lookup=_snapshot_lookup,
+    ).execute()
+    # Purpose-hidden rows are still discovered via locked contract dual-key.
+    assert report.observation_count == 2
+    assert report.cohort_count == 1
+    cohort = report.cohorts[0]
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert cohort.observation_validation.invalid_observation_count == 2
