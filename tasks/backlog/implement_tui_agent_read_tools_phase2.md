@@ -1,6 +1,6 @@
 # Implement TUI Agent Phase 2 — Allowlisted Read-Tool Orchestration
 
-Status: `READY — EPIC (activation triggers met; runtime gated per §7 and §13)`
+Status: `IN PROGRESS — EPIC (foundation and 8.1 complete; 8.2–8.4 pending)`
 
 Activated on 2026-08-02 from `parked_tui_agent_read_tools_phase2.md`. The two
 activation triggers are now satisfied:
@@ -205,6 +205,10 @@ registered. Executable contract:
 
 ### 8.1 Tool — `get_visible_cockpit_result`
 
+Status: **IMPLEMENTED** on 2026-08-02 in
+[`implement_tui_agent_visible_cockpit_result_phase2_1.md`](implement_tui_agent_visible_cockpit_result_phase2_1.md),
+commit `b8b60d06`.
+
 - Schemas: `agent_tool.visible_cockpit.args.v1` (`visible_result_reference: str`
   only) → `agent_tool.visible_cockpit.result.v1`.
 - Execution: compare proposed reference to the adapter-captured reference and
@@ -362,6 +366,11 @@ git diff --check
 - Foundation (8.0) commit: `825ce241`; implementation and full verification
   green on 2026-08-02.
 - Tool subtasks (8.1–8.4):
+  - 8.1 `get_visible_cockpit_result`: implemented and registered by `b8b60d06`;
+    exact turn-local projection, no recompute/read/write, ordered TUI trace.
+  - 8.2–8.4: pending independent task activation and proof.
 - Completed date:
-- Commits:
-- Verification:
+- Commits: foundation `825ce241`; tool 8.1 `b8b60d06`.
+- Verification for 8.1: 67 agent tests; 56 TUI tests with 1 skipped;
+  full suite 6155 passed with 1 skipped; architecture, inventory, Ruff, and diff
+  gates passed on 2026-08-02.

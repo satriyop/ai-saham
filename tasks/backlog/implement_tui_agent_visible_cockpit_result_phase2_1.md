@@ -1,6 +1,6 @@
 # Implement TUI Agent Phase 2.1 — Visible Cockpit Result Tool
 
-Status: `IN PROGRESS`
+Status: `IMPLEMENTED` — verified on 2026-08-02
 
 Source:
 
@@ -136,13 +136,13 @@ No model output becomes deterministic authority.
 
 ## 13. Acceptance Criteria
 
-- [ ] Exact contracts and negative tests above are implemented.
-- [ ] Only `get_visible_cockpit_result` is registered.
-- [ ] Phase 1 behavior remains when tools are not effectively enabled.
-- [ ] Application imports no infrastructure/adapter module.
-- [ ] Dedicated tests carry `pytest.mark.agent`.
-- [ ] Agent, TUI, architecture, full-suite, Ruff, and diff gates pass.
-- [ ] Implementation commit and verification are recorded below.
+- [x] Exact contracts and negative tests above are implemented.
+- [x] Only `get_visible_cockpit_result` is registered.
+- [x] Phase 1 behavior remains when tools are not effectively enabled.
+- [x] Application imports no infrastructure/adapter module.
+- [x] Dedicated tests carry `pytest.mark.agent`.
+- [x] Agent, TUI, architecture, full-suite, Ruff, and diff gates pass.
+- [x] Implementation commit and verification are recorded below.
 
 ## 14. Testing Expectations
 
@@ -171,6 +171,17 @@ activating another tool.
 ## 17. Completion Record
 
 - Base commit: `ef4e9205`
-- Implemented date:
-- Commit:
+- Implemented date: 2026-08-02
+- Commit: `b8b60d06`
 - Verification:
+  - `pytest -m "agent and not tui" -q`: 63 passed
+  - architecture + multi-surface inventory: 9 passed
+  - `pytest -m "agent and tui" -q`: 4 passed
+  - `pytest -m agent -q`: 67 passed
+  - `pytest -m tui -q`: 56 passed, 1 skipped
+  - `pytest -q`: 6155 passed, 1 skipped
+  - `ruff check src/ tests/`: passed
+  - `ruff format --check src/ tests/`: passed
+  - `git diff --check`: passed
+- Runtime remains disabled by default. Effective registration requires both AI
+  flags, DeepSeek support, and an available credential.
