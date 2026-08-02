@@ -22,6 +22,8 @@ class AgentComposition:
     use_case: ExplainAccumulationCandidateUseCase
     provider_available: bool
     configured_provider: str
+    tools_requested: bool
+    tools_enabled: bool
 
 
 def build_agent_composition(ai_config: object, *, provider: str | None = None) -> AgentComposition:
@@ -30,6 +32,7 @@ def build_agent_composition(ai_config: object, *, provider: str | None = None) -
         explicit = str(getattr(ai_config, "provider", "deepseek"))
     configured = resolve_ai_provider(explicit).strip().lower()
     enabled = bool(getattr(ai_config, "enabled", False))
+    tools_requested = enabled and bool(getattr(ai_config, "tools_enabled", False))
     model = None
     reason = None
     if not enabled:
@@ -53,4 +56,6 @@ def build_agent_composition(ai_config: object, *, provider: str | None = None) -
             model_unavailable_reason=reason,
         ),
     )
-    return AgentComposition(use_case, model is not None, configured)
+    # Foundation ships no registered tool. Effective enablement therefore stays
+    # false even when the independent config flag requests tools.
+    return AgentComposition(use_case, model is not None, configured, tools_requested, False)

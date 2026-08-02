@@ -37,9 +37,7 @@ _GOLDEN_CONFIG = "x: 1\n"
 # Schema-12 retires Accum group-breadth material (ADR-062).
 # schema-11 was sha256:e3546ed4…; schema-10 was sha256:12dc594c…;
 # schema-9 was sha256:5b2849a0…).
-_GOLDEN_COMPATIBILITY_ID = (
-    "sha256:19488deb57c0240f3e9e580a4dd50bb0dbaa9baba70e91c22e265589f50d9fb2"
-)
+_GOLDEN_COMPATIBILITY_ID = "sha256:19488deb57c0240f3e9e580a4dd50bb0dbaa9baba70e91c22e265589f50d9fb2"
 
 
 def test_resolver_returns_valid_prefixed_sha256() -> None:

@@ -105,3 +105,4 @@ fetch:
 ai:
   enabled: false         # AI-assisted analysis is OFF by default
   provider: deepseek     # default provider: deepseek | claude | openai | gemini | ollama
+  tools_enabled: false   # closed read tools are an independent opt-in

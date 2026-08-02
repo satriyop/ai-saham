@@ -120,6 +120,7 @@ class FetchConfig:
 class AiConfig:
     enabled: bool = False
     provider: str = "deepseek"  # deepseek | claude | openai | gemini | ollama
+    tools_enabled: bool = False
 
 
 @dataclass(frozen=True)

@@ -14,6 +14,30 @@ def test_disabled_composition_does_not_construct_provider(monkeypatch) -> None:
     result = build_agent_composition(AiConfig(enabled=False, provider="deepseek"))
     assert result.provider_available is False
     assert result.use_case.provider_available is False
+    assert result.tools_requested is False
+    assert result.tools_enabled is False
+
+
+def test_tools_require_both_ai_and_tool_flags(monkeypatch) -> None:
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
+    disabled = build_agent_composition(
+        AiConfig(enabled=False, provider="deepseek", tools_enabled=True)
+    )
+    zero_tool = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", tools_enabled=False)
+    )
+    enabled = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", tools_enabled=True)
+    )
+
+    assert disabled.tools_requested is False
+    assert zero_tool.tools_requested is False
+    assert enabled.tools_requested is True
+    assert disabled.tools_enabled is False
+    assert zero_tool.tools_enabled is False
+    assert enabled.tools_enabled is False  # no production tool is registered yet
 
 
 def test_enabled_missing_key_is_fail_soft(monkeypatch) -> None:

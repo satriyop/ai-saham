@@ -8,12 +8,25 @@ from enum import Enum
 from typing import Any
 
 from src.application.dto.accumulation_screen import AccumulationCandidate
+from src.application.dto.agent_tools import (
+    AgentModelToolCall,
+    AgentModelToolChoice,
+    AgentToolDefinition,
+    AgentToolExecutionResult,
+)
 
 
 class AgentTurnStatus(str, Enum):
     SUCCESS = "SUCCESS"
+    PARTIAL = "PARTIAL"
     UNAVAILABLE = "UNAVAILABLE"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
+class AgentModelResponseKind(str, Enum):
+    ANSWER = "ANSWER"
+    TOOL_CALLS = "TOOL_CALLS"
 
 
 class AgentModelUnavailableReason(str, Enum):
@@ -212,6 +225,26 @@ class AgentModelRequest:
     user_text: str
     context: AgentAccumulationContext
     max_output_tokens: int
+    tool_definitions: tuple[AgentToolDefinition, ...] = ()
+    tool_choice: AgentModelToolChoice = AgentModelToolChoice.NONE
+    prior_tool_calls: tuple[AgentModelToolCall, ...] = ()
+    tool_results: tuple[AgentToolExecutionResult, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.max_output_tokens <= 0:
+            raise ValueError("agent model output limit must be positive")
+        if self.tool_choice is AgentModelToolChoice.AUTO:
+            if not self.tool_definitions or self.prior_tool_calls or self.tool_results:
+                raise ValueError("initial tool request requires definitions and no prior results")
+        elif self.prior_tool_calls or self.tool_results:
+            if not self.tool_definitions or len(self.prior_tool_calls) != len(self.tool_results):
+                raise ValueError("final tool request requires matched calls, results, definitions")
+            if tuple(call.call_id for call in self.prior_tool_calls) != tuple(
+                result.call_id for result in self.tool_results
+            ):
+                raise ValueError("final tool request call/result identities must match")
+        elif self.tool_definitions:
+            raise ValueError("tool definitions without auto choice or prior results are invalid")
 
 
 @dataclass(frozen=True)
@@ -223,6 +256,17 @@ class AgentModelResponse:
     finish_reason: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    kind: AgentModelResponseKind = AgentModelResponseKind.ANSWER
+    tool_calls: tuple[AgentModelToolCall, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.provider.strip() or not self.model.strip():
+            raise ValueError("agent model response requires provider and model")
+        if self.kind is AgentModelResponseKind.ANSWER:
+            if not self.text.strip() or self.tool_calls:
+                raise ValueError("agent answer requires text and no tool calls")
+        elif self.text or not 1 <= len(self.tool_calls) <= 2:
+            raise ValueError("agent tool response requires one or two calls and no answer")
 
 
 @dataclass(frozen=True)
@@ -237,15 +281,18 @@ class AgentTurnResult:
     input_tokens: int | None = None
     output_tokens: int | None = None
     error_message: str | None = None
+    tool_results: tuple[AgentToolExecutionResult, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.status is AgentTurnStatus.SUCCESS:
+        if self.status in {AgentTurnStatus.SUCCESS, AgentTurnStatus.PARTIAL}:
             if not all((self.answer.strip(), self.context_reference, self.provider, self.model)):
                 raise ValueError(
                     "successful agent result requires answer, context, provider, model"
                 )
             if self.error_message is not None:
                 raise ValueError("successful agent result cannot have an error")
+            if self.status is AgentTurnStatus.PARTIAL and not self.tool_results:
+                raise ValueError("partial agent result requires tool results")
         elif self.answer or not self.error_message:
             raise ValueError("unavailable/failed agent result requires only an error message")
 

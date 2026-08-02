@@ -1,0 +1,306 @@
+"""Closed, provider-neutral contracts for read-only agent tools."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import re
+from dataclasses import dataclass, fields, is_dataclass
+from datetime import date, datetime
+from enum import Enum
+from typing import Protocol
+
+
+class AgentToolName(str, Enum):
+    GET_VISIBLE_COCKPIT_RESULT = "get_visible_cockpit_result"
+    GET_TICKER_DASHBOARD = "get_ticker_dashboard"
+    JUDGE_ACCUMULATION_TICKER = "judge_accumulation_ticker"
+    GET_BROKER_DESK = "get_broker_desk"
+
+
+class AgentToolSideEffect(str, Enum):
+    NONE = "NONE"
+
+
+class AgentToolArgumentType(str, Enum):
+    STRING = "string"
+
+
+@dataclass(frozen=True)
+class AgentToolArgumentField:
+    name: str
+    description: str
+    value_type: AgentToolArgumentType = AgentToolArgumentType.STRING
+    enum_values: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self.name):
+            raise ValueError(f"invalid agent tool argument name: {self.name!r}")
+        if not self.description.strip():
+            raise ValueError("agent tool argument description cannot be empty")
+        if self.enum_values and len(set(self.enum_values)) != len(self.enum_values):
+            raise ValueError("agent tool argument enum values must be unique")
+
+
+@dataclass(frozen=True)
+class AgentToolDefinition:
+    name: AgentToolName
+    description: str
+    argument_schema_id: str
+    result_schema_id: str
+    arguments: tuple[AgentToolArgumentField, ...]
+    required_context: str
+    timeout_ms: int
+    max_result_bytes: int
+    side_effect: AgentToolSideEffect = AgentToolSideEffect.NONE
+
+    def __post_init__(self) -> None:
+        if not self.description.strip():
+            raise ValueError("agent tool description cannot be empty")
+        if not self.argument_schema_id.strip() or not self.result_schema_id.strip():
+            raise ValueError("agent tool schema identifiers cannot be empty")
+        if not self.required_context.strip():
+            raise ValueError("agent tool required context cannot be empty")
+        if self.timeout_ms <= 0 or self.timeout_ms > 15_000:
+            raise ValueError("agent tool timeout must be between 1 and 15000 ms")
+        if self.max_result_bytes <= 0 or self.max_result_bytes > 32 * 1024:
+            raise ValueError("agent tool result limit must be between 1 and 32768 bytes")
+        names = tuple(item.name for item in self.arguments)
+        if len(names) != len(set(names)):
+            raise ValueError("agent tool argument names must be unique")
+        if self.side_effect is not AgentToolSideEffect.NONE:
+            raise ValueError("Phase 2 agent tools must be side-effect free")
+
+
+class AgentToolArguments:
+    """Marker base for frozen, tool-specific argument DTOs."""
+
+
+class AgentToolResultPayload(Protocol):
+    schema_id: str
+
+
+@dataclass(frozen=True)
+class AgentToolFreshness:
+    as_of: date | None
+    status: str
+    warnings: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.status.strip():
+            raise ValueError("agent tool freshness status cannot be empty")
+
+
+@dataclass(frozen=True)
+class AgentToolProvenance:
+    source: str
+    as_of: date | None = None
+    source_reference: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.source.strip():
+            raise ValueError("agent tool provenance source cannot be empty")
+
+
+class AgentToolExecutionStatus(str, Enum):
+    SUCCESS = "SUCCESS"
+    PARTIAL = "PARTIAL"
+    FAILED = "FAILED"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+@dataclass(frozen=True)
+class _AgentToolResultEnvelope:
+    call_id: str
+    name: AgentToolName
+    status: AgentToolExecutionStatus
+    data: AgentToolResultPayload | None
+    warnings: tuple[str, ...]
+    error_code: str | None
+    error_message: str | None
+    freshness: AgentToolFreshness | None
+    provenance: AgentToolProvenance
+    source_reference: str | None
+    retryable: bool
+    side_effect: AgentToolSideEffect
+
+
+@dataclass(frozen=True)
+class AgentToolExecutionResult:
+    call_id: str
+    name: AgentToolName
+    status: AgentToolExecutionStatus
+    data: AgentToolResultPayload | None
+    warnings: tuple[str, ...]
+    error_code: str | None
+    error_message: str | None
+    freshness: AgentToolFreshness | None
+    provenance: AgentToolProvenance
+    source_reference: str | None
+    result_reference: str
+    retryable: bool = False
+    side_effect: AgentToolSideEffect = AgentToolSideEffect.NONE
+
+    def __post_init__(self) -> None:
+        if not self.call_id.strip():
+            raise ValueError("agent tool call id cannot be empty")
+        if self.side_effect is not AgentToolSideEffect.NONE:
+            raise ValueError("Phase 2 agent tool result must have side_effect=NONE")
+        if self.retryable:
+            raise ValueError("Phase 2 agent tool results cannot be retryable")
+        if self.status is AgentToolExecutionStatus.SUCCESS:
+            if self.data is None or self.error_code is not None or self.error_message is not None:
+                raise ValueError("successful agent tool result requires only typed data")
+        elif self.status is AgentToolExecutionStatus.PARTIAL:
+            if self.data is None or not self.warnings:
+                raise ValueError("partial agent tool result requires data and warnings")
+        elif self.data is not None or not self.error_code or not self.error_message:
+            raise ValueError("failed/unavailable agent tool result requires only a typed error")
+        if self.data is not None:
+            params = getattr(type(self.data), "__dataclass_params__", None)
+            if not is_dataclass(self.data) or params is None or not params.frozen:
+                raise ValueError("agent tool result data must be a frozen typed dataclass")
+            if not str(getattr(self.data, "schema_id", "")).strip():
+                raise ValueError("agent tool result data requires a schema_id")
+        expected = canonical_reference(self._envelope())
+        if self.result_reference != expected:
+            raise ValueError("agent tool result reference does not match its envelope")
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        call_id: str,
+        name: AgentToolName,
+        status: AgentToolExecutionStatus,
+        data: AgentToolResultPayload | None,
+        warnings: tuple[str, ...] = (),
+        error_code: str | None = None,
+        error_message: str | None = None,
+        freshness: AgentToolFreshness | None = None,
+        provenance: AgentToolProvenance,
+        source_reference: str | None = None,
+    ) -> AgentToolExecutionResult:
+        envelope = _AgentToolResultEnvelope(
+            call_id=call_id,
+            name=name,
+            status=status,
+            data=data,
+            warnings=warnings,
+            error_code=error_code,
+            error_message=error_message,
+            freshness=freshness,
+            provenance=provenance,
+            source_reference=source_reference,
+            retryable=False,
+            side_effect=AgentToolSideEffect.NONE,
+        )
+        return cls(
+            call_id=call_id,
+            name=name,
+            status=status,
+            data=data,
+            warnings=warnings,
+            error_code=error_code,
+            error_message=error_message,
+            freshness=freshness,
+            provenance=provenance,
+            source_reference=source_reference,
+            result_reference=canonical_reference(envelope),
+        )
+
+    def canonical_payload(self) -> dict[str, object]:
+        payload = canonical_json_value(self._envelope())
+        assert isinstance(payload, dict)
+        return payload | {"result_reference": self.result_reference}
+
+    def serialized_size(self) -> int:
+        return len(canonical_json_bytes(self))
+
+    def _envelope(self) -> _AgentToolResultEnvelope:
+        return _AgentToolResultEnvelope(
+            call_id=self.call_id,
+            name=self.name,
+            status=self.status,
+            data=self.data,
+            warnings=self.warnings,
+            error_code=self.error_code,
+            error_message=self.error_message,
+            freshness=self.freshness,
+            provenance=self.provenance,
+            source_reference=self.source_reference,
+            retryable=self.retryable,
+            side_effect=self.side_effect,
+        )
+
+
+@dataclass(frozen=True)
+class AgentModelToolCall:
+    call_id: str
+    name: str
+    arguments_json: str
+
+    def __post_init__(self) -> None:
+        if not self.call_id.strip() or not self.name.strip() or not self.arguments_json.strip():
+            raise ValueError("model tool call fields cannot be empty")
+
+
+class AgentModelToolChoice(str, Enum):
+    AUTO = "auto"
+    NONE = "none"
+
+
+@dataclass(frozen=True)
+class AgentToolTurnPolicy:
+    tools_enabled: bool
+    max_provider_calls: int = 2
+    max_tool_calls: int = 2
+    provider_timeout_seconds: float = 10.0
+    tool_budget_seconds: float = 15.0
+    turn_deadline_seconds: float = 35.0
+    max_total_result_bytes: int = 64 * 1024
+
+    def __post_init__(self) -> None:
+        if self.max_provider_calls != 2 or self.max_tool_calls != 2:
+            raise ValueError("Phase 2 requires exactly the ADR-061 call ceilings")
+        if self.provider_timeout_seconds != 10.0:
+            raise ValueError("Phase 2 provider timeout must be 10 seconds")
+        if self.tool_budget_seconds != 15.0 or self.turn_deadline_seconds != 35.0:
+            raise ValueError("Phase 2 tool/turn deadlines must match ADR-061")
+        if self.max_total_result_bytes != 64 * 1024:
+            raise ValueError("Phase 2 total result limit must be 64 KiB")
+
+
+def canonical_json_value(value: object) -> object:
+    if is_dataclass(value):
+        return {
+            item.name: canonical_json_value(getattr(value, item.name)) for item in fields(value)
+        }
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    if isinstance(value, tuple):
+        return [canonical_json_value(item) for item in value]
+    if value is None or isinstance(value, (str, int, bool)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("agent canonical JSON rejects non-finite floats")
+        return value
+    raise TypeError(f"unsupported agent canonical JSON value: {type(value).__name__}")
+
+
+def canonical_json_bytes(value: object) -> bytes:
+    return json.dumps(
+        canonical_json_value(value),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+
+
+def canonical_reference(value: object) -> str:
+    return "sha256:" + hashlib.sha256(canonical_json_bytes(value)).hexdigest()
