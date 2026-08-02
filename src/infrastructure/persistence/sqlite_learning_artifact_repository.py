@@ -1408,6 +1408,10 @@ def _list_labels_with_identity_discovery(
 ) -> Sequence[LearningOutcomeLabel]:
     """Purpose-isolated ACCUM-aware label discovery with full candidate validation.
 
+    Task authority (not an implementation-only exception) — see
+    ``tasks/backlog/grow_snapshot_bound_accum_challenge_corpus.md`` §6.1.1 and the
+    locked ACCUM label integrity discovery (v1) decision:
+
     Candidate union (bounded; not whole-table):
     1. dual observation_id (column / artifact JSON) for requested parents;
     2. expected label_id for each parent × path/pre-open contracts;
@@ -1415,8 +1419,8 @@ def _list_labels_with_identity_discovery(
        corpus corruption cannot abort ACCUM status.
 
     Every candidate is fully validated before filtering to requested parents.
-    Design lock: simultaneous mutation of parent ID, label ID, *and* label contract
-    away from ACCUM contracts cannot be detected without a separate corpus audit.
+    Simultaneous corruption of all scope anchors is outside readiness and belongs
+    to a separate corpus-wide integrity/audit mechanism (or future inventory design).
     """
     if not observation_ids:
         return ()

@@ -20,6 +20,44 @@ Status: `IN_PROGRESS_CONTRACT_HARDENING`
 - Do not hardcode lookback `10`, consult live YAML as historical authority, or
   introduce an immutable cohort-identity artifact (Option B) in this task.
 
+## Locked design decision (2026-08-02) — ACCUM label integrity discovery (v1)
+
+**Bounded-anchor model for ACCUM readiness label authority (selected for this
+task; not an implementation-only exception).**
+
+ACCUM readiness detects label corruption when **at least one** authoritative
+scope anchor survives:
+
+1. **Requested parent identity** — dual-key on column and `artifact_json`
+   `observation_id` for the ACCUM observations under evaluation;
+2. **Expected label identity** — deterministic `label_id` recomputed from each
+   parent × allowed label contracts;
+3. **ACCUM label contract** — dual-key on column and `artifact_json`
+   `contract_id` for exactly:
+   - `price_path.accum_3d.v1`
+   - `price_path.accum_10d.v1`
+   - `price_path.accum_20d.v1`
+
+Every candidate found through **any** of those anchors is fully validated
+(recon, digest, `label_id` identity) before filtering. Invalid ACCUM labels
+fail closed.
+
+**Purpose isolation (normative):** PRE_OPEN / other purposes must not abort
+ACCUM readiness. `price_path.open_30m.v1` is **outside** the ACCUM readiness
+candidate union. Unrelated PRE_OPEN corpus health is not ACCUM authority.
+
+**Explicit out-of-scope for readiness (v1):** simultaneous corruption of **all**
+scope anchors (parent ID, label ID, **and** ACCUM label contract) is outside
+ACCUM readiness detection. That class of failure belongs to a **separate
+corpus-wide integrity/audit mechanism**, or a future schema-level purpose
+binding / external immutable inventory. This task **must not** close by
+pretending readiness can detect all-anchor mutation under pure bounded SQL
+discovery.
+
+**Forbidden without a new task/ADR:** whole-table label scans on the ACCUM
+status hot path that break purpose isolation; inventing a silent inventory;
+claiming all-anchor detection without inventory/purpose-binding design.
+
 ## Locked Decisions (2026-08-02/03) — market-session authority for path labels
 
 Authoritative market-session source for ACCUM path labels and readiness:
@@ -394,6 +432,27 @@ tests before editing. A valid digest proves immutable content consistency; it
 does not by itself prove identity, producer origin, PIT meaning, or semantic
 eligibility.
 
+#### 6.1.1 ACCUM label readiness discovery (v1 authority lock)
+
+This cell is **task authority**, not an implementation footnote. It binds the
+repository reader used by `GetAccumulationProducerReadinessUseCase` / `research
+accum status`.
+
+| Dimension | Lock |
+|---|---|
+| Scope | ACCUM readiness label candidate discovery only (not corpus-wide audit) |
+| Surviving-anchor rule | Corruption is in-scope for readiness when **at least one** of these anchors survives: (1) requested parent `observation_id` (column **or** JSON), (2) expected `label_id` for parent × allowed contracts, (3) ACCUM label `contract_id` dual-key for exactly `price_path.accum_3d.v1` / `accum_10d.v1` / `accum_20d.v1` |
+| Validation | Every candidate found through any surviving anchor is fully validated (column↔artifact recon, digest, `label_id` identity) before parent filtering |
+| Fail-closed ACCUM | Invalid ACCUM-family candidates → integrity error / `BLOCKED_POLICY`; never silent skip as immature horizon |
+| Purpose isolation | PRE_OPEN family `price_path.open_30m.v1` is **outside** the ACCUM candidate union; PRE_OPEN corpus health must not abort ACCUM status |
+| Out of scope (v1) | Simultaneous corruption of **all** scope anchors (parent ID, label ID, **and** ACCUM contract) is **not** readiness-detectable under bounded SQL; belongs to a separate corpus-wide integrity/audit mechanism or a future inventory/purpose-binding design |
+| Forbidden without new task/ADR | Whole-table label scans on ACCUM status hot path; inventing an inventory to “close” all-anchor detection silently; claiming all-anchor detection under pure bounded discovery |
+
+Implementer note: code comments in
+`sqlite_learning_artifact_repository._list_labels_with_identity_discovery` must
+remain consistent with this table. Do not widen or narrow discovery without an
+authority update here.
+
 | Artifact / boundary | Authority owner and source | Exact identity dimensions | Integrity proof | Semantic contract checks | Missing state | Invalid / conflicting state | May contribute to readiness when |
 |---|---|---|---|---|---|---|---|
 | Accumulation observation | `AccumulationCandidateObservationPersister` using `build_session_observation_payload`; stored by the ai-saham learning observation repository | `stable_learning_id(learning_observation.accumulation_discovery.v2, {purpose=ACCUMULATION_DISCOVERY, policy_contract=accumulation_discovery.policy.v1, horizon_contract=accum_10d, compatibility_id, cutoff_at, universe_id, window_id})`; `window_id={UPPER_TICKER}:{YYYY-MM-DD}`; outer `schema_version=LEARNING_SCHEMA_VERSION`; payload `schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION` | Independently recompute `observation_id` and `artifact_digest`; stored outer columns must agree with the serialized identity and payload | Exact `artifact_type=accumulation_session_observation`, `workflow=research_accum_capture`, `canonical_window=7`, `horizon_primary=accum_10d`, and exact feature keys `7,30,90`; payload ticker/date must equal `window_id`; parsed `shared.provenance.decision_at` must equal outer `cutoff_at`; `latest_completed_session` and `analysis_as_of` must equal the payload/window economic session; payload `captured_at` must equal outer `captured_at`; all datetimes must be timezone-aware and canonical | No observation is `COLLECTING`; a missing required field on an existing active row is not ordinary absence | Any ID, digest, schema, contract, ticker/session/cutoff, capture timestamp, provenance, or envelope mismatch is `BLOCKED_POLICY`; the row contributes zero sessions, counts, Actions, readiness values, or label eligibility | Every identity, integrity, schema, semantic, provenance, and PIT check passes |
@@ -565,40 +624,34 @@ contract after product-owner approval.
 ```text
 Completed date (code gate): REOPENED 2026-08-02 (still open)
 Task status: IN_PROGRESS_CONTRACT_HARDENING
-  Historical CODE_COMPLETE_AWAITING_DATA claims below are SUPERSEDED.
-  Do not treat them as current; reopen findings remain open until closed
-  with mutation tests.
 
-Open reopen findings (must close before CODE_COMPLETE_AWAITING_DATA):
-  - Operational AWAITING_DATA still open (live multi-session + OOS folds)
-  - Pending independent review of latest selector-discovery + pack-binding seals
+Authority locks recorded this cycle (required before any CODE_COMPLETE claim):
+  - § Locked design decision — lookback Option A (producer attestation)
+  - § Locked design decision — ACCUM label integrity discovery (v1 bounded anchors)
+  - § 6.1.1 ACCUM label readiness discovery (v1 authority lock table)
+  These are task authority, not implementation-only comments.
 
-Closed this pass (selector discovery + pack seal hardening):
-  - P0 expected snapshot_id discovery + observation contract dual-key discovery
-  - P0 required pack_binding.json, field equality, atomic writer
-  - P1 gate_off:<key> resolves real adapter components; champions score-kind only
-  - P1 display writers stay schema v3; promote-evidence sealed as v4 only
-  - P1 calendar closed keys + exact isoform + artifact_json byte recon
-  - P2 exact relink/integrity exceptions; create() type errors → LearningContractError
+CODE_COMPLETE_AWAITING_DATA eligibility rule for this reopen:
+  - May be claimed only after independent review accepts the locked bounded-anchor
+    exception (above) as intentional task authority AND remaining code gates pass.
+  - Must NOT be claimed solely because the implementation already matches the rule.
+  - Operational multi-session growth + ml-saham ≥2 OOS folds remain separate
+    (operational DONE / move to tasks/done/).
 
-Closed earlier reopen (do not re-list as open):
-  - Exact observation/label ticker, session, timestamp parsing
-  - Exact ml-saham promote production identity strings + unsealed export mutation blocks
-  - Dual-key observation SQL parentheses; label expected-ID discovery
-  - Optional producer-contract presence; padded source_revision rejection
-  - Shadow-column reconciliation, Option A lookback, material hash, baseline fallback,
-    invalid≠insufficient labels, calendar natural-key uniqueness
+Open before CODE_COMPLETE_AWAITING_DATA:
+  - Independent review acceptance of §6.1.1 bounded-anchor ACCUM label discovery
+  - Operational AWAITING_DATA (live multi-session cohort + companion OOS folds)
 
-Commits (selected chain; SHAs land with this pass):
-  prior: bcd4cd55 / 85939db7 / dcd4610 / 5278a90 / 7f53b462 / 07717aa1
-  this pass: expected-ID discovery, pack seal fail-closed, calendar wire, docs
-
-P1 operational status: AWAITING_DATA (separate from code gate)
-  - live cohorts BLOCKED_POLICY / LEGACY_RAW_ONLY until ops calendar sync + growth
-  - multi-session LQ45 + ml-saham ≥2 post-embargo OOS folds required for operational DONE
+Closed under the bounded-anchor model (implementation + tests; authority now explicit):
+  - ACCUM/PRE_OPEN label purpose isolation (e1fae445)
+  - Global observation/snapshot integrity before classify
+  - Combined ACCUM label parent/ID mutation fails closed
+  - Invalid PRE_OPEN label does not abort ACCUM status
+  - Invalid ACCUM label still fails closed
+  - ml-saham pack seal, concurrent publication, exact identities, v4 promote evidence
 
 P2 configured-but-unwired finding recorded: YES (no v3)
 
-CODE_COMPLETE_AWAITING_DATA: NOT claimed while reopen findings above remain open
+CODE_COMPLETE_AWAITING_DATA: NOT claimed until §6.1.1 authority is accepted by review
 Operational DONE: still requires live multi-session growth + ml-saham OOS folds
 ```
