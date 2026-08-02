@@ -104,7 +104,7 @@ or guess it.
 Textual prompt/transcript adapter
               |
               v
-RunTuiAgentTurnUseCase                 Application
+ExplainAccumulationCandidateUseCase    Application
   - validate request/session context
   - choose permitted tool loop
   - enforce budgets and stop rules
@@ -139,8 +139,8 @@ to the pure domain.
 
 Own the provider-neutral and UI-neutral behavior:
 
-- `RunTuiAgentTurnUseCase` (name may become interface-neutral in the ADR if a
-  second adapter is approved before implementation);
+- `ExplainAccumulationCandidateUseCase`, channel-neutral and reusable only
+  after another adapter independently acquires an exact permitted candidate;
 - immutable request/result DTOs;
 - `AgentModelPort` under `src/application/ports/`;
 - typed tool descriptors and execution results;
@@ -176,9 +176,23 @@ The TUI owns only interaction and presentation:
 - keep keyboard focus, scroll, and board state stable;
 - never parse model text into commands or business actions.
 
-The TUI composition root may construct infrastructure adapters and inject the
-application use case. It must not own tool policy, fallback selection,
-freshness decisions, or grounding rules.
+The TUI composition root calls the channel-neutral infrastructure provider
+factory and injects the application use case. It must not own tool policy,
+fallback selection, freshness decisions, or grounding rules.
+
+### Future channel reuse boundary
+
+The application explanation seam is intentionally channel-neutral so a future
+Telegram adapter can reuse it. That adapter is not part of this roadmap's Phase
+1 implementation. Before calling `ExplainAccumulationCandidateUseCase`, it must
+authenticate/allowlist the sender and obtain an exact full candidate through an
+approved application workflow or allowlisted read tool. It may not reconstruct
+context from chat text, ticker strings, board scalars, CLI output, or direct
+SQLite/provider reads.
+
+Telegram transport mode, delivery retries/idempotency, sender and chat identity,
+rate limits, message-size formatting, sessions, audit, commands, and any write
+authority require a separate roadmap/backlog and applicable ADR decisions.
 
 ## Required contracts before UI wiring
 
@@ -314,7 +328,8 @@ Judge result without an agent tool loop. This is intentionally one vertical
 surface before context projection expands to pre-open, ticker, or broker views.
 
 - Add immutable application DTOs and `AgentModelPort`.
-- Build the visible-result projection and `RunTuiAgentTurnUseCase` in one-turn,
+- Build the visible-result projection and
+  `ExplainAccumulationCandidateUseCase` in one-turn,
   zero-tool mode.
 - Implement one provider adapter plus a deterministic fake adapter for tests.
 - Wire an optional `agent_turn_runner` into `CockpitApp` through the composition

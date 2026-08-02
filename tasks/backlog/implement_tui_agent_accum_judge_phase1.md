@@ -1,6 +1,6 @@
 # Implement TUI Agent Phase 1 — Accumulation Judge Explanation
 
-Status: `READY` after the shared-worktree start gate below is cleared
+Status: `READY` — re-vetted and contract-hardened on 2026-08-02
 
 Source:
 
@@ -21,17 +21,14 @@ Source:
 
 ## 2. Shared-worktree start gate
 
-At task creation, the following expected implementation files or their close
-design/tests have unrelated uncommitted changes:
+The unrelated TUI/design work that blocked this task at creation was committed
+in `8abb8ba0`. The 2026-08-02 re-vet found a clean worktree and a green focused
+baseline.
 
-- `src/adapters/tui/main.py`
-- `docs/design/tui-cockpit-opencode.md`
-- `docs/design/tui-cockpit-opencode.html`
-- multiple `tests/adapters/tui/test_*.py` files
-
-Before editing, run `git status --short`. Do not start implementation until the
-owner has committed those changes or explicitly identified the exact lines/files
-that this task may edit. Never clean, restore, stash, or overwrite them.
+This does not waive the per-run ownership check. Before implementation, run
+`git status --short`; preserve any new unrelated changes and report any overlap
+with the file boundary below. Never clean, restore, stash, or overwrite shared
+worktree changes.
 
 ## 3. Problem Statement
 
@@ -76,6 +73,9 @@ typed honest unavailable state and performs no provider call.
 - No direct SQLite, filesystem, browser, shell, MCP, CLI, or market-provider
   access.
 - No provider fallback and no additional provider adapter beyond DeepSeek.
+- No Telegram adapter, bot transport, sender authentication, webhook/polling,
+  channel session, or Telegram command in Phase 1. The application seam is
+  channel-neutral only so a separately approved adapter can reuse it later.
 - No change to Signal/Risk/MCE/TradeSetup behavior or evidence authority.
 
 ## 6. Hard Invariants
@@ -93,8 +93,11 @@ typed honest unavailable state and performs no provider call.
 6. Model prose cannot be consumed by any deterministic workflow or write path.
 7. AI-disabled and provider-failure behavior cannot delay or degrade normal
    cockpit operation.
-8. A late worker result is accepted only when its generation, ticker, context
-   reference, and originating Judge stage still match.
+8. Before dispatch, the adapter captures the generation, ticker, originating
+   Judge stage, and exact `row.source` object identity. A late worker result is
+   accepted only while all four still match. The returned `context_reference`
+   is displayed and tested as projection integrity; it is not a value the
+   adapter can know before the application builds the projection.
 
 ## 7. Architecture Impact Assessment
 
@@ -124,15 +127,17 @@ Layer plan:
 
 Expected new files:
 
-- `src/application/dto/tui_agent.py`
+- `src/application/dto/accumulation_agent.py`
 - `src/application/ports/agent_model.py`
 - `src/application/services/agent_accumulation_context.py`
-- `src/application/use_case/run_tui_agent_turn_use_case.py`
+- `src/application/use_case/explain_accumulation_candidate_use_case.py`
 - `src/infrastructure/ai/deepseek_agent_model.py`
+- `src/infrastructure/composition/agent_model.py`
 - `src/adapters/tui/widgets/agent_commentary.py`
 - `tests/application/services/test_agent_accumulation_context.py`
-- `tests/application/use_case/test_run_tui_agent_turn_use_case.py`
+- `tests/application/use_case/test_explain_accumulation_candidate_use_case.py`
 - `tests/infrastructure/ai/test_deepseek_agent_model.py`
+- `tests/infrastructure/composition/test_agent_model.py`
 - `tests/adapters/tui/test_agent_commentary.py`
 
 Expected existing files:
@@ -140,8 +145,11 @@ Expected existing files:
 - `src/application/ports/__init__.py`
 - `src/adapters/tui/composition.py`
 - `src/adapters/tui/main.py`
+- `src/adapters/tui/theme.py`
 - `src/adapters/tui/widgets/__init__.py`
-- focused existing TUI tests only when needed for prompt/late-result wiring
+- `tests/adapters/tui/test_visual_parity_contracts.py`
+- `tests/adapters/tui/test_finish_cockpit_slices.py`
+- focused additional existing TUI tests only when needed for lifecycle wiring
 - `docs/design/tui-cockpit-opencode.md`
 - `docs/design/tui-cockpit-opencode.html` only if the accepted rendered frame
   cannot be documented truthfully without updating the mock
@@ -163,29 +171,27 @@ AgentTurnRequest
   user_text: str
   candidate: AccumulationCandidate
 
-AgentVisibleAccumulationContext
+AgentAccumulationContext
+  schema_id: str
   context_reference: str
   ticker: str
-  as_of: date | None
-  action: str
-  signal_score: float | None
-  signal_strength: str | None
-  accum_score: float
-  accum_breakdown: mapping
-  risk_status: str | None
-  risk_gate: str | None
-  why: tuple[str, ...]
-  setup_readiness: mapping | None
-  setup_phase: mapping | None
-  freshness: mapping | None
+  as_of: date
+  trade_setup: AgentTradeSetupFacts
+  signal: AgentSignalFacts
+  risk: AgentRiskFacts | None
+  accumulation: AgentAccumulationFacts
+  rationale: AgentDecisionRationale
+  setup_readiness: AgentSetupReadinessFacts | None
+  setup_phase_diagnostic: AgentSetupPhaseFacts | None
+  freshness: AgentFreshnessFacts | None
+  source_availability: tuple[AgentSourceAvailabilityFacts, ...]
+  source_dates: AgentSourceDates
   warnings: tuple[str, ...]
-  provenance: mapping
-  diagnostic_context: mapping
 
 AgentModelRequest
   system_policy: str
   user_text: str
-  context: AgentVisibleAccumulationContext
+  context: AgentAccumulationContext
   max_output_tokens: int
 
 AgentModelResponse
@@ -193,6 +199,7 @@ AgentModelResponse
   provider: str
   model: str
   response_id: str | None
+  finish_reason: str | None
   input_tokens: int | None
   output_tokens: int | None
 
@@ -207,6 +214,16 @@ AgentTurnResult
   input_tokens: int | None
   output_tokens: int | None
   error_message: str | None
+
+AgentModelUnavailableReason =
+  DISABLED | UNSUPPORTED_PROVIDER | MISSING_CREDENTIAL
+
+AgentTurnPolicy
+  enabled: bool
+  configured_provider: str
+  model_unavailable_reason: AgentModelUnavailableReason | None
+  max_question_chars: int
+  max_output_tokens: int
 ```
 
 Successful results require non-empty `answer`, `context_reference`, `provider`,
@@ -218,21 +235,68 @@ states in `__post_init__`.
 
 `build_agent_accumulation_context(candidate)` is pure and performs no IO.
 
-- Extract Signal from `candidate.signal_assessment` without recalculation.
-- Extract Action from `candidate.trade_setup.action`; missing TradeSetup makes
-  the context unavailable rather than inventing Action.
-- Extract risk only from `candidate.risk_assessment`.
-- Extract Accum values from the candidate and its existing breakdown.
-- Extract Why/readiness through application-owned typed fields. Do not import
-  `src.adapters.shared.decision_display` into application.
-- Put sector macro, named setup evaluations, and similar non-Action material
-  under `diagnostic_context`, labelled diagnostic.
-- Include date/source/availability identities already carried by the candidate.
-  Do not query for more provenance.
-- Omit raw candles, unrestricted news text, full database rows, secrets, and
-  objects that cannot be serialized deterministically.
-- Compute `context_reference` as `sha256:<lowercase hex>` over canonical JSON of
-  the projection excluding `context_reference` itself.
+- `schema_id` is exactly `tui_agent.accum_judge.v1`.
+- Require `trade_setup`, `signal_assessment.assessment`, and
+  `accum_score_breakdown`; absence is typed `UNAVAILABLE` and makes no model
+  call. Risk, readiness, setup phase, freshness, and source availability remain
+  explicitly optional.
+- Require ticker equality across candidate, TradeSetup, SignalAssessment, and
+  AccumScoreBreakdown. Require snapshot-date equality across TradeSetup,
+  SignalAssessment, AccumScoreBreakdown, and RiskAssessment when risk exists.
+  Any mismatch is an invariant failure and makes no model call.
+- `as_of` is exactly `trade_setup.snapshot_date`; it is never inferred from the
+  latest source date.
+- `AgentTradeSetupFacts` copies exactly: snapshot date, Action, signal score,
+  raw signal score, signal strength, blocking gates, regime, signal multiplier,
+  gate tightening, and TradeSetup rationale.
+- `AgentSignalFacts` copies exactly: identity purpose/policy contract, ticker,
+  snapshot date, score, strength, entry quality, ordered breakdown pairs,
+  rationale, authority coverage, coverage warning, and every
+  `DecisionConstraints` field when present, plus `availability_enforcement`.
+- `AgentRiskFacts` copies exactly: snapshot date, derived `OPEN|BLOCKED`, fired
+  gate, structural flag, gate confidence, and rationale. It excludes the raw
+  indicator snapshot.
+- `AgentAccumulationFacts` copies exactly from `AccumScoreBreakdown`: ticker,
+  snapshot date, score/max score, component coverage, missing components,
+  ordered component records (`key`, points, max points, status), net-buy ratio,
+  streak, VWAP discount, RSI, flow ratio, BB-width percentile, BCI label, and
+  Tier-1 count. It does not call unrestricted `candidate.to_dict()`.
+- `AgentDecisionRationale` transports the unmodified TradeSetup rationale,
+  Signal rationale, Risk rationale, decision-constraint reasons, and coverage
+  warning as separate fields. It does **not** recreate the adapter-owned
+  `format_action_why()` sentence. The model may explain these labelled facts;
+  the deterministic Judge continues using shared `decision_display`.
+- Readiness copies exactly its family, status, current phase, missing inputs,
+  and failed requirements. Setup phase is labelled diagnostic and copies the
+  current/previous phase, age, detection strength, input coverage, sequence
+  validity, reasons, unavailable-evidence reasons, and volume-trigger fields;
+  history is excluded from v1.
+- Freshness copies exactly the seven `DataFreshnessStatus` fields. Each setup or
+  flow availability group copies `evidence_group`, `all_authoritative`,
+  `settled_authority_fraction`, `unassessed_contributors`, and its ordered
+  assessments. Each assessment copies `source_family`, `decision_at`,
+  `observed_through`, `available_at`, `expected_available_at`, status,
+  `is_authoritative`, reason, and notes. Groups are ordered setup then flow;
+  assessment order is preserved. Source dates copy the candidate's latest
+  candle, broker, and broker-daily-flow dates.
+- `warnings` is a stable de-duplicated tuple, in this order: coverage warning;
+  readiness missing inputs; readiness failed requirements; setup-phase
+  unavailable-evidence reasons; unassessed contributor names; then reason and
+  notes from non-current or non-authoritative source assessments. These are
+  copied strings, not newly formatted display-policy sentences.
+- V1 excludes sector-macro context, named setup evaluations, setup history,
+  gate-audit payloads, raw indicators, candles, unrestricted news/enrichment,
+  full database rows, secrets, and arbitrary object representations. Adding
+  any excluded field requires updating this task and the schema ID first.
+- All context DTOs are frozen dataclasses containing scalars, enums/dates, other
+  frozen DTOs, and tuples only. No mutable or open-ended `dict`/`Mapping` field
+  may cross the model port.
+- Serialize the projection excluding `context_reference` with
+  `json.dumps(payload, sort_keys=True, separators=(",", ":"),
+  ensure_ascii=False, allow_nan=False)`, encode UTF-8, and compute
+  `context_reference` as `sha256:<lowercase hex>`. Dates use ISO `YYYY-MM-DD`;
+  enums use `.value`; tuples serialize as JSON arrays; absent optionals are
+  explicit JSON `null`. Do not import the learning-artifact canonicalizer.
 
 ### Model port and failures
 
@@ -247,11 +311,26 @@ as ordinary unavailable data.
 
 ### Use case policy
 
-`RunTuiAgentTurnUseCase` receives:
+`ExplainAccumulationCandidateUseCase` receives:
 
 - `model: AgentModelPort | None`;
-- typed policy containing `enabled`, `max_question_chars`, and
+- `AgentTurnPolicy` containing `enabled`, normalized `configured_provider`,
+  typed `model_unavailable_reason`, `max_question_chars`, and
   `max_output_tokens`.
+
+The use case contains no Textual, Telegram, chat ID, widget, transport, or
+message-formatting type. The TUI adapter supplies its exact `row.source`
+candidate. A future adapter must acquire the same full candidate through a
+separately approved application-owned workflow before calling this use case.
+
+Policy invariants:
+
+- disabled requires `model is None` and reason `DISABLED`;
+- enabled with a model requires no unavailable reason;
+- enabled without a model requires `UNSUPPORTED_PROVIDER` or
+  `MISSING_CREDENTIAL`;
+- unsupported-provider copy names `configured_provider`; credential copy never
+  includes the credential value.
 
 Lock initial values:
 
@@ -269,24 +348,41 @@ of deterministic facts from commentary.
 
 Implement `DeepSeekAgentModel` using the existing OpenAI-compatible SDK:
 
+Provider capability was re-verified on 2026-08-02 against the official
+[DeepSeek API guide](https://api-docs.deepseek.com/guides/function_calling/)
+and [Chat Completions contract](https://api-docs.deepseek.com/api/create-chat-completion).
+Re-verify those sources immediately before implementation because model IDs are
+an external capability contract.
+
 - credential: `DEEPSEEK_API_KEY`;
 - endpoint: `https://api.deepseek.com`;
-- model: `deepseek-chat`;
+- model: `deepseek-v4-flash`;
+- thinking: explicitly disabled with
+  `extra_body={"thinking": {"type": "disabled"}}`;
 - timeout: 10 seconds;
-- temperature: deterministic minimum supported by the API;
-- no SDK retry;
-- response text must be non-empty;
-- return exact provider/model/response ID and usage when available;
+- temperature: exactly `0.0`;
+- OpenAI client `max_retries=0` and one Chat Completions request per turn;
+- pass no tools and set `tool_choice="none"`;
+- missing choices or empty text is malformed. `stop` is normal success;
+  `length` may return success with exact warning
+  `Model answer reached the output limit`; `tool_calls`/`content_filter` is
+  malformed and `insufficient_system_resource` is provider-unavailable;
+- return exact response model, response ID, finish reason, and usage when
+  available; provider is exactly `deepseek`;
 - never log or return the API key or raw credential-bearing client state.
 
 Composition behavior:
 
+- Resolve provider using existing `resolve_ai_provider()` precedence: explicit
+  argument, then non-empty `AI_PROVIDER`, then `ai.provider`; normalize lowercase.
 - `ai.enabled: false` -> inject no model; use case returns `UNAVAILABLE` without
-  importing/constructing the provider client.
+  importing/constructing the provider client; policy reason is `DISABLED`.
 - `ai.enabled: true` + `ai.provider: deepseek` -> construct
-  `DeepSeekAgentModel`.
+  `DeepSeekAgentModel` only when `DEEPSEEK_API_KEY` is non-empty.
+- missing `DEEPSEEK_API_KEY` -> inject no model with reason
+  `MISSING_CREDENTIAL`; cockpit construction must not raise.
 - any other configured provider -> typed `UNAVAILABLE` stating that TUI agent
-  Phase 1 supports DeepSeek only.
+  Phase 1 supports DeepSeek only; policy reason is `UNSUPPORTED_PROVIDER`.
 - never fall back to mock or another real provider in production composition.
 
 ## 11. TUI Contract
@@ -296,8 +392,9 @@ Composition behavior:
 - `agent` mode submits only while a full accumulation Judge is visible.
 - `idle` mode remains non-executing. `cli` mode remains explicitly unwired.
 - Run the agent turn off the UI thread.
-- Show a compact commentary region under/adjacent to the Judge without replacing
-  or unmasking the Judge body.
+- Mount `AgentCommentary` immediately after `JudgeDesk` inside `#stage-scroll`.
+  It is displayed only for an accumulation Judge and never replaces, overlays,
+  or mutates `JudgeDesk`.
 - Render: `Agent commentary`, answer, `provider · model`, context/as-of, warnings,
   and unavailable/error copy.
 - Do not style the commentary as Action/Signal/Risk or reuse verdict mast colors
@@ -309,6 +406,26 @@ Composition behavior:
   the visible commentary and any in-flight turn.
 - Never place the full prompt or model answer in notifications, logs, sidebar,
   or status text.
+- Before a remote request, prompt metadata identifies `remote · deepseek` when
+  the provider is available; it must not imply local inference.
+
+Worker lineage is exact:
+
+1. Capture generation, stage ID, ticker, and the exact `row.source` object.
+2. Pass that same object in `AgentTurnRequest`; never copy or reconstruct it.
+3. On completion require the captured generation to remain current, the Judge
+   stage to remain active, the focused ticker to match, and
+   `current_row.source is captured_source`.
+4. Re-judge, refresh, focus change, navigation, Esc, or a newer submission
+   invalidates the generation and clears commentary.
+5. Render the returned context reference, but do not re-project in the adapter.
+
+Responsive acceptance is executable, not taste-based: headless tests cover
+loading, success with a long bounded answer, unavailable, and failed states at
+`80x24` and `120x40`. At both sizes the deterministic Judge remains visible,
+commentary is keyboard-scrollable, metadata is not color-only, and no answer or
+warning overlaps the prompt/status rows. Below `80x24`, existing resize guidance
+remains authoritative.
 
 ## 12. Missing and Failure States
 
@@ -340,9 +457,17 @@ Composition behavior:
 - Candidate projection contains no raw candles, secrets, or arbitrary object
   repr.
 - Unsupported provider does not fall back.
+- Disabled AI and missing credentials construct no OpenAI client; cockpit
+  composition still succeeds.
+- Provider resolution tests prove explicit argument > non-empty `AI_PROVIDER` >
+  `ai.provider`; unsupported env override does not fall back to config.
 - Timeout does not retry.
+- The DeepSeek request pins model, thinking-disabled body, temperature,
+  timeout, no tools, and zero SDK retries.
 - Empty/malformed provider output cannot render as success.
 - Late response for ticker A cannot paint after navigation to ticker B.
+- Late response cannot paint after re-judging the same ticker with a different
+  `row.source` object.
 - Agent answer cannot be passed to plan, paper, screen, observation, label, or
   config workflows.
 
@@ -351,6 +476,8 @@ Composition behavior:
 - [ ] ADR-060 contracts are implemented exactly.
 - [ ] A full accumulation Judge can receive one grounded agent explanation.
 - [ ] Deterministic facts and Agent commentary are visibly separate.
+- [ ] `80x24` and `120x40` headless acceptance covers loading, long answer,
+      unavailable, and failed commentary without obscuring the Judge.
 - [ ] AI-disabled, unsupported, missing-key, limited-row, timeout, malformed,
       cancellation, and late-result behavior match the table above.
 - [ ] No tool, write, persistence, CLI, shell, SQLite, or provider access exists
@@ -368,8 +495,9 @@ Run after the final edit:
 ```bash
 .venv/bin/python -m pytest \
   tests/application/services/test_agent_accumulation_context.py \
-  tests/application/use_case/test_run_tui_agent_turn_use_case.py \
+  tests/application/use_case/test_explain_accumulation_candidate_use_case.py \
   tests/infrastructure/ai/test_deepseek_agent_model.py \
+  tests/infrastructure/composition/test_agent_model.py \
   tests/adapters/tui/test_agent_commentary.py -q
 .venv/bin/python -m pytest tests/architecture/test_layer_boundaries.py -q
 .venv/bin/python -m pytest -m tui
@@ -393,7 +521,7 @@ optional and never replaces contract tests.
   a challenger Action.
 - Do not silently weaken missing/failure states to make a demo answer appear.
 - Do not preserve a late response because its ticker string happens to match;
-  generation and context reference must also match.
+  generation, stage, and exact source-object identity must also match.
 
 ## 17. Completion Record
 
@@ -407,4 +535,3 @@ optional and never replaces contract tests.
 - Architecture tests:
 - `git diff --check`:
 - Shared-worktree ownership resolution:
-
