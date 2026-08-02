@@ -1,6 +1,6 @@
 # Implement TUI Agent Phase 2 — Allowlisted Read-Tool Orchestration
 
-Status: `IN PROGRESS — EPIC (foundation and 8.1–8.2 complete; 8.3–8.4 pending)`
+Status: `IN PROGRESS — EPIC (foundation and 8.1–8.3 complete; 8.4 pending)`
 
 Activated on 2026-08-02 from `parked_tui_agent_read_tools_phase2.md`. The two
 activation triggers are now satisfied:
@@ -230,6 +230,10 @@ commit `e964f48f`.
   `PARTIAL`/`UNAVAILABLE`, never refresh/fetch/neutral-fill.
 
 ### 8.3 Tool — `judge_accumulation_ticker`
+
+Status: **IMPLEMENTED** on 2026-08-03 in
+[`implement_tui_agent_accum_judge_phase2_3.md`](implement_tui_agent_accum_judge_phase2_3.md),
+commit `a768f963`.
 
 - Schemas: `agent_tool.accum_judge.args.v1` (`ticker: str`, canonical form) →
   `agent_tool.accum_judge.result.v1` wrapping the existing
