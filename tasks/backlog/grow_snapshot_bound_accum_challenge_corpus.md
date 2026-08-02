@@ -566,13 +566,17 @@ Task status: IN_PROGRESS_CONTRACT_HARDENING
   with mutation tests.
 
 Open reopen findings (must close before CODE_COMPLETE_AWAITING_DATA):
-  - P0 ml-saham challenge evidence sealing (schema v4 content_digest/artifact_id;
-    exact status/against/primary_horizon; v3 historical-only) — in flight this pass
-  - P0 label dual-observation_id relink discovery via expected label_id — in flight
-  - P1 malformed optional producer-contract presence blocks — in flight
-  - P1 exact policy/calendar source_revision (no strip) — in flight
+  - (none from the 2026-08-02 sealing/relink reopen — pending independent review)
+  - Operational AWAITING_DATA still open (live multi-session + OOS folds)
 
-Closed since prior reopen (do not re-list as open):
+Closed this pass:
+  - P0 ml-saham challenge evidence sealing (schema v4 content_digest/artifact_id;
+    exact status/against/primary_horizon; v3 historical-only) — 5278a90
+  - P0 label dual-observation_id relink discovery via expected label_id — 7f53b462
+  - P1 malformed optional producer-contract presence blocks — 07717aa1
+  - P1 exact policy/calendar source_revision (no strip) — 07717aa1
+
+Closed earlier reopen (do not re-list as open):
   - Exact observation/label ticker, session, timestamp parsing
   - Exact ml-saham promote production identity strings
   - Dual-key observation SQL parentheses
@@ -580,10 +584,12 @@ Closed since prior reopen (do not re-list as open):
   - Shadow-column reconciliation, Option A lookback, material hash, baseline fallback,
     invalid≠insufficient labels, calendar natural-key uniqueness
 
-Commits (selected; incomplete vs open list until this pass lands):
-  bcd4cd55 fix(readiness): require exact canonical observation and label strings
-  85939db7 fix(persistence): parenthesize dual-key observation filters
-  dcd4610  (ml-saham) fix(promote): require exact identity strings without rewrite
+Commits (selected chain):
+  bcd4cd55 / 85939db7 / dcd4610 — prior exactness pass
+  5278a90 (ml-saham) fix(promote): seal challenge evidence with schema v4 digests
+  7f53b462 fix(persistence): discover labels by expected identity
+  07717aa1 fix(corpus): reject padded provenance and malformed optional contracts
+  156fca9c docs(backlog): refresh open findings
 
 P1 operational status: AWAITING_DATA (separate from code gate)
   - live cohorts BLOCKED_POLICY / LEGACY_RAW_ONLY until ops calendar sync + growth
