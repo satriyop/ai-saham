@@ -6,6 +6,17 @@
 
 **Date:** 2026-08-02
 
+**Amendment (2026-08-04):** The registry is **extensible without a per-tool ADR**.
+Adding another **application-owned, typed, `side_effect=NONE`, descriptive** read
+tool requires only its Task Template subtask (projection, lineage, PIT, tests) —
+not a new ADR. A **new ADR is required only** when a tool adds new **authority**, a
+new **`side_effect` class**, or a new **provider/evidence** (as [ADR-065](ADR-065-ai-research-cockpit-external-and-ro-data-l4.md)
+did for `NETWORK_READ`/`LOCAL_READ_ELEVATED` + confirm). Model-invented tools remain
+forbidden. This reconciles the ADR text with practice (registry is now >4 tools) and
+with the governance in
+[`docs/roadmap/ai_research_cockpit_tool_coverage.md`](../roadmap/ai_research_cockpit_tool_coverage.md).
+Where older text below says "four names," read "the application-registered set."
+
 **Amends:** [ADR-060](ADR-060-read-only-tui-context-agent.md)
 
 **Depends on:** [ADR-003](ADR-003-hexagonal-ports-adapters-architecture.md),
@@ -71,9 +82,10 @@ The initial closed set is:
 Each name remains absent from the runtime registry and provider request until
 its own complete Task Template subtask proves its projection, lineage,
 composition, transitive read-only behavior, failure mapping, and tests. An
-inactive tool is invisible, not advertised as unavailable. Adding or renaming
-a tool requires an ADR amendment; configuration and model output cannot extend
-the set.
+inactive tool is invisible, not advertised as unavailable. Adding another
+`side_effect=NONE` descriptive read tool requires its Task Template subtask (not a
+per-tool ADR); a new authority / `side_effect` class / provider requires an ADR (see
+Amendment 2026-08-04). Configuration and model output can never extend the set.
 
 Phase 2 is `NON_SEMANTIC` only while every tool returns a read-only projection
 of an existing deterministic result and nothing enters Signal, Risk, MCE,
@@ -416,7 +428,9 @@ transport, sessions, persistence, or writes.
 1. Deterministic `TradeSetup.action` remains the only Action.
 2. Model output may propose a call but cannot register, authorize, configure,
    retry, sequence, or execute one.
-3. The runtime registry is a subset of the four names in this ADR.
+3. The runtime registry is a subset of the **application-registered set** (initial
+   four below; extended by later ADRs and `side_effect=NONE` read-tool tasks per
+   Amendment 2026-08-04) — never extended by config or model output.
 4. Every registered tool has `side_effect=NONE` proven transitively.
 5. Tools return bounded typed projections, never adapter output, secrets,
    unrestricted rows, or arbitrary object serialization.
