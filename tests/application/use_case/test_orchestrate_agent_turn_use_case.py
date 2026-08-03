@@ -146,6 +146,29 @@ def test_empty_registry_preserves_single_call_zero_tool_behavior() -> None:
     assert model.requests[0].tool_definitions == ()
 
 
+def test_tools_offered_but_unused_adds_honesty_note() -> None:
+    model = _Model([_answer("INCO remains ENTER on Judge facts.")])
+    result = _orchestrator(model, _Tool()).execute(AgentTurnRequest("why?", make_candidate()))
+    assert result.status is AgentTurnStatus.SUCCESS
+    assert any("TOOLS_NOT_USED" in w for w in result.warnings)
+
+
+def test_planning_only_answer_with_tools_offered_fails_with_tool_gap_clue() -> None:
+    model = _Model(
+        [
+            _answer(
+                "I'll check the broker desk data to identify which brokers are buying INCO."
+            )
+        ]
+    )
+    result = _orchestrator(model, _Tool()).execute(
+        AgentTurnRequest("siapa broker beli?", make_candidate())
+    )
+    assert result.status is AgentTurnStatus.FAILED
+    assert result.error_message is not None
+    assert "plan" in result.error_message.lower() or "TOOL_GAP" in result.error_message
+
+
 def test_valid_batch_executes_sequentially_then_forces_final_answer() -> None:
     calls = (_call(call_id="one"), _call('{"reference":"sha256:def"}', "two"))
     model = _Model([_tool_response(*calls), _answer("Grounded answer.")])

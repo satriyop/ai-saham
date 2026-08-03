@@ -238,6 +238,8 @@ def build_agent_accumulation_context(
             latest_broker_daily_flow_date=candidate.latest_broker_daily_flow_date,
         ),
         warnings=warnings,
+        top_brokers=tuple(candidate.top_brokers or ()),
+        institutional_flag=candidate.institutional_flag,
     )
     canonical = json.dumps(
         context.canonical_payload(),

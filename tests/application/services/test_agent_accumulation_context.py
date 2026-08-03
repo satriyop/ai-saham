@@ -101,6 +101,8 @@ def test_projection_is_allow_listed_and_digest_is_stable() -> None:
     payload = first.canonical_payload()
     assert "context_reference" not in payload
     assert payload["trade_setup"]["action"] == "WATCH"
+    assert payload["top_brokers"] == ["AK"]
+    assert payload["institutional_flag"] is True
     assert "named_setup_evaluations" not in payload
 
 

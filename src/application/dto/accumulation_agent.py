@@ -215,6 +215,9 @@ class AgentAccumulationContext:
     source_availability: tuple[AgentSourceAvailabilityFacts, ...]
     source_dates: AgentSourceDates
     warnings: tuple[str, ...]
+    # Screen-window top broker codes for this ticker (local cache; may be empty).
+    top_brokers: tuple[str, ...] = ()
+    institutional_flag: bool | None = None
 
     def canonical_payload(self) -> dict[str, Any]:
         return _json_value(self, exclude_context_reference=True)

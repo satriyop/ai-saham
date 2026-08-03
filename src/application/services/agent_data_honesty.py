@@ -121,6 +121,29 @@ def format_agent_more_notes(notes: AgentDataHonestyView) -> str:
 
 
 def _classify(raw: str) -> AgentDataNote:
+    if raw.startswith("TOOLS_NOT_USED") or "without calling any registered tools" in raw:
+        return AgentDataNote(
+            code="TOOLS_NOT_USED",
+            severity=AgentNoteSeverity.WARN,
+            title="No tools ran",
+            do_line=(
+                "Model answered without OUR tools. Re-ask if you need desk/dashboard "
+                "data; if the need is not in the tool list, treat as TOOL_GAP for a "
+                "new OUR tool (e.g. ticker→top buyers is not get_broker_desk)."
+            ),
+            detail=raw,
+        )
+    if "TOOL_GAP" in raw or "ticker→top" in raw:
+        return AgentDataNote(
+            code="TOOL_GAP",
+            severity=AgentNoteSeverity.WARN,
+            title="Missing OUR tool",
+            do_line=(
+                "Capability not in the closed registry. Record as design clue for a "
+                "new internal tool; do not invent tools or trust planning prose."
+            ),
+            detail=raw,
+        )
     if _RISK_LAG.search(raw):
         return AgentDataNote(
             code="RISK_SNAPSHOT_LAG",

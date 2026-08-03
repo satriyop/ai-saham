@@ -197,7 +197,13 @@ class AgentTurnOrchestrator:
         if isinstance(initial, AgentTurnResult):
             return initial
         if initial.kind is AgentModelResponseKind.ANSWER:
-            return _answer_result(initial, context.context_reference, context.warnings, ())
+            return _answer_result(
+                initial,
+                context.context_reference,
+                context.warnings,
+                (),
+                tools_offered=True,
+            )
 
         try:
             prepared = self._registry.prepare_batch(
@@ -244,7 +250,13 @@ class AgentTurnOrchestrator:
         warnings = context.warnings + tuple(
             warning for result in results for warning in result.warnings
         )
-        return _answer_result(final, context.context_reference, warnings, tuple(results))
+        return _answer_result(
+            final,
+            context.context_reference,
+            warnings,
+            tuple(results),
+            tools_offered=True,
+        )
 
     def _l3_path(
         self,
@@ -299,8 +311,6 @@ class AgentTurnOrchestrator:
             rounds_used += 1
 
             if response.kind is AgentModelResponseKind.ANSWER:
-                # Intermediate monologue while tools remain is not Turn OK when the
-                # model returned empty-ish planning with forced final handled below.
                 if not response.text.strip():
                     return _failed("Agent provider returned an empty answer")
                 warnings = context.warnings + tuple(
@@ -311,6 +321,7 @@ class AgentTurnOrchestrator:
                     context.context_reference,
                     warnings,
                     tuple(all_results),
+                    tools_offered=True,
                 )
 
             if forced_final:
@@ -497,14 +508,34 @@ def _answer_result(
     context_reference: str,
     warnings: tuple[str, ...],
     tool_results: tuple[AgentToolExecutionResult, ...],
+    *,
+    tools_offered: bool = False,
 ) -> AgentTurnResult:
+    text = response.text.strip()
+    extra: list[str] = list(warnings)
+    if response.finish_reason == "length":
+        extra.append("Model answer reached the output limit")
+    if tools_offered and not tool_results:
+        extra.append(
+            "TOOLS_NOT_USED: Model answered without calling any registered tools. "
+            "If the question needs broker desk, dashboard, or re-judge data not in "
+            "context, re-ask and expect a tool call — or design a new OUR tool "
+            "(TOOL_GAP clue)."
+        )
+    if tools_offered and not tool_results and _looks_like_planning_only(text):
+        return AgentTurnResult(
+            status=AgentTurnStatus.FAILED,
+            error_message=(
+                "Model returned a plan instead of using tools or answering from "
+                "Judge context. Re-ask, or note TOOL_GAP: we may need a ticker→top "
+                "brokers tool (get_broker_desk is desk-code centric, not stock-centric)."
+            ),
+        )
     status = (
         AgentTurnStatus.PARTIAL
         if any(result.status is not AgentToolExecutionStatus.SUCCESS for result in tool_results)
         else AgentTurnStatus.SUCCESS
     )
-    if response.finish_reason == "length":
-        warnings += ("Model answer reached the output limit",)
     return AgentTurnResult(
         status=status,
         answer=response.text,
@@ -512,11 +543,43 @@ def _answer_result(
         provider=response.provider,
         model=response.model,
         response_id=response.response_id,
-        warnings=tuple(dict.fromkeys(warnings)),
+        warnings=tuple(dict.fromkeys(extra)),
         input_tokens=response.input_tokens,
         output_tokens=response.output_tokens,
         tool_results=tool_results,
     )
+
+
+def _looks_like_planning_only(text: str) -> bool:
+    """Heuristic: final text is only a promise to look something up."""
+    lowered = text.strip().lower()
+    if len(lowered) > 280:
+        return False
+    starters = (
+        "i'll ",
+        "i will ",
+        "let me ",
+        "i am going to ",
+        "i'm going to ",
+        "saya akan ",
+        "saya coba ",
+        "mari saya ",
+        "baik, saya ",
+    )
+    if not any(lowered.startswith(s) for s in starters):
+        return False
+    plan_verbs = (
+        "check",
+        "investigate",
+        "look up",
+        "look into",
+        "identify",
+        "cek",
+        "periksa",
+        "cari",
+        "telusuri",
+    )
+    return any(v in lowered for v in plan_verbs)
 
 
 def _failed(message: str) -> AgentTurnResult:
