@@ -1845,7 +1845,7 @@ class CockpitApp(App[None]):
             return
 
     def action_focus_agent(self) -> None:
-        """/ — enter agent mode and OpenCode-style stage replace when Judge is open."""
+        """/ — enter agent mode and OpenCode-style stage replace when context is ready."""
         if self._modal_blocks_board_keys():
             return
         self._set_prompt_mode_chip("agent")
@@ -1853,18 +1853,31 @@ class CockpitApp(App[None]):
             "judge",
             "re-judging",
         }
+        on_accum_board = self._stage == "accum" and self._board_kind == "accum"
         if on_judge:
             self._enter_agent_stage(ready=True)
+            placeholder = "ask about this Judge · Enter send · Esc leave agent"
+        elif on_accum_board and self._agent_cockpit_multi_stage:
+            self._enter_agent_stage(ready=True)
+            placeholder = "ask about this accum board · Enter send · Esc leave agent"
+        elif on_accum_board:
+            self.notify(
+                "Agent is available only in accumulation Judge · Enter a row first "
+                "(or enable ai.cockpit_multi_stage)",
+                timeout=2.4,
+            )
+            placeholder = "ask agent · Enter sends · mode cli for CLI (not wired)"
         else:
             self.notify(
                 "Open accumulation Judge (Enter on a row) then / to ask",
                 timeout=2.2,
             )
+            placeholder = "ask agent · Enter sends · mode cli for CLI (not wired)"
         try:
             rail = self.query_one("#prompt-rail", Vertical)
             rail.add_class("is-focus")
             inp = self.query_one("#prompt-input", Input)
-            inp.placeholder = "ask about this Judge · Enter send · Esc leave agent"
+            inp.placeholder = placeholder
             inp.focus()
         except Exception:
             return
@@ -1959,14 +1972,19 @@ class CockpitApp(App[None]):
             build_agent_stage_context,
         )
 
-        # Slice 0: only Judge is wired. Multi-stage destinations land later under
-        # ai.cockpit_multi_stage; when the flag is off, keep exact Judge-only copy.
         on_judge = self._stage == "detail" and self._status_note in {"judge", "re-judging"}
-        if not on_judge:
-            if self._agent_cockpit_multi_stage:
+        on_accum_board = self._stage == "accum" and self._board_kind == "accum"
+        if not on_judge and not (on_accum_board and self._agent_cockpit_multi_stage):
+            if on_accum_board:
+                self.notify(
+                    "Agent is available only in accumulation Judge · Enter a row first "
+                    "(or enable ai.cockpit_multi_stage)",
+                    timeout=2.4,
+                )
+            elif self._agent_cockpit_multi_stage:
                 self.notify(
                     "Research Cockpit multi-stage destinations are not available yet "
-                    "· open accumulation Judge (Enter a row)",
+                    "· open accumulation Judge (Enter a row) or accum board",
                     timeout=2.4,
                 )
             else:
@@ -1975,25 +1993,44 @@ class CockpitApp(App[None]):
                     timeout=2.2,
                 )
             return
-        row = self._rows[self._row_index] if self._rows else None
-        source = getattr(row, "source", None)
-        if source is None:
-            self._show_agent_unavailable("Full Judge context required · press j to re-judge")
-            return
         if self._agent_turn_runner is None:
             self._show_agent_unavailable(
                 "Agent commentary is unavailable · check ai.enabled and API key"
             )
             return
+
         # ADR-066 D1: build once at open (also the availability gate).
+        source: Any = None
         try:
-            stage_context = build_agent_stage_context(AgentStageKind.ACCUM_JUDGE, source)
-        except AgentContextUnavailableError:
-            self._show_agent_unavailable("Full Judge context required · press j to re-judge")
+            if on_judge:
+                row = self._rows[self._row_index] if self._rows else None
+                source = getattr(row, "source", None)
+                if source is None:
+                    self._show_agent_unavailable(
+                        "Full Judge context required · press j to re-judge"
+                    )
+                    return
+                stage_context = build_agent_stage_context(AgentStageKind.ACCUM_JUDGE, source)
+            else:
+                raw = self._build_accum_screen_raw_input()
+                stage_context = build_agent_stage_context(AgentStageKind.ACCUM_SCREEN, raw)
+                source = raw
+        except AgentContextUnavailableError as exc:
+            hint = (
+                "Full Judge context required · press j to re-judge"
+                if on_judge
+                else f"Accum board context unavailable · {exc}"
+            )
+            self._show_agent_unavailable(hint)
             return
         except AgentContextInvariantError as exc:
-            self._show_agent_unavailable(f"Judge context identity failed · {exc}")
+            label = "Judge" if on_judge else "Accum board"
+            self._show_agent_unavailable(f"{label} context identity failed · {exc}")
             return
+        except TypeError as exc:
+            self._show_agent_unavailable(f"Stage context type failed · {exc}")
+            return
+
         # Cancel in-flight without collapsing stage if we are already in agent stage.
         keep_stage = self._agent_stage_open
         self._agent_generation += 1
@@ -2004,7 +2041,11 @@ class CockpitApp(App[None]):
             except Exception:
                 pass
         generation = self._agent_generation
-        ticker = str(self._focus_ticker).upper()
+        # Status strip subject: ticker for Judge; board label for cohort.
+        if on_judge:
+            subject = str(self._focus_ticker).upper()
+        else:
+            subject = f"BOARD:{getattr(stage_context, 'as_of', '—')}"
         stage_id = (self._stage, self._status_note)
         self._agent_loading = True
         self._agent_last_question = user_text
@@ -2015,7 +2056,7 @@ class CockpitApp(App[None]):
         commentary.set_stage_mode(True)
         commentary.show_loading(
             provider=self._agent_provider,
-            ticker=ticker,
+            ticker=subject,
             question=user_text,
         )
         try:
@@ -2030,9 +2071,74 @@ class CockpitApp(App[None]):
         self._execute_agent_turn(
             generation,
             stage_id,
-            ticker,
+            subject,
             source,
             AgentTurnRequest(user_text=user_text, stage_context=stage_context),
+        )
+
+    def _build_accum_screen_raw_input(self):
+        """Assemble typed accum_screen input from the focused board (adapter-thin)."""
+        from datetime import date as date_cls
+
+        from src.application.dto.accumulation_screen import AccumulationCandidate
+        from src.application.services.agent_accum_screen_context import (
+            AgentAccumScreenRawInput,
+        )
+        from src.application.services.agent_stage_context import (
+            AgentContextUnavailableError,
+        )
+
+        candidates: list[AccumulationCandidate] = []
+        for row in self._rows:
+            src = getattr(row, "source", None)
+            if isinstance(src, AccumulationCandidate):
+                candidates.append(src)
+        if not candidates:
+            raise AgentContextUnavailableError(
+                "no AccumulationCandidate sources on board (limited/snapshot? recompute r)"
+            )
+
+        board_as_of = None
+        # Market regime from workflow diagnostic MCE when present.
+        regime = None
+        mce = self._market_context
+        if mce is not None:
+            regime = getattr(mce, "regime", None) or getattr(
+                getattr(mce, "regime_state", None), "value", None
+            )
+            if regime is not None:
+                regime = str(getattr(regime, "value", regime))
+
+        window_days = 7
+        sort_by = "signal"
+        top_limit = None
+        if candidates:
+            window_days = int(getattr(candidates[0], "window_days", 7) or 7)
+
+        # Parse meta string "as of YYYY-MM-DD · …" when presenter set it.
+        meta = str(self._meta or "")
+        if meta.lower().startswith("as of "):
+            token = meta.split("·", 1)[0].replace("as of", "").strip()
+            try:
+                board_as_of = date_cls.fromisoformat(token)
+            except ValueError:
+                board_as_of = None
+
+        universe = (self._snapshot_universe or "lq45").strip().lower()
+        filter_policy: list[tuple[str, str | int | float | bool | None]] = [
+            ("sort_by", sort_by),
+            ("window_days", window_days),
+            ("top_limit", top_limit),
+        ]
+        return AgentAccumScreenRawInput(
+            candidates=tuple(candidates),
+            universe=universe,
+            window_days=window_days,
+            sort_by=sort_by,
+            top_limit=top_limit,
+            as_of=board_as_of,
+            regime=regime,
+            filter_policy=tuple(filter_policy),
         )
 
     def _show_agent_unavailable(self, message: str) -> None:
@@ -2239,12 +2345,19 @@ class CockpitApp(App[None]):
             return
         if (self._stage, self._status_note) != stage_id:
             return
-        if str(self._focus_ticker).upper() != ticker:
+        # Judge turns pin focus ticker; cohort/board subjects use BOARD:… prefix.
+        subject = str(ticker)
+        if not subject.startswith("BOARD:") and str(self._focus_ticker).upper() != subject:
             return
-        if getattr(row, "source", None) is not source:
-            return
+        if hasattr(source, "trade_setup") and hasattr(source, "ticker"):
+            # Judge candidate identity: drop if the focused row moved.
+            if getattr(row, "source", None) is not source:
+                return
+            as_of = str(getattr(getattr(source, "trade_setup", None), "snapshot_date", "—"))
+        else:
+            # Stage raw bag (e.g. accum_screen): keep as long as stage_id matches.
+            as_of = str(getattr(source, "as_of", "—") or "—")
         self._agent_loading = False
-        as_of = str(getattr(source.trade_setup, "snapshot_date", "—"))
         if not self._agent_stage_open:
             self._enter_agent_stage(ready=False)
         commentary = self.query_one("#agent-commentary")

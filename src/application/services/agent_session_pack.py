@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from src.application.dto.accumulation_agent import AgentAccumulationContext
+from src.application.dto.accumulation_agent import AgentStageContext
 from src.application.dto.agent_session import (
     AgentReferenceCompatibility,
     AgentSessionPack,
@@ -36,12 +36,13 @@ def classify_context_reference(
 def classify_tool_record(
     record: AgentSessionToolRecord,
     *,
-    current: AgentAccumulationContext,
+    current: AgentStageContext,
 ) -> AgentReferenceCompatibility:
-    # Tool memory is fresh only when captured under the exact current Judge context.
+    # Tool memory is fresh only when captured under the exact current stage context.
     if record.context_reference == current.context_reference:
         return AgentReferenceCompatibility.FRESH
-    if _looks_like_ticker(record.subject) and record.subject != current.ticker:
+    subject = current.session_subject
+    if _looks_like_ticker(record.subject) and record.subject != subject:
         return AgentReferenceCompatibility.INCOMPATIBLE
     return AgentReferenceCompatibility.STALE
 
@@ -49,7 +50,7 @@ def classify_tool_record(
 def build_session_pack(
     state: AgentSessionState,
     *,
-    current: AgentAccumulationContext,
+    current: AgentStageContext,
     policy: AgentSessionPolicy,
 ) -> AgentSessionPack:
     fresh: list[AgentSessionToolRecord] = []
@@ -81,7 +82,7 @@ def build_session_pack(
     anchor = state.anchor_context_reference
     if anchor and anchor != current.context_reference:
         pack_warnings.append(
-            "Focused Judge context changed since the previous turn; "
+            "Focused cockpit stage context changed since the previous turn; "
             "treat prior commentary as historical only"
         )
 
@@ -90,7 +91,7 @@ def build_session_pack(
         session_id=state.session_id,
         next_turn_sequence=state.turn_count + 1,
         current_context_reference=current.context_reference,
-        current_ticker=current.ticker,
+        current_ticker=current.session_subject,
         prior_commentary=state.commentary_turns,
         older_commentary_summary=state.older_commentary_summary,
         fresh_tool_records=tuple(fresh),

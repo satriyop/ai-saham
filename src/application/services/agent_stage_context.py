@@ -10,6 +10,10 @@ from src.application.dto.accumulation_agent import (
     AgentTurnRequest,
 )
 from src.application.dto.accumulation_screen import AccumulationCandidate
+from src.application.services.agent_accum_screen_context import (
+    AgentAccumScreenRawInput,
+    build_agent_accum_screen_context,
+)
 from src.application.services.agent_accumulation_context import (
     AgentContextInvariantError,
     AgentContextUnavailableError,
@@ -17,6 +21,7 @@ from src.application.services.agent_accumulation_context import (
 )
 
 __all__ = [
+    "AgentAccumScreenRawInput",
     "AgentContextInvariantError",
     "AgentContextUnavailableError",
     "build_agent_stage_context",
@@ -47,7 +52,15 @@ def build_agent_stage_context(
             )
         return build_agent_accumulation_context(raw_stage_input)
 
-    # Destinations land in later slices; refuse honestly rather than fabricate.
+    if stage_kind is AgentStageKind.ACCUM_SCREEN:
+        if not isinstance(raw_stage_input, AgentAccumScreenRawInput):
+            raise TypeError(
+                "accum_screen raw_stage_input must be AgentAccumScreenRawInput, "
+                f"got {type(raw_stage_input).__name__}"
+            )
+        return build_agent_accum_screen_context(raw_stage_input)
+
+    # Remaining destinations land in later slices; refuse honestly rather than fabricate.
     raise AgentContextUnavailableError(
         f"Research Cockpit stage {stage_kind.value!r} context is not available yet"
     )

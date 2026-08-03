@@ -7,7 +7,6 @@ from dataclasses import replace
 from typing import Any, Callable, Protocol
 
 from src.application.dto.accumulation_agent import (
-    AgentAccumulationContext,
     AgentTurnRequest,
     AgentTurnResult,
     AgentTurnStatus,
@@ -98,11 +97,6 @@ class SessionAwareAgentTurnUseCase:
 
         # ADR-066 D1: built once at open; session layer consumes the passed projection.
         context = request.stage_context
-        if not isinstance(context, AgentAccumulationContext):
-            # Session pack still anchors on Judge ticker identity until multi-stage pack.
-            return _failed(
-                f"Agent session requires accum_judge stage context, got {context.stage_kind.value}"
-            )
 
         try:
             state = self._store.begin_turn()
@@ -170,7 +164,7 @@ class SessionAwareAgentTurnUseCase:
             commentary=commentary,
             tool_records=tools,
             anchor_context_reference=context.context_reference,
-            anchor_ticker=context.ticker,
+            anchor_ticker=context.session_subject,
             anchor_schema_id=context.schema_id,
             structural_warnings=merged_warnings,
             structural_failures=(),

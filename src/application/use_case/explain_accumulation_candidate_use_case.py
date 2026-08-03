@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Callable
 
 from src.application.dto.accumulation_agent import (
-    AgentAccumulationContext,
     AgentModelRequest,
     AgentModelUnavailableReason,
     AgentTurnPolicy,
@@ -85,11 +84,6 @@ class ExplainAccumulationCandidateUseCase:
             return self._unavailable_copy()
         # ADR-066 D1: built once at open; phase-1 does not rebuild.
         context = request.stage_context
-        if not isinstance(context, AgentAccumulationContext):
-            return _failed(
-                "Phase-1 explain requires accum_judge stage context, "
-                f"got {context.stage_kind.value}"
-            )
         try:
             response = self._model.generate(
                 AgentModelRequest(
@@ -114,7 +108,7 @@ class ExplainAccumulationCandidateUseCase:
         except AgentModelTransportError as exc:
             detail = str(exc).strip() or "transport failed"
             return _failed(f"Agent provider transport failed: {detail}")
-        warnings = context.warnings
+        warnings = tuple(getattr(context, "warnings", ()) or ())
         if response.finish_reason == "length":
             warnings += ("Model answer reached the output limit",)
         return AgentTurnResult(

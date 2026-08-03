@@ -62,6 +62,11 @@ class AgentStageContext:
     def stage_kind(self) -> AgentStageKind:
         raise NotImplementedError
 
+    @property
+    def session_subject(self) -> str:
+        """Stable process-session anchor (ticker or stage-scoped subject)."""
+        raise NotImplementedError
+
     def canonical_payload(self) -> dict[str, Any]:
         return _json_value(self, exclude_context_reference=True)
 
@@ -254,6 +259,53 @@ class AgentAccumulationContext(AgentStageContext):
     @property
     def stage_kind(self) -> AgentStageKind:
         return AgentStageKind.ACCUM_JUDGE
+
+    @property
+    def session_subject(self) -> str:
+        return self.ticker
+
+
+@dataclass(frozen=True)
+class AgentAccumScreenCandidateSummary:
+    """Bounded board-row facts for cohort stages (not a full Judge projection)."""
+
+    rank: int
+    ticker: str
+    as_of: date
+    signal_score: int | None
+    accum_score: float | None
+    action: str | None
+    phase: str | None
+    streak: int | None
+    gate: str | None
+    net_buy_ratio: float | None
+
+
+@dataclass(frozen=True)
+class AgentAccumScreenContext(AgentStageContext):
+    """Accumulation screen board cohort (`stage_kind=accum_screen`, tui_agent.accum_screen.v1)."""
+
+    as_of: date
+    screen_kind: str
+    universe: str
+    window_days: int
+    sort_by: str
+    top_limit: int | None
+    regime: str | None
+    filter_policy: tuple[tuple[str, str | int | float | bool | None], ...]
+    cohort_total: int
+    shown: int
+    members: tuple[AgentAccumScreenCandidateSummary, ...]
+    cohort_identity: str
+    warnings: tuple[str, ...] = ()
+
+    @property
+    def stage_kind(self) -> AgentStageKind:
+        return AgentStageKind.ACCUM_SCREEN
+
+    @property
+    def session_subject(self) -> str:
+        return f"ACCUM_SCREEN:{self.as_of.isoformat()}"
 
 
 @dataclass(frozen=True)
