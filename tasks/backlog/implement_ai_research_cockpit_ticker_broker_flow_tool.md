@@ -80,8 +80,9 @@ Read before editing:
    consistency labels); default `target_date` = latest and an explicit past date;
    `limit` cap enforced; missing-data → `UNAVAILABLE` (no fabrication); result byte
    cap; frozen-dataclass result validation; registration gated by flags.
-5. **Docs:** flip coverage-matrix rows 1/2/4 to 🟢 with tool+field citations; add a
-   journey SSOT changelog row.
+5. **Docs:** flip coverage-matrix rows 1/2/4 to 🟢, and row 5 to 🟢 (avg-price was
+   its last open sub-part; volume/net already covered), with tool+field citations;
+   add a journey SSOT changelog row.
 
 ## 2b. Partial-data honesty (follow the shared policy)
 
@@ -112,7 +113,8 @@ Never fabricate desks; empty stays empty; null stays null. UNAVAILABLE is last r
 - [ ] `side_effect=NONE`, no confirm; cache-only; no fetch/scrape/write.
 - [ ] Offered on all stages; deterministic Action authority untouched.
 - [ ] Offline agent suite + golden UX pilot green; Ruff green.
-- [ ] Coverage matrix rows 1/2/4 → 🟢 (row 5 avg-price too); completion record filled.
+- [ ] Coverage matrix rows 1/2/4 → 🟢, and row 5 → 🟢 (avg-price closes its last
+  sub-part; volume/net already covered); completion record filled.
 
 ## 4. Verification
 
@@ -142,4 +144,4 @@ ruff format --check src/ tests/
 - Authorizing ADR: ADR-061 (routine closed read tool; no dedicated ADR)
 - Implemented date:
 - Commits:
-- Coverage rows flipped: 1, 2, 4
+- Coverage rows flipped: 1, 2, 4, 5 (avg-price sub-part; volume/net already covered)
