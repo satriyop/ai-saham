@@ -106,6 +106,47 @@ def test_reset_clears_session() -> None:
     assert inner.calls[-1].prior_commentary == ()
 
 
+def test_session_dedupes_repeated_data_warnings_across_turns() -> None:
+    class _WarnInner:
+        provider_available = True
+        configured_provider = "deepseek"
+
+        def execute(self, request, *, is_cancelled=None, session_pack=None):
+            del is_cancelled, session_pack
+            from src.application.services.agent_accumulation_context import (
+                build_agent_accumulation_context,
+            )
+
+            context = build_agent_accumulation_context(request.candidate)
+            return AgentTurnResult(
+                status=AgentTurnStatus.SUCCESS,
+                answer=f"answer for {request.user_text}",
+                context_reference=context.context_reference,
+                provider="deepseek",
+                model="deepseek-v4-flash",
+                warnings=(
+                    "Risk snapshot 2026-07-31 differs from decision as-of 2026-08-01",
+                    "SESSION_ALIGNED_LATE_WITHIN_LAG",
+                ),
+            )
+
+    store = InMemoryAgentSessionStore(AgentSessionPolicy(enabled=True))
+    uc = SessionAwareAgentTurnUseCase(
+        _WarnInner(),
+        store,
+        AgentSessionPolicy(enabled=True),
+        certification=DEEPSEEK_SESSION_CERTIFICATION,
+        configured_provider="deepseek",
+    )
+    candidate = make_candidate()
+    first = uc.execute(AgentTurnRequest("q1", candidate))
+    second = uc.execute(AgentTurnRequest("q2", candidate))
+    assert first.warnings
+    assert any("Risk snapshot" in w for w in first.warnings)
+    # Same data notes should not reappear on the next turn display payload.
+    assert second.warnings == ()
+
+
 def test_stale_focus_warning_when_context_changes() -> None:
     uc, inner = _session_uc(enabled=True)
     first_candidate = make_candidate()

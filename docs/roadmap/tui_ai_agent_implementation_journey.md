@@ -244,8 +244,11 @@ Known baseline data warnings (if any):
 
 **Agent stage fields** (full stage replace, not under-board only)
 
+- **Status strip (top):** Turn OK/FAIL · ticker · as-of · ranked Data notes  
+  with codes + **Do** guides (max 3; WARN before INFO)  
 - Question echo · Answer · Meta (provider / model / context / session)  
-- Tool lines · Warnings / errors  
+- Tool lines · **More data notes (N)** collapsed remainder · errors  
+- Session dedupes identical data notes on later turns  
 - Judge remains authoritative; Esc returns to Judge
 
 ---
@@ -309,6 +312,7 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | `afb9d677` | Ephemeral sessions + `/reset` + `ai.session_enabled` |
 | 2026-08-03 | `agent-live-call` suite | Automated live smoke package `tests/agent_live/` for A–D + N |
 | 2026-08-03 | Agent stage UX | Auto agent mode on free-text; `/` opens OpenCode-style full stage replace; Esc leaves |
+| 2026-08-03 | Data honesty strip | Ranked notes + Do guides; risk lag / authority WARN; settlement INFO; session dedupe |
 | _next_ | Phase 4/5 | Update this table + §1 + smoke sections |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,

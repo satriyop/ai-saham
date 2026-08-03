@@ -158,19 +158,22 @@ class SessionAwareAgentTurnUseCase:
         else:
             failures = (result.error_message or result.status.value,)
 
+        merged_warnings = tuple(dict.fromkeys(result.warnings + pack.pack_warnings + warnings))
+        # Cross-turn display dedupe: hide data notes already shown earlier in-session.
+        prior_seen = set(state.structural_warnings)
+        display_warnings = tuple(item for item in merged_warnings if item not in prior_seen)
         committed = self._store.commit_turn(
             commentary=commentary,
             tool_records=tools,
             anchor_context_reference=context.context_reference,
             anchor_ticker=context.ticker,
             anchor_schema_id=context.schema_id,
-            structural_warnings=warnings,
+            structural_warnings=merged_warnings,
             structural_failures=failures,
         )
-        merged_warnings = tuple(dict.fromkeys(result.warnings + pack.pack_warnings))
         return replace(
             result,
-            warnings=merged_warnings,
+            warnings=display_warnings,
             session_id=committed.session_id,
             turn_sequence=committed.turn_count,
         )

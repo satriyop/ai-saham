@@ -63,13 +63,21 @@ def test_commentary_renders_answer_and_context_without_action_styling() -> None:
                     context_reference="sha256:abc",
                     provider="deepseek",
                     model="deepseek-v4-flash",
+                    warnings=(
+                        "Risk snapshot 2026-07-31 differs from decision as-of 2026-08-03",
+                        "SESSION_ALIGNED_LATE_WITHIN_LAG",
+                    ),
                 ),
                 as_of="2026-08-01",
+                ticker="UNVR",
             )
             await pilot.pause()
             assert widget.display is True
             assert "WATCH" in str(widget.query_one(".agent-answer").content)
             assert "sha256:abc" in str(widget.query_one(".agent-meta").content)
+            status = str(widget.query_one(".agent-status").content)
+            assert "Turn  OK · UNVR" in status
+            assert "RISK_SNAPSHOT_LAG" in status or "Risk lag" in status
             assert "action-enter" not in widget.classes
 
     asyncio.run(scenario())

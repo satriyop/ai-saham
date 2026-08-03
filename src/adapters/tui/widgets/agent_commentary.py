@@ -8,6 +8,13 @@ from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
 
 from src.application.dto.accumulation_agent import AgentTurnResult, AgentTurnStatus
+from src.application.services.agent_data_honesty import (
+    AgentDataHonestyView,
+    AgentNoteSeverity,
+    format_agent_more_notes,
+    format_agent_status_strip,
+    normalize_agent_data_notes,
+)
 
 
 class AgentCommentary(Vertical):
@@ -33,6 +40,24 @@ class AgentCommentary(Vertical):
         background: #0e0e12;
     }
     AgentCommentary .agent-title { color: #aaaabc; text-style: bold; height: auto; }
+    AgentCommentary .agent-status {
+        color: #9a9aac;
+        height: auto;
+        margin-top: 1;
+        padding: 1 1;
+        background: #14141a;
+        border-left: solid #5a5a6a;
+    }
+    AgentCommentary .agent-status.has-warn {
+        color: #d4b06a;
+        border-left: solid #d4b06a;
+        background: #1a1810;
+    }
+    AgentCommentary .agent-status.is-fail {
+        color: #c97a72;
+        border-left: solid #c97a72;
+        background: #1a1212;
+    }
     AgentCommentary .agent-question {
         color: #858596;
         height: auto;
@@ -52,19 +77,24 @@ class AgentCommentary(Vertical):
     AgentCommentary .agent-answer { color: #d0d0d8; height: auto; }
     AgentCommentary .agent-meta { color: #686878; height: auto; margin-top: 1; }
     AgentCommentary .agent-tools { color: #858596; height: auto; margin-top: 1; }
-    AgentCommentary .agent-warning { color: #d4b06a; height: auto; }
+    AgentCommentary .agent-more {
+        color: #858596;
+        height: auto;
+        margin-top: 1;
+    }
     AgentCommentary .agent-error { color: #c97a72; height: auto; margin-top: 1; }
     AgentCommentary .agent-hint { color: #555566; height: auto; margin-top: 1; }
     """
 
     def compose(self) -> ComposeResult:
         yield Static("Agent", classes="agent-title")
+        yield Static("", classes="agent-status")
         yield Static("", classes="agent-question")
         with VerticalScroll(classes="agent-answer-scroll"):
             yield Static("", classes="agent-answer")
         yield Static("", classes="agent-meta")
         yield Static("", classes="agent-tools")
-        yield Static("", classes="agent-warning")
+        yield Static("", classes="agent-more")
         yield Static("", classes="agent-error")
         yield Static("", classes="agent-hint")
 
@@ -75,15 +105,18 @@ class AgentCommentary(Vertical):
         self.display = False
         self.set_stage_mode(False)
         for selector in (
+            ".agent-status",
             ".agent-question",
             ".agent-answer",
             ".agent-meta",
             ".agent-tools",
-            ".agent-warning",
+            ".agent-more",
             ".agent-error",
             ".agent-hint",
         ):
             self.query_one(selector, Static).update("")
+        status = self.query_one(".agent-status", Static)
+        status.remove_class("has-warn", "is-fail")
         self.query_one(".agent-title", Static).update("Agent")
 
     def show_stage_ready(self, *, ticker: str, action: str, provider: str) -> None:
@@ -91,6 +124,13 @@ class AgentCommentary(Vertical):
         self.set_stage_mode(True)
         self.display = True
         self.query_one(".agent-title", Static).update("Agent")
+        self._paint_status(
+            turn_ok=True,
+            ticker=ticker,
+            as_of="—",
+            notes=normalize_agent_data_notes(()),
+            force_empty_msg=True,
+        )
         self.query_one(".agent-question", Static).update("")
         self.query_one(".agent-answer", Static).update(
             Text(
@@ -103,7 +143,7 @@ class AgentCommentary(Vertical):
             Text(f"{remote} · {provider or '—'} · non-authoritative commentary")
         )
         self.query_one(".agent-tools", Static).update("")
-        self.query_one(".agent-warning", Static).update("")
+        self.query_one(".agent-more", Static).update("")
         self.query_one(".agent-error", Static).update("")
         self.query_one(".agent-hint", Static).update(
             Text("Judge facts stay authoritative · model cannot change Action")
@@ -112,6 +152,13 @@ class AgentCommentary(Vertical):
     def show_loading(self, *, provider: str, ticker: str, question: str = "") -> None:
         self.display = True
         self.query_one(".agent-title", Static).update("Agent")
+        self._paint_status(
+            turn_ok=True,
+            ticker=ticker,
+            as_of="…",
+            notes=normalize_agent_data_notes(()),
+            loading=True,
+        )
         if question.strip():
             self.query_one(".agent-question", Static).update(Text(f"› {question.strip()}"))
         else:
@@ -119,13 +166,28 @@ class AgentCommentary(Vertical):
         self.query_one(".agent-answer", Static).update("Thinking…")
         self.query_one(".agent-meta", Static).update(Text(f"remote · {provider} · {ticker}"))
         self.query_one(".agent-tools", Static).update("")
-        self.query_one(".agent-warning", Static).update("")
+        self.query_one(".agent-more", Static).update("")
         self.query_one(".agent-error", Static).update("")
         self.query_one(".agent-hint", Static).update("")
 
-    def show_result(self, result: AgentTurnResult, *, as_of: str, question: str = "") -> None:
+    def show_result(
+        self,
+        result: AgentTurnResult,
+        *,
+        as_of: str,
+        question: str = "",
+        ticker: str = "—",
+    ) -> None:
         self.display = True
         answered = result.status in {AgentTurnStatus.SUCCESS, AgentTurnStatus.PARTIAL}
+        turn_ok = answered
+        notes = normalize_agent_data_notes(result.warnings)
+        self._paint_status(
+            turn_ok=turn_ok,
+            ticker=ticker or "—",
+            as_of=as_of,
+            notes=notes,
+        )
         answer = result.answer if answered else ""
         if question.strip():
             self.query_one(".agent-question", Static).update(Text(f"› {question.strip()}"))
@@ -146,11 +208,45 @@ class AgentCommentary(Vertical):
             for item in result.tool_results
         )
         self.query_one(".agent-tools", Static).update(Text(trace))
-        warnings = "\n".join(f"Warning: {item}" for item in result.warnings)
-        self.query_one(".agent-warning", Static).update(Text(warnings))
+        self.query_one(".agent-more", Static).update(Text(format_agent_more_notes(notes)))
         self.query_one(".agent-error", Static).update(Text(result.error_message or ""))
         self.query_one(".agent-hint", Static).update(
             Text("Esc leave agent · / ask again · deterministic Judge unchanged")
             if self.has_class("is-stage")
             else Text("")
         )
+
+    def _paint_status(
+        self,
+        *,
+        turn_ok: bool,
+        ticker: str,
+        as_of: str,
+        notes: AgentDataHonestyView,
+        loading: bool = False,
+        force_empty_msg: bool = False,
+    ) -> None:
+        status = self.query_one(".agent-status", Static)
+        status.remove_class("has-warn", "is-fail")
+        if loading:
+            status.update(Text(f"Turn  … · {ticker or '—'} · waiting on model"))
+            return
+        if force_empty_msg and notes.empty:
+            status.update(
+                Text(
+                    f"Turn  ready · {ticker or '—'} · as-of {as_of or '—'}\n"
+                    "Data  honesty notes appear here after a reply (with Do guides)"
+                )
+            )
+            return
+        body = format_agent_status_strip(
+            turn_ok=turn_ok,
+            ticker=ticker,
+            as_of=as_of,
+            notes=notes,
+        )
+        status.update(Text(body))
+        if not turn_ok:
+            status.add_class("is-fail")
+        elif any(n.severity is AgentNoteSeverity.WARN for n in notes.primary):
+            status.add_class("has-warn")

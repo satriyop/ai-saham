@@ -2007,6 +2007,7 @@ class CockpitApp(App[None]):
             AgentTurnResult(status=AgentTurnStatus.UNAVAILABLE, error_message=message),
             as_of=as_of,
             question=self._agent_last_question,
+            ticker=str(self._focus_ticker or "—").upper(),
         )
 
     @work(thread=True, group="agent")
@@ -2068,6 +2069,7 @@ class CockpitApp(App[None]):
             result,
             as_of=as_of,
             question=self._agent_last_question,
+            ticker=ticker,
         )
 
     def on_input_blurred(self, event: Input.Blurred) -> None:
