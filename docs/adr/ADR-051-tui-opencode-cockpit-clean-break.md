@@ -6,7 +6,12 @@
 **Date:** 2026-07-28  
 **Amended by:** [ADR-060](ADR-060-read-only-tui-context-agent.md), which permits
 one bounded, optional, read-only context assistant without changing cockpit or
-deterministic decision authority
+deterministic decision authority  
+**Token enforcement (2026-08-03):** Phase 1 theme is consumed only via
+`src/adapters/tui/theme.py` (`OPENCODE_TOKENS` · `OPENCODE_DERIVED` ·
+`bake_css($oc_*)` for CSS · `OC.*` for Rich). CI visual-parity tests fail on
+off-map hex. Detail: design bible § Visual → *Token implementation*. Not a new
+product surface — adapter presentation only.  
 **Depends on:** [ADR-011](ADR-011-offline-capable-cli-as-primary-interface.md),
 [ADR-040](ADR-040-manual-dependency-injection-and-composition-roots.md),
 [ADR-050](ADR-050-cli-verb-contracts.md)  

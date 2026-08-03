@@ -73,7 +73,7 @@ Ship Textual against **`.app` inside this mock**. Design-tools strip is for revi
 | Focus | click rail · `:` or `/` → composer elevates (soft brass glow + stronger left bar) |
 | Keys | `↵` submit mock · `esc` blur/clear · Ctrl+P still palette |
 | Later | agent adapter · CLI passthrough · never Action authority |
-| Agent | A non-empty question on a full accumulation Judge opens one read-only **Agent commentary** turn below Judge. Snapshot-limited rows direct the operator to `j` re-judge. |
+| Agent | A non-empty question on a full accumulation Judge opens one read-only **AI Research Cockpit** turn (L4; non-authoritative) below Judge. Snapshot-limited rows direct the operator to `j` re-judge. |
 | Idle / CLI | Idle does not execute. CLI remains explicitly unwired. |
 
 **Reject:** single-line hairline strip · mode chip only on the right of a flat bar · no left accent · same bg as status with no card.
@@ -946,6 +946,26 @@ When TUI cannot run full workflow: **Phase = discovery-only** (or SNAPSHOT) on s
 - Hierarchy by weight — not Fraunces  
 - Chip **focus ring** = peach (keyboard path must be visible)
 
+### Token implementation (code authority)
+
+Visual **values** stay in this bible + mock `.app` tokens. **Consumption** is
+enforced in code so retheme and CI share one map:
+
+| Piece | Role |
+|-------|------|
+| `src/adapters/tui/theme.py` · `OPENCODE_TOKENS` | Tier 1 — canonical palette (near-black surfaces, peach selection, mint/amber/coral, one blue, one purple) |
+| `OPENCODE_DERIVED` | Tier 2 — named chrome/washes only (scrollbar, hairlines, warn/ok/fail bg, **scalar_track `#1a1a1a`**) · each entry has a role comment |
+| `bake_css("""… $oc_* …""")` | Widget / shell `DEFAULT_CSS` and `COCKPIT_CSS` — import-time substitute from the maps (not f-strings; avoids `{ }` CSS brace collision) |
+| `OC.*` | Inline Rich markup (`[{OC.mint}]…`) — same maps; Textual `$vars` do not reach Rich |
+| Parity tests | `tests/adapters/tui/test_visual_parity_contracts.py` — fail on off-map hex under `src/adapters/tui/**`; require `bake_css` + `$oc_*` in product CSS source; ban raw `[#rrggbb]` Rich tags outside `theme.py` |
+
+**Rules for implementers**
+
+- No drive-by hex. New semantic color → Tier 1 (`OPENCODE_TOKENS`) with a bible note, or a **named** Tier 2 derived with a role comment — never an anonymous shade in a widget.
+- Night-ink / journey cool ramp is **reject** as ship skin (`FORBIDDEN_PRODUCT_MARKERS` + agent surface detox).
+- Scalar bars: glyph track + mandatory integer `%` (mute) · residual track = `scalar_track` · signed fill = mint/coral (see Scalar bar contract).
+- L4 agent product title in all paint states: **AI Research Cockpit** (overrides older in-doc “Agent commentary” chrome wording for the shipped title string).
+
 ### Reject
 - Night-ink as ship skin  
 - Judge as primary tab  
@@ -988,4 +1008,4 @@ When TUI cannot run full workflow: **Phase = discovery-only** (or SNAPSHOT) on s
 
 - ADR: [`ADR-051`](../adr/ADR-051-tui-opencode-cockpit-clean-break.md)  
 - Journey: [`tui-journey-hub.html`](./tui-journey-hub.html)  
-- Code (later): `src/adapters/tui/` shared ChipBar · stage desks · presenters  
+- Code: `src/adapters/tui/theme.py` (tokens · derived · `bake_css` · `OC`) · shared ChipBar · stage desks · presenters · `test_visual_parity_contracts.py`
