@@ -24,9 +24,10 @@ ADR-051, ADR-054, ADR-057, ADR-060, ADR-061, and ADR-063
 | 1 — One-turn visible-result assistant | [`implement_tui_agent_accum_judge_phase1.md`](../../tasks/backlog/implement_tui_agent_accum_judge_phase1.md) | Implemented; owned slices green, unrelated repository baseline exceptions recorded |
 | 2 — Allowlisted read tools | [`implement_tui_agent_read_tools_phase2.md`](../../tasks/backlog/implement_tui_agent_read_tools_phase2.md) | Implemented 2026-08-03 (foundation + tools 8.1–8.4) |
 | 3 — Ephemeral sessions | [`implement_tui_agent_ephemeral_sessions_phase3.md`](../../tasks/backlog/implement_tui_agent_ephemeral_sessions_phase3.md) | Implemented 2026-08-03 (ADR-063; `ai.session_enabled` default false) |
-| L3 — Multi-round OUR tools | [`implement_ai_research_cockpit_multi_round_tools_l3.md`](../../tasks/backlog/implement_ai_research_cockpit_multi_round_tools_l3.md) | ADR-064 accepted 2026-08-03; runtime not started (`ai.tools_multi_round`) |
+| L3 — Multi-round OUR tools | [`implement_ai_research_cockpit_multi_round_tools_l3.md`](../../tasks/backlog/implement_ai_research_cockpit_multi_round_tools_l3.md) | ADR-064 accepted 2026-08-03; runtime not started |
+| L4 — External + RO data | [`implement_ai_research_cockpit_external_and_ro_data_l4.md`](../../tasks/backlog/implement_ai_research_cockpit_external_and_ro_data_l4.md) | ADR-065 accepted 2026-08-03; runtime not started (after L3) |
 | 4 — Audit persistence | [`parked_tui_agent_audit_persistence_phase4.md`](../../tasks/backlog/parked_tui_agent_audit_persistence_phase4.md) | Parked; requires explicit persistence ADR |
-| 5 — Consequential / L4 external | [`parked_tui_agent_consequential_tools_phase5.md`](../../tasks/backlog/parked_tui_agent_consequential_tools_phase5.md) | Parked; L4 external research + confirm is a separate future ADR |
+| 5 — Consequential writes | [`parked_tui_agent_consequential_tools_phase5.md`](../../tasks/backlog/parked_tui_agent_consequential_tools_phase5.md) | Parked; writes remain separate from L4 research reads |
 
 ## Decision
 
