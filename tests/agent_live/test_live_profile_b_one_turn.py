@@ -70,6 +70,7 @@ def test_b5_tools_disabled_no_tool_results_required(
         assert result.tool_results == () or result.tool_results is not None
 
 
+@pytest.mark.tui
 def test_b7_limited_row_without_source_unavailable_no_dispatch() -> None:
     """B7: limited snapshot row (source=None) → UNAVAILABLE path, no runner call."""
     calls: list[object] = []
@@ -110,6 +111,7 @@ def test_b7_limited_row_without_source_unavailable_no_dispatch() -> None:
     asyncio.run(scenario())
 
 
+@pytest.mark.tui
 def test_b6_generation_invalidate_discards_stale_paint() -> None:
     """B6: invalidate generation → late path does not leave wrong paint mandate."""
 

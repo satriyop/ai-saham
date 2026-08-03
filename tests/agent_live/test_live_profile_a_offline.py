@@ -50,6 +50,7 @@ def test_a1_a4_ai_disabled_zero_provider_construct(monkeypatch) -> None:
     assert constructed == []
 
 
+@pytest.mark.tui
 def test_a2_a3_cockpit_usable_without_agent_runner() -> None:
     """A2/A3: accum board + Judge without agent; prompt chrome does not crash."""
 

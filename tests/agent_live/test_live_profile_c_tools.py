@@ -139,12 +139,60 @@ def test_c4_get_broker_desk_show_cache_path(live_db_path: Path) -> None:
         assert result.result_reference.startswith("sha256:")
 
 
-def test_c3_judge_accumulation_ticker_when_factory_present(
-    require_deepseek_key: str,
+def test_c3_judge_accumulation_ticker_direct_execute(
     live_db_path: Path,
     live_candidate,
 ) -> None:
-    """C3: judge tool via composition factory when available; else skip."""
+    """C3: direct AccumulationJudgeTool.execute against local read-only screen path.
+
+    Mirrors c1/c2/c4: does not depend on the model choosing to call the tool.
+    Skips when factory/cache path is unavailable.
+    """
+    from src.adapters.composition.screen_deps import (
+        build_read_only_accumulation_judge_runner,
+    )
+    from src.application.services.agent_accumulation_judge_tool import (
+        AccumulationJudgeTool,
+    )
+
+    try:
+        judge_runner = build_read_only_accumulation_judge_runner(
+            live_db_path,
+            universe="lq45",
+        )
+    except Exception as exc:  # noqa: BLE001 — live env may lack full screen deps
+        pytest.skip(f"accumulation judge runner unavailable: {exc}")
+
+    tool = AccumulationJudgeTool(judge_runner)
+    assert tool.definition.name is AgentToolName.JUDGE_ACCUMULATION_TICKER
+    ctx = AgentToolExecutionContext(
+        visible_accumulation_context=build_agent_accumulation_context(live_candidate)
+    )
+    before = action_identity(live_candidate)
+    ticker = live_ticker()
+    args = tool.build_arguments((ticker,))
+    result = tool.execute("live-judge-1", args, ctx)
+    assert action_identity(live_candidate) == before
+    assert result.status in {
+        AgentToolExecutionStatus.SUCCESS,
+        AgentToolExecutionStatus.PARTIAL,
+        AgentToolExecutionStatus.UNAVAILABLE,
+        AgentToolExecutionStatus.FAILED,
+    }
+    if result.status in {
+        AgentToolExecutionStatus.SUCCESS,
+        AgentToolExecutionStatus.PARTIAL,
+    }:
+        assert result.result_reference.startswith("sha256:")
+        schema = getattr(result.data, "schema_id", "")
+        assert "accum" in schema or schema.startswith("agent_tool.")
+
+
+def test_c3_judge_registered_in_composition_when_factory_present(
+    require_deepseek_key: str,
+    live_db_path: Path,
+) -> None:
+    """C3 composition: factory registers judge tool in closed ADR-061 set."""
     del require_deepseek_key
     from src.adapters.composition.screen_deps import (
         build_read_only_accumulation_judge_runner,
@@ -164,21 +212,8 @@ def test_c3_judge_accumulation_ticker_when_factory_present(
 
     if AgentToolName.JUDGE_ACCUMULATION_TICKER not in composition.registered_tools:
         pytest.skip("judge_accumulation_ticker not registered in composition")
-
-    before = action_identity(live_candidate)
-    result = composition.use_case.execute(
-        AgentTurnRequest(
-            f"Re-state the deterministic Action for {live_candidate.ticker} only.",
-            live_candidate,
-        )
-    )
-    assert action_identity(live_candidate) == before
-    if result.tool_results:
-        assert_tool_trace_closed(result.tool_results)
-        names = {
-            (t.name.value if hasattr(t.name, "value") else str(t.name)) for t in result.tool_results
-        }
-        assert names <= {n.value for n in _CLOSED}
+    for name in composition.registered_tools:
+        assert name in _CLOSED
 
 
 def test_c5_c6_orchestrator_live_turn_schema_and_action(

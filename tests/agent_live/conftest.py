@@ -2,12 +2,18 @@
 
 Hard gate: ``AI_SAHAM_AGENT_LIVE=1`` — without it every live test skips.
 Additional skips for missing credentials, flags, or local cache data.
+
+Live provider HTTP is hard-capped via ``LIVE_HTTP_TIMEOUT_S`` on the DeepSeek
+client and a wall-clock wrapper around ``generate``. Suite-wide provider calls
+are capped by ``LIVE_PROVIDER_CALL_BUDGET``.
 """
 
 from __future__ import annotations
 
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -33,6 +39,7 @@ agent_live_call = getattr(pytest.mark, "agent-live-call")
 
 _SHA256_REF = re.compile(r"^sha256:[0-9a-f]{64}$")
 _CLOSED_TOOL_NAMES = frozenset(item.value for item in AgentToolName)
+_provider_calls: dict[str, int] = {"n": 0}
 
 
 def live_env_enabled() -> bool:
@@ -76,6 +83,77 @@ def _require_agent_live_gate(request: pytest.FixtureRequest) -> None:
         return
     if not live_env_enabled():
         pytest.skip("AI_SAHAM_AGENT_LIVE=1 required for agent-live-call tests")
+
+
+def make_budgeted_deepseek_factory(
+    *,
+    call_counter: dict[str, int] | None = None,
+    timeout_s: float = LIVE_HTTP_TIMEOUT_S,
+    budget: int = LIVE_PROVIDER_CALL_BUDGET,
+):
+    """Return a DeepSeekAgentModel factory with HTTP timeout + call budget.
+
+    Used by the live autouse fixture and unit-tested so the caps are not dead.
+    """
+    from src.infrastructure.ai.deepseek_agent_model import DeepSeekAgentModel
+
+    counter = call_counter if call_counter is not None else _provider_calls
+
+    def _factory(api_key: str, *, client: Any | None = None) -> DeepSeekAgentModel:
+        if client is None:
+            import openai
+
+            client = openai.OpenAI(
+                api_key=api_key,
+                base_url="https://api.deepseek.com",
+                timeout=timeout_s,
+                max_retries=0,
+            )
+        model = DeepSeekAgentModel(api_key, client=client)
+        original = model.generate
+
+        def _guarded_generate(req: Any) -> Any:
+            counter["n"] += 1
+            if counter["n"] > budget:
+                raise RuntimeError(
+                    f"live provider call budget exceeded ({counter['n']} > {budget})"
+                )
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(original, req)
+                try:
+                    return future.result(timeout=timeout_s)
+                except FuturesTimeout as exc:
+                    raise TimeoutError(f"DeepSeek generate exceeded {timeout_s}s live cap") from exc
+
+        model.generate = _guarded_generate  # type: ignore[method-assign]
+        return model
+
+    return _factory
+
+
+@pytest.fixture(autouse=True)
+def _enforce_live_http_timeout_and_budget(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Apply hard HTTP timeout + suite provider-call budget to live DeepSeek models.
+
+    Only active when the operator opted into live runs; skipped tests never
+    construct a client. Monkeypatch targets composition import site so every
+    ``build_agent_composition`` path is covered.
+    """
+    if request.node.get_closest_marker("agent-live-call") is None:
+        return
+    if not live_env_enabled():
+        return
+
+    from src.infrastructure.composition import agent_model as agent_model_mod
+
+    monkeypatch.setattr(
+        agent_model_mod,
+        "DeepSeekAgentModel",
+        make_budgeted_deepseek_factory(),
+    )
 
 
 @pytest.fixture
