@@ -70,6 +70,10 @@ class AgentCommentary(Vertical):
                 f"{result.provider} · {result.model} · as-of {as_of}\n"
                 f"context {result.context_reference}"
             )
+            session_id = getattr(result, "session_id", None)
+            turn_sequence = getattr(result, "turn_sequence", None)
+            if session_id and turn_sequence:
+                meta += f"\nsession {session_id} · turn {turn_sequence}"
         self.query_one(".agent-meta", Static).update(Text(meta))
         trace = "\n".join(
             f"tool {item.name.value} · {item.status.value} · {item.result_reference}"

@@ -1,7 +1,6 @@
 # Implement TUI Agent Phase 3 — Ephemeral Sessions and Hardening
 
-Status: `ACTIVATED` — architecture authorized by ADR-063 (2026-08-03); runtime
-implementation not yet started
+Status: `IMPLEMENTED` — verified on 2026-08-03
 
 Source:
 
@@ -137,15 +136,15 @@ Out of scope: domain engines, SQLite schemas, new tools, audit tables.
 
 ## 10. Acceptance Criteria
 
-- [ ] Follow-ups work within one process using exact compatible references.
-- [ ] Stale, cancelled, overflow, evicted, and reset states are explicit.
-- [ ] Context compression preserves authority-bearing fields in typed form.
-- [ ] No persistent side effect occurs.
-- [ ] Provider capability is identity-bound and does not grant authority.
-- [ ] Offline/AI-disabled cockpit behavior is unchanged.
-- [ ] Dedicated tests use `pytest.mark.agent`.
-- [ ] Focused, architecture, TUI, agent, Ruff, and `git diff --check` gates pass.
-- [ ] Completion record filled below.
+- [x] Follow-ups work within one process using exact compatible references.
+- [x] Stale, cancelled, overflow, evicted, and reset states are explicit.
+- [x] Context compression preserves authority-bearing fields in typed form.
+- [x] No persistent side effect occurs.
+- [x] Provider capability is identity-bound and does not grant authority.
+- [x] Offline/AI-disabled cockpit behavior is unchanged.
+- [x] Dedicated tests use `pytest.mark.agent`.
+- [x] Focused, architecture, TUI, agent, Ruff, and `git diff --check` gates pass.
+- [x] Completion record filled below.
 
 ## 11. Testing Expectations
 
@@ -171,6 +170,14 @@ git diff --check
 ## 13. Completion Record
 
 - Activation ADR: ADR-063 (2026-08-03)
-- Implemented date:
-- Commit(s):
+- Implemented date: 2026-08-03
+- Commit(s): see git history after `e5587381` (implementation + docs)
 - Verification:
+  - `pytest -m agent -q`: 130 passed
+  - focused session pack/use-case/composition/orchestrator/explain/commentary: 44 passed
+  - `ruff check src/ tests/`: passed
+  - `ruff format --check src/ tests/`: passed
+  - `git diff --check`: passed
+  - Runtime: `ai.session_enabled` default false; certified DeepSeek path only;
+    TUI `/reset` / `session reset`; pack includes non-authoritative history +
+    exact references only

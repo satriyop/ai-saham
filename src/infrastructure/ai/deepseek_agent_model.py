@@ -146,16 +146,22 @@ class DeepSeekAgentModel:
 
     @staticmethod
     def _messages(request: AgentModelRequest) -> list[dict[str, Any]]:
+        from src.application.dto.agent_tools import canonical_json_value
+
+        payload: dict[str, Any] = {
+            "question": request.user_text,
+            "context": request.context.canonical_payload()
+            | {"context_reference": request.context.context_reference},
+        }
+        if request.session_pack is not None:
+            # Session history is non-authoritative commentary + exact references only.
+            payload["session"] = canonical_json_value(request.session_pack)
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": request.system_policy},
             {
                 "role": "user",
                 "content": json.dumps(
-                    {
-                        "question": request.user_text,
-                        "context": request.context.canonical_payload()
-                        | {"context_reference": request.context.context_reference},
-                    },
+                    payload,
                     ensure_ascii=False,
                     allow_nan=False,
                     separators=(",", ":"),

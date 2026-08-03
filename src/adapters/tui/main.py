@@ -1757,6 +1757,9 @@ class CockpitApp(App[None]):
             self._set_prompt_mode_chip("cli")
             self.notify("prompt · cli · not wired yet", timeout=1.5)
             return
+        if low in {"/reset", "session reset", "reset session"}:
+            self._reset_agent_session()
+            return
         if text and self._prompt_mode == "agent":
             self._submit_agent_turn(text)
         elif text and self._prompt_mode == "cli":
@@ -1769,6 +1772,21 @@ class CockpitApp(App[None]):
                 table.focus()
         except Exception:
             pass
+
+    def _reset_agent_session(self) -> None:
+        """Clear process-local agent session state (ADR-063)."""
+        runner = self._agent_turn_runner
+        reset = getattr(runner, "reset_session", None)
+        if not callable(reset):
+            self.notify("Agent session reset unavailable", timeout=1.5)
+            return
+        try:
+            session_id = reset()
+        except Exception:
+            self.notify("Agent session reset failed", timeout=1.5)
+            return
+        self._invalidate_agent_turn()
+        self.notify(f"Agent session reset · {session_id}", timeout=1.8)
 
     def _submit_agent_turn(self, user_text: str) -> None:
         from src.application.dto.accumulation_agent import AgentTurnRequest

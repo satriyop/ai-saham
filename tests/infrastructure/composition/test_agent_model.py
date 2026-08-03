@@ -2,6 +2,9 @@ import pytest
 
 from src.application.dto.agent_tools import AgentToolName
 from src.application.use_case.orchestrate_agent_turn_use_case import AgentTurnOrchestrator
+from src.application.use_case.session_aware_agent_turn_use_case import (
+    SessionAwareAgentTurnUseCase,
+)
 from src.infrastructure.composition import agent_model
 from src.infrastructure.composition.agent_model import build_agent_composition
 from src.infrastructure.config.app_config import AiConfig
@@ -18,6 +21,8 @@ def test_disabled_composition_does_not_construct_provider(monkeypatch) -> None:
     assert result.use_case.provider_available is False
     assert result.tools_requested is False
     assert result.tools_enabled is False
+    assert result.session_requested is False
+    assert result.session_enabled is False
     assert result.registered_tools == ()
 
 
@@ -221,6 +226,26 @@ def test_composition_uses_local_env_when_process_key_is_absent(monkeypatch) -> N
 
     assert result.provider_available is True
     assert result.use_case.provider_available is True
+
+
+def test_session_enabled_wraps_use_case_when_certified(monkeypatch) -> None:
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(agent_model, "DeepSeekAgentModel", lambda key: object())
+
+    disabled = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", session_enabled=False)
+    )
+    enabled = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", session_enabled=True)
+    )
+
+    assert disabled.session_requested is False
+    assert disabled.session_enabled is False
+    assert not isinstance(disabled.use_case, SessionAwareAgentTurnUseCase)
+    assert enabled.session_requested is True
+    assert enabled.session_enabled is True
+    assert isinstance(enabled.use_case, SessionAwareAgentTurnUseCase)
 
 
 def test_process_key_takes_precedence_over_local_env(monkeypatch) -> None:

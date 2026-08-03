@@ -11,9 +11,11 @@ from src.application.dto.accumulation_agent import (
     AgentModelUnavailableReason,
     AgentTurnPolicy,
 )
+from src.application.dto.agent_session import AgentSessionPolicy
 from src.application.dto.agent_tools import AgentToolName, AgentToolTurnPolicy
 from src.application.services.agent_accumulation_judge_tool import AccumulationJudgeTool
 from src.application.services.agent_broker_desk_tool import BrokerDeskTool
+from src.application.services.agent_session_store import InMemoryAgentSessionStore
 from src.application.services.agent_ticker_dashboard_tool import TickerDashboardTool
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_visible_cockpit_tool import VisibleCockpitResultTool
@@ -21,6 +23,10 @@ from src.application.use_case.explain_accumulation_candidate_use_case import (
     ExplainAccumulationCandidateUseCase,
 )
 from src.application.use_case.orchestrate_agent_turn_use_case import AgentTurnOrchestrator
+from src.application.use_case.session_aware_agent_turn_use_case import (
+    DEEPSEEK_SESSION_CERTIFICATION,
+    SessionAwareAgentTurnUseCase,
+)
 from src.infrastructure.ai.deepseek_agent_model import DeepSeekAgentModel
 from src.infrastructure.ai.provider_config import resolve_ai_provider
 from src.infrastructure.composition.view_broker_deps import (
@@ -34,11 +40,15 @@ from src.infrastructure.config.local_env import read_local_env_value
 
 @dataclass(frozen=True)
 class AgentComposition:
-    use_case: ExplainAccumulationCandidateUseCase | AgentTurnOrchestrator
+    use_case: (
+        ExplainAccumulationCandidateUseCase | AgentTurnOrchestrator | SessionAwareAgentTurnUseCase
+    )
     provider_available: bool
     configured_provider: str
     tools_requested: bool
     tools_enabled: bool
+    session_requested: bool
+    session_enabled: bool
     registered_tools: tuple[AgentToolName, ...]
 
 
@@ -55,6 +65,7 @@ def build_agent_composition(
     configured = resolve_ai_provider(explicit).strip().lower()
     enabled = bool(getattr(ai_config, "enabled", False))
     tools_requested = enabled and bool(getattr(ai_config, "tools_enabled", False))
+    session_requested = enabled and bool(getattr(ai_config, "session_enabled", False))
     model = None
     reason = None
     if not enabled:
@@ -79,7 +90,9 @@ def build_agent_composition(
         ),
     )
     tools_enabled = tools_requested and model is not None and configured == "deepseek"
-    use_case: ExplainAccumulationCandidateUseCase | AgentTurnOrchestrator
+    use_case: (
+        ExplainAccumulationCandidateUseCase | AgentTurnOrchestrator | SessionAwareAgentTurnUseCase
+    )
     registered_tools: tuple[AgentToolName, ...] = ()
     if tools_enabled:
         tools = [VisibleCockpitResultTool()]
@@ -111,11 +124,30 @@ def build_agent_composition(
         )
     else:
         use_case = phase_one_use_case
+
+    session_enabled = (
+        session_requested
+        and model is not None
+        and configured == DEEPSEEK_SESSION_CERTIFICATION.provider
+        and DEEPSEEK_SESSION_CERTIFICATION.passed
+    )
+    if session_enabled:
+        store = InMemoryAgentSessionStore(AgentSessionPolicy(enabled=True))
+        use_case = SessionAwareAgentTurnUseCase(
+            use_case,
+            store,
+            AgentSessionPolicy(enabled=True),
+            certification=DEEPSEEK_SESSION_CERTIFICATION,
+            configured_provider=configured,
+        )
+
     return AgentComposition(
         use_case,
         model is not None,
         configured,
         tools_requested,
         tools_enabled,
+        session_requested,
+        session_enabled,
         registered_tools,
     )

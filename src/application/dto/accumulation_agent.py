@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Any
 
 from src.application.dto.accumulation_screen import AccumulationCandidate
+from src.application.dto.agent_session import AgentSessionPack
 from src.application.dto.agent_tools import (
     AgentModelToolCall,
     AgentModelToolChoice,
@@ -229,6 +230,7 @@ class AgentModelRequest:
     tool_choice: AgentModelToolChoice = AgentModelToolChoice.NONE
     prior_tool_calls: tuple[AgentModelToolCall, ...] = ()
     tool_results: tuple[AgentToolExecutionResult, ...] = ()
+    session_pack: AgentSessionPack | None = None
 
     def __post_init__(self) -> None:
         if self.max_output_tokens <= 0:
@@ -282,8 +284,12 @@ class AgentTurnResult:
     output_tokens: int | None = None
     error_message: str | None = None
     tool_results: tuple[AgentToolExecutionResult, ...] = ()
+    session_id: str | None = None
+    turn_sequence: int | None = None
 
     def __post_init__(self) -> None:
+        if self.turn_sequence is not None and self.turn_sequence < 1:
+            raise ValueError("turn_sequence must be >= 1 when present")
         if self.status in {AgentTurnStatus.SUCCESS, AgentTurnStatus.PARTIAL}:
             if not all((self.answer.strip(), self.context_reference, self.provider, self.model)):
                 raise ValueError(

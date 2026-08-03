@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
 from src.application.dto.accumulation_agent import (
     AgentModelRequest,
     AgentModelUnavailableReason,
@@ -10,6 +12,7 @@ from src.application.dto.accumulation_agent import (
     AgentTurnResult,
     AgentTurnStatus,
 )
+from src.application.dto.agent_session import AgentSessionPack
 from src.application.ports.agent_model import (
     AgentModelAuthenticationError,
     AgentModelMalformedResponseError,
@@ -60,7 +63,14 @@ class ExplainAccumulationCandidateUseCase:
     def configured_provider(self) -> str:
         return self._policy.configured_provider
 
-    def execute(self, request: AgentTurnRequest) -> AgentTurnResult:
+    def execute(
+        self,
+        request: AgentTurnRequest,
+        *,
+        is_cancelled: Callable[[], bool] | None = None,
+        session_pack: AgentSessionPack | None = None,
+    ) -> AgentTurnResult:
+        del is_cancelled  # Phase 1 has a single short provider call; cancel is best-effort only.
         text = request.user_text.strip()
         if not text:
             return _failed("Question cannot be empty")
@@ -84,6 +94,7 @@ class ExplainAccumulationCandidateUseCase:
                     user_text=text,
                     context=context,
                     max_output_tokens=self._policy.max_output_tokens,
+                    session_pack=session_pack,
                 )
             )
         except AgentModelAuthenticationError:

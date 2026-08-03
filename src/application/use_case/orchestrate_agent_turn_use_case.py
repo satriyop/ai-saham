@@ -15,6 +15,7 @@ from src.application.dto.accumulation_agent import (
     AgentTurnResult,
     AgentTurnStatus,
 )
+from src.application.dto.agent_session import AgentSessionPack
 from src.application.dto.agent_tool_context import AgentToolExecutionContext
 from src.application.dto.agent_tools import (
     AgentModelToolChoice,
@@ -70,6 +71,7 @@ class AgentTurnOrchestrator:
         request: AgentTurnRequest,
         *,
         is_cancelled: Callable[[], bool] | None = None,
+        session_pack: AgentSessionPack | None = None,
     ) -> AgentTurnResult:
         cancelled = is_cancelled or (lambda: False)
         text = request.user_text.strip()
@@ -100,6 +102,7 @@ class AgentTurnOrchestrator:
             max_output_tokens=500,
             tool_definitions=definitions,
             tool_choice=(AgentModelToolChoice.AUTO if definitions else AgentModelToolChoice.NONE),
+            session_pack=session_pack,
         )
         initial = self._provider_call(initial_request, started)
         if isinstance(initial, AgentTurnResult):
@@ -145,6 +148,7 @@ class AgentTurnOrchestrator:
             tool_choice=AgentModelToolChoice.NONE,
             prior_tool_calls=initial.tool_calls,
             tool_results=tuple(results),
+            session_pack=session_pack,
         )
         final = self._provider_call(final_request, started)
         if isinstance(final, AgentTurnResult):
