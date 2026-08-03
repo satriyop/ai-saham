@@ -21,7 +21,7 @@
 [`docs/roadmap/tui_ai_agent_implementation_journey.md`](../roadmap/tui_ai_agent_implementation_journey.md)
 
 **Implementation epic (gated):**
-[`tasks/backlog/implement_ai_research_cockpit_multi_stage_destinations.md`](../../tasks/backlog/implement_ai_research_cockpit_multi_stage_destinations.md)
+[`tasks/done/implement_ai_research_cockpit_multi_stage_destinations.md`](../../tasks/done/implement_ai_research_cockpit_multi_stage_destinations.md)
 
 ## Context
 

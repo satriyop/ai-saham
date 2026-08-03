@@ -1,6 +1,6 @@
 # Goal Instruction — Implement AI Research Cockpit Multi-Stage Destinations
 
-**Status:** `READY FOR AGENT`
+**Status:** `IMPLEMENTED`
 **Audience:** Implementation agent (any coding agent in this repo)
 **Product term:** **AI Research Cockpit** (`/`) — use this name in code, commits, docs.
 
@@ -120,15 +120,15 @@ open**, without changing Judge behavior. Resolved design calls (ADR-066 D1/D2):
   with a comment pointing at ADR-066.
 
 **Acceptance:**
-- [ ] Accum Judge turn is **bit-identical**: same painted answer, same
+- [x] Accum Judge turn is **bit-identical**: same painted answer, same
   `tui_agent.accum_judge.v1` `context_reference` for the same candidate.
-- [ ] **Finding 5:** the prior internal double-build (session_aware + orchestrate)
+- [x] **Finding 5:** the prior internal double-build (session_aware + orchestrate)
   collapses to a **single canonical build**; assert the context is built exactly
   once per turn and the hash is unchanged. This collapse is required, not a
   regression.
-- [ ] Phase-1 (`explain`) path still works via the built context (no internal build).
-- [ ] Flag false → `/` opens only on Judge (all other stages notify + refuse).
-- [ ] Existing agent suite + golden UX pilot green.
+- [x] Phase-1 (`explain`) path still works via the built context (no internal build).
+- [x] Flag false → `/` opens only on Judge (all other stages notify + refuse).
+- [x] Existing agent suite + golden UX pilot green.
 
 Commit: `refactor(agent): stage-tagged cockpit context built once at open (ADR-066)`
 
@@ -183,12 +183,12 @@ Commit theme per slice, e.g.:
 
 ## 4. Cross-cutting acceptance (every slice)
 
-- [ ] Builder is pure, allow-listed, identity-validated, content-hashed, versioned schema.
-- [ ] Missing/partial context → notify + refuse; never fabricated context.
-- [ ] Cohort stages bounded (top-N); no full-board or per-candidate Judge leakage.
-- [ ] No new tools/authority; L4 confirm + fail-safe unchanged; deterministic champion intact.
-- [ ] `ai.cockpit_multi_stage=false` keeps `/` Judge-only.
-- [ ] Offline agent suite + golden UX pilot + layer-boundary test green; Ruff green.
+- [x] Builder is pure, allow-listed, identity-validated, content-hashed, versioned schema.
+- [x] Missing/partial context → notify + refuse; never fabricated context.
+- [x] Cohort stages bounded (top-N); no full-board or per-candidate Judge leakage.
+- [x] No new tools/authority; L4 confirm + fail-safe unchanged; deterministic champion intact.
+- [x] `ai.cockpit_multi_stage=false` keeps `/` Judge-only.
+- [x] Offline agent suite + golden UX pilot + layer-boundary test green; Ruff green.
 
 ---
 
@@ -215,7 +215,7 @@ git diff --check
 
 ---
 
-## 7. Completion record (fill when done)
+## 7. Completion record
 
 - Activation ADR: ADR-066
 - Implemented date: 2026-08-03
@@ -227,27 +227,15 @@ git diff --check
   - Slice 4: `b496e097` preopen_screen + `c55754f7` tests
   - Slice 5: `adde4009` plan_swing + `1da127cb` tests
 - Verification: `pytest -m "agent and not agent-live-call"` green; golden UX pilots green; ruff check/format green
-- Status: **IMPLEMENTED** (runtime still gated by `ai.cockpit_multi_stage` default false)
+- Status: **IMPLEMENTED** (runtime still gated by `ai.cockpit_multi_stage` default false in shipped config; local `user.yaml` may enable)
+- Path: `tasks/done/implement_ai_research_cockpit_multi_stage_destinations.md`
 
 ---
 
-## 8. Copy-paste kickoff prompt
+## 8. Historical kickoff prompt (archive — do not re-run)
 
 ```text
 Implement AI Research Cockpit multi-stage destinations per
-tasks/backlog/implement_ai_research_cockpit_multi_stage_destinations.md and ADR-066.
-
-Order: Slice 0 foundation (prove Judge bit-identical), then destinations in priority:
-accum_screen → view_ticker → view_broker → preopen_screen → plan_swing.
-Stop for review after each slice.
-
-Hard rules:
-- Per-stage context = pure, allow-listed, identity-validated, sha256 context_reference,
-  versioned schema_id (copy agent_accumulation_context.py discipline).
-- Missing context → notify + refuse; never fabricate. Cohort stages = bounded top-N.
-- No new tools/authority; reuse L1–L4 unchanged; deterministic champion intact.
-- Gate behind ai.cockpit_multi_stage (default false); Judge path stays bit-identical.
-- Multi-commit contextual; AGENT_QUICKSTART lint gate; offline agent + golden UX green.
-
-Read ADR-066 and the reference contract first.
+tasks/done/implement_ai_research_cockpit_multi_stage_destinations.md and ADR-066.
+(Epic complete — use only as historical reference.)
 ```
