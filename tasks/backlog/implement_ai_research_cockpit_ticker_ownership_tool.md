@@ -47,8 +47,9 @@ Read first: `src/domain/value_objects/shareholding_composition.py`
 ## 2. Result (facts only)
 
 `ticker`, `report_date`, `institution_pct`, `individual_pct`, `top_holder_name`,
-`top_holder_pct`, `total_shares`(+formatted). Optional: prior-period delta **only if**
-a prior composition is cached (else omit — do not fabricate a trend). No score.
+`top_holder_pct`, `total_shares`(+formatted). **Single (latest) composition only** —
+`get_ownership` returns one row (`LIMIT 1`) and no port exposes a prior row, so there
+is **no prior-period delta** in this tool (see Non-goals). No score.
 
 ## 3. Slices
 
@@ -70,8 +71,13 @@ a prior composition is cached (else omit — do not fabricate a trend). No score
 
 ## 5. Non-goals
 
-- Any "float-tightness score"; fabricated ownership trend without cached history;
-  new provider/fetch; external/elevated; writes.
+- Any "float-tightness score".
+- **Ownership trend / prior-period delta** — `get_ownership` is single-row (`LIMIT 1`)
+  and no port returns a prior composition. Do **not** extend the port or improvise a
+  history query here. If ownership-over-time is wanted, it is a **separate follow-up
+  task** that adds a `get_ownership_history` port method + SQLite impl (Application +
+  Infrastructure), out of scope for this projection tool.
+- New provider/fetch; external/elevated; writes.
 
 ## 6. Completion record (fill when done)
 

@@ -73,4 +73,4 @@ Hard rules:
   `build_read_only_ticker_foreign_history_use_case`, registration in `agent_model.py`
 - Tests: `tests/application/services/test_agent_ticker_foreign_flow_tool.py`
 - Coverage row: 9
-- Commits: `42892c96`
+- Commits: `292f7234`
