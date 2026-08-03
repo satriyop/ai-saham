@@ -46,7 +46,7 @@ def test_judge_facade_matches_direct_builder_hash() -> None:
 
 def test_unshipped_stage_raises_unavailable() -> None:
     with pytest.raises(AgentContextUnavailableError, match="not available yet"):
-        build_agent_stage_context(AgentStageKind.VIEW_TICKER, object())
+        build_agent_stage_context(AgentStageKind.VIEW_BROKER, object())
 
 
 def test_wrong_raw_input_type_for_judge() -> None:

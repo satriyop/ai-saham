@@ -312,3 +312,115 @@ def test_golden_accum_board_opens_with_multi_stage_flag() -> None:
             assert "Board cohort" in answer or "summary" in answer.lower()
 
     asyncio.run(scenario())
+
+
+def test_golden_view_ticker_refuses_without_multi_stage_flag() -> None:
+    """U5 — view ticker refuses when ai.cockpit_multi_stage is false."""
+
+    async def scenario() -> None:
+        seen = []
+
+        def runner(request):
+            seen.append(request)
+            return AgentTurnResult(
+                status=AgentTurnStatus.SUCCESS,
+                answer="should not run",
+                context_reference="sha256:x",
+                provider="deepseek",
+                model="deepseek-v4-flash",
+            )
+
+        app = CockpitApp(
+            accum_loader=_accum_payload,
+            accum_controller=BoardController(_accum_payload),
+            accum_presenter=AccumPresenter(),
+            agent_turn_runner=runner,
+            agent_provider_available=True,
+            agent_cockpit_multi_stage=False,
+        )
+        async with app.run_test(size=(100, 36)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            # Simulate open view ticker without full loader
+            app._stage = "detail"
+            app._status_note = "view ticker"
+            app._focus_ticker = "BBCA"
+            app._ticker_dashboard = None
+            app._submit_agent_turn("what is the price?")
+            await pilot.pause()
+            assert seen == []
+
+    asyncio.run(scenario())
+
+
+def test_golden_view_ticker_opens_with_multi_stage_flag() -> None:
+    """U5 / ADR-066 — view_ticker destination when flag on + cached dashboard."""
+
+    async def scenario() -> None:
+        from datetime import date
+
+        from src.application.dto.ticker_dashboard import GetTickerDashboardRequest
+        from src.application.use_case.get_ticker_dashboard_use_case import (
+            GetTickerDashboardUseCase,
+        )
+        from tests.application.use_case.test_get_ticker_dashboard_use_case import (
+            FakeTickerDashboardSource,
+        )
+
+        dash = GetTickerDashboardUseCase(FakeTickerDashboardSource()).execute(
+            GetTickerDashboardRequest(ticker="BBCA", brief=False, today=date(2026, 7, 24))
+        )
+        seen = []
+
+        def runner(request):
+            seen.append(request.stage_context)
+            return AgentTurnResult(
+                status=AgentTurnStatus.SUCCESS,
+                answer="Ticker dashboard summary only.",
+                context_reference=request.stage_context.context_reference,
+                provider="deepseek",
+                model="deepseek-v4-flash",
+            )
+
+        app = CockpitApp(
+            accum_loader=_accum_payload,
+            accum_controller=BoardController(_accum_payload),
+            accum_presenter=AccumPresenter(),
+            agent_turn_runner=runner,
+            agent_provider_available=True,
+            agent_cockpit_multi_stage=True,
+        )
+        async with app.run_test(size=(120, 40)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            app._stage = "detail"
+            app._status_note = "view ticker"
+            app._focus_ticker = "BBCA"
+            app._ticker_dashboard = dash
+            app.action_focus_agent()
+            await pilot.pause()
+            assert app._agent_stage_open is True
+            app._submit_agent_turn("Summarize price and flow")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if seen and not app._agent_loading:
+                    break
+            assert len(seen) == 1
+            ctx = seen[0]
+            assert ctx.stage_kind.value == "view_ticker"
+            assert ctx.schema_id == "tui_agent.view_ticker.v1"
+            assert ctx.ticker == "BBCA"
+            assert ctx.context_reference.startswith("sha256:")
+            commentary = app.query_one("#agent-commentary", AgentCommentary)
+            for _ in range(20):
+                await pilot.pause(0.05)
+                answer = str(commentary.query_one(".agent-answer").content)
+                if "dashboard" in answer.lower() or "summary" in answer.lower():
+                    break
+            assert "dashboard" in answer.lower() or "summary" in answer.lower()
+
+    asyncio.run(scenario())

@@ -116,7 +116,8 @@ flags may tighten or expand by ADR as the cockpit matures; vocabulary stays.
 |---|---|---|---|
 | Accumulation **Judge** | `accum_judge` | always (with `ai.enabled`) | **Shipped** — full candidate context |
 | Accumulation **screen** board | `accum_screen` | `ai.cockpit_multi_stage` | **Shipped** — bounded top-20 cohort (ADR-066) |
-| View ticker / broker, pre-open, plan | … | `ai.cockpit_multi_stage` | Journey work — notify + refuse until each contract lands |
+| **View ticker** dashboard | `view_ticker` | `ai.cockpit_multi_stage` | **Shipped** — cache-only dashboard projection (ADR-066) |
+| View broker, pre-open, plan | … | `ai.cockpit_multi_stage` | Journey work — notify + refuse until each contract lands |
 
 **Destination:** invoke from every TUI stage with a stage-appropriate context
 projection—each stage needs an explicit context contract before `/` opens there.
@@ -145,7 +146,7 @@ Application authority rules are unchanged (ADR-060/061/063).
 | U2 | Invocation free-text | Any non-empty prompt submit that is not a mode/reset command **auto-enters agent mode** and dispatches an agent turn when the **current stage** context is valid. Idle must **not** silently drop questions. |
 | U3 | Invocation `:` | Focuses the prompt rail without forcing stage replace by itself. |
 | U4 | Leave | `Esc` while agent stage is open closes agent stage and **restores** the prior deterministic stage. Does not quit the app. |
-| U5 | Scope | Opens only when the stage builder succeeds (identity-validated projection). **Judge:** full `row.source`. **Accum board** (`ai.cockpit_multi_stage`): bounded top-20 cohort — never full board dump, never per-candidate Judge. Missing/partial → notify + refuse; never fabricate. Limited judge → re-judge (`j`). |
+| U5 | Scope | Opens only when the stage builder succeeds (identity-validated projection). **Judge:** full `row.source`. **Accum board** (`ai.cockpit_multi_stage`): bounded top-20 cohort — never full board dump, never per-candidate Judge. **View ticker** (`ai.cockpit_multi_stage`): cache-only dashboard facts for the focused ticker. Missing/partial → notify + refuse; never fabricate. Limited judge → re-judge (`j`). |
 | U6 | Stage layout (top→bottom) | **Status strip** → question echo → answer → meta → tool trace → **More data notes** (if any) → error → hint. Answer is not buried under a raw warning dump. |
 | U7 | Status strip | Shows `Turn OK\|FAIL · {ticker} · as-of {date}` and ranked **Data** notes. Primary notes ≤ **3**, **WARN** before **INFO**, each with stable **code** + **Do** guide (`agent_data_honesty`). |
 | U8 | Severity defaults | `RISK_SNAPSHOT_LAG`, `AUTHORITY_INCOMPLETE` → **WARN**. Settlement-within-lag / bandar diagnostic → **INFO**. |
@@ -434,6 +435,7 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | L4 runtime | confirm + `web_research` + `ro_data_query` + TOOL_GAP + fail-safe restore |
 | 2026-08-03 | L4 confirm hardening | Consent fail-closed: no approver ⇒ `TOOL_NO_APPROVER` skip (never execute); removed fail-open runner retry (one-shot signature probe, no turn re-run); denies no longer consume tool/byte budget or block re-proposal |
 | 2026-08-03 | ADR-066 Slice 0–1 | Stage-tagged context built once at open; `ai.cockpit_multi_stage`; `accum_screen` top-20 cohort destination; U5 generalized |
+| 2026-08-03 | ADR-066 Slice 2 | `view_ticker` cache-dashboard destination; reuses agent ticker projection; U5 entry map |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same
