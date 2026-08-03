@@ -1860,21 +1860,24 @@ class CockpitApp(App[None]):
         on_accum_board = self._stage == "accum" and self._board_kind == "accum"
         on_view_ticker = self._is_view_ticker_stage()
         on_view_broker = self._is_view_broker_stage()
+        on_preopen_board = self._stage == "preopen" and self._board_kind == "preopen"
+        multi_stage_open = on_accum_board or on_view_ticker or on_view_broker or on_preopen_board
         if on_judge:
             self._enter_agent_stage(ready=True)
             placeholder = "ask about this Judge · Enter send · Esc leave agent"
         elif on_accum_board and self._agent_cockpit_multi_stage:
             self._enter_agent_stage(ready=True)
             placeholder = "ask about this accum board · Enter send · Esc leave agent"
+        elif on_preopen_board and self._agent_cockpit_multi_stage:
+            self._enter_agent_stage(ready=True)
+            placeholder = "ask about this pre-open board · Enter send · Esc leave agent"
         elif on_view_ticker and self._agent_cockpit_multi_stage:
             self._enter_agent_stage(ready=True)
             placeholder = "ask about this ticker dashboard · Enter send · Esc leave agent"
         elif on_view_broker and self._agent_cockpit_multi_stage:
             self._enter_agent_stage(ready=True)
             placeholder = "ask about this broker desk · Enter send · Esc leave agent"
-        elif (
-            on_accum_board or on_view_ticker or on_view_broker
-        ) and not self._agent_cockpit_multi_stage:
+        elif multi_stage_open and not self._agent_cockpit_multi_stage:
             self.notify(
                 "Agent is available only in accumulation Judge · Enter a row first "
                 "(or enable ai.cockpit_multi_stage)",
@@ -1990,11 +1993,12 @@ class CockpitApp(App[None]):
         on_accum_board = self._stage == "accum" and self._board_kind == "accum"
         on_view_ticker = self._is_view_ticker_stage()
         on_view_broker = self._is_view_broker_stage()
+        on_preopen_board = self._stage == "preopen" and self._board_kind == "preopen"
         multi_ok = self._agent_cockpit_multi_stage and (
-            on_accum_board or on_view_ticker or on_view_broker
+            on_accum_board or on_view_ticker or on_view_broker or on_preopen_board
         )
         if not on_judge and not multi_ok:
-            if on_accum_board or on_view_ticker or on_view_broker:
+            if on_accum_board or on_view_ticker or on_view_broker or on_preopen_board:
                 self.notify(
                     "Agent is available only in accumulation Judge · Enter a row first "
                     "(or enable ai.cockpit_multi_stage)",
@@ -2003,7 +2007,7 @@ class CockpitApp(App[None]):
             elif self._agent_cockpit_multi_stage:
                 self.notify(
                     "Research Cockpit multi-stage destinations are not available yet "
-                    "· open Judge, accum board, view ticker, or broker desk",
+                    "· open Judge, accum/preopen board, view ticker, or broker desk",
                     timeout=2.4,
                 )
             else:
@@ -2034,6 +2038,10 @@ class CockpitApp(App[None]):
                 raw = self._build_accum_screen_raw_input()
                 stage_context = build_agent_stage_context(AgentStageKind.ACCUM_SCREEN, raw)
                 source = raw
+            elif on_preopen_board:
+                raw = self._build_preopen_screen_raw_input()
+                stage_context = build_agent_stage_context(AgentStageKind.PREOPEN_SCREEN, raw)
+                source = raw
             elif on_view_ticker:
                 dashboard = self._ticker_dashboard
                 if dashboard is None:
@@ -2060,6 +2068,8 @@ class CockpitApp(App[None]):
                 hint = "Full Judge context required · press j to re-judge"
             elif on_accum_board:
                 hint = f"Accum board context unavailable · {exc}"
+            elif on_preopen_board:
+                hint = f"Pre-open board context unavailable · {exc}"
             elif on_view_ticker:
                 hint = f"View ticker context unavailable · {exc}"
             else:
@@ -2071,6 +2081,8 @@ class CockpitApp(App[None]):
                 label = "Judge"
             elif on_accum_board:
                 label = "Accum board"
+            elif on_preopen_board:
+                label = "Pre-open board"
             elif on_view_ticker:
                 label = "View ticker"
             else:
@@ -2094,6 +2106,8 @@ class CockpitApp(App[None]):
         # Status strip subject: ticker for Judge/view ticker; board/broker labels otherwise.
         if on_accum_board:
             subject = f"BOARD:{getattr(stage_context, 'as_of', '—')}"
+        elif on_preopen_board:
+            subject = f"PREOPEN:{getattr(stage_context, 'as_of', '—')}"
         elif on_view_broker:
             subject = f"BROKER:{getattr(stage_context, 'broker_code', '—')}"
         else:
@@ -2144,6 +2158,78 @@ class CockpitApp(App[None]):
         if not self._broker_desk_code:
             return False
         return self._broker_page in {"show", "top", "flow", "history", "matrix", "cal"}
+
+    def _build_preopen_screen_raw_input(self):
+        """Assemble typed preopen_screen input from the focused board (adapter-thin)."""
+        from datetime import date as date_cls
+
+        from src.application.services.agent_preopen_screen_context import (
+            AgentPreOpenScreenRawInput,
+        )
+        from src.application.services.agent_stage_context import (
+            AgentContextUnavailableError,
+        )
+
+        candidates: list[Any] = []
+        hints: list[tuple[str, str | None, str | None, str | None]] = []
+        for row in self._rows:
+            src = getattr(row, "source", None)
+            if src is None:
+                continue
+            ticker = str(getattr(src, "ticker", getattr(row, "ticker", "")) or "").upper()
+            if not ticker:
+                continue
+            candidates.append(src)
+            hints.append(
+                (
+                    ticker,
+                    str(getattr(row, "action", "") or "") or None,
+                    str(getattr(row, "ncp", "") or "") or None,
+                    str(getattr(row, "risk", "") or "") or None,
+                )
+            )
+        if not candidates:
+            raise AgentContextUnavailableError(
+                "no pre-open candidate sources on board (empty or snapshot missing)"
+            )
+
+        snap = str(self._preopen_snapshot_date or "").strip()
+        board_as_of = None
+        if snap:
+            try:
+                board_as_of = date_cls.fromisoformat(snap[:10])
+            except ValueError:
+                board_as_of = None
+        if board_as_of is None:
+            raise AgentContextUnavailableError(
+                "pre-open as_of missing · reload pre-open screen (Ctrl+P)"
+            )
+
+        strip = self._preopen_session_strip
+        session_source = getattr(strip, "source", None) if strip is not None else None
+        session_phase = getattr(strip, "phase", None) if strip is not None else None
+        regime = None
+        mce = self._market_context
+        if mce is not None:
+            regime = getattr(mce, "regime", None) or getattr(
+                getattr(mce, "regime_state", None), "value", None
+            )
+            if regime is not None:
+                regime = str(getattr(regime, "value", regime))
+
+        return AgentPreOpenScreenRawInput(
+            candidates=tuple(candidates),
+            as_of=board_as_of,
+            capture_phase=str(session_phase) if session_phase else None,
+            ncp_authoritative=None,
+            source_is_live=(str(session_source).upper() == "LIVE" if session_source else None),
+            session_source=str(session_source) if session_source else None,
+            session_phase=str(session_phase) if session_phase else None,
+            regime=regime,
+            total_movers_seen=None,
+            filter_policy=(("screen_kind", "preopen"), ("as_of", board_as_of.isoformat())),
+            row_hints=tuple(hints),
+        )
 
     def _build_accum_screen_raw_input(self):
         """Assemble typed accum_screen input from the focused board (adapter-thin)."""
@@ -2418,6 +2504,7 @@ class CockpitApp(App[None]):
         subject = str(ticker)
         if (
             not subject.startswith("BOARD:")
+            and not subject.startswith("PREOPEN:")
             and not subject.startswith("BROKER:")
             and str(self._focus_ticker).upper() != subject
         ):

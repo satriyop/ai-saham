@@ -309,6 +309,51 @@ class AgentAccumScreenContext(AgentStageContext):
 
 
 @dataclass(frozen=True)
+class AgentPreOpenCandidateSummary:
+    """Bounded pre-open board-row facts (not a full Judge projection)."""
+
+    rank: int
+    ticker: str
+    as_of: date
+    action: str | None
+    iep: float | None
+    iep_gap_pct: float | None
+    iev: float | None
+    ncp: str | None
+    delta_iev: float | None
+    risk: str | None
+
+
+@dataclass(frozen=True)
+class AgentPreOpenScreenContext(AgentStageContext):
+    """Pre-open screen board cohort (`stage_kind=preopen_screen`, tui_agent.preopen_screen.v1)."""
+
+    as_of: date
+    screen_kind: str
+    capture_phase: str | None
+    ncp_authoritative: bool | None
+    source_is_live: bool | None
+    session_source: str | None
+    session_phase: str | None
+    regime: str | None
+    total_movers_seen: int | None
+    filter_policy: tuple[tuple[str, str | int | float | bool | None], ...]
+    cohort_total: int
+    shown: int
+    members: tuple[AgentPreOpenCandidateSummary, ...]
+    cohort_identity: str
+    warnings: tuple[str, ...] = ()
+
+    @property
+    def stage_kind(self) -> AgentStageKind:
+        return AgentStageKind.PREOPEN_SCREEN
+
+    @property
+    def session_subject(self) -> str:
+        return f"PREOPEN_SCREEN:{self.as_of.isoformat()}"
+
+
+@dataclass(frozen=True)
 class AgentViewTickerContext(AgentStageContext):
     """View-ticker cache dashboard (`stage_kind=view_ticker`, tui_agent.view_ticker.v1).
 
