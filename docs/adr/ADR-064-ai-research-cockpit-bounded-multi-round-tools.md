@@ -195,7 +195,9 @@ Provider error strings should remain operator-visible (detail, not secrets).
 5. Intermediate monologue is not a successful turn answer.  
 6. Model cannot extend rounds, tools, or registry via text.  
 7. `tools_multi_round=false` restores ADR-061 L1 exactly.  
-8. External/network/write remains unauthorized (L4+).  
+8. External/network/write remains unauthorized except via
+   [ADR-065](ADR-065-ai-research-cockpit-external-and-ro-data-l4.md) when
+   activated; model-invented tools remain forbidden.  
 
 ## Non-goals
 
