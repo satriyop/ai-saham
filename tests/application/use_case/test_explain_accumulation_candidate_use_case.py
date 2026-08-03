@@ -4,7 +4,6 @@ from src.application.dto.accumulation_agent import (
     AgentModelResponse,
     AgentModelUnavailableReason,
     AgentTurnPolicy,
-    AgentTurnRequest,
     AgentTurnStatus,
 )
 from src.application.ports.agent_model import (
@@ -15,6 +14,7 @@ from src.application.ports.agent_model import (
     AgentModelTransportError,
     AgentModelUnavailableError,
 )
+from src.application.services.agent_stage_context import build_judge_turn_request
 from src.application.use_case.explain_accumulation_candidate_use_case import (
     ExplainAccumulationCandidateUseCase,
 )
@@ -39,7 +39,7 @@ def test_one_turn_projects_same_candidate_and_calls_model_once() -> None:
         AgentTurnPolicy(True, "deepseek"),
     )
     candidate = make_candidate()
-    result = use_case.execute(AgentTurnRequest("Mengapa WATCH?", candidate))
+    result = use_case.execute(build_judge_turn_request("Mengapa WATCH?", candidate))
 
     assert result.status is AgentTurnStatus.SUCCESS
     assert result.answer == "Fakta tetap WATCH."
@@ -56,7 +56,7 @@ def test_disabled_agent_is_unavailable_without_model_call() -> None:
             AgentModelUnavailableReason.DISABLED,
         ),
     )
-    result = use_case.execute(AgentTurnRequest("why?", make_candidate()))
+    result = use_case.execute(build_judge_turn_request("why?", make_candidate()))
     assert result.status is AgentTurnStatus.UNAVAILABLE
     assert result.answer == ""
 
@@ -80,7 +80,7 @@ def test_expected_provider_failures_are_operator_safe(error) -> None:
     use_case = ExplainAccumulationCandidateUseCase(
         FailingModel(), AgentTurnPolicy(True, "deepseek")
     )
-    result = use_case.execute(AgentTurnRequest("why?", make_candidate()))
+    result = use_case.execute(build_judge_turn_request("why?", make_candidate()))
     assert result.status is AgentTurnStatus.FAILED
     assert result.answer == ""
     assert result.error_message

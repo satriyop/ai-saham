@@ -15,7 +15,7 @@ from src.application.dto.agent_tools import (
     AgentToolName,
     AgentToolProvenance,
 )
-from tests.adapters.tui.test_finish_cockpit_slices import _accum_payload
+from tests.adapters.tui.agent_board_fixtures import agent_accum_payload as _accum_payload
 
 pytestmark = pytest.mark.agent
 
@@ -123,7 +123,7 @@ def test_cockpit_dispatches_exact_judge_source_and_rejects_stale_result(size) ->
         seen = []
 
         def runner(request):
-            seen.append(request.candidate)
+            seen.append(request.stage_context)
             return AgentTurnResult(
                 status=AgentTurnStatus.SUCCESS,
                 answer="Commentary only.",
@@ -151,7 +151,16 @@ def test_cockpit_dispatches_exact_judge_source_and_rejects_stale_result(size) ->
                 await pilot.pause(0.05)
                 if seen:
                     break
-            assert seen == [source]
+            from src.application.services.agent_accumulation_context import (
+                build_agent_accumulation_context,
+            )
+
+            assert len(seen) == 1
+            assert (
+                seen[0].context_reference
+                == build_agent_accumulation_context(source).context_reference
+            )
+            assert seen[0].ticker == source.ticker
             commentary = app.query_one("#agent-commentary", AgentCommentary)
             assert commentary.display is True
             # OpenCode-style stage replace: Judge is hidden while agent is open.
@@ -187,7 +196,8 @@ def test_cockpit_dispatches_exact_judge_source_and_rejects_stale_result(size) ->
             app._rows[app._row_index] = replace(app._rows[app._row_index], source=None)
             app._submit_agent_turn("Do not dispatch limited context")
             await pilot.pause()
-            assert seen == [source]
+            # Limited/missing source must not dispatch another turn.
+            assert len(seen) == 1
             assert "Full Judge context" in str(commentary.query_one(".agent-error").content)
             app._invalidate_agent_turn()
             await pilot.pause()

@@ -16,7 +16,7 @@ from src.application.dto.accumulation_agent import (
     AgentTurnResult,
     AgentTurnStatus,
 )
-from tests.adapters.tui.test_finish_cockpit_slices import _accum_payload
+from tests.adapters.tui.agent_board_fixtures import agent_accum_payload as _accum_payload
 from tests.agent_live.conftest import agent_live_call
 
 pytestmark = [pytest.mark.agent, agent_live_call, pytest.mark.tui]

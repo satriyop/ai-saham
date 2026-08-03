@@ -17,7 +17,7 @@ pytestmark = pytest.mark.agent
 
 def _context() -> AgentToolExecutionContext:
     return AgentToolExecutionContext(
-        visible_accumulation_context=build_agent_accumulation_context(make_candidate())
+        stage_context=build_agent_accumulation_context(make_candidate())
     )
 
 

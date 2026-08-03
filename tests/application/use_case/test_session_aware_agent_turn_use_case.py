@@ -3,12 +3,12 @@ from dataclasses import replace
 import pytest
 
 from src.application.dto.accumulation_agent import (
-    AgentTurnRequest,
     AgentTurnResult,
     AgentTurnStatus,
 )
 from src.application.dto.agent_session import AgentSessionPolicy
 from src.application.services.agent_session_store import InMemoryAgentSessionStore
+from src.application.services.agent_stage_context import build_judge_turn_request
 from src.application.use_case.session_aware_agent_turn_use_case import (
     DEEPSEEK_SESSION_CERTIFICATION,
     SessionAwareAgentTurnUseCase,
@@ -27,11 +27,7 @@ class _FakeInner:
     def execute(self, request, *, is_cancelled=None, session_pack=None):
         del is_cancelled
         self.calls.append(session_pack)
-        from src.application.services.agent_accumulation_context import (
-            build_agent_accumulation_context,
-        )
-
-        context = build_agent_accumulation_context(request.candidate)
+        context = request.stage_context
         return AgentTurnResult(
             status=AgentTurnStatus.SUCCESS,
             answer=f"answer for {request.user_text}",
@@ -57,8 +53,8 @@ def _session_uc(enabled: bool = True) -> tuple[SessionAwareAgentTurnUseCase, _Fa
 def test_disabled_session_never_packs_or_retains_state() -> None:
     uc, inner = _session_uc(enabled=False)
     candidate = make_candidate()
-    first = uc.execute(AgentTurnRequest("why watch?", candidate))
-    second = uc.execute(AgentTurnRequest("why risk?", candidate))
+    first = uc.execute(build_judge_turn_request("why watch?", candidate))
+    second = uc.execute(build_judge_turn_request("why risk?", candidate))
     assert first.status is AgentTurnStatus.SUCCESS
     assert second.status is AgentTurnStatus.SUCCESS
     assert first.session_id is None
@@ -69,8 +65,8 @@ def test_disabled_session_never_packs_or_retains_state() -> None:
 def test_enabled_session_retains_follow_up_pack() -> None:
     uc, inner = _session_uc(enabled=True)
     candidate = make_candidate()
-    first = uc.execute(AgentTurnRequest("why watch?", candidate))
-    second = uc.execute(AgentTurnRequest("explain gate", candidate))
+    first = uc.execute(build_judge_turn_request("why watch?", candidate))
+    second = uc.execute(build_judge_turn_request("explain gate", candidate))
     assert first.session_id is not None
     assert first.turn_sequence == 1
     assert second.session_id == first.session_id
@@ -87,9 +83,9 @@ def test_max_turns_fails_closed() -> None:
     uc, _inner = _session_uc(enabled=True)
     candidate = make_candidate()
     for i in range(8):
-        result = uc.execute(AgentTurnRequest(f"q{i}", candidate))
+        result = uc.execute(build_judge_turn_request(f"q{i}", candidate))
         assert result.status is AgentTurnStatus.SUCCESS
-    blocked = uc.execute(AgentTurnRequest("q9", candidate))
+    blocked = uc.execute(build_judge_turn_request("q9", candidate))
     assert blocked.status is AgentTurnStatus.FAILED
     assert "maximum of 8 turns" in (blocked.error_message or "")
 
@@ -97,9 +93,9 @@ def test_max_turns_fails_closed() -> None:
 def test_reset_clears_session() -> None:
     uc, inner = _session_uc(enabled=True)
     candidate = make_candidate()
-    first = uc.execute(AgentTurnRequest("first", candidate))
+    first = uc.execute(build_judge_turn_request("first", candidate))
     new_id = uc.reset_session()
-    second = uc.execute(AgentTurnRequest("after reset", candidate))
+    second = uc.execute(build_judge_turn_request("after reset", candidate))
     assert new_id != first.session_id
     assert second.session_id == new_id
     assert second.turn_sequence == 1
@@ -113,11 +109,7 @@ def test_session_dedupes_repeated_data_warnings_across_turns() -> None:
 
         def execute(self, request, *, is_cancelled=None, session_pack=None):
             del is_cancelled, session_pack
-            from src.application.services.agent_accumulation_context import (
-                build_agent_accumulation_context,
-            )
-
-            context = build_agent_accumulation_context(request.candidate)
+            context = request.stage_context
             return AgentTurnResult(
                 status=AgentTurnStatus.SUCCESS,
                 answer=f"answer for {request.user_text}",
@@ -139,8 +131,8 @@ def test_session_dedupes_repeated_data_warnings_across_turns() -> None:
         configured_provider="deepseek",
     )
     candidate = make_candidate()
-    first = uc.execute(AgentTurnRequest("q1", candidate))
-    second = uc.execute(AgentTurnRequest("q2", candidate))
+    first = uc.execute(build_judge_turn_request("q1", candidate))
+    second = uc.execute(build_judge_turn_request("q2", candidate))
     assert first.warnings
     assert any("Risk snapshot" in w for w in first.warnings)
     # Same data notes should not reappear on the next turn display payload.
@@ -177,7 +169,7 @@ def test_typeerror_in_inner_runs_exactly_once() -> None:
     )
     with pytest.raises(TypeError):
         uc.execute(
-            AgentTurnRequest("q", make_candidate()),
+            build_judge_turn_request("q", make_candidate()),
             on_progress=lambda _m: None,
             on_approval=lambda _r: True,
         )
@@ -188,7 +180,7 @@ def test_inner_without_callback_kwargs_still_invoked_once() -> None:
     """F1 boundary: signature probing (not error-catching) adapts to a narrow inner."""
     uc, inner = _session_uc(enabled=True)
     result = uc.execute(
-        AgentTurnRequest("why watch?", make_candidate()),
+        build_judge_turn_request("why watch?", make_candidate()),
         on_progress=lambda _m: None,
         on_approval=lambda _r: True,
     )
@@ -201,12 +193,12 @@ def test_inner_without_callback_kwargs_still_invoked_once() -> None:
 def test_stale_focus_warning_when_context_changes() -> None:
     uc, inner = _session_uc(enabled=True)
     first_candidate = make_candidate()
-    uc.execute(AgentTurnRequest("first", first_candidate))
+    uc.execute(build_judge_turn_request("first", first_candidate))
     second_candidate = replace(
         first_candidate,
         trade_setup=replace(first_candidate.trade_setup, rationale="Different wait reason"),
     )
-    result = uc.execute(AgentTurnRequest("second", second_candidate))
+    result = uc.execute(build_judge_turn_request("second", second_candidate))
     assert result.status is AgentTurnStatus.SUCCESS
     pack = inner.calls[-1]
     assert pack is not None

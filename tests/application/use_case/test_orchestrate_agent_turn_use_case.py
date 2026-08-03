@@ -5,7 +5,6 @@ import pytest
 from src.application.dto.accumulation_agent import (
     AgentModelResponse,
     AgentModelResponseKind,
-    AgentTurnRequest,
     AgentTurnStatus,
 )
 from src.application.dto.agent_tools import (
@@ -23,6 +22,7 @@ from src.application.dto.agent_tools import (
 from src.application.services.agent_accumulation_context import (
     build_agent_accumulation_context,
 )
+from src.application.services.agent_stage_context import build_judge_turn_request
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_visible_cockpit_tool import (
     VisibleCockpitResultData,
@@ -138,7 +138,7 @@ def _orchestrator(model, tool=None, *, enabled=True, timed_call=None):
 
 def test_empty_registry_preserves_single_call_zero_tool_behavior() -> None:
     model = _Model([_answer()])
-    result = _orchestrator(model).execute(AgentTurnRequest("why?", make_candidate()))
+    result = _orchestrator(model).execute(build_judge_turn_request("why?", make_candidate()))
 
     assert result.status is AgentTurnStatus.SUCCESS
     assert len(model.requests) == 1
@@ -148,7 +148,9 @@ def test_empty_registry_preserves_single_call_zero_tool_behavior() -> None:
 
 def test_tools_offered_but_unused_adds_honesty_note() -> None:
     model = _Model([_answer("INCO remains ENTER on Judge facts.")])
-    result = _orchestrator(model, _Tool()).execute(AgentTurnRequest("why?", make_candidate()))
+    result = _orchestrator(model, _Tool()).execute(
+        build_judge_turn_request("why?", make_candidate())
+    )
     assert result.status is AgentTurnStatus.SUCCESS
     assert any("TOOLS_NOT_USED" in w for w in result.warnings)
 
@@ -158,7 +160,7 @@ def test_planning_only_answer_with_tools_offered_fails_with_tool_gap_clue() -> N
         [_answer("I'll check the broker desk data to identify which brokers are buying INCO.")]
     )
     result = _orchestrator(model, _Tool()).execute(
-        AgentTurnRequest("siapa broker beli?", make_candidate())
+        build_judge_turn_request("siapa broker beli?", make_candidate())
     )
     assert result.status is AgentTurnStatus.FAILED
     assert result.error_message is not None
@@ -170,7 +172,9 @@ def test_valid_batch_executes_sequentially_then_forces_final_answer() -> None:
     model = _Model([_tool_response(*calls), _answer("Grounded answer.")])
     tool = _Tool()
 
-    result = _orchestrator(model, tool).execute(AgentTurnRequest("compare", make_candidate()))
+    result = _orchestrator(model, tool).execute(
+        build_judge_turn_request("compare", make_candidate())
+    )
 
     assert result.status is AgentTurnStatus.SUCCESS
     assert tool.executed == ["sha256:abc", "sha256:def"]
@@ -192,7 +196,7 @@ def test_visible_tool_returns_the_same_context_supplied_to_initial_model_call() 
     model = _Model([_tool_response(call), _answer("Exact visible result explained.")])
 
     result = _orchestrator(model, VisibleCockpitResultTool()).execute(
-        AgentTurnRequest("explain visible result", candidate)
+        build_judge_turn_request("explain visible result", candidate)
     )
 
     assert result.status is AgentTurnStatus.SUCCESS
@@ -204,7 +208,7 @@ def test_invalid_batch_executes_nothing_and_does_not_call_provider_again() -> No
     model = _Model([_tool_response(_call('{"reference":"x","extra":"bad"}'))])
     tool = _Tool()
 
-    result = _orchestrator(model, tool).execute(AgentTurnRequest("why?", make_candidate()))
+    result = _orchestrator(model, tool).execute(build_judge_turn_request("why?", make_candidate()))
 
     assert result.status is AgentTurnStatus.FAILED
     assert tool.executed == []
@@ -215,7 +219,9 @@ def test_final_tool_proposal_is_rejected_without_third_provider_call() -> None:
     call = _call()
     model = _Model([_tool_response(call), _tool_response(call)])
 
-    result = _orchestrator(model, _Tool()).execute(AgentTurnRequest("why?", make_candidate()))
+    result = _orchestrator(model, _Tool()).execute(
+        build_judge_turn_request("why?", make_candidate())
+    )
 
     assert result.status is AgentTurnStatus.FAILED
     assert len(model.requests) == 2
@@ -226,7 +232,7 @@ def test_unavailable_tool_can_only_produce_partial_final_answer() -> None:
     model = _Model([_tool_response(_call()), _answer()])
     tool = _Tool(result_status=AgentToolExecutionStatus.UNAVAILABLE)
 
-    result = _orchestrator(model, tool).execute(AgentTurnRequest("why?", make_candidate()))
+    result = _orchestrator(model, tool).execute(build_judge_turn_request("why?", make_candidate()))
 
     assert result.status is AgentTurnStatus.PARTIAL
     assert result.tool_results[0].status is AgentToolExecutionStatus.UNAVAILABLE
@@ -244,7 +250,7 @@ def test_tool_timeout_becomes_non_retryable_partial_result() -> None:
 
     model = _Model([_tool_response(_call()), _answer()])
     result = _orchestrator(model, _Tool(), timed_call=timed_call).execute(
-        AgentTurnRequest("why?", make_candidate())
+        build_judge_turn_request("why?", make_candidate())
     )
 
     assert result.status is AgentTurnStatus.PARTIAL
@@ -265,7 +271,7 @@ def test_cancellation_after_provider_proposal_starts_no_tool() -> None:
     tool = _Tool()
     model = CancellingModel([_tool_response(_call())])
     result = _orchestrator(model, tool).execute(
-        AgentTurnRequest("why?", make_candidate()),
+        build_judge_turn_request("why?", make_candidate()),
         is_cancelled=lambda: cancelled,
     )
 
@@ -277,7 +283,7 @@ def test_tool_result_over_declared_limit_stops_before_final_provider_call() -> N
     model = _Model([_tool_response(_call())])
     tool = _Tool(payload_size=2_000)
 
-    result = _orchestrator(model, tool).execute(AgentTurnRequest("why?", make_candidate()))
+    result = _orchestrator(model, tool).execute(build_judge_turn_request("why?", make_candidate()))
 
     assert result.status is AgentTurnStatus.FAILED
     assert len(model.requests) == 1

@@ -10,7 +10,6 @@ import pytest
 from src.application.dto.accumulation_agent import (
     AgentModelResponse,
     AgentModelResponseKind,
-    AgentTurnRequest,
     AgentTurnStatus,
 )
 from src.application.dto.agent_tools import (
@@ -28,6 +27,7 @@ from src.application.dto.agent_tools import (
     AgentToolTurnPolicy,
 )
 from src.application.services.agent_ro_data_query_tool import RoDataQueryTool
+from src.application.services.agent_stage_context import build_judge_turn_request
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_web_research_tool import (
     NullWebResearchClient,
@@ -160,7 +160,7 @@ def test_web_research_requires_confirm_and_counts_as_tool() -> None:
         AgentToolTurnPolicy.l1(tools_enabled=True),
         on_approval=on_approval,
     )
-    result = orch.execute(AgentTurnRequest("news?", make_candidate()))
+    result = orch.execute(build_judge_turn_request("news?", make_candidate()))
     assert result.status is AgentTurnStatus.SUCCESS
     assert len(approvals) == 1
     assert approvals[0].tool_name == "web_research"
@@ -184,7 +184,7 @@ def test_deny_skips_elevated_and_continues() -> None:
         AgentToolTurnPolicy.l1(tools_enabled=True),
         on_approval=lambda _r: False,
     )
-    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    result = orch.execute(build_judge_turn_request("q", make_candidate()))
     assert result.status is AgentTurnStatus.PARTIAL  # denied tool non-success
     assert result.tool_results[0].error_code == "TOOL_DENIED"
     assert result.answer.startswith("Answered")
@@ -203,7 +203,7 @@ def test_unregistered_tool_emits_gap_clue_not_fake_execute() -> None:
         AgentToolRegistry((local,)),
         AgentToolTurnPolicy.l1(tools_enabled=True),
     )
-    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    result = orch.execute(build_judge_turn_request("q", make_candidate()))
     assert result.status is AgentTurnStatus.SUCCESS
     assert result.gap_clues
     assert result.gap_clues[0].code == "TOOL_GAP"
@@ -224,7 +224,7 @@ def test_post_approve_web_fail_sets_restore_flag() -> None:
         AgentToolTurnPolicy.l1(tools_enabled=True),
         on_approval=lambda _r: True,
     )
-    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    result = orch.execute(build_judge_turn_request("q", make_candidate()))
     assert result.status is AgentTurnStatus.FAILED
     assert result.restore_last_good is True
     assert result.elevated_attempted is True
@@ -257,7 +257,7 @@ def test_ro_data_query_allowlist_and_confirm(tmp_path: Path) -> None:
         AgentToolTurnPolicy.l1(tools_enabled=True),
         on_approval=lambda _r: True,
     )
-    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    result = orch.execute(build_judge_turn_request("q", make_candidate()))
     assert result.status is AgentTurnStatus.SUCCESS
     assert result.tool_results[0].status is AgentToolExecutionStatus.SUCCESS
     assert result.tool_results[0].side_effect is AgentToolSideEffect.LOCAL_READ_ELEVATED
@@ -285,7 +285,7 @@ def test_elevated_counts_toward_l3_tool_budget() -> None:
         AgentToolTurnPolicy.l3(tools_enabled=True),
         on_approval=lambda _r: True,
     )
-    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    result = orch.execute(build_judge_turn_request("q", make_candidate()))
     assert result.status is AgentTurnStatus.SUCCESS
     assert len(result.tool_results) == 4
     assert model.requests[-1].tool_choice is AgentModelToolChoice.NONE
@@ -307,7 +307,7 @@ def test_no_approver_fails_closed_and_continues() -> None:
         AgentToolTurnPolicy.l1(tools_enabled=True),
         # No on_approval anywhere: a missing approver is not consent.
     )
-    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    result = orch.execute(build_judge_turn_request("q", make_candidate()))
     assert client.calls == 0  # never executed — no network egress
     assert result.status is AgentTurnStatus.PARTIAL
     assert result.tool_results[0].error_code == "TOOL_NO_APPROVER"
@@ -330,7 +330,7 @@ def test_side_effect_none_tool_runs_without_approver() -> None:
         AgentToolRegistry((local,)),
         AgentToolTurnPolicy.l1(tools_enabled=True),
     )
-    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    result = orch.execute(build_judge_turn_request("q", make_candidate()))
     assert local.executed == 1
     assert result.status is AgentTurnStatus.SUCCESS
 
@@ -357,7 +357,7 @@ def test_typeerror_midturn_fails_once_without_rerun() -> None:
         AgentToolRegistry((local,)),
         AgentToolTurnPolicy.l1(tools_enabled=True),
     )
-    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    result = orch.execute(build_judge_turn_request("q", make_candidate()))
     assert result.status is AgentTurnStatus.FAILED
     assert local.executed == 1  # tool ran exactly once — no restart
     assert model.calls == 2  # first (tool_calls) + second (raises); no re-run
@@ -382,7 +382,7 @@ def test_deny_then_different_tool_continues_and_executes() -> None:
         AgentToolTurnPolicy.l3(tools_enabled=True),
         on_approval=lambda _r: False,  # deny the elevated call
     )
-    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    result = orch.execute(build_judge_turn_request("q", make_candidate()))
     assert result.status is AgentTurnStatus.PARTIAL  # deny is non-success
     assert local.executed == 1  # different tool still ran after the deny
     codes = [r.error_code for r in result.tool_results]
@@ -407,7 +407,7 @@ def test_deny_then_repropose_same_tool_is_not_duplicate() -> None:
         AgentToolTurnPolicy.l3(tools_enabled=True),
         on_approval=_DenyThenApprove(),
     )
-    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    result = orch.execute(build_judge_turn_request("q", make_candidate()))
     # Old behavior failed the turn here as a duplicate tool call.
     assert result.status is AgentTurnStatus.PARTIAL
     assert client.calls == 1  # executed exactly once (the approved re-proposal)

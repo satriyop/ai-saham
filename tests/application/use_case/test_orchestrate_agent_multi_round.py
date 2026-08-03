@@ -9,7 +9,6 @@ import pytest
 from src.application.dto.accumulation_agent import (
     AgentModelResponse,
     AgentModelResponseKind,
-    AgentTurnRequest,
     AgentTurnStatus,
 )
 from src.application.dto.agent_session import AgentSessionPolicy
@@ -26,6 +25,7 @@ from src.application.dto.agent_tools import (
     AgentToolTurnPolicy,
 )
 from src.application.services.agent_session_store import InMemoryAgentSessionStore
+from src.application.services.agent_stage_context import build_judge_turn_request
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.use_case.orchestrate_agent_turn_use_case import AgentTurnOrchestrator
 from src.application.use_case.session_aware_agent_turn_use_case import (
@@ -132,7 +132,7 @@ def test_l1_flag_false_keeps_two_provider_calls_and_one_batch() -> None:
     tool = _Tool()
     model = _Model([_tool_response(_call()), _answer()])
     result = _orch(model, tool, multi_round=False).execute(
-        AgentTurnRequest("why?", make_candidate())
+        build_judge_turn_request("why?", make_candidate())
     )
     assert result.status is AgentTurnStatus.SUCCESS
     assert len(model.requests) == 2
@@ -153,7 +153,7 @@ def test_l3_enforces_three_rounds_and_forced_final_none() -> None:
     )
     progress: list[str] = []
     result = _orch(model, tool, multi_round=True, on_progress=progress.append).execute(
-        AgentTurnRequest("research path", make_candidate())
+        build_judge_turn_request("research path", make_candidate())
     )
     assert result.status is AgentTurnStatus.SUCCESS
     assert "Final after two hops" in result.answer
@@ -183,7 +183,7 @@ def test_l3_tool_budget_four_then_forced_final() -> None:
         ]
     )
     result = _orch(model, tool, multi_round=True).execute(
-        AgentTurnRequest("cap tools", make_candidate())
+        build_judge_turn_request("cap tools", make_candidate())
     )
     assert result.status is AgentTurnStatus.SUCCESS
     assert len(tool.executed) == 4
@@ -201,7 +201,7 @@ def test_l3_invalid_batch_fails_closed_without_execute() -> None:
         ]
     )
     result = _orch(model, tool, multi_round=True).execute(
-        AgentTurnRequest("bad batch", make_candidate())
+        build_judge_turn_request("bad batch", make_candidate())
     )
     assert result.status is AgentTurnStatus.FAILED
     assert (
@@ -221,7 +221,7 @@ def test_l3_duplicate_across_rounds_fails_closed() -> None:
         ]
     )
     result = _orch(model, tool, multi_round=True).execute(
-        AgentTurnRequest("dup turn", make_candidate())
+        build_judge_turn_request("dup turn", make_candidate())
     )
     assert result.status is AgentTurnStatus.FAILED
     assert "duplicate" in (result.error_message or "").lower()
@@ -239,7 +239,7 @@ def test_l3_exhaustion_without_answer_failed() -> None:
         ]
     )
     result = _orch(model, tool, multi_round=True).execute(
-        AgentTurnRequest("no answer", make_candidate())
+        build_judge_turn_request("no answer", make_candidate())
     )
     assert result.status is AgentTurnStatus.FAILED
     assert "final" in (result.error_message or "").lower()
@@ -275,14 +275,14 @@ def test_l3_failed_turn_does_not_commit_session_memory() -> None:
         certification=DEEPSEEK_SESSION_CERTIFICATION,
         configured_provider="deepseek",
     )
-    seed = ok_uc.execute(AgentTurnRequest("seed", candidate))
+    seed = ok_uc.execute(build_judge_turn_request("seed", candidate))
     assert seed.status is AgentTurnStatus.SUCCESS
     before = store.get()
     assert before is not None
     before_commentary = len(before.commentary_turns)
     before_tools = len(before.tool_records)
 
-    failed = uc.execute(AgentTurnRequest("fail me", candidate))
+    failed = uc.execute(build_judge_turn_request("fail me", candidate))
     assert failed.status is AgentTurnStatus.FAILED
     after = store.get()
     assert after is not None
@@ -296,7 +296,7 @@ def test_progress_callback_not_treated_as_success_answer() -> None:
     model = _Model([_tool_response(_call()), _answer("real")])
     progress: list[str] = []
     result = _orch(model, tool, multi_round=True, on_progress=progress.append).execute(
-        AgentTurnRequest("q", make_candidate())
+        build_judge_turn_request("q", make_candidate())
     )
     assert result.status is AgentTurnStatus.SUCCESS
     assert result.answer == "real"

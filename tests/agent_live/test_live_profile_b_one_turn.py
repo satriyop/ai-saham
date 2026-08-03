@@ -18,7 +18,8 @@ from src.application.dto.accumulation_agent import (
 from src.application.services.agent_accumulation_context import (
     build_agent_accumulation_context,
 )
-from tests.adapters.tui.test_finish_cockpit_slices import _accum_payload
+from src.application.services.agent_stage_context import build_judge_turn_request
+from tests.adapters.tui.agent_board_fixtures import agent_accum_payload as _accum_payload
 from tests.agent_live.conftest import (
     action_identity,
     agent_live_call,
@@ -36,7 +37,7 @@ def test_b2_b4_live_one_turn_success_or_partial(
     uc = live_composition_phase1.use_case
     before_action = action_identity(live_candidate)
     result = uc.execute(
-        AgentTurnRequest(
+        build_judge_turn_request(
             "In one short sentence, why is the deterministic Action WATCH?",
             live_candidate,
         )
@@ -58,7 +59,7 @@ def test_b5_tools_disabled_no_tool_results_required(
     """B5: tools off — empty tool_results is OK."""
     assert live_composition_phase1.tools_enabled is False
     result = live_composition_phase1.use_case.execute(
-        AgentTurnRequest("Summarize the risk gates briefly.", live_candidate)
+        build_judge_turn_request("Summarize the risk gates briefly.", live_candidate)
     )
     assert result.status in {
         AgentTurnStatus.SUCCESS,
@@ -162,7 +163,7 @@ def test_b2_missing_key_unavailable(monkeypatch, live_candidate) -> None:
     )
     assert composition.provider_available is False
     result = composition.use_case.execute(
-        AgentTurnRequest("why?", live_candidate),
+        build_judge_turn_request("why?", live_candidate),
     )
     assert result.status is AgentTurnStatus.UNAVAILABLE
     assert result.error_message

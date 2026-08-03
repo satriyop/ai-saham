@@ -16,7 +16,7 @@ from src.adapters.tui.presenters.accum_presenter import AccumPresenter
 from src.infrastructure.composition import agent_model as agent_model_mod
 from src.infrastructure.composition.agent_model import build_agent_composition
 from src.infrastructure.config.app_config import AiConfig
-from tests.adapters.tui.test_finish_cockpit_slices import _accum_payload
+from tests.adapters.tui.agent_board_fixtures import agent_accum_payload as _accum_payload
 from tests.agent_live.conftest import agent_live_call
 
 pytestmark = [pytest.mark.agent, agent_live_call]
@@ -42,10 +42,13 @@ def test_a1_a4_ai_disabled_zero_provider_construct(monkeypatch) -> None:
     assert composition.registered_tools == ()
     assert constructed == []
 
-    from src.application.dto.accumulation_agent import AgentTurnRequest, AgentTurnStatus
+    from src.application.dto.accumulation_agent import AgentTurnStatus
+    from src.application.services.agent_stage_context import build_judge_turn_request
     from tests.application.services.test_agent_accumulation_context import make_candidate
 
-    result = composition.use_case.execute(AgentTurnRequest("why is this WATCH?", make_candidate()))
+    result = composition.use_case.execute(
+        build_judge_turn_request("why is this WATCH?", make_candidate())
+    )
     assert result.status is AgentTurnStatus.UNAVAILABLE
     assert constructed == []
 

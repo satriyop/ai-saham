@@ -6,7 +6,8 @@ from dataclasses import replace
 
 import pytest
 
-from src.application.dto.accumulation_agent import AgentTurnRequest, AgentTurnStatus
+from src.application.dto.accumulation_agent import AgentTurnStatus
+from src.application.services.agent_stage_context import build_judge_turn_request
 from src.application.use_case.session_aware_agent_turn_use_case import (
     SessionAwareAgentTurnUseCase,
 )
@@ -32,9 +33,11 @@ def test_d2_d3_two_sequential_turns_same_candidate(
 ) -> None:
     """D2–D3: two live questions → session_id continuity, turn_sequence >= 2."""
     uc = live_composition_session.use_case
-    first = uc.execute(AgentTurnRequest("Why is Action WATCH?", live_candidate))
+    first = uc.execute(build_judge_turn_request("Why is Action WATCH?", live_candidate))
     second = uc.execute(
-        AgentTurnRequest("In one sentence, what gate or rationale supports that?", live_candidate)
+        build_judge_turn_request(
+            "In one sentence, what gate or rationale supports that?", live_candidate
+        )
     )
     assert first.status in {AgentTurnStatus.SUCCESS, AgentTurnStatus.PARTIAL}
     assert second.status in {AgentTurnStatus.SUCCESS, AgentTurnStatus.PARTIAL}
@@ -52,7 +55,7 @@ def test_d4_context_change_pack_warnings_safe(
 ) -> None:
     """D4: different context_reference still yields safe status (warnings allowed)."""
     uc = live_composition_session.use_case
-    first = uc.execute(AgentTurnRequest("Summarize Action briefly.", live_candidate))
+    first = uc.execute(build_judge_turn_request("Summarize Action briefly.", live_candidate))
     assert first.status in {
         AgentTurnStatus.SUCCESS,
         AgentTurnStatus.PARTIAL,
@@ -65,7 +68,7 @@ def test_d4_context_change_pack_warnings_safe(
             rationale="Different wait reason for context identity change",
         ),
     )
-    second = uc.execute(AgentTurnRequest("Has context changed?", altered))
+    second = uc.execute(build_judge_turn_request("Has context changed?", altered))
     assert second.status in {
         AgentTurnStatus.SUCCESS,
         AgentTurnStatus.PARTIAL,
@@ -83,12 +86,12 @@ def test_d5_d6_reset_session_new_sequence(
 ) -> None:
     """D5–D6: reset_session → next turn sequence 1 with new session_id."""
     uc = live_composition_session.use_case
-    first = uc.execute(AgentTurnRequest("First turn before reset.", live_candidate))
+    first = uc.execute(build_judge_turn_request("First turn before reset.", live_candidate))
     assert first.session_id is not None
     new_id = uc.reset_session()
     assert new_id
     assert new_id != first.session_id
-    after = uc.execute(AgentTurnRequest("After reset — start fresh.", live_candidate))
+    after = uc.execute(build_judge_turn_request("After reset — start fresh.", live_candidate))
     assert after.session_id == new_id
     assert after.turn_sequence == 1
 
@@ -103,8 +106,8 @@ def test_d8_session_disabled_no_continuity(
         AiConfig(enabled=True, provider="deepseek", session_enabled=False),
     )
     assert composition.session_enabled is False
-    first = composition.use_case.execute(AgentTurnRequest("q1", live_candidate))
-    second = composition.use_case.execute(AgentTurnRequest("q2", live_candidate))
+    first = composition.use_case.execute(build_judge_turn_request("q1", live_candidate))
+    second = composition.use_case.execute(build_judge_turn_request("q2", live_candidate))
     assert getattr(first, "session_id", None) in {None}
     assert getattr(second, "session_id", None) in {None}
 

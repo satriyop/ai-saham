@@ -6,13 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from src.application.dto.accumulation_agent import AgentTurnRequest, AgentTurnStatus
+from src.application.dto.accumulation_agent import AgentTurnStatus
 from src.application.dto.agent_tool_context import AgentToolExecutionContext
 from src.application.dto.agent_tools import AgentToolExecutionStatus, AgentToolName
 from src.application.services.agent_accumulation_context import (
     build_agent_accumulation_context,
 )
 from src.application.services.agent_broker_desk_tool import BrokerDeskTool
+from src.application.services.agent_stage_context import build_judge_turn_request
 from src.application.services.agent_ticker_dashboard_tool import TickerDashboardTool
 from src.application.services.agent_visible_cockpit_tool import (
     VisibleCockpitResultArguments,
@@ -73,9 +74,7 @@ def test_c8_tools_off_no_tool_definitions_path(require_deepseek_key: str) -> Non
 
 def test_c1_get_visible_cockpit_result_live_path(live_candidate) -> None:
     """Direct live path for get_visible_cockpit_result (always cache-free)."""
-    ctx = AgentToolExecutionContext(
-        visible_accumulation_context=build_agent_accumulation_context(live_candidate)
-    )
+    ctx = AgentToolExecutionContext(stage_context=build_agent_accumulation_context(live_candidate))
     tool = VisibleCockpitResultTool()
     result = tool.execute(
         "live-visible-1",
@@ -95,7 +94,7 @@ def test_c2_get_ticker_dashboard_cache_path(live_db_path: Path) -> None:
         pytest.skip(f"ticker dashboard use case unavailable: {exc}")
     tool = TickerDashboardTool(dashboard_uc)
     ctx = AgentToolExecutionContext(
-        visible_accumulation_context=build_agent_accumulation_context(make_candidate())
+        stage_context=build_agent_accumulation_context(make_candidate())
     )
     ticker = live_ticker()
     args = tool.build_arguments((ticker,))
@@ -124,7 +123,7 @@ def test_c4_get_broker_desk_show_cache_path(live_db_path: Path) -> None:
         pytest.skip(f"broker desk use cases unavailable: {exc}")
     tool = BrokerDeskTool(desk)
     ctx = AgentToolExecutionContext(
-        visible_accumulation_context=build_agent_accumulation_context(make_candidate())
+        stage_context=build_agent_accumulation_context(make_candidate())
     )
     code = live_broker()
     args = tool.build_arguments((code, "SHOW"))
@@ -165,9 +164,7 @@ def test_c3_judge_accumulation_ticker_direct_execute(
 
     tool = AccumulationJudgeTool(judge_runner)
     assert tool.definition.name is AgentToolName.JUDGE_ACCUMULATION_TICKER
-    ctx = AgentToolExecutionContext(
-        visible_accumulation_context=build_agent_accumulation_context(live_candidate)
-    )
+    ctx = AgentToolExecutionContext(stage_context=build_agent_accumulation_context(live_candidate))
     before = action_identity(live_candidate)
     ticker = live_ticker()
     args = tool.build_arguments((ticker,))
@@ -223,7 +220,7 @@ def test_c5_c6_orchestrator_live_turn_schema_and_action(
     """C5–C6: live turn; tool trace closed if any; Action identity unchanged."""
     before = action_identity(live_candidate)
     result = live_composition_tools.use_case.execute(
-        AgentTurnRequest(
+        build_judge_turn_request(
             "Using only the visible Judge facts, why is Action WATCH?",
             live_candidate,
         )

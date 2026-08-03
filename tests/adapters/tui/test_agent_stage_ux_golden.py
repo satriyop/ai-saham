@@ -16,7 +16,7 @@ from src.adapters.tui.main import CockpitApp
 from src.adapters.tui.presenters.accum_presenter import AccumPresenter
 from src.adapters.tui.widgets.agent_commentary import AgentCommentary
 from src.application.dto.accumulation_agent import AgentTurnResult, AgentTurnStatus
-from tests.adapters.tui.test_finish_cockpit_slices import _accum_payload
+from tests.adapters.tui.agent_board_fixtures import agent_accum_payload as _accum_payload
 
 pytestmark = pytest.mark.agent
 
