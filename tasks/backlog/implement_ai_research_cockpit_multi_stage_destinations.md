@@ -225,7 +225,7 @@ git diff --check
   - Slice 2: `ca36dfc6` view_ticker + `5faa4999` tests
   - Slice 3: `3f51ae25` view_broker + `0ac49a23` tests
   - Slice 4: `b496e097` preopen_screen + `c55754f7` tests
-  - Slice 5: ``
+  - Slice 5: `adde4009` plan_swing + `1da127cb` tests
 - Verification: `pytest -m "agent and not agent-live-call"` green; golden UX pilots green; ruff check/format green
 - Status: **IMPLEMENTED** (runtime still gated by `ai.cockpit_multi_stage` default false)
 
