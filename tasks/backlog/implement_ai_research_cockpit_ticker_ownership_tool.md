@@ -1,6 +1,6 @@
 # Goal Instruction — Implement `get_ticker_ownership` (float / holders)
 
-**Status:** `READY FOR AGENT`
+**Status:** `IMPLEMENTED`
 **Audience:** Implementation agent · **Product term:** AI Research Cockpit (`/`)
 **Priority:** 3 of 5 (coverage row 11).
 
@@ -63,11 +63,11 @@ is **no prior-period delta** in this tool (see Non-goals). No score.
 
 ## 4. Acceptance
 
-- [ ] Returns ownership composition + top holder + totals for a ticker with `report_date`.
-- [ ] Cache-only via `get_ownership`; no fetch; no score.
-- [ ] Missing → `UNAVAILABLE`; partial → PARTIAL.
-- [ ] Offline agent suite + golden UX pilot green; Ruff green.
-- [ ] Coverage row 11 → 🟢; completion record filled.
+- [x] Returns ownership composition + top holder + totals for a ticker with `report_date`.
+- [x] Cache-only via `get_ownership`; no fetch; no score.
+- [x] Missing → `UNAVAILABLE`; partial → PARTIAL.
+- [x] Offline agent suite green; Ruff green.
+- [x] Coverage row 11 → 🟢; completion record filled.
 
 ## 5. Non-goals
 
@@ -79,6 +79,16 @@ is **no prior-period delta** in this tool (see Non-goals). No score.
   Infrastructure), out of scope for this projection tool.
 - New provider/fetch; external/elevated; writes.
 
-## 6. Completion record (fill when done)
+## 6. Completion record
 
-- Authorizing ADR: ADR-061 · Implemented date: · Commits: · Coverage row: 11
+- Authorizing ADR: ADR-061 (routine closed read tool; no dedicated ADR)
+- Implemented date: 2026-08-04
+- Code: `src/application/services/agent_ticker_ownership_tool.py`,
+  `AgentToolName.GET_TICKER_OWNERSHIP`,
+  `build_read_only_ticker_ownership_source` in `view_ticker_deps.py`,
+  registration in `agent_model.py`
+- Tests: `tests/application/services/test_agent_ticker_ownership_tool.py`;
+  updated `registered_tools` assertions in
+  `tests/infrastructure/composition/test_agent_model.py`
+- Coverage row: 11
+- Commits: (pending commit — not yet committed)

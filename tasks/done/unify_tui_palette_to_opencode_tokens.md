@@ -1,9 +1,34 @@
 # Task: Unify TUI palette onto OpenCode tokens + fix scalar-bar `%` contract
 
-> Source: TUI UI/UX audit, 2026-08-03. Audit-only pass; no code changed. This file
-> captures the findings so implementation can be scheduled per the refactor workflow.
-> Authority for all visual rules: `docs/design/tui-cockpit-opencode.md` (the bible),
-> ADR-051. Design tokens: `src/adapters/tui/theme.py` (`OPENCODE_TOKENS`).
+Status: `DONE`
+
+> **Closed 2026-08-03/04.** Implemented: scalar-bar `%` + mint/coral (flow/top);
+> `OPENCODE_DERIVED` + `bake_css($oc_*)` + `OC.*`; tree hex guard; agent skin/title;
+> bible § Visual token implementation + ADR-051 enforcement note.
+> Source: TUI UI/UX audit, 2026-08-03. Authority: `docs/design/tui-cockpit-opencode.md`,
+> ADR-051. Code: `src/adapters/tui/theme.py`.
+
+---
+
+## 0. Decisions (locked 2026-08-03 — spec review)
+
+Six gaps were raised on the first draft; resolutions below are binding for implementation.
+Runtime fact: **Textual 8.2.8** (native `$` CSS variables + `Theme` system available; the
+codebase currently uses none of it).
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| **Ship shape** | **Two PRs, P1 first.** PR-1 = scalar-bar `%` + mint/coral tones (standalone bugfix). PR-2 = token seam + palette migration + CI guard. | P1 is a correctness fix, independently testable, low risk; unblocks value without waiting on the big migration. |
+| **Token seam** | **Hybrid from one dict.** Build a Textual `Theme`/`$var` set *from* `OPENCODE_TOKENS`; reference `$oc_*` in every `DEFAULT_CSS`; export Python constants (e.g. `OC.text`, `OC.brass`) from the same dict for **inline Rich markup** (which Textual `$vars` cannot reach). | `$vars` sidestep the f-string brace collision (Textual CSS uses `{ }` for rule blocks). Inline `[#hex]` markup is Rich-rendered, so it needs Python constants. One source, two consumption paths. |
+| **Guard scope** | **(C) — scan all of `src/adapters/tui/**`** (DEFAULT_CSS *and* inline Rich markup), with a documented exception list: `FORBIDDEN_PRODUCT_MARKERS` in `theme.py` + test fixtures. | Inline markup (`ticker_desk.py:1575`) is exactly where drift hides; DEFAULT_CSS-only would miss it. |
+| **Derived-shade policy** | **3-tier: tokens + named derived.** Tier 1 = the 22 `OPENCODE_TOKENS`. Tier 2 = a documented `OPENCODE_DERIVED` map in `theme.py` (chrome: scrollbar `#3a3a3a`, track/inactive `#121212`, hairline-strong `#2a2a2a`, status-bg `#090909`, dim `#6b6b6b`; washes: warn-bg `#1a1810`, ok-bg `#121a14`, fail-bg `#1a1212`; **scalar track `#1a1a1a`**). Each entry carries a role comment. Tier 3 = everything else must collapse to Tier 1/2. Inline raw hex banned. | Smallest churn; every incidental shade becomes named + greppable without bloating the canonical token count. |
+| **Agent title** | **"AI Research Cockpit" in all states** (ready / loading / progress / result). | Product name per ADR-065; kills the flicker. Consciously overrides the bible's in-surface term "Agent commentary" — note in the ADR/bible when landed. |
+| **Gray mapping** | Nearest token: `#ececec → text_bright`, `#c8c8c8 → text`, `#a0a0a0 → text_dim`. **Guardrail:** `#a0a0a0` is the chip *mute label* — if `text_dim` reads too dim, promote **one** named derived `label_mute` (Tier 2), not raw hex. | Deterministic default; implementer keeps final pixel judgment against the bible. |
+
+**Extra gap found in review:** the bible-locked scalar track `#1a1a1a` **is absent from
+`COCKPIT_CSS` today** (`grep` = 0) — the "bars use the locked track" rule is currently
+unenforced. PR-2 must wire it as the Tier-2 `scalar_track` derived and apply it to every
+glyph-bar surface.
 
 ---
 
@@ -78,9 +103,11 @@ already conform. This is purely the color/token system + one bar-label bug.
 - The AI Research Cockpit surface renders on neutral-near-black + the token
   purple/peach accents only — no cool night-ink ramp.
 - Agent surface uses one consistent product name across all states.
-- A test extends `test_visual_parity_contracts.py` to **fail on off-token hexes in
-  widget `DEFAULT_CSS`** (allowlist = `OPENCODE_TOKENS` values + documented derived
-  shades), so drift cannot silently return.
+- A test extends `test_visual_parity_contracts.py` to **fail on off-token hexes across
+  all of `src/adapters/tui/**`** (DEFAULT_CSS *and* inline Rich markup), so drift cannot
+  silently return. Allowlist = `OPENCODE_TOKENS ∪ OPENCODE_DERIVED` values + the
+  documented exception list — **generated from those maps**, never hand-listed (single
+  source of truth for doc grep *and* CI).
 
 Observable change from the operator's view: desks read as one consistent skin; flow
 bars are no longer "mystery magnitude"; the agent cockpit matches the rest of the app.
@@ -117,9 +144,14 @@ Layer plan:
 - Domain: not touched
 - Application: not touched
 - Infrastructure: not touched
-- Adapter: theme.py token-consumption helper; migrate ~13 widget DEFAULT_CSS blocks and
-  inline markup colors onto tokens; add `%` label + token tones to broker_flow_desk;
-  detox agent_commentary skin; single agent title; extend visual-parity test.
+- Adapter:
+  PR-1 (bugfix): add % label + mint/coral token tones to broker_flow_desk (+ audit
+    foreign/history glyph-bar siblings); flow-desk paint test.
+  PR-2 (migration): build Textual Theme/$oc_* vars + OC.* Python constants FROM
+    OPENCODE_TOKENS; add OPENCODE_DERIVED (Tier-2) map incl. scalar track #1a1a1a;
+    migrate ~13 widget DEFAULT_CSS blocks + inline Rich markup onto vars/constants;
+    detox agent_commentary skin; single "AI Research Cockpit" title; extend
+    visual-parity test to fail on off-token/off-derived hex across src/adapters/tui/**.
 ```
 
 ---
@@ -153,17 +185,24 @@ eligibility. The `%` label surfaces an already-computed `bar_pct` — no new aut
 
 ## 9. Acceptance Criteria
 
-- [ ] Every color in `src/adapters/tui/**` widget `DEFAULT_CSS` and inline Rich markup
-      resolves to an `OPENCODE_TOKENS` value or a documented token-derived shade; the
-      audit greps below return only allowlisted hexes.
+**PR-1 (scalar-bar bugfix):**
 - [ ] `broker_flow_desk` renders an integer `%` next to every bar (mute tone), and bar
-      tone uses token mint/coral; any sibling foreign/flow glyph-bar surface audited for
-      the same and fixed or confirmed compliant.
+      tone uses token mint `#6fbf8a` / coral `#c97a72`; any sibling foreign/flow glyph-bar
+      surface audited for the same and fixed or confirmed compliant.
+
+**PR-2 (palette migration + guard):**
+- [ ] Every color across **`src/adapters/tui/**`** — `DEFAULT_CSS` *and* inline Rich markup —
+      resolves to a Tier-1 `OPENCODE_TOKENS` value or a named Tier-2 `OPENCODE_DERIVED`
+      shade (via `$oc_*` vars in CSS / `OC.*` constants in markup). No raw off-token/off-
+      derived hex; the audit greps below return only allowlisted hexes.
+- [ ] `OPENCODE_DERIVED` exists in `theme.py` with a role comment per entry, including the
+      bible scalar track `#1a1a1a` (`scalar_track`), and every glyph-bar surface uses it.
 - [ ] AI Research Cockpit surface (`agent_commentary.py`) uses only neutral-near-black +
       token purple/peach; no cool night-ink ramp remains.
-- [ ] Agent surface shows one consistent product name across ready/loading/progress/result.
-- [ ] New/extended test in `test_visual_parity_contracts.py` fails on off-token hexes in
-      widget `DEFAULT_CSS` (allowlist = token values + documented derived shades).
+- [ ] Agent surface title is **"AI Research Cockpit"** in ready/loading/progress/result.
+- [ ] `test_visual_parity_contracts.py` fails on off-token/off-derived hex across all of
+      `src/adapters/tui/**` (allowlist = token values + `OPENCODE_DERIVED` + the documented
+      exception list: `FORBIDDEN_PRODUCT_MARKERS` + test fixtures).
 - [ ] Behavior matches Desired Outcome; works with AI disabled; deterministic; complies
       with DoD; no non-goals violated; ADR-051 + bible considered.
 - [ ] Adapter thinness reviewed — no workflow/policy added.
@@ -175,7 +214,9 @@ eligibility. The `%` label surfaces an already-computed `bar_pct` — no new aut
 
 ## 10. Testing Expectations
 
-- Unit-test the new palette guard (off-token hex scanner over widget `DEFAULT_CSS`).
+- Unit-test the new palette guard (off-token hex scanner over **all of
+  `src/adapters/tui/**`** — DEFAULT_CSS *and* inline Rich markup; allowlist generated from
+  `OPENCODE_TOKENS ∪ OPENCODE_DERIVED` + the documented exception list).
 - Extend/adjust flow-desk paint test to assert a `%` token appears in the rendered row
   alongside the bar (mirror line at `broker_flow_desk.py:128-132` is a convenient hook).
 - Existing `test_visual_parity_contracts.py` and any agent-commentary snapshot/behavior
@@ -203,20 +244,38 @@ Before implementation, the agent must:
 - Re-read `docs/design/tui-cockpit-opencode.md` § Visual + § Scalar bar contract, and
   `theme.py` `OPENCODE_TOKENS` / `FORBIDDEN_PRODUCT_MARKERS`.
 - State the layer plan (Adapter-only, as above).
-- Decide the token-consumption mechanism first (e.g. a `theme.py` helper that emits
-  token-substituted `DEFAULT_CSS` strings, or a documented derived-shade map) before
-  mass-migrating widgets — get that seam right, then apply per widget.
-- Suggested order: (1) scalar-bar `%` fix in flow desk — smallest isolated win, may ship
-  alone; (2) token-consumption seam + parity guard test; (3) migrate widget CSS in
-  batches (broker desks, ticker desk, judge/plan/health, agent cockpit last); (4) agent
-  title unification.
+- Seam is **already decided** (§0): Textual `Theme`/`$oc_*` vars + `OC.*` Python constants,
+  both built from `OPENCODE_TOKENS`; do **not** use an f-string `DEFAULT_CSS` (brace
+  collision with Textual's `{ }` rule blocks). Build the seam + `OPENCODE_DERIVED` map
+  once, then apply per widget.
+- Execution order (two PRs, per §0):
+  - **PR-1:** scalar-bar `%` + mint/coral tone in `broker_flow_desk` (+ foreign/history
+    audit) and its paint test. Smallest isolated win; ships first. **Uses literal token
+    hexes** (`#6fbf8a` / `#c97a72`) — it does **not** introduce the `$oc_*`/`OC.*` seam or
+    touch `scalar_track`; those are PR-2's. Do not let PR-1 grow into the seam.
+  - **PR-2, step 1 (seam spike first):** verify Textual 8.2.8 resolves `$oc_*` inside
+    class-level `DEFAULT_CSS` once the `Theme` is registered on the App (registration
+    order matters). **Fallback if unreliable** (not a new product decision): substitute
+    tokens into the CSS string at class-definition time via `string.Template` `$name`
+    (final string carries baked hexes — no runtime `$`, no f-string braces). Then land
+    the seam + `OPENCODE_DERIVED` (incl. `scalar_track #1a1a1a`) + the extended parity
+    guard test (write the guard early so it red-lights remaining drift as you migrate).
+  - **PR-2, step 2:** migrate widget CSS + inline markup in batches — broker desks →
+    ticker desk → judge/plan/health → **agent cockpit last** (biggest skin change:
+    detox ramp + "AI Research Cockpit" title).
 
 ### Audit greps (repeatable — should shrink to zero off-token hits as work lands)
 
+> **Allowlist is illustrative, not canonical.** At implementation time, generate the
+> pattern from `OPENCODE_TOKENS ∪ OPENCODE_DERIVED` (+ exception list) so the doc grep and
+> the CI guard share one source. The snapshot below already lags §0 — it now includes the
+> Tier-2 promotions `#1a1a1a` (scalar_track) and `#1a1212` (fail-bg); the generated
+> allowlist keeps this correct by construction.
+
 ```bash
-# off-palette hexes in TUI python (allowlist = OPENCODE_TOKENS values + derived shades)
+# off-palette hexes in TUI python (allowlist = OPENCODE_TOKENS ∪ OPENCODE_DERIVED)
 grep -rhoE '#[0-9a-fA-F]{6}' --include='*.py' src/adapters/tui \
- | grep -viE '#0b0b0b|#141414|#101010|#0e0e0e|#161616|#1c1c1c|#181818|#121212|#090909|#d8d8d8|#e8e8e8|#7a7a7a|#555555|#3d3d3d|#c9a68a|#1a120c|#a8896f|#6fbf8a|#d4b06a|#c97a72|#7aa2c4|#9b8fb8|#3a3a3a|#2a2a2a|#6b6b6b|#1a1810|#121a14' \
+ | grep -viE '#0b0b0b|#141414|#101010|#0e0e0e|#161616|#1c1c1c|#181818|#121212|#090909|#d8d8d8|#e8e8e8|#7a7a7a|#555555|#3d3d3d|#c9a68a|#1a120c|#a8896f|#6fbf8a|#d4b06a|#c97a72|#7aa2c4|#9b8fb8|#3a3a3a|#2a2a2a|#6b6b6b|#1a1810|#121a14|#1a1a1a|#1a1212' \
  | sort | uniq -c | sort -rn
 
 # flow-desk bar must carry a % (P1)
