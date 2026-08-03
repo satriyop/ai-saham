@@ -88,6 +88,7 @@ class SessionAwareAgentTurnUseCase:
         *,
         is_cancelled: Callable[[], bool] | None = None,
         on_progress: Callable[[str], None] | None = None,
+        on_approval: Callable | None = None,
     ) -> AgentTurnResult:
         if not self._policy.enabled or not self._session_certified():
             return self._call_inner(
@@ -95,6 +96,7 @@ class SessionAwareAgentTurnUseCase:
                 is_cancelled=is_cancelled,
                 session_pack=None,
                 on_progress=on_progress,
+                on_approval=on_approval,
             )
 
         try:
@@ -130,6 +132,7 @@ class SessionAwareAgentTurnUseCase:
             is_cancelled=is_cancelled,
             session_pack=pack,
             on_progress=on_progress,
+            on_approval=on_approval,
         )
         # ADR-064 fail-safe: only SUCCESS/PARTIAL commit commentary/tool memory.
         # FAIL/CANCEL/UNAVAILABLE leave session as before this Enter.
@@ -197,6 +200,7 @@ class SessionAwareAgentTurnUseCase:
         is_cancelled: Callable[[], bool] | None,
         session_pack: AgentSessionPack | None,
         on_progress: Callable[[str], None] | None = None,
+        on_approval: Callable | None = None,
     ) -> AgentTurnResult:
         try:
             return self._inner.execute(
@@ -204,10 +208,16 @@ class SessionAwareAgentTurnUseCase:
                 is_cancelled=is_cancelled,
                 session_pack=session_pack,
                 on_progress=on_progress,
+                on_approval=on_approval,
             )
         except TypeError:
             # Phase 1 use case historically only accepted the request positional.
-            if is_cancelled is None and session_pack is None and on_progress is None:
+            if (
+                is_cancelled is None
+                and session_pack is None
+                and on_progress is None
+                and on_approval is None
+            ):
                 return self._inner.execute(request)  # type: ignore[call-arg]
             try:
                 return self._inner.execute(  # type: ignore[call-arg]
@@ -215,13 +225,22 @@ class SessionAwareAgentTurnUseCase:
                     is_cancelled=is_cancelled,
                     session_pack=session_pack,
                     on_progress=on_progress,
+                    on_approval=on_approval,
                 )
             except TypeError:
-                return self._inner.execute(  # type: ignore[call-arg]
-                    request,
-                    is_cancelled=is_cancelled,
-                    session_pack=session_pack,
-                )
+                try:
+                    return self._inner.execute(  # type: ignore[call-arg]
+                        request,
+                        is_cancelled=is_cancelled,
+                        session_pack=session_pack,
+                        on_progress=on_progress,
+                    )
+                except TypeError:
+                    return self._inner.execute(  # type: ignore[call-arg]
+                        request,
+                        is_cancelled=is_cancelled,
+                        session_pack=session_pack,
+                    )
 
 
 def _tool_subject(item) -> str | None:

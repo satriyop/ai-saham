@@ -26,11 +26,15 @@ from src.application.dto.accumulation_agent import (
 from src.application.dto.agent_session import AgentSessionPack
 from src.application.dto.agent_tool_context import AgentToolExecutionContext
 from src.application.dto.agent_tools import (
+    AgentApprovalRequest,
     AgentModelToolCall,
     AgentModelToolChoice,
+    AgentToolApproval,
     AgentToolExecutionResult,
     AgentToolExecutionStatus,
+    AgentToolGapClue,
     AgentToolProvenance,
+    AgentToolSideEffect,
     AgentToolTurnPolicy,
     canonical_json_bytes,
 )
@@ -59,6 +63,7 @@ from src.application.use_case.explain_accumulation_candidate_use_case import SYS
 _T = TypeVar("_T")
 TimedCallRunner = Callable[[Callable[[], _T], float], _T]
 ProgressCallback = Callable[[str], None]
+ApprovalCallback = Callable[[AgentApprovalRequest], bool]
 
 
 class AgentTurnOrchestrator:
@@ -71,6 +76,7 @@ class AgentTurnOrchestrator:
         monotonic: Callable[[], float] = time.monotonic,
         timed_call: TimedCallRunner = None,
         on_progress: ProgressCallback | None = None,
+        on_approval: ApprovalCallback | None = None,
     ) -> None:
         self._model = model
         self._registry = registry
@@ -78,6 +84,7 @@ class AgentTurnOrchestrator:
         self._monotonic = monotonic
         self._timed_call = timed_call or _run_with_timeout
         self._on_progress = on_progress
+        self._on_approval = on_approval
 
     def execute(
         self,
@@ -86,9 +93,11 @@ class AgentTurnOrchestrator:
         is_cancelled: Callable[[], bool] | None = None,
         session_pack: AgentSessionPack | None = None,
         on_progress: ProgressCallback | None = None,
+        on_approval: ApprovalCallback | None = None,
     ) -> AgentTurnResult:
         cancelled = is_cancelled or (lambda: False)
         progress = on_progress or self._on_progress or (lambda _m: None)
+        approval = on_approval or self._on_approval
         text = request.user_text.strip()
         if not text:
             return _failed("Question cannot be empty")
@@ -130,6 +139,7 @@ class AgentTurnOrchestrator:
                 started=started,
                 cancelled=cancelled,
                 progress=progress,
+                approval=approval,
             )
 
         return self._l3_path(
@@ -141,6 +151,7 @@ class AgentTurnOrchestrator:
             started=started,
             cancelled=cancelled,
             progress=progress,
+            approval=approval,
         )
 
     def _single_answer_path(
@@ -181,8 +192,9 @@ class AgentTurnOrchestrator:
         started: float,
         cancelled: Callable[[], bool],
         progress: ProgressCallback,
+        approval: ApprovalCallback | None,
     ) -> AgentTurnResult:
-        """Exact ADR-061: auto → optional one batch ≤2 → forced none."""
+        """Exact ADR-061: auto → optional one batch ≤2 → forced none (+ L4 confirm/gaps)."""
         progress("AI Research Cockpit · round 1/2")
         initial_request = AgentModelRequest(
             system_policy=SYSTEM_POLICY,
@@ -206,31 +218,69 @@ class AgentTurnOrchestrator:
             )
 
         try:
-            prepared = self._registry.prepare_batch(
+            batch = self._registry.prepare_batch_result(
                 initial.tool_calls,
                 max_calls=self._policy.max_tools_per_batch,
+                allow_gaps=True,
             )
         except AgentToolValidationError:
             return _failed("Agent provider proposed an invalid tool batch")
 
+        gap_clues = list(batch.gaps)
         tool_started = self._monotonic()
-        results, err = self._run_batch(
-            prepared,
+        results, err, elevated = self._run_batch(
+            batch.prepared,
             tool_context=tool_context,
             started=started,
             tool_started=tool_started,
             cancelled=cancelled,
             progress=progress,
+            approval=approval,
             total_bytes=0,
             seen_identities=set(),
         )
         if err is not None:
-            return err
+            return _with_gaps(err, gap_clues, elevated_attempted=elevated)
         assert results is not None
 
         if cancelled():
             return _cancelled()
+        if not results and gap_clues and not batch.prepared:
+            # Only gaps — still force a final answer honesty path
+            progress("AI Research Cockpit · round 2/2 · final answer")
+            final_only = self._provider_call(
+                AgentModelRequest(
+                    system_policy=SYSTEM_POLICY,
+                    user_text=text,
+                    context=context,
+                    max_output_tokens=500,
+                    tool_definitions=definitions,
+                    tool_choice=AgentModelToolChoice.NONE,
+                    session_pack=session_pack,
+                ),
+                started,
+            )
+            if isinstance(final_only, AgentTurnResult):
+                return _with_gaps(final_only, gap_clues)
+            if final_only.kind is not AgentModelResponseKind.ANSWER:
+                return _with_gaps(
+                    _failed("Agent provider proposed tools after the final call"),
+                    gap_clues,
+                )
+            return _answer_result(
+                final_only,
+                context.context_reference,
+                context.warnings + tuple(g.operator_line() for g in gap_clues),
+                (),
+                tools_offered=True,
+                gap_clues=tuple(gap_clues),
+            )
+
         progress("AI Research Cockpit · round 2/2 · final answer")
+        # Prior history only for executed tools (denies included as results)
+        prior_calls = tuple(
+            c for c in initial.tool_calls if any(r.call_id == c.call_id for r in results)
+        )
         final_request = AgentModelRequest(
             system_policy=SYSTEM_POLICY,
             user_text=text,
@@ -238,24 +288,32 @@ class AgentTurnOrchestrator:
             max_output_tokens=500,
             tool_definitions=definitions,
             tool_choice=AgentModelToolChoice.NONE,
-            prior_tool_calls=initial.tool_calls,
+            prior_tool_calls=prior_calls,
             tool_results=tuple(results),
             session_pack=session_pack,
         )
         final = self._provider_call(final_request, started)
         if isinstance(final, AgentTurnResult):
-            return final
+            return _with_gaps(final, gap_clues, elevated_attempted=elevated)
         if final.kind is not AgentModelResponseKind.ANSWER:
-            return _failed("Agent provider proposed tools after the final call")
+            return _with_gaps(
+                _failed("Agent provider proposed tools after the final call"),
+                gap_clues,
+                elevated_attempted=elevated,
+                restore=elevated,
+            )
         warnings = context.warnings + tuple(
             warning for result in results for warning in result.warnings
         )
+        warnings = warnings + tuple(g.operator_line() for g in gap_clues)
         return _answer_result(
             final,
             context.context_reference,
             warnings,
             tuple(results),
             tools_offered=True,
+            gap_clues=tuple(gap_clues),
+            elevated_attempted=elevated,
         )
 
     def _l3_path(
@@ -269,6 +327,7 @@ class AgentTurnOrchestrator:
         started: float,
         cancelled: Callable[[], bool],
         progress: ProgressCallback,
+        approval: ApprovalCallback | None,
     ) -> AgentTurnResult:
         """ADR-064 multi-round: up to 3 provider rounds and 4 tool executions."""
         max_rounds = self._policy.max_provider_calls
@@ -280,6 +339,8 @@ class AgentTurnOrchestrator:
         seen_identities: set[tuple[str, bytes]] = set()
         tool_started = self._monotonic()
         total_bytes = 0
+        gap_clues: list[AgentToolGapClue] = []
+        elevated_any = False
 
         while rounds_used < max_rounds:
             if cancelled():
@@ -307,107 +368,204 @@ class AgentTurnOrchestrator:
             )
             response = self._provider_call(model_request, started)
             if isinstance(response, AgentTurnResult):
-                return response
+                return _with_gaps(response, gap_clues, elevated_attempted=elevated_any)
             rounds_used += 1
 
             if response.kind is AgentModelResponseKind.ANSWER:
                 if not response.text.strip():
-                    return _failed("Agent provider returned an empty answer")
+                    return _with_gaps(
+                        _failed("Agent provider returned an empty answer"),
+                        gap_clues,
+                        elevated_attempted=elevated_any,
+                    )
                 warnings = context.warnings + tuple(
                     warning for result in all_results for warning in result.warnings
                 )
+                warnings = warnings + tuple(g.operator_line() for g in gap_clues)
                 return _answer_result(
                     response,
                     context.context_reference,
                     warnings,
                     tuple(all_results),
                     tools_offered=True,
+                    gap_clues=tuple(gap_clues),
+                    elevated_attempted=elevated_any,
                 )
 
             if forced_final:
-                return _failed("Agent provider proposed tools after the final call")
+                return _with_gaps(
+                    _failed("Agent provider proposed tools after the final call"),
+                    gap_clues,
+                    elevated_attempted=elevated_any,
+                    restore=elevated_any,
+                )
 
             if tools_used >= max_tools:
-                return _failed("AI Research Cockpit tool budget exhausted without an answer")
+                return _with_gaps(
+                    _failed("AI Research Cockpit tool budget exhausted without an answer"),
+                    gap_clues,
+                    elevated_attempted=elevated_any,
+                )
 
             try:
-                prepared = self._registry.prepare_batch(
+                batch = self._registry.prepare_batch_result(
                     response.tool_calls,
                     max_calls=min(self._policy.max_tools_per_batch, remaining_tools),
+                    allow_gaps=True,
                 )
             except AgentToolValidationError:
-                return _failed("Agent provider proposed an invalid tool batch")
+                return _with_gaps(
+                    _failed("Agent provider proposed an invalid tool batch"),
+                    gap_clues,
+                    elevated_attempted=elevated_any,
+                )
 
-            if tools_used + len(prepared) > max_tools:
-                return _failed("Agent provider proposed more tools than the turn budget allows")
+            gap_clues.extend(batch.gaps)
+            if tools_used + len(batch.prepared) > max_tools:
+                return _with_gaps(
+                    _failed("Agent provider proposed more tools than the turn budget allows"),
+                    gap_clues,
+                    elevated_attempted=elevated_any,
+                )
 
-            batch_results, err = self._run_batch(
-                prepared,
+            batch_results, err, elevated = self._run_batch(
+                batch.prepared,
                 tool_context=tool_context,
                 started=started,
                 tool_started=tool_started,
                 cancelled=cancelled,
                 progress=progress,
+                approval=approval,
                 total_bytes=total_bytes,
                 seen_identities=seen_identities,
             )
+            elevated_any = elevated_any or elevated
             if err is not None:
-                return err
+                return _with_gaps(err, gap_clues, elevated_attempted=elevated_any, restore=elevated)
             assert batch_results is not None
-            for call, result in zip(response.tool_calls, batch_results, strict=False):
-                # prepare_batch may reorder? It preserves order of input calls.
-                pass
-            # Match prepared order to model call order via call_id
             by_id = {r.call_id: r for r in batch_results}
-            ordered_results: list[AgentToolExecutionResult] = []
             for call in response.tool_calls:
                 result = by_id.get(call.call_id)
                 if result is None:
-                    return _failed("Agent tool batch identity mismatch")
-                ordered_results.append(result)
+                    continue  # gap / skipped unregistered
                 all_calls.append(call)
                 all_results.append(result)
                 total_bytes += result.serialized_size()
-            tools_used += len(ordered_results)
+            tools_used += len(batch_results)
 
-        return _failed("AI Research Cockpit round budget exhausted without an answer")
+        return _with_gaps(
+            _failed("AI Research Cockpit round budget exhausted without an answer"),
+            gap_clues,
+            elevated_attempted=elevated_any,
+        )
 
     def _run_batch(
         self,
-        prepared: tuple[PreparedAgentToolCall, ...],
+        prepared: tuple,
         *,
         tool_context: AgentToolExecutionContext,
         started: float,
         tool_started: float,
         cancelled: Callable[[], bool],
         progress: ProgressCallback,
+        approval: ApprovalCallback | None,
         total_bytes: int,
         seen_identities: set[tuple[str, bytes]],
-    ) -> tuple[list[AgentToolExecutionResult] | None, AgentTurnResult | None]:
+    ) -> tuple[list[AgentToolExecutionResult] | None, AgentTurnResult | None, bool]:
         results: list[AgentToolExecutionResult] = []
         running_bytes = total_bytes
+        elevated_attempted = False
         for call in prepared:
             if cancelled():
-                return None, _cancelled()
+                return None, _cancelled(), elevated_attempted
             try:
                 identity = (call.name.value, canonical_json_bytes(call.arguments))
             except (TypeError, ValueError):
-                return None, _failed("Agent tool arguments contain unsupported values")
+                return (
+                    None,
+                    _failed("Agent tool arguments contain unsupported values"),
+                    elevated_attempted,
+                )
             if identity in seen_identities:
-                return None, _failed("Agent provider proposed a duplicate tool call in this turn")
+                return (
+                    None,
+                    _failed("Agent provider proposed a duplicate tool call in this turn"),
+                    elevated_attempted,
+                )
             seen_identities.add(identity)
+
+            definition = call.tool.definition
+            if definition.approval is AgentToolApproval.PER_CALL:
+                elevated_attempted = True
+                req = AgentApprovalRequest(
+                    call_id=call.call_id,
+                    tool_name=call.name.value,
+                    arg_summary=_arg_summary(call),
+                    implication=_implication(definition.side_effect),
+                    side_effect=definition.side_effect,
+                )
+                progress(f"AI Research Cockpit · confirm {call.name.value}…")
+                approved = True if approval is None else bool(approval(req))
+                if not approved:
+                    results.append(
+                        AgentToolExecutionResult.create(
+                            call_id=call.call_id,
+                            name=call.name,
+                            status=AgentToolExecutionStatus.UNAVAILABLE,
+                            data=None,
+                            error_code="TOOL_DENIED",
+                            error_message="Operator declined elevated/external tool",
+                            warnings=("EXTERNAL_OR_ELEVATED_DECLINED",),
+                            provenance=AgentToolProvenance(source=call.name.value),
+                            side_effect=definition.side_effect,
+                        )
+                    )
+                    continue
+
             progress(f"AI Research Cockpit · tool {call.name.value}…")
             result = self._execute_tool(call, tool_context, started, tool_started)
             if isinstance(result, AgentTurnResult):
-                return None, result
+                # Promote post-approve elevated failure to restore flag
+                if elevated_attempted:
+                    result = replace_restore(result, True)
+                return None, result, elevated_attempted
+            if (
+                definition.side_effect is not AgentToolSideEffect.NONE
+                and result.status
+                in {
+                    AgentToolExecutionStatus.FAILED,
+                    AgentToolExecutionStatus.UNAVAILABLE,
+                }
+                and result.error_code != "TOOL_DENIED"
+            ):
+                # Post-approve fail: fail closed turn with restore (ADR-065)
+                return (
+                    None,
+                    AgentTurnResult(
+                        status=AgentTurnStatus.FAILED,
+                        error_message=result.error_message
+                        or "Elevated/external tool failed after approval",
+                        restore_last_good=True,
+                        elevated_attempted=True,
+                    ),
+                    True,
+                )
             size = result.serialized_size()
             if size > call.tool.definition.max_result_bytes:
-                return None, _failed("Agent tool result exceeded its size limit")
+                return (
+                    None,
+                    _failed("Agent tool result exceeded its size limit"),
+                    elevated_attempted,
+                )
             running_bytes += size
             if running_bytes > self._policy.max_total_result_bytes:
-                return None, _failed("Agent tool results exceeded the turn size limit")
+                return (
+                    None,
+                    _failed("Agent tool results exceeded the turn size limit"),
+                    elevated_attempted,
+                )
             results.append(result)
-        return results, None
+        return results, None, elevated_attempted
 
     def _provider_call(
         self,
@@ -468,6 +626,7 @@ class AgentTurnOrchestrator:
                 error_code="TOOL_TIMEOUT",
                 error_message="Agent read tool timed out",
                 provenance=AgentToolProvenance(source=call.name.value),
+                side_effect=call.tool.definition.side_effect,
             )
         except AgentToolExecutionContractError:
             return AgentToolExecutionResult.create(
@@ -478,6 +637,7 @@ class AgentTurnOrchestrator:
                 error_code="TOOL_CONTRACT",
                 error_message="Agent read tool violated its result contract",
                 provenance=AgentToolProvenance(source=call.name.value),
+                side_effect=call.tool.definition.side_effect,
             )
         except Exception:
             return AgentToolExecutionResult.create(
@@ -488,6 +648,7 @@ class AgentTurnOrchestrator:
                 error_code="TOOL_FAILED",
                 error_message="Agent read tool failed",
                 provenance=AgentToolProvenance(source=call.name.value),
+                side_effect=call.tool.definition.side_effect,
             )
 
     def _remaining_turn_seconds(self, started: float) -> float:
@@ -510,19 +671,21 @@ def _answer_result(
     tool_results: tuple[AgentToolExecutionResult, ...],
     *,
     tools_offered: bool = False,
+    gap_clues: tuple[AgentToolGapClue, ...] = (),
+    elevated_attempted: bool = False,
 ) -> AgentTurnResult:
     text = response.text.strip()
     extra: list[str] = list(warnings)
     if response.finish_reason == "length":
         extra.append("Model answer reached the output limit")
-    if tools_offered and not tool_results:
+    if tools_offered and not tool_results and not gap_clues:
         extra.append(
             "TOOLS_NOT_USED: Model answered without calling any registered tools. "
             "If the question needs broker desk, dashboard, or re-judge data not in "
             "context, re-ask and expect a tool call — or design a new OUR tool "
             "(TOOL_GAP clue)."
         )
-    if tools_offered and not tool_results and _looks_like_planning_only(text):
+    if tools_offered and not tool_results and not gap_clues and _looks_like_planning_only(text):
         return AgentTurnResult(
             status=AgentTurnStatus.FAILED,
             error_message=(
@@ -531,11 +694,16 @@ def _answer_result(
                 "brokers tool (get_broker_desk is desk-code centric, not stock-centric)."
             ),
         )
+    # Denied elevated tools count as non-SUCCESS for PARTIAL honesty
     status = (
         AgentTurnStatus.PARTIAL
         if any(result.status is not AgentToolExecutionStatus.SUCCESS for result in tool_results)
+        or gap_clues
         else AgentTurnStatus.SUCCESS
     )
+    if status is AgentTurnStatus.PARTIAL and not tool_results and gap_clues:
+        # PARTIAL requires tool_results — attach synthetic note via SUCCESS if answer only
+        status = AgentTurnStatus.SUCCESS
     return AgentTurnResult(
         status=status,
         answer=response.text,
@@ -547,7 +715,53 @@ def _answer_result(
         input_tokens=response.input_tokens,
         output_tokens=response.output_tokens,
         tool_results=tool_results,
+        gap_clues=gap_clues,
+        elevated_attempted=elevated_attempted,
     )
+
+
+def _with_gaps(
+    result: AgentTurnResult,
+    gaps: list[AgentToolGapClue] | tuple[AgentToolGapClue, ...],
+    *,
+    elevated_attempted: bool = False,
+    restore: bool = False,
+) -> AgentTurnResult:
+    from dataclasses import replace
+
+    gap_t = tuple(gaps)
+    extra_warn = tuple(g.operator_line() for g in gap_t)
+    return replace(
+        result,
+        warnings=tuple(dict.fromkeys(result.warnings + extra_warn)),
+        gap_clues=gap_t or result.gap_clues,
+        elevated_attempted=elevated_attempted or result.elevated_attempted,
+        restore_last_good=restore or result.restore_last_good,
+    )
+
+
+def replace_restore(result: AgentTurnResult, restore: bool) -> AgentTurnResult:
+    from dataclasses import replace
+
+    return replace(result, restore_last_good=restore, elevated_attempted=True)
+
+
+def _arg_summary(call: PreparedAgentToolCall) -> str:
+    try:
+        raw = canonical_json_bytes(call.arguments).decode("utf-8")
+    except Exception:
+        raw = call.name.value
+    if len(raw) > 120:
+        return raw[:117] + "…"
+    return raw
+
+
+def _implication(side_effect: AgentToolSideEffect) -> str:
+    if side_effect is AgentToolSideEffect.NETWORK_READ:
+        return "Network leaves this machine · external research · does not change Action"
+    if side_effect is AgentToolSideEffect.LOCAL_READ_ELEVATED:
+        return "Local read-only allowlisted query · broader surface · does not change Action"
+    return "Read-only · does not change Action"
 
 
 def _looks_like_planning_only(text: str) -> bool:
