@@ -1,8 +1,11 @@
 # Parked — TUI Agent Phase 3 Ephemeral Sessions and Hardening
 
-Status: `PARKED`
+Status: `SUPERSEDED` — activated 2026-08-03 as
+[`implement_tui_agent_ephemeral_sessions_phase3.md`](implement_tui_agent_ephemeral_sessions_phase3.md)
+under [ADR-063](../../docs/adr/ADR-063-ephemeral-agent-session-and-context-budget.md).
+Keep this file only as historical activation criteria.
 
-Activation trigger: Phases 1 and 2 are complete, their final contracts are
+Activation trigger (met): Phases 1 and 2 are complete, their final contracts are
 re-vetted against current code, and an ADR amendment locks session identity,
 reference invalidation, context budgeting, and provider capability rules.
 

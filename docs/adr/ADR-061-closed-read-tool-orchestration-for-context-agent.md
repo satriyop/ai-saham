@@ -426,6 +426,9 @@ transport, sessions, persistence, or writes.
 8. Validation and budgets run before execution and fail closed.
 9. At most two sequential tools and two provider calls occur in one turn.
 10. Phase 2 creates no multi-turn memory, audit history, or write authority.
+    Multi-turn process-local sessions are authorized only by
+    [ADR-063](ADR-063-ephemeral-agent-session-and-context-budget.md), not by this
+    ADR alone.
 
 ## Non-goals
 
