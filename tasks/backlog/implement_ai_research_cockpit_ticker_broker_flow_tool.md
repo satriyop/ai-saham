@@ -8,13 +8,12 @@
 
 | Doc | Role |
 |---|---|
-| [ADR-067](../../docs/adr/ADR-067-ai-research-cockpit-ticker-broker-flow-tool.md) | **Binding** — tool contract, args, result, invariants |
-| [ADR-061](../../docs/adr/ADR-061-closed-read-tool-orchestration-for-context-agent.md) | Closed read-tool registry pattern |
-| Coverage matrix | [`docs/roadmap/ai_research_cockpit_tool_coverage.md`](../../docs/roadmap/ai_research_cockpit_tool_coverage.md) (rows 1/2/4) |
+| [ADR-061](../../docs/adr/ADR-061-closed-read-tool-orchestration-for-context-agent.md) | **Binding** — closed read-tool registry authorization (this tool is a routine `side_effect=NONE` addition, no new ADR) |
+| Coverage matrix | [`docs/roadmap/ai_research_cockpit_tool_coverage.md`](../../docs/roadmap/ai_research_cockpit_tool_coverage.md) (rows 1/2/4/5-avgprice) |
 | Reference tools | `agent_ticker_dashboard_tool.py`, `agent_broker_desk_tool.py` (copy their shape) |
 
-**Do not invent product behavior.** If ADR and code conflict, stop and ask. If ADR
-is silent, choose the **safer, smaller** option and document it.
+**Do not invent product behavior.** If ADR and code conflict, stop and ask. If a
+contract detail is unspecified, choose the **safer, smaller** option and document it.
 
 ## 0. Mission
 
@@ -61,10 +60,11 @@ Read before editing:
 ## 2. Slices
 
 1. **Contract:** add `AgentToolName.GET_TICKER_BROKER_FLOW`; define the frozen
-   result payload DTO (`schema_id = agent_tool.ticker_broker_flow.v1`) with fields
-   per ADR-067 (named top accumulating/distributing desks with net + side;
+   result payload DTO (`schema_id = agent_tool.ticker_broker_flow.v1`): named top
+   accumulating/distributing desks with net + side + **avg buy/sell price**
+   (`broker_flow.avg_buy_price/avg_sell_price` — closes coverage row 5);
    `total_buyers`/`total_sellers`/`number_broker_buysell`; `broker_accdist` +
-   `five_day/top1/3/5/10_accdist`; provenance `tops_source`/`tops_scope`; `as_of`).
+   `five_day/top1/3/5/10_accdist`; provenance `tops_source`/`tops_scope`; `as_of`.
 2. **Tool:** `TickerBrokerFlowTool` — args `ticker` (required), optional
    `window_days` (cap 20), `limit` (cap 10). Compose `ViewTickerTopBrokersUseCase`
    (+ bandar snapshot when available). Cap output bytes; return `UNAVAILABLE` with a
@@ -87,7 +87,7 @@ Read before editing:
 - [ ] `side_effect=NONE`, no confirm; cache-only; no fetch/scrape/write.
 - [ ] Offered on all stages; deterministic Action authority untouched.
 - [ ] Offline agent suite + golden UX pilot green; Ruff green.
-- [ ] Coverage matrix rows 1/2/4 → 🟢; ADR-067 completion record filled.
+- [ ] Coverage matrix rows 1/2/4 → 🟢 (row 5 avg-price too); completion record filled.
 
 ## 4. Verification
 
@@ -101,14 +101,15 @@ ruff format --check src/ tests/
 
 ## 5. Non-goals
 
-- New data providers (insider row 7, corp-action row 8).
+- Insider (row 7) and corporate action (row 8) — their data is also local but they
+  are **separate sibling tasks** under ADR-061, not part of this one.
 - Per-broker average price / monthly aggregation (revisit if asked).
 - External/network or elevated access; model-invented tools.
 - Any write/fetch/refresh.
 
 ## 6. Completion record (fill when done)
 
-- Activation ADR: ADR-067
+- Authorizing ADR: ADR-061 (routine closed read tool; no dedicated ADR)
 - Implemented date:
 - Commits:
 - Coverage rows flipped: 1, 2, 4

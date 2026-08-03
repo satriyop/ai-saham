@@ -3,8 +3,10 @@
 **Role:** Audit whether OUR closed tools cover the **canonical accum/preopen
 research questions** operators actually ask. This is the static half of the
 [ADR-065](../adr/ADR-065-ai-research-cockpit-external-and-ro-data-l4.md) learning
-loop: rows that are **GAP** become the backlog for new OUR tools (each via its own
-ADR). The behavioral half is the runtime `TOOL_GAP` clue.
+loop: rows that are **GAP** become the backlog for new OUR tools — each an
+**implement task under [ADR-061](../adr/ADR-061-closed-read-tool-orchestration-for-context-agent.md)**
+(a new ADR only if the tool needs new authority / a new `side_effect` class, as
+ADR-065 did). The behavioral half is the runtime `TOOL_GAP` clue.
 
 **Keep this file honest:** a question is only **Covered** when the datum both
 **exists** and is **exposed** in an agent-facing result. See the three states.
@@ -50,10 +52,10 @@ by auditing only agent-facing DTOs. The underlying data is **local** — they ar
 
 | # | Canonical question | Required datum | Carrier (tool · field) | State |
 |---|---|---|---|---|
-| 1 | **Which** desks are accumulating this ticker (named) | ticker→named brokers, buy side | *none yet* — `get_broker_desk` is desk-centric; `ViewTickerTopBrokersUseCase.top_buyers` exists but is not a tool | 🔴→ [ADR-067](../adr/ADR-067-ai-research-cockpit-ticker-broker-flow-tool.md) `get_ticker_broker_flow` |
+| 1 | **Which** desks are accumulating this ticker (named) | ticker→named brokers, buy side | *none yet* — `get_broker_desk` is desk-centric; `ViewTickerTopBrokersUseCase.top_buyers` exists but is not a tool | 🔴→ [`get_ticker_broker_flow` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_broker_flow_tool.md) (under ADR-061) |
 | 2 | **How many** desks accumulating | `total_buyer` / `number_broker_buysell` | exists in `BandarDetectorSnapshot`; agent sees only `bci_tier1_count` | 🟡 projection |
 | 3 | **Consistency** — streak (days), months | daily streak; multi-window smoothing; monthly agg | days ✅ `AgentAccumulationFacts.consecutive_streak`; multi-window `five_day/top-N accdist` exists unexposed; **monthly not aggregated** | 🟡 / 🔴 (months) |
-| 4 | All of 1–3 for **distribution/selling** | ticker→named sellers; `Dis` labels; `total_seller` | `top_sellers` exists (no tool); `broker_accdist="Dis"`, `total_seller` unexposed | 🔴→ [ADR-067](../adr/ADR-067-ai-research-cockpit-ticker-broker-flow-tool.md) + 🟡 |
+| 4 | All of 1–3 for **distribution/selling** | ticker→named sellers; `Dis` labels; `total_seller` | `top_sellers` exists (no tool); `broker_accdist="Dis"`, `total_seller` unexposed | 🔴→ [`get_ticker_broker_flow` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_broker_flow_tool.md) (under ADR-061) + 🟡 |
 | 5 | All of 1–4 on **volume / qty / price avg** | per-ticker volume; per-broker net; per-broker avg price | volume ✅ dashboard; per-broker net ✅ `get_broker_desk`/`ro_data_query`; per-broker avg price **exists** — `broker_flow.avg_buy_price/avg_sell_price` — unexposed | 🟡 projection (avg price) |
 | 6 | Phase **compression / breakout** | setup phase; BB width percentile | ✅ `AgentSetupPhaseFacts.current_phase`; ✅ `AgentAccumulationFacts.bb_width_pctile` | 🟢 covered |
 | 7 | Recent **insider activity** | insider transactions | **exists** — `insider_cache` + `InsiderTransaction` + `InsiderActivityProvider` (via `ticker_dashboard_source`); no agent tool/projection | 🟡 projection |
@@ -61,7 +63,7 @@ by auditing only agent-facing DTOs. The underlying data is **local** — they ar
 
 **Headline:** Q1/Q2/Q4 are one missing tool — a **stock-centric** ticker→desks
 view — and the data already exists (`ViewTickerTopBrokersUseCase` +
-`BandarDetectorSnapshot`). See [ADR-067](../adr/ADR-067-ai-research-cockpit-ticker-broker-flow-tool.md). The orchestrator already emits this exact
+`BandarDetectorSnapshot`). See the [`get_ticker_broker_flow` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_broker_flow_tool.md) (under ADR-061). The orchestrator already emits this exact
 `TOOL_GAP` at runtime.
 
 ## Guard test spec (regression + routing)
@@ -84,6 +86,7 @@ emitted `TOOL_GAP` clues — the runtime half of the audit.
 ## Maintenance rule
 
 - New frequently-asked question → add a matrix row + a corpus row.
-- A row that is 🔴 → open a follow-up ADR for the new OUR tool (or provider).
+- A row that is 🟡/🔴 → add an implement task under ADR-061 for the new OUR tool
+  (a new ADR only for new authority / a new provider).
 - A row that flips to 🟢 → cite the tool/field + the ADR that closed it.
 - Never mark 🟢 on data that exists but is unexposed — that is 🟡 by definition.
