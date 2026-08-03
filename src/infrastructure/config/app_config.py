@@ -121,6 +121,8 @@ class AiConfig:
     enabled: bool = False
     provider: str = "deepseek"  # deepseek | claude | openai | gemini | ollama
     tools_enabled: bool = False
+    # ADR-064: bounded multi-round OUR tools (L3). Default false keeps ADR-061 L1.
+    tools_multi_round: bool = False
     session_enabled: bool = False
 
 

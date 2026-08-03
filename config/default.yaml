@@ -106,4 +106,7 @@ ai:
   enabled: false         # AI-assisted analysis is OFF by default
   provider: deepseek     # default provider: deepseek | claude | openai | gemini | ollama
   tools_enabled: false   # closed read tools are an independent opt-in
+  # ADR-064 L3: when true (+ tools_enabled), allow up to 3 provider rounds / 4 tools / 2 per batch.
+  # Default false keeps exact ADR-061 L1 ceilings (1 tool batch, 2 tools, 2 provider calls).
+  tools_multi_round: false
   session_enabled: false # process-local multi-turn follow-ups (ADR-063)
