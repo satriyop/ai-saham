@@ -218,9 +218,16 @@ git diff --check
 ## 7. Completion record (fill when done)
 
 - Activation ADR: ADR-066
-- Implemented date:
+- Implemented date: 2026-08-03
 - Slices landed (commits):
-- Verification:
+  - Slice 0: `2a8d8535` foundation + `90f7da74` tests
+  - Slice 1: `d71add2f` accum_screen + `8845552b` tests
+  - Slice 2: `ca36dfc6` view_ticker + `5faa4999` tests
+  - Slice 3: `3f51ae25` view_broker + `0ac49a23` tests
+  - Slice 4: `b496e097` preopen_screen + `c55754f7` tests
+  - Slice 5: plan_swing (this close-out)
+- Verification: `pytest -m "agent and not agent-live-call"` green; golden UX pilots green; ruff check/format green
+- Status: **IMPLEMENTED** (runtime still gated by `ai.cockpit_multi_stage` default false)
 
 ---
 

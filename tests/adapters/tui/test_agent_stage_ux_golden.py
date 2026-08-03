@@ -687,3 +687,117 @@ def test_golden_preopen_board_opens_with_multi_stage_flag() -> None:
             assert "pre-open" in answer.lower() or "summary" in answer.lower()
 
     asyncio.run(scenario())
+
+
+def test_golden_plan_swing_refuses_without_multi_stage_flag() -> None:
+    """U5 — plan stage refuses when ai.cockpit_multi_stage is false."""
+
+    async def scenario() -> None:
+        seen = []
+
+        def runner(request):
+            seen.append(request)
+            return AgentTurnResult(
+                status=AgentTurnStatus.SUCCESS,
+                answer="should not run",
+                context_reference="sha256:x",
+                provider="deepseek",
+                model="deepseek-v4-flash",
+            )
+
+        app = CockpitApp(
+            accum_loader=_accum_payload,
+            accum_controller=BoardController(_accum_payload),
+            accum_presenter=AccumPresenter(),
+            agent_turn_runner=runner,
+            agent_provider_available=True,
+            agent_cockpit_multi_stage=False,
+        )
+        async with app.run_test(size=(100, 36)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            app._stage = "plan"
+            app._plan_ticker = "BBCA"
+            app._plan_running = False
+            app._submit_agent_turn("explain structure")
+            await pilot.pause()
+            assert seen == []
+
+    asyncio.run(scenario())
+
+
+def test_golden_plan_swing_opens_with_multi_stage_flag() -> None:
+    """U5 / ADR-066 — plan_swing destination when flag on + structure ready."""
+
+    async def scenario() -> None:
+        from src.adapters.tui.plan_structure_result import PlanStructureResult
+
+        struct = PlanStructureResult(
+            summary="structure WATCH · entry 9,100 · stop 8,800 · target 9,800 · 2 lots · no order",
+            ticker="BBCA",
+            action="WATCH",
+            entry="9,100",
+            stop="8,800",
+            target="9,800",
+            lots="2",
+            risk_pct="1.0",
+            horizon="swing",
+            inherits_action=True,
+            no_order=True,
+        )
+        seen = []
+
+        def runner(request):
+            seen.append(request.stage_context)
+            return AgentTurnResult(
+                status=AgentTurnStatus.SUCCESS,
+                answer="Plan structure summary only.",
+                context_reference=request.stage_context.context_reference,
+                provider="deepseek",
+                model="deepseek-v4-flash",
+            )
+
+        app = CockpitApp(
+            accum_loader=_accum_payload,
+            accum_controller=BoardController(_accum_payload),
+            accum_presenter=AccumPresenter(),
+            agent_turn_runner=runner,
+            agent_provider_available=True,
+            agent_cockpit_multi_stage=True,
+        )
+        async with app.run_test(size=(120, 40)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            app._stage = "plan"
+            app._plan_ticker = "BBCA"
+            app._plan_structure = struct
+            app._plan_running = False
+            app._focus_ticker = "BBCA"
+            app.action_focus_agent()
+            await pilot.pause()
+            assert app._agent_stage_open is True
+            app._submit_agent_turn("Summarize entry stop target")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if seen and not app._agent_loading:
+                    break
+            assert len(seen) == 1
+            ctx = seen[0]
+            assert ctx.stage_kind.value == "plan_swing"
+            assert ctx.schema_id == "tui_agent.plan_swing.v1"
+            assert ctx.ticker == "BBCA"
+            assert ctx.geometry_available is True
+            assert ctx.no_order is True
+            commentary = app.query_one("#agent-commentary", AgentCommentary)
+            for _ in range(20):
+                await pilot.pause(0.05)
+                answer = str(commentary.query_one(".agent-answer").content)
+                if "structure" in answer.lower() or "summary" in answer.lower():
+                    break
+            assert "structure" in answer.lower() or "summary" in answer.lower()
+
+    asyncio.run(scenario())

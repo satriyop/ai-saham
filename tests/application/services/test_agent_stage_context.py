@@ -14,7 +14,6 @@ from src.application.dto.accumulation_agent import (
 )
 from src.application.dto.agent_session import AgentSessionPolicy
 from src.application.services.agent_accumulation_context import (
-    AgentContextUnavailableError,
     build_agent_accumulation_context,
 )
 from src.application.services.agent_session_store import InMemoryAgentSessionStore
@@ -45,7 +44,8 @@ def test_judge_facade_matches_direct_builder_hash() -> None:
 
 
 def test_unshipped_stage_raises_unavailable() -> None:
-    with pytest.raises(AgentContextUnavailableError, match="not available yet"):
+    # All catalog stages are shipped; wrong-type still raises TypeError, not Unavailable.
+    with pytest.raises(TypeError, match="plan_swing"):
         build_agent_stage_context(AgentStageKind.PLAN_SWING, object())
 
 

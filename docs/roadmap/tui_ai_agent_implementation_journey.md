@@ -119,7 +119,7 @@ flags may tighten or expand by ADR as the cockpit matures; vocabulary stays.
 | **View ticker** dashboard | `view_ticker` | `ai.cockpit_multi_stage` | **Shipped** — cache-only dashboard projection (ADR-066) |
 | **View broker** desk | `view_broker` | `ai.cockpit_multi_stage` | **Shipped** — desk code + shown view (show/top/flow/matrix/…) (ADR-066) |
 | **Pre-open screen** board | `preopen_screen` | `ai.cockpit_multi_stage` | **Shipped** — bounded top-20 cohort + IEV/NCP session honesty (ADR-066) |
-| Plan swing | `plan_swing` | `ai.cockpit_multi_stage` | Journey work — notify + refuse until contract lands |
+| **Plan swing** | `plan_swing` | `ai.cockpit_multi_stage` | **Shipped** — structure desk geometry + sizing honesty; no order (ADR-066) |
 
 **Destination:** invoke from every TUI stage with a stage-appropriate context
 projection—each stage needs an explicit context contract before `/` opens there.
@@ -148,7 +148,7 @@ Application authority rules are unchanged (ADR-060/061/063).
 | U2 | Invocation free-text | Any non-empty prompt submit that is not a mode/reset command **auto-enters agent mode** and dispatches an agent turn when the **current stage** context is valid. Idle must **not** silently drop questions. |
 | U3 | Invocation `:` | Focuses the prompt rail without forcing stage replace by itself. |
 | U4 | Leave | `Esc` while agent stage is open closes agent stage and **restores** the prior deterministic stage. Does not quit the app. |
-| U5 | Scope | Opens only when the stage builder succeeds (identity-validated projection). **Judge:** full `row.source`. **Accum / pre-open boards** (`ai.cockpit_multi_stage`): bounded top-20 cohorts — never full board dump, never per-candidate Judge. **View ticker** (`ai.cockpit_multi_stage`): cache-only dashboard facts for the focused ticker. **View broker** (`ai.cockpit_multi_stage`): desk code + current desk view facts (show/top/flow/matrix/…). Missing/partial → notify + refuse; never fabricate. Limited judge → re-judge (`j`). |
+| U5 | Scope | Opens only when the stage builder succeeds (identity-validated projection). **Judge:** full `row.source`. **Accum / pre-open boards** (`ai.cockpit_multi_stage`): bounded top-20 cohorts — never full board dump, never per-candidate Judge. **View ticker** (`ai.cockpit_multi_stage`): cache-only dashboard facts for the focused ticker. **View broker** (`ai.cockpit_multi_stage`): desk code + current desk view facts (show/top/flow/matrix/…). **Plan swing** (`ai.cockpit_multi_stage`): structure geometry / sizing honesty only — inherits Action, never places orders. Missing/partial → notify + refuse; never fabricate. Limited judge → re-judge (`j`). |
 | U6 | Stage layout (top→bottom) | **Status strip** → question echo → answer → meta → tool trace → **More data notes** (if any) → error → hint. Answer is not buried under a raw warning dump. |
 | U7 | Status strip | Shows `Turn OK\|FAIL · {ticker} · as-of {date}` and ranked **Data** notes. Primary notes ≤ **3**, **WARN** before **INFO**, each with stable **code** + **Do** guide (`agent_data_honesty`). |
 | U8 | Severity defaults | `RISK_SNAPSHOT_LAG`, `AUTHORITY_INCOMPLETE` → **WARN**. Settlement-within-lag / bandar diagnostic → **INFO**. |
@@ -440,6 +440,7 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | ADR-066 Slice 2 | `view_ticker` cache-dashboard destination; reuses agent ticker projection; U5 entry map |
 | 2026-08-03 | ADR-066 Slice 3 | `view_broker` desk destination; reuses broker desk projection; U5 entry map |
 | 2026-08-03 | ADR-066 Slice 4 | `preopen_screen` top-20 cohort destination; U5 entry map |
+| 2026-08-03 | ADR-066 Slice 5 | `plan_swing` structure destination; multi-stage catalog complete under flag |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same
