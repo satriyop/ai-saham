@@ -65,6 +65,23 @@ currently **no true capability gaps** in this list.
 (single-session stock-centric ticker→desks + bandar). Remaining open projection
 work: multi-day desk history (row 3), insider (7), corp-action (8).
 
+## Matrix — broader accum/preopen research context
+
+Beyond "who's accumulating," these are the next highest-impact research questions.
+All data is **local** (🟡 projection gaps) → each an implement task under ADR-061,
+`side_effect=NONE`, **facts-not-score**.
+
+| # | Canonical question | Required datum | Carrier (exists) → tool | State |
+|---|---|---|---|---|
+| 9 | Is **foreign/smart money** accumulating (net trend over weeks)? | `foreign_flow_points` series | `ViewTickerForeignHistoryUseCase` (cache-only, `days`) → [`get_ticker_foreign_flow` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_foreign_flow_tool.md) | 🟡→ task |
+| 10 | What's the current **market regime / breadth**? | `market_context_snapshots` + `regime_observations` | `BuildMarketContextUseCase` (stored snapshot) → [`get_market_regime` task](../../tasks/backlog/implement_ai_research_cockpit_market_regime_tool.md) | 🟡→ task |
+| 11 | Is the **float tightening** / who owns it? | `shareholding_composition` (`institution_pct`, `individual_pct`, `top_holder_*`, `total_shares`) | → [`get_ticker_ownership` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_ownership_tool.md) | 🟡→ task |
+| 12 | **Pre-open IEV** / NCP snapshot / IEV delta? | `iev_snapshots` | `SQLiteIEVRepository` (`get_ncp_snapshot`, `get_iev_delta`, `get_locked_iev_baseline`) → [`get_preopen_iev` task](../../tasks/backlog/implement_ai_research_cockpit_preopen_iev_tool.md) | 🟡→ task |
+| 13 | **Sector** strength / rotation / peers? | sector macro context evidence (ADR-053) | `candidate_sector_macro_context_evidence_assembler` → [`get_ticker_sector_context` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) | 🟡→ task |
+
+**Honorable mentions (not yet tasked):** fundamentals/earnings trend (partial
+overlap with `get_ticker_dashboard`); `get_macro_calendar` (`macro_calendar_events`).
+
 ## Partial-data honesty policy (all read tools)
 
 Every cockpit read tool follows one policy so status is consistent and never lies.
