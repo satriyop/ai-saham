@@ -28,6 +28,9 @@ from tests.application.services.test_agent_accumulation_context import make_cand
 LIVE_HTTP_TIMEOUT_S = 45.0
 LIVE_PROVIDER_CALL_BUDGET = 15
 
+# Hyphenated marker name from pyproject (select with -m agent-live-call).
+agent_live_call = getattr(pytest.mark, "agent-live-call")
+
 _SHA256_REF = re.compile(r"^sha256:[0-9a-f]{64}$")
 _CLOSED_TOOL_NAMES = frozenset(item.value for item in AgentToolName)
 
@@ -206,6 +209,7 @@ def assert_tool_trace_closed(tool_results: tuple[Any, ...]) -> None:
         status_value = status.value if hasattr(status, "value") else str(status)
         assert status_value in {
             "SUCCESS",
+            "PARTIAL",
             "UNAVAILABLE",
             "FAILED",
             "REJECTED",
