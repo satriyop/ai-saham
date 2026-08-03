@@ -149,4 +149,4 @@ foreign/local split; weekly rollup point cap.
 - Locked defaults: sessions default/cap 60; limit 10; as_of optional latest;
   streak breaks on absence; rotation ~20/40; weekly ≤12 points
 - Coverage row flipped: 3 (multi-day)
-- Commits: (fill after commit)
+- Commits: `a0a7b626`
