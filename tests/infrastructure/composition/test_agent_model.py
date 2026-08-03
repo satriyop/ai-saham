@@ -61,7 +61,7 @@ def test_tools_register_only_visible_result_when_fully_enabled(monkeypatch) -> N
     assert result.registered_tools == (AgentToolName.GET_VISIBLE_COCKPIT_RESULT,)
 
 
-def test_existing_db_registers_visible_and_ticker_dashboard_tools(
+def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -69,6 +69,7 @@ def test_existing_db_registers_visible_and_ticker_dashboard_tools(
     db_path.touch()
     sentinel_model = object()
     sentinel_dashboard = object()
+    sentinel_desk = object()
     monkeypatch.delenv("AI_PROVIDER", raising=False)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     monkeypatch.setattr(agent_model, "DeepSeekAgentModel", lambda key: sentinel_model)
@@ -76,6 +77,11 @@ def test_existing_db_registers_visible_and_ticker_dashboard_tools(
         agent_model,
         "build_read_only_ticker_dashboard_use_case",
         lambda path: sentinel_dashboard,
+    )
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_broker_desk_use_cases",
+        lambda path: sentinel_desk,
     )
 
     result = build_agent_composition(
@@ -86,6 +92,7 @@ def test_existing_db_registers_visible_and_ticker_dashboard_tools(
     assert result.registered_tools == (
         AgentToolName.GET_VISIBLE_COCKPIT_RESULT,
         AgentToolName.GET_TICKER_DASHBOARD,
+        AgentToolName.GET_BROKER_DESK,
     )
 
 
@@ -104,6 +111,11 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
         "build_read_only_ticker_dashboard_use_case",
         lambda path: object(),
     )
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_broker_desk_use_cases",
+        lambda path: object(),
+    )
 
     result = build_agent_composition(
         AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
@@ -114,6 +126,7 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
     assert result.registered_tools == (
         AgentToolName.GET_VISIBLE_COCKPIT_RESULT,
         AgentToolName.GET_TICKER_DASHBOARD,
+        AgentToolName.GET_BROKER_DESK,
         AgentToolName.JUDGE_ACCUMULATION_TICKER,
     )
 

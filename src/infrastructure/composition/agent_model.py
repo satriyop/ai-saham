@@ -13,6 +13,7 @@ from src.application.dto.accumulation_agent import (
 )
 from src.application.dto.agent_tools import AgentToolName, AgentToolTurnPolicy
 from src.application.services.agent_accumulation_judge_tool import AccumulationJudgeTool
+from src.application.services.agent_broker_desk_tool import BrokerDeskTool
 from src.application.services.agent_ticker_dashboard_tool import TickerDashboardTool
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_visible_cockpit_tool import VisibleCockpitResultTool
@@ -22,6 +23,9 @@ from src.application.use_case.explain_accumulation_candidate_use_case import (
 from src.application.use_case.orchestrate_agent_turn_use_case import AgentTurnOrchestrator
 from src.infrastructure.ai.deepseek_agent_model import DeepSeekAgentModel
 from src.infrastructure.ai.provider_config import resolve_ai_provider
+from src.infrastructure.composition.view_broker_deps import (
+    build_read_only_broker_desk_use_cases,
+)
 from src.infrastructure.composition.view_ticker_deps import (
     build_read_only_ticker_dashboard_use_case,
 )
@@ -86,6 +90,12 @@ def build_agent_composition(
                 dashboard = None
             if dashboard is not None:
                 tools.append(TickerDashboardTool(dashboard))
+            try:
+                desk = build_read_only_broker_desk_use_cases(db_path)
+            except (OSError, ValueError):
+                desk = None
+            if desk is not None:
+                tools.append(BrokerDeskTool(desk))
         if accumulation_judge_factory is not None:
             try:
                 judge_ticker = accumulation_judge_factory()

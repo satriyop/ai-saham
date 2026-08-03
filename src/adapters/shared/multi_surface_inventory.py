@@ -186,11 +186,15 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         cli_surface="saham view broker show",
         tui_surface="Enter on desk row · broker show page",
         shared_application_path=(
-            "ViewBrokerDeskShowUseCase; format via view_broker_desk_text.format_desk_show_text"
+            "ViewBrokerDeskShowUseCase via build_view_broker_deps / "
+            "build_read_only_broker_desk_use_cases; format via "
+            "view_broker_desk_text.format_desk_show_text"
         ),
         intentional_deltas=(
             "TUI may append stock-scoped pulse line on show body (presentation)",
             "TUI t/f/h/m/v hub keys",
+            "Agent get_broker_desk SHOW = bounded typed cache projection only; no rendered "
+            "text, schema initialization, scrape, refresh, or write",
         ),
     ),
     DualSurfaceJob(
@@ -199,9 +203,13 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         cli_surface="saham view broker top-stocks",
         tui_surface="t on desk hub",
         shared_application_path=(
-            "ViewBrokerDeskTopStocksUseCase; format via format_desk_top_stocks_text"
+            "ViewBrokerDeskTopStocksUseCase via build_view_broker_deps / "
+            "build_read_only_broker_desk_use_cases; format via format_desk_top_stocks_text"
         ),
-        intentional_deltas=("TUI BrokerTopDesk dual-heat widget vs CLI Rich table",),
+        intentional_deltas=(
+            "TUI BrokerTopDesk dual-heat widget vs CLI Rich table",
+            "Agent get_broker_desk TOP_STOCKS = bounded typed cache projection only",
+        ),
     ),
     DualSurfaceJob(
         job_id="view-broker-top-matrix",
@@ -209,12 +217,14 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         cli_surface="saham view broker top-matrix",
         tui_surface="m on desk hub",
         shared_application_path=(
-            "ViewBrokerDeskTopMatrixUseCase; format via format_desk_top_matrix_text; "
+            "ViewBrokerDeskTopMatrixUseCase via build_view_broker_deps / "
+            "build_read_only_broker_desk_use_cases; format via format_desk_top_matrix_text; "
             "rank_desk_top_buy_matrix (net · lot-weighted avg buy · desk×ticker streak)"
         ),
         intentional_deltas=(
             "TUI BrokerMatrixDesk widget vs CLI Rich multi-column table",
             "Calendar (c) deferred — not this job",
+            "Agent get_broker_desk TOP_MATRIX = bounded typed cache projection only",
         ),
     ),
     DualSurfaceJob(
@@ -222,8 +232,14 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         product_name="View broker flow",
         cli_surface="saham view broker flow",
         tui_surface="f on desk hub",
-        shared_application_path=("ViewBrokerDeskFlowUseCase; format via format_desk_flow_text"),
-        intentional_deltas=("TUI BrokerFlowDesk day-net table vs CLI Rich table",),
+        shared_application_path=(
+            "ViewBrokerDeskFlowUseCase via build_view_broker_deps / "
+            "build_read_only_broker_desk_use_cases; format via format_desk_flow_text"
+        ),
+        intentional_deltas=(
+            "TUI BrokerFlowDesk day-net table vs CLI Rich table",
+            "Agent get_broker_desk FLOW = bounded typed cache projection only",
+        ),
     ),
     DualSurfaceJob(
         job_id="view-broker-calendar",
@@ -231,10 +247,14 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         cli_surface="saham view broker calendar",
         tui_surface="c on desk hub",
         shared_application_path=(
-            "ViewBrokerDeskCalendarUseCase; format via format_desk_calendar_text; "
+            "ViewBrokerDeskCalendarUseCase via build_view_broker_deps / "
+            "build_read_only_broker_desk_use_cases; format via format_desk_calendar_text; "
             "build_desk_calendar_days (top stock · net · B/S)"
         ),
-        intentional_deltas=("TUI BrokerCalendarDesk widget vs CLI Rich table",),
+        intentional_deltas=(
+            "TUI BrokerCalendarDesk widget vs CLI Rich table",
+            "Agent get_broker_desk CALENDAR = bounded typed cache projection only",
+        ),
     ),
     DualSurfaceJob(
         job_id="view-broker-history",
@@ -242,10 +262,12 @@ DUAL_SURFACE_JOBS: tuple[DualSurfaceJob, ...] = (
         cli_surface="saham view broker history",
         tui_surface="h on desk hub",
         shared_application_path=(
-            "ViewBrokerDeskHistoryUseCase; format via format_desk_history_text"
+            "ViewBrokerDeskHistoryUseCase via build_view_broker_deps / "
+            "build_read_only_broker_desk_use_cases; format via format_desk_history_text"
         ),
         intentional_deltas=(
             "TUI BrokerHistoryDesk row-capped widget; CLI may show fuller Rich table",
+            "Agent get_broker_desk HISTORY = bounded typed cache projection (40-row cap)",
         ),
     ),
     DualSurfaceJob(

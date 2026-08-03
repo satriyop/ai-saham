@@ -124,3 +124,10 @@ def test_ticker_dashboard_inventory_records_agent_read_projection() -> None:
 
     assert "build_read_only_ticker_dashboard_use_case" in job.shared_application_path
     assert any("Agent get_ticker_dashboard" in note for note in job.intentional_deltas)
+
+
+def test_broker_desk_inventory_records_agent_read_projection() -> None:
+    job = next(item for item in DUAL_SURFACE_JOBS if item.job_id == "view-broker-show")
+
+    assert "build_read_only_broker_desk_use_cases" in job.shared_application_path
+    assert any("Agent get_broker_desk SHOW" in note for note in job.intentional_deltas)
