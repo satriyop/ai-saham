@@ -175,3 +175,41 @@ def build_read_only_ticker_dashboard_use_case(
         SQLiteTickerDashboardSource(resolved, initialize_schema=False),
         sector_macro_context_loader=smc_loader,
     )
+
+
+@dataclass(frozen=True)
+class TickerBrokerFlowDeps:
+    """Cache-only deps for the stock-centric ticker broker-flow agent tool."""
+
+    top_brokers: ViewTickerTopBrokersUseCase
+    bandar_source: object  # application port TickerDashboardSource (get_bandar)
+
+
+def build_read_only_ticker_broker_flow_deps(
+    db_path: Path | str,
+) -> TickerBrokerFlowDeps:
+    """Construct top-brokers + bandar cache readers without schema initialization.
+
+    Reserved for side-effect-free agent tool registration. Requires an existing
+    DB file; never creates or migrates tables. Does not open the Stockbit
+    bandar browser/fetch provider path.
+    """
+    from src.infrastructure.config.institutional_accumulation_config_loader import (
+        load_institutional_accumulation_config,
+    )
+    from src.infrastructure.persistence.sqlite_broker_repository import (
+        SQLiteBrokerRepository,
+    )
+    from src.infrastructure.persistence.sqlite_ticker_dashboard_source import (
+        SQLiteTickerDashboardSource,
+    )
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"ticker broker-flow database is unavailable: {resolved}")
+    foreign = load_institutional_accumulation_config().foreign_broker_codes
+    repo = SQLiteBrokerRepository(resolved, initialize_schema=False)
+    return TickerBrokerFlowDeps(
+        top_brokers=ViewTickerTopBrokersUseCase(repo, foreign_broker_codes=foreign),
+        bandar_source=SQLiteTickerDashboardSource(resolved, initialize_schema=False),
+    )

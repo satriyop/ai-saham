@@ -106,6 +106,11 @@ def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
     sentinel_model = object()
     sentinel_dashboard = object()
     sentinel_desk = object()
+    sentinel_flow = type(
+        "FlowDeps",
+        (),
+        {"top_brokers": object(), "bandar_source": object()},
+    )()
     monkeypatch.delenv("AI_PROVIDER", raising=False)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
     monkeypatch.setattr(agent_model, "DeepSeekAgentModel", lambda key: sentinel_model)
@@ -119,6 +124,11 @@ def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
         "build_read_only_broker_desk_use_cases",
         lambda path: sentinel_desk,
     )
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_ticker_broker_flow_deps",
+        lambda path: sentinel_flow,
+    )
 
     result = build_agent_composition(
         AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
@@ -129,6 +139,7 @@ def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
         AgentToolName.GET_VISIBLE_COCKPIT_RESULT,
         AgentToolName.GET_TICKER_DASHBOARD,
         AgentToolName.GET_BROKER_DESK,
+        AgentToolName.GET_TICKER_BROKER_FLOW,
     )
 
 
@@ -152,6 +163,15 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
         "build_read_only_broker_desk_use_cases",
         lambda path: object(),
     )
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_ticker_broker_flow_deps",
+        lambda path: type(
+            "FlowDeps",
+            (),
+            {"top_brokers": object(), "bandar_source": object()},
+        )(),
+    )
 
     result = build_agent_composition(
         AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
@@ -163,6 +183,7 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
         AgentToolName.GET_VISIBLE_COCKPIT_RESULT,
         AgentToolName.GET_TICKER_DASHBOARD,
         AgentToolName.GET_BROKER_DESK,
+        AgentToolName.GET_TICKER_BROKER_FLOW,
         AgentToolName.JUDGE_ACCUMULATION_TICKER,
     )
 

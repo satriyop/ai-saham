@@ -17,6 +17,7 @@ from src.application.services.agent_accumulation_judge_tool import AccumulationJ
 from src.application.services.agent_broker_desk_tool import BrokerDeskTool
 from src.application.services.agent_ro_data_query_tool import RoDataQueryTool
 from src.application.services.agent_session_store import InMemoryAgentSessionStore
+from src.application.services.agent_ticker_broker_flow_tool import TickerBrokerFlowTool
 from src.application.services.agent_ticker_dashboard_tool import TickerDashboardTool
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_visible_cockpit_tool import VisibleCockpitResultTool
@@ -38,9 +39,13 @@ from src.infrastructure.composition.view_broker_deps import (
     build_read_only_broker_desk_use_cases,
 )
 from src.infrastructure.composition.view_ticker_deps import (
+    build_read_only_ticker_broker_flow_deps,
     build_read_only_ticker_dashboard_use_case,
 )
 from src.infrastructure.config.local_env import read_local_env_value
+from src.infrastructure.persistence.sqlite_allowlisted_ro_query import (
+    SqliteAllowlistedRoQuery,
+)
 
 
 @dataclass(frozen=True)
@@ -121,6 +126,17 @@ def build_agent_composition(
                 desk = None
             if desk is not None:
                 tools.append(BrokerDeskTool(desk))
+            try:
+                ticker_flow = build_read_only_ticker_broker_flow_deps(db_path)
+            except (OSError, ValueError):
+                ticker_flow = None
+            if ticker_flow is not None:
+                tools.append(
+                    TickerBrokerFlowTool(
+                        ticker_flow.top_brokers,
+                        ticker_flow.bandar_source,
+                    )
+                )
         if accumulation_judge_factory is not None:
             try:
                 judge_ticker = accumulation_judge_factory()
@@ -133,7 +149,7 @@ def build_agent_composition(
             tools.append(WebResearchTool(NullWebResearchClient()))
         if ro_data_on and db_path is not None:
             try:
-                tools.append(RoDataQueryTool(db_path))
+                tools.append(RoDataQueryTool(SqliteAllowlistedRoQuery(db_path)))
             except (OSError, ValueError):
                 pass
         registered_tools = tuple(tool.definition.name for tool in tools)

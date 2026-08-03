@@ -28,6 +28,11 @@ _ALLOWED_SIDE_EFFECTS = frozenset(
 
 # Heuristic suggestions when the model invents a tool name (ADR-065 gap loop).
 _GAP_SUGGESTIONS: tuple[tuple[str, str, str], ...] = (
+    ("top_buyer", "get_ticker_broker_flow", "stock-centric top desks + bandar counts"),
+    ("top_seller", "get_ticker_broker_flow", "stock-centric top desks + bandar counts"),
+    ("ticker_broker", "get_ticker_broker_flow", "stock-centric top desks + bandar counts"),
+    ("broker_flow", "get_ticker_broker_flow", "stock-centric top desks + bandar counts"),
+    ("named_desk", "get_ticker_broker_flow", "stock-centric top desks + bandar counts"),
     ("broker", "get_broker_desk", "cache-only broker desk projection"),
     ("desk", "get_broker_desk", "cache-only broker desk projection"),
     ("dashboard", "get_ticker_dashboard", "cache-only ticker dashboard"),
