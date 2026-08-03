@@ -41,9 +41,10 @@ def test_risk_and_settlement_have_operator_do_lines() -> None:
         )
     )
     by_code = {n.code: n for n in view.primary + view.more}
-    assert "secondary" in by_code["RISK_SNAPSHOT_LAG"].do_line.lower() or "refresh" in by_code[
-        "RISK_SNAPSHOT_LAG"
-    ].do_line.lower()
+    assert (
+        "secondary" in by_code["RISK_SNAPSHOT_LAG"].do_line.lower()
+        or "refresh" in by_code["RISK_SNAPSHOT_LAG"].do_line.lower()
+    )
     assert by_code["SETTLEMENT_LATE_WITHIN_LAG"].severity is AgentNoteSeverity.INFO
     assert "wait" in by_code["SETTLEMENT_LATE_WITHIN_LAG"].do_line.lower()
 

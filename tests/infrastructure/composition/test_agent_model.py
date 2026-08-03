@@ -21,9 +21,40 @@ def test_disabled_composition_does_not_construct_provider(monkeypatch) -> None:
     assert result.use_case.provider_available is False
     assert result.tools_requested is False
     assert result.tools_enabled is False
+    assert result.tools_multi_round is False
     assert result.session_requested is False
     assert result.session_enabled is False
     assert result.registered_tools == ()
+
+
+def test_tools_multi_round_defaults_false_and_requires_tools(monkeypatch) -> None:
+    sentinel = object()
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    monkeypatch.setattr(agent_model, "DeepSeekAgentModel", lambda key: sentinel)
+
+    l1 = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", tools_enabled=True, tools_multi_round=False)
+    )
+    l3 = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", tools_enabled=True, tools_multi_round=True)
+    )
+    multi_without_tools = build_agent_composition(
+        AiConfig(enabled=True, provider="deepseek", tools_enabled=False, tools_multi_round=True)
+    )
+
+    assert l1.tools_multi_round is False
+    assert isinstance(l1.use_case, AgentTurnOrchestrator)
+    assert l1.use_case._policy.multi_round is False
+    assert l1.use_case._policy.max_provider_calls == 2
+
+    assert l3.tools_multi_round is True
+    assert isinstance(l3.use_case, AgentTurnOrchestrator)
+    assert l3.use_case._policy.multi_round is True
+    assert l3.use_case._policy.max_provider_calls == 3
+    assert l3.use_case._policy.max_tool_calls == 4
+
+    assert multi_without_tools.tools_multi_round is False
 
 
 def test_tools_require_both_ai_and_tool_flags(monkeypatch) -> None:
