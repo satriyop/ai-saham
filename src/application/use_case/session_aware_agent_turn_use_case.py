@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import replace
-from typing import Callable, Protocol
+from typing import Any, Callable, Protocol
 
 from src.application.dto.accumulation_agent import (
     AgentTurnRequest,
@@ -202,45 +203,38 @@ class SessionAwareAgentTurnUseCase:
         on_progress: Callable[[str], None] | None = None,
         on_approval: Callable | None = None,
     ) -> AgentTurnResult:
-        try:
-            return self._inner.execute(
-                request,
-                is_cancelled=is_cancelled,
-                session_pack=session_pack,
-                on_progress=on_progress,
-                on_approval=on_approval,
-            )
-        except TypeError:
-            # Phase 1 use case historically only accepted the request positional.
-            if (
-                is_cancelled is None
-                and session_pack is None
-                and on_progress is None
-                and on_approval is None
-            ):
-                return self._inner.execute(request)  # type: ignore[call-arg]
-            try:
-                return self._inner.execute(  # type: ignore[call-arg]
-                    request,
-                    is_cancelled=is_cancelled,
-                    session_pack=session_pack,
-                    on_progress=on_progress,
-                    on_approval=on_approval,
-                )
-            except TypeError:
-                try:
-                    return self._inner.execute(  # type: ignore[call-arg]
-                        request,
-                        is_cancelled=is_cancelled,
-                        session_pack=session_pack,
-                        on_progress=on_progress,
-                    )
-                except TypeError:
-                    return self._inner.execute(  # type: ignore[call-arg]
-                        request,
-                        is_cancelled=is_cancelled,
-                        session_pack=session_pack,
-                    )
+        # Detect the inner use case's supported kwargs ONCE, up front, rather
+        # than catching a TypeError and retrying with fewer args. Retrying on an
+        # execution error would re-run a turn that already started executing —
+        # double provider spend / double egress, and re-running without the
+        # approval callback (ADR-065 invariant 2). Signature-probe instead so the
+        # turn runs exactly once; a genuine execution error propagates.
+        kwargs = _supported_kwargs(
+            self._inner.execute,
+            {
+                "is_cancelled": is_cancelled,
+                "session_pack": session_pack,
+                "on_progress": on_progress,
+                "on_approval": on_approval,
+            },
+        )
+        return self._inner.execute(request, **kwargs)  # type: ignore[call-arg]
+
+
+def _supported_kwargs(func: Callable, candidate: dict[str, Any]) -> dict[str, Any]:
+    """Filter ``candidate`` to the keyword params ``func`` actually accepts.
+
+    Used once before invoking the inner use case so the turn runs exactly once
+    (no TypeError-catch retry ladder). If the signature cannot be introspected or
+    the callable accepts ``**kwargs``, pass everything through unchanged.
+    """
+    try:
+        params = inspect.signature(func).parameters
+    except (TypeError, ValueError):
+        return dict(candidate)
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return dict(candidate)
+    return {name: value for name, value in candidate.items() if name in params}
 
 
 def _tool_subject(item) -> str | None:

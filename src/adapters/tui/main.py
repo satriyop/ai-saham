@@ -53,6 +53,25 @@ BoardKind = Literal["accum", "preopen", "none"]
 DetailReturnStage = Literal["accum", "preopen", "shell", "broker-list"]
 
 
+def _runner_supported_kwargs(runner: Any, candidate: dict[str, Any]) -> dict[str, Any]:
+    """Filter callback kwargs to those the injected agent runner accepts.
+
+    Probed once, up front, so the runner is invoked exactly once — never via a
+    TypeError-catch retry ladder that could re-run a started turn (ADR-065
+    invariant 2). If the signature cannot be read or the runner accepts
+    ``**kwargs``, pass everything through.
+    """
+    import inspect
+
+    try:
+        params = inspect.signature(runner).parameters
+    except (TypeError, ValueError):
+        return dict(candidate)
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return dict(candidate)
+    return {name: value for name, value in candidate.items() if name in params}
+
+
 class CockpitApp(App[None]):
     """Daily cockpit — layout B (main stage + context sidebar + status)."""
 
@@ -2056,13 +2075,17 @@ class CockpitApp(App[None]):
 
         try:
             runner = self._agent_turn_runner
-            try:
-                result = runner(request, on_progress=_progress, on_approval=_approval)
-            except TypeError:
-                try:
-                    result = runner(request, on_progress=_progress)
-                except TypeError:
-                    result = runner(request)
+            # Detect the runner's supported callbacks ONCE, then call it exactly
+            # once. Do NOT catch a TypeError to retry with fewer args: a TypeError
+            # raised during execution would then re-run the whole turn — double
+            # provider spend / double egress, and re-running without the approval
+            # callback executes elevated/external tools without confirm
+            # (ADR-065 invariant 2). A genuine execution error maps to FAILED below.
+            call_kwargs = _runner_supported_kwargs(
+                runner,
+                {"on_progress": _progress, "on_approval": _approval},
+            )
+            result = runner(request, **call_kwargs)
         except Exception:
             from src.application.dto.accumulation_agent import (
                 AgentTurnResult,
