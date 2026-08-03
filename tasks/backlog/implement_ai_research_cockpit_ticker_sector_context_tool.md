@@ -1,26 +1,24 @@
 # Goal Instruction — Implement `get_ticker_sector_context` (sector strength / rotation)
 
-**Status:** `NEEDS RESCOPE — NOT READY`
-**Audience:** Planner (resolve before agent) · **Product term:** AI Research Cockpit (`/`)
+**Status:** `READY FOR AGENT` (rescoped 2026-08-04 — deeper, shared use case)
+**Audience:** Implementation agent · **Product term:** AI Research Cockpit (`/`)
 **Priority:** 5 of 5 (coverage row 13).
 
-> **⚠️ Signature-verification found two blockers (2026-08-04):**
-> 1. **Not thin.** `CandidateSectorMacroContextEvidenceAssembler.assemble(inputs:
->    SectorMacroContextInputs)` **does not load data** — it needs pre-loaded
->    `series_candles` + `policy_steps`. Wrapping it requires a new **inputs-loader**
->    (load sector/peer candle series), i.e. real Application + Infrastructure work,
->    not "compose an existing read." The layer plan below understates this.
-> 2. **Facts-not-score conflict.** It returns `SectorMacroContextEvidence` — a
->    **scored** evidence VO — which violates the read-tool facts-not-score rule.
+> **Rescoped per Depth policy (2026-08-04).** Original "thin wrap" was blocked:
+> `CandidateSectorMacroContextEvidenceAssembler.assemble(inputs)` needs pre-loaded
+> `SectorMacroContextInputs` (`series_candles`, `policy_steps`) and returns a
+> **scored** `SectorMacroContextEvidence`. Resolution = **build it deeper as a
+> shared use case**, not a wrap:
 >
-> **Resolve before READY (planner decision):**
-> - **(a) Rescope bigger:** add a cache-only sector-series inputs-loader + project
->   only **descriptive** facts (sector id, raw sector trend/relative values), never
->   the evidence score. Larger surface; needs an explicit layer plan.
-> - **(b) Replace in the top-5:** defer sector; promote a cleaner honorable-mention
->   (`get_ticker_fundamentals_trend` or `get_macro_calendar`) that projects directly.
->
-> Do not implement as written.
+> - Add a **`BuildTickerSectorContextUseCase`** (application) that loads the sector
+>   + peer candle series (cache-only inputs-loader) and produces a **descriptive**
+>   sector-context result: sector id, sector trend/relative-strength readings, and
+>   bounded peer positioning — **raw values, not the evidence score.**
+> - This use case is **shared**: the agent tool, a CLI `sector` view, and a future
+>   TUI sector stage are all thin adapters over it.
+> - May reuse ADR-053 internals for computation, but the **exposed result stays
+>   descriptive** (facts-not-score). If a scored sector signal is ever wanted, that
+>   is the evidence-promotion lane (separate ADR), not this tool.
 
 **Binding architecture:**
 
@@ -52,11 +50,14 @@ Hard rules:
 
 ```md
 - Domain: not touched
-- Application: AgentToolName.GET_TICKER_SECTOR_CONTEXT; result DTO
-  (schema agent_tool.ticker_sector_context.v1); TickerSectorContextTool wrapping the
-  sector-macro-context evidence assembler (read-only)
-- Infrastructure: composition wiring (register when tools_enabled + inputs available)
-- Adapter: none
+- Application: BuildTickerSectorContextUseCase (loads sector+peer series cache-only,
+  produces a DESCRIPTIVE sector-context result; may reuse ADR-053 compute internally
+  but exposes raw values, not the evidence score) — SHARED by CLI/TUI/agent;
+  AgentToolName.GET_TICKER_SECTOR_CONTEXT + result DTO
+  (schema agent_tool.ticker_sector_context.v1); TickerSectorContextTool projects it
+- Infrastructure: sector/peer series read (reuse existing candle/sector readers);
+  composition wiring
+- Adapter: agent tool (this) + optional CLI/TUI sector view over the same use case
 ```
 
 **Verify first:** the inputs the assembler needs (sector mapping + macro/sector

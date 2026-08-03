@@ -19,6 +19,26 @@ ADR-065 did). The behavioral half is the runtime `TOOL_GAP` clue.
 | 🟡 **Projection gap** | Datum exists in our data/domain but is **not** projected to the agent | cheap — widen a projection field, no new provider/tool |
 | 🔴 **Capability gap** | Datum does **not** exist locally at all | expensive — new provider + new OUR tool + ADR (or `web_research` stopgap under L4 confirm) |
 
+## Depth policy (2026-08-04)
+
+Thinness is **no longer a constraint.** Tools may be backed by real
+**application use cases** with genuine computation, new port methods, and new
+SQLite reads. **Build the depth as a shared `application/use_case` so CLI, TUI, and
+the agent are all thin adapters over it** — do not build agent-only analytics.
+
+What still binds (these are governance, not style):
+
+- **Descriptive, not authority.** A tool result stays context; it must not become
+  an evaluative verdict/score competing with `TradeSetup` (ADR-042 champion).
+  A genuinely scored output is allowed only via the **evidence-promotion lane
+  (its own ADR)**, then projected descriptively with provenance — never smuggled
+  into a read tool.
+- **Read-only** (no writes — Phase 5), **PIT** correctness, and the
+  **signature-trace READY gate** below (deeper = more surface = more verification).
+- A new shared use case that adds real capability/analysis may warrant its **own
+  ADR** when it crosses a boundary (new authority, new provider, new evidence);
+  a descriptive read use case remains under ADR-061.
+
 ## Current tool catalog (carriers)
 
 | Tool | Tier | Key result carriers |
@@ -29,6 +49,7 @@ ADR-065 did). The behavioral half is the runtime `TOOL_GAP` clue.
 | `get_broker_desk` | OUR / NONE | **desk→ticker** views (SHOW/TOP_STOCKS/TOP_MATRIX/FLOW/CALENDAR/HISTORY) |
 | `get_ticker_broker_flow` | OUR / NONE | **ticker→desks** single-session: `top_accumulating`/`top_distributing` (net + avg buy/sell price), `bandar.total_buyers`/`total_sellers`/`number_broker_buysell`, `broker_accdist` + `five_day`/`top1`/`top3`/`top5`/`top10_accdist`, `tops_source`/`tops_scope`, `as_of` |
 | `get_ticker_foreign_flow` | OUR / NONE | foreign net series: `cumulative_net_idr`, `latest_net_idr`, `net_buy_sessions`/`active_sessions`, `trend_direction` (rising/falling/flat), capped `(date, net_value_idr)` tail, `resolved_source` |
+| `get_ticker_ownership` | OUR / NONE | `institution_pct`, `individual_pct`, `top_holder_name`/`top_holder_pct`, `total_shares`(+formatted), `report_date` |
 | `web_research` | External / NETWORK_READ | external snippets (confirm) |
 | `ro_data_query` | Elevated / LOCAL_READ_ELEVATED | 3 allowlisted shapes: ticker close, ticker volume, broker day net (confirm) |
 
@@ -76,9 +97,9 @@ All data is **local** (🟡 projection gaps) → each an implement task under AD
 |---|---|---|---|---|
 | 9 | Is **foreign/smart money** accumulating (net trend over weeks)? | `foreign_flow_points` series | ✅ `get_ticker_foreign_flow` (`cumulative_net_idr`, `latest_net_idr`, `trend_direction`, `net_buy_sessions`, point tail) — complements dashboard window summaries | 🟢 covered |
 | 10 | What's the current **market regime / breadth**? | `market_context_snapshots` + `regime_observations` | `BuildMarketContextUseCase` (stored snapshot) → [`get_market_regime` task](../../tasks/backlog/implement_ai_research_cockpit_market_regime_tool.md) | 🟡→ task |
-| 11 | Is the **float tightening** / who owns it? | `shareholding_composition` (`institution_pct`, `individual_pct`, `top_holder_*`, `total_shares`) | → [`get_ticker_ownership` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_ownership_tool.md) | 🟡→ task |
+| 11 | Is the **float tightening** / who owns it? | `shareholding_composition` (`institution_pct`, `individual_pct`, `top_holder_*`, `total_shares`) | ✅ `get_ticker_ownership` (`institution_pct`, `individual_pct`, `top_holder_name`, `top_holder_pct`, `total_shares`, `report_date`) | 🟢 covered |
 | 12 | **Pre-open IEV** / NCP snapshot / IEV delta? | `iev_snapshots` | `SQLiteIEVRepository` (`get_ncp_snapshot`, `get_iev_delta`, `get_locked_iev_baseline`) → [`get_preopen_iev` task](../../tasks/backlog/implement_ai_research_cockpit_preopen_iev_tool.md) | 🟡→ task |
-| 13 | **Sector** strength / rotation / peers? | sector macro context evidence (ADR-053) | assembler needs **pre-loaded inputs** + returns a **scored** VO → [`get_ticker_sector_context` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) is **NEEDS RESCOPE** (not thin; facts-not-score conflict) | 🟡 (blocked) |
+| 13 | **Sector** strength / rotation / peers? | sector macro context evidence (ADR-053) | rescoped deeper → **`BuildTickerSectorContextUseCase`** (shared CLI/TUI/agent; descriptive, not scored) via [`get_ticker_sector_context` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) | 🟡→ task (rescoped) |
 
 **Honorable mentions (not yet tasked):** fundamentals/earnings trend (partial
 overlap with `get_ticker_dashboard`); `get_macro_calendar` (`macro_calendar_events`).
