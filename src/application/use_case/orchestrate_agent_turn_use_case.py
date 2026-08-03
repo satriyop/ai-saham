@@ -444,14 +444,20 @@ class AgentTurnOrchestrator:
                 return _with_gaps(err, gap_clues, elevated_attempted=elevated_any, restore=elevated)
             assert batch_results is not None
             by_id = {r.call_id: r for r in batch_results}
+            executed_count = 0
             for call in response.tool_calls:
                 result = by_id.get(call.call_id)
                 if result is None:
                     continue  # gap / skipped unregistered
                 all_calls.append(call)
                 all_results.append(result)
-                total_bytes += result.serialized_size()
-            tools_used += len(batch_results)
+                # ADR-065 decision 5B counts executions. Denied / no-approver
+                # consent skips are kept in the trace for honesty but consume
+                # neither the tool budget (F3) nor the turn byte budget (F4).
+                if not _is_consent_skip(result):
+                    total_bytes += result.serialized_size()
+                    executed_count += 1
+            tools_used += executed_count
 
         return _with_gaps(
             _failed("AI Research Cockpit round budget exhausted without an answer"),
@@ -492,7 +498,6 @@ class AgentTurnOrchestrator:
                     _failed("Agent provider proposed a duplicate tool call in this turn"),
                     elevated_attempted,
                 )
-            seen_identities.add(identity)
 
             definition = call.tool.definition
             if definition.approval is AgentToolApproval.PER_CALL:
@@ -505,23 +510,22 @@ class AgentTurnOrchestrator:
                     side_effect=definition.side_effect,
                 )
                 progress(f"AI Research Cockpit · confirm {call.name.value}…")
-                approved = True if approval is None else bool(approval(req))
-                if not approved:
-                    results.append(
-                        AgentToolExecutionResult.create(
-                            call_id=call.call_id,
-                            name=call.name,
-                            status=AgentToolExecutionStatus.UNAVAILABLE,
-                            data=None,
-                            error_code="TOOL_DENIED",
-                            error_message="Operator declined elevated/external tool",
-                            warnings=("EXTERNAL_OR_ELEVATED_DECLINED",),
-                            provenance=AgentToolProvenance(source=call.name.value),
-                            side_effect=definition.side_effect,
-                        )
-                    )
+                # Consent is a fail-closed gate (ADR-065). A missing approver is
+                # NOT consent: fail closed with a distinct TOOL_NO_APPROVER skip
+                # (F2). An explicit decline is TOOL_DENIED. Both skip-and-continue
+                # (deny semantics, decision 6) and neither consumes the identity
+                # budget, so the model may re-propose the tool later (F3).
+                if approval is None:
+                    results.append(_no_approver_result(call, definition.side_effect))
+                    continue
+                if not bool(approval(req)):
+                    results.append(_denied_result(call, definition.side_effect))
                     continue
 
+            # Committed to execute: only now does this tool consume the turn's
+            # per-identity budget (a genuine re-execution is a duplicate; a
+            # re-proposed deny/no-approver is not — F3).
+            seen_identities.add(identity)
             progress(f"AI Research Cockpit · tool {call.name.value}…")
             result = self._execute_tool(call, tool_context, started, tool_started)
             if isinstance(result, AgentTurnResult):
@@ -746,6 +750,48 @@ def replace_restore(result: AgentTurnResult, restore: bool) -> AgentTurnResult:
     return replace(result, restore_last_good=restore, elevated_attempted=True)
 
 
+# Consent skips (explicit decline or absent approver) are non-authoritative notes
+# in the trace. They never count toward the ADR-064 tool/byte budget (F3/F4) and
+# never seed the per-identity duplicate guard (so the model may re-propose them).
+_CONSENT_SKIP_CODES = frozenset({"TOOL_DENIED", "TOOL_NO_APPROVER"})
+
+
+def _is_consent_skip(result: AgentToolExecutionResult) -> bool:
+    return result.error_code in _CONSENT_SKIP_CODES
+
+
+def _denied_result(
+    call: PreparedAgentToolCall, side_effect: AgentToolSideEffect
+) -> AgentToolExecutionResult:
+    return AgentToolExecutionResult.create(
+        call_id=call.call_id,
+        name=call.name,
+        status=AgentToolExecutionStatus.UNAVAILABLE,
+        data=None,
+        error_code="TOOL_DENIED",
+        error_message="Operator declined elevated/external tool",
+        warnings=("EXTERNAL_OR_ELEVATED_DECLINED",),
+        provenance=AgentToolProvenance(source=call.name.value),
+        side_effect=side_effect,
+    )
+
+
+def _no_approver_result(
+    call: PreparedAgentToolCall, side_effect: AgentToolSideEffect
+) -> AgentToolExecutionResult:
+    return AgentToolExecutionResult.create(
+        call_id=call.call_id,
+        name=call.name,
+        status=AgentToolExecutionStatus.UNAVAILABLE,
+        data=None,
+        error_code="TOOL_NO_APPROVER",
+        error_message="No operator approver available to confirm elevated/external tool",
+        warnings=("EXTERNAL_OR_ELEVATED_DECLINED",),
+        provenance=AgentToolProvenance(source=call.name.value),
+        side_effect=side_effect,
+    )
+
+
 def _arg_summary(call: PreparedAgentToolCall) -> str:
     try:
         raw = canonical_json_bytes(call.arguments).decode("utf-8")
@@ -765,7 +811,12 @@ def _implication(side_effect: AgentToolSideEffect) -> str:
 
 
 def _looks_like_planning_only(text: str) -> bool:
-    """Heuristic: final text is only a promise to look something up."""
+    """Heuristic: final text is only a promise to look something up.
+
+    Best-effort soft guard only (ADR-064 §Failure): an EN/ID prefix match capped
+    at 280 chars. It is not an invariant — it can miss real planning-only replies
+    and is not relied on for consent, budget, or Action authority.
+    """
     lowered = text.strip().lower()
     if len(lowered) > 280:
         return False
