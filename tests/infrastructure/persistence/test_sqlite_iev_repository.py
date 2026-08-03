@@ -363,6 +363,8 @@ def test_get_ncp_snapshot_returns_locked_batch(tmp_path):
     assert "BBCA" in tickers
     assert "BMRI" in tickers
     assert "BBRI" not in tickers  # pre-NCP only — not in NCP batch
+    # History path must surface lock flag (not dataclass default 0).
+    assert all(r.is_ncp_locked == 1 for r in result)
 
 
 def test_get_ncp_snapshot_fallback_no_history(tmp_path):

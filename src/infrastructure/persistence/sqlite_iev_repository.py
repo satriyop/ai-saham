@@ -243,7 +243,7 @@ class SQLiteIEVRepository:
             timespec="seconds"
         )
         sql = """
-            SELECT date, ticker, iev, rank, iep
+            SELECT date, ticker, iev, rank, iep, is_ncp_locked
             FROM iev_snapshot_history
             WHERE date = ?
               AND is_ncp_locked = 1
@@ -277,6 +277,8 @@ class SQLiteIEVRepository:
         if not rows:
             return self.get_snapshot(snapshot_date, top_n)
 
+        # Rows are filtered to is_ncp_locked=1; still map the column so callers
+        # (pre-open board / agent NCP labels) do not see the dataclass default 0.
         return [
             IEVSnapshot(
                 date=date.fromisoformat(r["date"]),
@@ -284,6 +286,7 @@ class SQLiteIEVRepository:
                 iev=r["iev"],
                 rank=r["rank"],
                 iep=r["iep"],
+                is_ncp_locked=r["is_ncp_locked"],
             )
             for r in rows
         ]
