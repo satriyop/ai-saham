@@ -1,15 +1,18 @@
 # TUI AI Agent Implementation Roadmap
 
-**Status:** Active implementation roadmap — ADR-060/061 accepted; Phases 1–2
-implemented (Phase 2 closed 2026-08-03); Phase 3 authorized by ADR-063
+**Status:** Active implementation roadmap — ADR-060/061/063 accepted; Phases 1–3
+implemented (Phase 3 runtime `afb9d677`, 2026-08-03)
 
-**Re-vetted against:** Phase 2 close commits through `2f1fa01d` on 2026-08-03
+**Re-vetted against:** Phase 3 implementation through `afb9d677` on 2026-08-03
 
 **Supersedes implementation sequencing in:**
 [`roadmap_conversational_agent_architecture.md`](roadmap_conversational_agent_architecture.md)
 
+**Operator journey + live TUI smoke (SSOT):**
+[`tui_ai_agent_implementation_journey.md`](tui_ai_agent_implementation_journey.md)
+
 **Depends on:** ADR-002, ADR-003, ADR-013, ADR-014, ADR-040, ADR-042, ADR-045,
-ADR-051, ADR-054, ADR-057, and ADR-060
+ADR-051, ADR-054, ADR-057, ADR-060, ADR-061, and ADR-063
 
 ## Operational tracking
 
