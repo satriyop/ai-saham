@@ -47,15 +47,25 @@ Read first: `src/infrastructure/persistence/sqlite_iev_repository.py`
 
 ## 2. Result (facts only)
 
-`ticker`, `session_date`, capture label (e.g. NCP 08:56), IEV value, `iev_delta`
-vs locked baseline, baseline value, and coverage/provenance. No directive.
+`ticker`, `session_date`, `iev`, `iep`, `rank`, `is_ncp_locked`, `iev_delta`
+(vs locked baseline), baseline value, and coverage/provenance. No directive.
+
+**⚠️ Access pattern (verified):** `SQLiteIEVRepository` is **date-keyed, not
+ticker-keyed** — `get_ncp_snapshot(snapshot_date, top_n)` returns a **list** of
+`IEVSnapshot` (all tickers that date), `get_iev_delta(snapshot_date)` returns a
+**dict** `{ticker: ΔIEV}`, `get_locked_iev_baseline(snapshot_date, …)` is per-date.
+The tool must: resolve `session_date` (default = latest via `get_snapshot_dates()`),
+call the date-keyed reads, then **extract this `ticker`** from the list/dict. If the
+ticker is absent for that date → `UNAVAILABLE`. `IEVSnapshot` fields:
+`date, ticker, iev, rank, iep, is_ncp_locked`.
 
 ## 3. Slices
 
 1. Contract: `AgentToolName.GET_PREOPEN_IEV` + frozen result DTO.
 2. Tool: `PreopenIevTool` — args `ticker` (required), optional `session_date`
-   (default latest IEV date). Compose the repository reads (NCP snapshot + delta +
-   baseline). Bound bytes.
+   (default = latest via `get_snapshot_dates()`). Call the **date-keyed** reads,
+   then extract `ticker` from the NCP list / delta dict / baseline (see access
+   pattern above). Bound bytes.
 3. Register in composition when `tools_enabled` + IEV DB present.
 4. Tests (offline `pytest.mark.agent`): happy path (NCP snapshot + delta + baseline);
    PIT (no future session); missing snapshot → `UNAVAILABLE`; missing baseline/delta

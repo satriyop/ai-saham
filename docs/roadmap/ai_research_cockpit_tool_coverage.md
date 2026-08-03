@@ -78,7 +78,7 @@ All data is **local** (🟡 projection gaps) → each an implement task under AD
 | 10 | What's the current **market regime / breadth**? | `market_context_snapshots` + `regime_observations` | `BuildMarketContextUseCase` (stored snapshot) → [`get_market_regime` task](../../tasks/backlog/implement_ai_research_cockpit_market_regime_tool.md) | 🟡→ task |
 | 11 | Is the **float tightening** / who owns it? | `shareholding_composition` (`institution_pct`, `individual_pct`, `top_holder_*`, `total_shares`) | → [`get_ticker_ownership` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_ownership_tool.md) | 🟡→ task |
 | 12 | **Pre-open IEV** / NCP snapshot / IEV delta? | `iev_snapshots` | `SQLiteIEVRepository` (`get_ncp_snapshot`, `get_iev_delta`, `get_locked_iev_baseline`) → [`get_preopen_iev` task](../../tasks/backlog/implement_ai_research_cockpit_preopen_iev_tool.md) | 🟡→ task |
-| 13 | **Sector** strength / rotation / peers? | sector macro context evidence (ADR-053) | `candidate_sector_macro_context_evidence_assembler` → [`get_ticker_sector_context` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) | 🟡→ task |
+| 13 | **Sector** strength / rotation / peers? | sector macro context evidence (ADR-053) | assembler needs **pre-loaded inputs** + returns a **scored** VO → [`get_ticker_sector_context` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) is **NEEDS RESCOPE** (not thin; facts-not-score conflict) | 🟡 (blocked) |
 
 **Honorable mentions (not yet tasked):** fundamentals/earnings trend (partial
 overlap with `get_ticker_dashboard`); `get_macro_calendar` (`macro_calendar_events`).
@@ -130,3 +130,24 @@ emitted `TOOL_GAP` clues — the runtime half of the audit.
   (a new ADR only for new authority / a new provider).
 - A row that flips to 🟢 → cite the tool/field + the ADR that closed it.
 - Never mark 🟢 on data that exists but is unexposed — that is 🟡 by definition.
+
+## Task READY gate — signature trace (planner discipline)
+
+Before a tool task is marked `READY FOR AGENT`, **every arg and every result field
+must trace to a concrete method signature that already returns it** — a named port
+or use-case method, verified in source. Specifically:
+
+- An "optional / if-available" field with **no read path** is **dead spec** (it
+  always omits) or **hidden scope** (it silently forces a port extension). Drop it
+  or scope the extension explicitly. *(Caught late: `window_days`, ownership delta.)*
+- Confirm the access **shape** matches the tool's args: a ticker-keyed tool cannot
+  wrap a date-keyed repository without an extract step. *(Caught: `get_preopen_iev`
+  — IEV repo is date-keyed.)*
+- Confirm the reuse target is **descriptive**, not a **scored/evidence** VO
+  (facts-not-score). *(Caught: `get_ticker_foreign_flow` must use `ForeignFlowPoint`,
+  not `ForeignFlowEvidence`; `get_ticker_sector_context` returns a scored VO → rescope.)*
+- Confirm the read is **cache-only** (not a fetch/browser provider) and the
+  named factory actually exposes it. *(Caught: bandar via dashboard source, not
+  the browser `BandarDetectorProvider`.)*
+
+If any trace fails, the task is `NEEDS RESCOPE`, not `READY`.

@@ -42,10 +42,13 @@ Hard rules:
 - Adapter: none
 ```
 
-**Verify first:** whether a read-only repository already exposes the latest stored
-`market_context_snapshots` (regime + factors). If yes, wrap it. If only the compute
-use case + a writer exist, add a **thin read-only** reader (SELECT latest ≤ as_of) —
-still `side_effect=NONE`, no compute, no fetch. Do not widen scope beyond a read.
+**Reader confirmed (verified):** `SQLiteMarketContextRepository.get(as_of_date)`
+→ `MarketContext | None` and `get_recent(limit)` → `list[MarketContext]` already
+exist. Wrap `get(as_of)`; default latest via `get_recent(1)`. No new reader needed;
+no compute, no fetch. `MarketContext` fields: `regime` (`MarketRegime`),
+`conviction` (0–1), `signal_multiplier`, `gate_tightening`, + factor breakdown —
+project them as **descriptive facts**; `signal_multiplier`/`gate_tightening` are
+config-derived readings, not a directive from this tool.
 
 Read first: `src/application/use_case/build_market_context_use_case.py` (result
 shape: regime, confidence, factors), the persistence for `market_context_snapshots`

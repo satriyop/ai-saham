@@ -1,8 +1,26 @@
 # Goal Instruction — Implement `get_ticker_sector_context` (sector strength / rotation)
 
-**Status:** `READY FOR AGENT`
-**Audience:** Implementation agent · **Product term:** AI Research Cockpit (`/`)
+**Status:** `NEEDS RESCOPE — NOT READY`
+**Audience:** Planner (resolve before agent) · **Product term:** AI Research Cockpit (`/`)
 **Priority:** 5 of 5 (coverage row 13).
+
+> **⚠️ Signature-verification found two blockers (2026-08-04):**
+> 1. **Not thin.** `CandidateSectorMacroContextEvidenceAssembler.assemble(inputs:
+>    SectorMacroContextInputs)` **does not load data** — it needs pre-loaded
+>    `series_candles` + `policy_steps`. Wrapping it requires a new **inputs-loader**
+>    (load sector/peer candle series), i.e. real Application + Infrastructure work,
+>    not "compose an existing read." The layer plan below understates this.
+> 2. **Facts-not-score conflict.** It returns `SectorMacroContextEvidence` — a
+>    **scored** evidence VO — which violates the read-tool facts-not-score rule.
+>
+> **Resolve before READY (planner decision):**
+> - **(a) Rescope bigger:** add a cache-only sector-series inputs-loader + project
+>   only **descriptive** facts (sector id, raw sector trend/relative values), never
+>   the evidence score. Larger surface; needs an explicit layer plan.
+> - **(b) Replace in the top-5:** defer sector; promote a cleaner honorable-mention
+>   (`get_ticker_fundamentals_trend` or `get_macro_calendar`) that projects directly.
+>
+> Do not implement as written.
 
 **Binding architecture:**
 
