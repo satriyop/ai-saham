@@ -1,6 +1,6 @@
 # Goal Instruction — Implement `get_ticker_desk_flow_history` (multi-day desk view)
 
-**Status:** `READY FOR AGENT`
+**Status:** `IMPLEMENTED`
 **Audience:** Implementation agent (any coding agent in this repo)
 **Product term:** **AI Research Cockpit** (`/`)
 
@@ -106,14 +106,15 @@ top-N ≤ 10 each side. Report `window_sessions`, `as_of`, and provenance.
 
 ## 4. Acceptance
 
-- [ ] Returns top accumulating + distributing desks over a ≤60-session PIT window
+- [x] Returns top accumulating + distributing desks over a ≤60-session PIT window
   with cumulative net, active/net-buy sessions, longest streak, avg prices, foreign flag.
-- [ ] Aggregation from raw daily flow (raw-not-topN test passes).
-- [ ] Sessions not calendar days; no look-ahead past `as_of`.
-- [ ] Caps enforced; missing data → `UNAVAILABLE`; no score field.
-- [ ] `side_effect=NONE`, cache-only, no fetch/write; Action authority untouched.
-- [ ] Offline agent suite + golden UX pilot green; Ruff green.
-- [ ] Coverage row 3 multi-day → 🟢; completion record filled.
+- [x] Aggregation from raw daily flow (raw-not-topN test passes).
+- [x] Sessions not calendar days; no look-ahead past `as_of`.
+- [x] Caps enforced; missing data → `UNAVAILABLE`; no score field.
+- [x] `side_effect=NONE`, cache-only, no fetch/write; Action authority untouched.
+- [x] Offline agent suite + golden UX pilot green; Ruff green.
+- [x] Coverage row 3 multi-day → 🟢; completion record filled.
+- [x] §2c: rotation + foreign/local split + weekly trajectory (capped).
 
 ## 5. Non-goals
 
@@ -138,9 +139,14 @@ Keep the shared-use-case shape: these live in `TickerDeskFlowHistoryService` so 
 broker-desk CLI/TUI view can reuse them. Add tests for rotation set-diff and the
 foreign/local split; weekly rollup point cap.
 
-## 6. Completion record (fill when done)
+## 6. Completion record
 
 - Authorizing ADR: ADR-061 (routine closed read tool; descriptive facts)
-- Implemented date:
-- Commits:
+- Implemented date: 2026-08-04
+- Code: `ticker_desk_flow_history.py`, `agent_ticker_desk_flow_history_tool.py`,
+  `build_read_only_ticker_desk_flow_history_service`
+- Tests: `test_ticker_desk_flow_history.py`, `test_agent_ticker_desk_flow_history_tool.py`
+- Locked defaults: sessions default/cap 60; limit 10; as_of optional latest;
+  streak breaks on absence; rotation ~20/40; weekly ≤12 points
 - Coverage row flipped: 3 (multi-day)
+- Commits: (fill after commit)

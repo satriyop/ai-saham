@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.application.ports.ticker_dashboard_source import TickerDashboardSource
 from src.application.use_case.get_ticker_dashboard_use_case import GetTickerDashboardUseCase
 from src.application.use_case.view_ticker_distribution_use_case import (
     ViewTickerDistributionUseCase,
@@ -215,6 +216,28 @@ def build_read_only_ticker_broker_flow_deps(
     )
 
 
+def build_read_only_ticker_desk_flow_history_service(
+    db_path: Path | str,
+):
+    """Construct multi-session desk history service without schema initialization."""
+    from src.application.services.ticker_desk_flow_history import (
+        TickerDeskFlowHistoryService,
+    )
+    from src.infrastructure.config.institutional_accumulation_config_loader import (
+        load_institutional_accumulation_config,
+    )
+    from src.infrastructure.persistence.sqlite_broker_repository import (
+        SQLiteBrokerRepository,
+    )
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"ticker desk-flow-history database is unavailable: {resolved}")
+    foreign = load_institutional_accumulation_config().foreign_broker_codes
+    repo = SQLiteBrokerRepository(resolved, initialize_schema=False)
+    return TickerDeskFlowHistoryService(repo, foreign_broker_codes=foreign)
+
+
 def build_read_only_ticker_foreign_history_use_case(
     db_path: Path | str,
 ) -> ViewTickerForeignHistoryUseCase:
@@ -232,3 +255,21 @@ def build_read_only_ticker_foreign_history_use_case(
         raise FileNotFoundError(f"ticker foreign-history database is unavailable: {resolved}")
     repo = SQLiteBrokerRepository(resolved, initialize_schema=False)
     return ViewTickerForeignHistoryUseCase(repo)
+
+
+def build_read_only_ticker_ownership_source(
+    db_path: Path | str,
+) -> TickerDashboardSource:
+    """Construct the ownership cache reader without schema initialization.
+
+    Reserved for side-effect-free agent tool registration. Requires an existing
+    DB file; never creates or migrates tables.
+    """
+    from src.infrastructure.persistence.sqlite_ticker_dashboard_source import (
+        SQLiteTickerDashboardSource,
+    )
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"ticker ownership database is unavailable: {resolved}")
+    return SQLiteTickerDashboardSource(resolved, initialize_schema=False)

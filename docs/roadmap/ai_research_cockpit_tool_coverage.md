@@ -49,6 +49,7 @@ What still binds (these are governance, not style):
 | `get_broker_desk` | OUR / NONE | **desk→ticker** views (SHOW/TOP_STOCKS/TOP_MATRIX/FLOW/CALENDAR/HISTORY) |
 | `get_ticker_broker_flow` | OUR / NONE | **ticker→desks** single-session: `top_accumulating`/`top_distributing` (net + avg buy/sell price), `bandar.total_buyers`/`total_sellers`/`number_broker_buysell`, `broker_accdist` + `five_day`/`top1`/`top3`/`top5`/`top10_accdist`, `tops_source`/`tops_scope`, `as_of` |
 | `get_ticker_foreign_flow` | OUR / NONE | foreign net series: `cumulative_net_idr`, `latest_net_idr`, `net_buy_sessions`/`active_sessions`, `trend_direction` (rising/falling/flat), capped `(date, net_value_idr)` tail, `resolved_source` |
+| `get_ticker_desk_flow_history` | OUR / NONE | multi-session desks: `top_accumulating`/`top_distributing` (cumulative_net, active/net_buy sessions, longest_streak, avg prices, weekly_net), rotation, foreign/local split |
 | `get_ticker_ownership` | OUR / NONE | `institution_pct`, `individual_pct`, `top_holder_name`/`top_holder_pct`, `total_shares`(+formatted), `report_date` |
 | `web_research` | External / NETWORK_READ | external snippets (confirm) |
 | `ro_data_query` | Elevated / LOCAL_READ_ELEVATED | 3 allowlisted shapes: ticker close, ticker volume, broker day net (confirm) |
@@ -62,8 +63,7 @@ Domain data that exists locally but is **not** exposed to the agent today (all
 - **`corp_action_cache`** table + `SQLiteCorporateActionCalendarRepository` +
   `CorporateActionCalendarEvent` (`event_type`, `ex_date`, `cum_date`,
   `record_date`, `payment_date`, `announcement_date`).
-- Multi-day per-desk persistence over a session window (row 3 remainder) —
-  sibling tool task `get_ticker_desk_flow_history`.
+
 
 **Correction (2026-08-03):** rows 5, 7, 8 were first mis-graded 🔴 capability gaps
 by auditing only agent-facing DTOs. The underlying data is **local** — they are
@@ -76,7 +76,7 @@ currently **no true capability gaps** in this list.
 |---|---|---|---|---|
 | 1 | **Which** desks are accumulating this ticker (named) | ticker→named brokers, buy side | ✅ `get_ticker_broker_flow.top_accumulating` (`broker_code`, `net_value_idr`, `avg_buy_price`) | 🟢 covered |
 | 2 | **How many** desks accumulating | `total_buyer` / `number_broker_buysell` | ✅ `get_ticker_broker_flow.bandar.total_buyers` / `number_broker_buysell` | 🟢 covered |
-| 3 | **Consistency** — streak (days), months | daily streak; multi-window smoothing; multi-day per-desk agg | days ✅ `AgentAccumulationFacts.consecutive_streak`; single-session `five_day/top-N accdist` ✅ `get_ticker_broker_flow.bandar.*_accdist`; multi-day per-desk over ≤60 sessions → [`get_ticker_desk_flow_history` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_desk_flow_history_tool.md) | 🟡 (multi-day remainder) |
+| 3 | **Consistency** — streak (days), months | daily streak; multi-window smoothing; multi-day per-desk agg | days ✅ `AgentAccumulationFacts.consecutive_streak`; single-session `five_day/top-N accdist` ✅ `get_ticker_broker_flow.bandar.*_accdist`; multi-day per-desk ✅ `get_ticker_desk_flow_history` (cumulative_net, longest_streak, net_buy_sessions, rotation) | 🟢 covered |
 | 4 | All of 1–3 for **distribution/selling** | ticker→named sellers; `Dis` labels; `total_seller` | ✅ `get_ticker_broker_flow.top_distributing`; `bandar.broker_accdist` / `total_sellers` | 🟢 covered |
 | 5 | All of 1–4 on **volume / qty / price avg** | per-ticker volume; per-broker net; per-broker avg price | volume ✅ dashboard; per-broker net ✅ desk/RO + `get_ticker_broker_flow` net fields; avg price ✅ `top_*.avg_buy_price` / `avg_sell_price` | 🟢 covered |
 | 6 | Phase **compression / breakout** | setup phase; BB width percentile | ✅ `AgentSetupPhaseFacts.current_phase`; ✅ `AgentAccumulationFacts.bb_width_pctile` | 🟢 covered |
@@ -85,7 +85,7 @@ currently **no true capability gaps** in this list.
 
 **Headline:** Q1/Q2/Q4/Q5 (avg-price) are closed by **`get_ticker_broker_flow`**
 (single-session stock-centric ticker→desks + bandar). Remaining open projection
-work: multi-day desk history (row 3), insider (7), corp-action (8).
+work: insider (7), corp-action (8); multi-day desk history (row 3) closed.
 
 ## Matrix — broader accum/preopen research context
 
@@ -112,7 +112,7 @@ descriptive (no authority/score):
 |---|---|---|
 | A | Ownership **history / float trend** (new port `get_ownership_history` + dedupe per `report_date`) | [`get_ticker_ownership_history`](../../tasks/backlog/implement_ai_research_cockpit_ticker_ownership_history_tool.md) |
 | B | Sector context as a **shared use case** (`BuildTickerSectorContextUseCase`) | [`get_ticker_sector_context`](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) |
-| C | Desk flow **rotation + foreign/local split + weekly trajectory** | [`get_ticker_desk_flow_history` §2c](../../tasks/backlog/implement_ai_research_cockpit_ticker_desk_flow_history_tool.md) |
+| C | Desk flow **rotation + foreign/local split + weekly trajectory** | ✅ `get_ticker_desk_flow_history` (IMPLEMENTED; see `tasks/done/…desk_flow_history…`) |
 | D | Fundamentals / **earnings trend** over quarters | [`get_ticker_fundamentals_trend`](../../tasks/backlog/implement_ai_research_cockpit_ticker_fundamentals_trend_tool.md) |
 | E | **Ticker research brief** — one composed, PIT-aligned bundle (surfaces Judge Action; **no minted verdict**, ADR-042) | [`get_ticker_research_brief`](../../tasks/backlog/implement_ai_research_cockpit_ticker_research_brief_tool.md) |
 
