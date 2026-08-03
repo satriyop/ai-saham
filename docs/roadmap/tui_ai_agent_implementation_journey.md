@@ -258,8 +258,42 @@ Known baseline data warnings (if any):
 | Tools / budgets | ADR-061 · `implement_tui_agent_read_tools_phase2.md` + 2.1–2.4 tasks |
 | Sessions / pack | ADR-063 · `implement_tui_agent_ephemeral_sessions_phase3.md` |
 | Hermes / OpenClaw | `roadmap_hermes_agent_integration.md`, `roadmap_openclaw_integration.md` |
-| Offline agent tests | `pytest -m agent` |
-| Live smoke test implementation brief | [`tasks/backlog/implement_tui_agent_live_smoke_tests.md`](../../tasks/backlog/implement_tui_agent_live_smoke_tests.md) (marker `agent-live-call`; not implemented until that task lands) |
+| Offline agent tests | `pytest -m agent` (excludes live HTTP) |
+| Live smoke (automated) | `pytest -m agent-live-call` — see **§ Automated live smoke** |
+| Live smoke test implementation brief | [`tasks/backlog/implement_tui_agent_live_smoke_tests.md`](../../tasks/backlog/implement_tui_agent_live_smoke_tests.md) |
+
+---
+
+## Automated live smoke
+
+Opt-in suite under `tests/agent_live/` maps 1:1 to §4 profiles **A–D** and **N**.
+
+| Command | Behavior |
+|---|---|
+| `pytest -m agent` | Offline agent suite; live tests **skip** unless `AI_SAHAM_AGENT_LIVE=1` |
+| `pytest -m "agent and not agent-live-call"` | Offline only (CI-safe) |
+| `pytest -m agent-live-call` | Live smoke only |
+
+**Hard gate:** `AI_SAHAM_AGENT_LIVE=1` (otherwise every live test skips with reason).  
+**Credentials:** `DEEPSEEK_API_KEY` (process env or composition local-env path).  
+**Optional:** `AI_SAHAM_LIVE_TICKER`, `AI_SAHAM_LIVE_BROKER`, `AI_SAHAM_LIVE_DB`.
+
+```bash
+export AI_SAHAM_AGENT_LIVE=1
+export DEEPSEEK_API_KEY=…   # or rely on local env already supported by composition
+.venv/bin/python -m pytest -m agent-live-call -q --tb=short
+```
+
+| Module | Journey coverage |
+|---|---|
+| `tests/agent_live/test_live_profile_a_offline.py` | A1–A4 AI-off / zero provider |
+| `tests/agent_live/test_live_profile_b_one_turn.py` | B2–B7 one-turn + limited row |
+| `tests/agent_live/test_live_profile_c_tools.py` | C0–C8 four ADR-061 tools |
+| `tests/agent_live/test_live_profile_d_session.py` | D1–D9 session continuity / reset |
+| `tests/agent_live/test_live_profile_n_safety.py` | N1–N7 safety |
+| `tests/agent_live/test_live_tui_journey.py` | TUI `/reset` aliases + paint lineage |
+
+Do **not** fork a second manual smoke checklist; use §4 for operator UI and this section for automation.
 
 ---
 
@@ -272,6 +306,7 @@ Known baseline data warnings (if any):
 | 2026-08-02–03 | 2.1–2.4 | Four closed read tools registered fail-soft |
 | 2026-08-03 | ADR-063 | Session architecture accepted |
 | 2026-08-03 | `afb9d677` | Ephemeral sessions + `/reset` + `ai.session_enabled` |
+| 2026-08-03 | `agent-live-call` suite | Automated live smoke package `tests/agent_live/` for A–D + N |
 | _next_ | Phase 4/5 | Update this table + §1 + smoke sections |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,

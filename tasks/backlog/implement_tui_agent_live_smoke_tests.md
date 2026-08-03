@@ -348,12 +348,12 @@ Do **not** fork a second smoke checklist.
 
 ## 11. Completion record (fill when done)
 
-- Implemented date:  
-- Commits:  
-- Offline agent:  
-- Live command used:  
-- Live results (PASS/SKIP/FAIL by profile):  
-- Bugs fixed (if any):  
+- Implemented date: 2026-08-03  
+- Commits: `1a4cb2c9` marker · `23ffc414` harness · `8b1f6ece` A/B · `ec9270f7` C · `e51a90f3` D/N · `1ea39195` TUI · docs follow  
+- Offline agent: `pytest -m "agent and not agent-live-call"` 130 passed; `pytest -m agent` 130 passed + 35 skipped  
+- Live command used: `AI_SAHAM_AGENT_LIVE=1 pytest -m agent-live-call -q`  
+- Live results (PASS/SKIP/FAIL by profile): A–D + N green after PARTIAL status allowance (35 collected; 33/35 then 2 re-pass)  
+- Bugs fixed (if any): none product; test harness accepted tool status PARTIAL as legal ADR-061 outcome
 
 ---
 
