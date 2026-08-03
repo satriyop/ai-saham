@@ -28,6 +28,19 @@ read** is in scope.
 - `get_ownership` today is single-row; **no history port method exists** → add one.
 - `ShareholdingComposition` VO fields: `report_date`, `institution_pct`,
   `individual_pct`, `top_holder_name`, `top_holder_pct`, `total_shares`, `fetched_at`.
+  The VO also exposes a `free_float_pct` property (`individual_pct + institution_pct`,
+  clamped [0, 100]) — reuse it, do not recompute the formula inline.
+- **PIT precedent already exists on this exact table.** The sibling domain port
+  `ShareholdingProvider.get_composition(ticker, as_of_date=None)`
+  (`src/domain/ports/shareholding_provider.py`) and its concrete
+  `_read_cache`/`read_cached` in `stockbit_shareholding.py` already filter with
+  `COALESCE(date(report_date), date(fetched_date)) <= date(?)` for exactly this
+  reason ("prevents look-ahead bias in backtests"). Every other historical-read
+  port in `src/domain/ports/` (`analyst_consensus_provider`,
+  `company_profile_provider`, `forward_estimates_provider`, `earnings_provider`,
+  `insider_activity_provider`, `fundamentals_provider`, `seasonality_provider`)
+  carries the same `as_of_date: date | None = None` parameter. The new history
+  port method must carry it too — see §2 layer plan and §4 slice 1.
 
 **⚠️ Dedupe rule (correctness):** the history read MUST collapse to **one row per
 `report_date`** (latest `fetched_date` wins), then order by `report_date`.
@@ -37,10 +50,12 @@ Otherwise re-fetches appear as fake duplicate periods.
 
 ```md
 - Domain: not touched (ShareholdingComposition VO exists)
-- Application: get_ownership_history on the ownership source port; a
-  ViewTickerOwnershipHistoryUseCase producing a DESCRIPTIVE period series +
-  period-over-period deltas — SHARED by CLI/TUI/agent
-- Infrastructure: SQLite read (dedupe latest-fetch per report_date, ORDER BY
+- Application: `get_ownership_history(ticker, limit, as_of_date=None)` on the
+  ownership source port; a ViewTickerOwnershipHistoryUseCase producing a
+  DESCRIPTIVE period series + period-over-period deltas — SHARED by CLI/TUI/agent
+- Infrastructure: SQLite read (dedupe latest-fetch per report_date, `as_of_date`
+  cutoff applied **before** the dedupe/limit — mirror `_read_cache`'s
+  `COALESCE(date(report_date), date(fetched_date)) <= date(?)` — then ORDER BY
   report_date DESC LIMIT N)
 - Adapter: agent tool GET_TICKER_OWNERSHIP_HISTORY + optional CLI/TUI ownership-trend view
 ```
@@ -48,13 +63,17 @@ Otherwise re-fetches appear as fake duplicate periods.
 ## 3. Result (facts only)
 
 `ticker`, ordered `periods[]` (each: `report_date`, `institution_pct`,
-`individual_pct`, `top_holder_name`, `top_holder_pct`, `total_shares`), and
-**period-over-period deltas** where ≥2 periods exist (`institution_pct_change`,
-`float_change`, `top_holder_pct_change`). No score/verdict.
+`individual_pct`, `free_float_pct` (VO property, not recomputed), `top_holder_name`,
+`top_holder_pct`, `total_shares`), and **period-over-period deltas** where ≥2
+periods exist (`institution_pct_change`, `float_change` — computed from
+`free_float_pct`, not re-derived from raw percentages —, `top_holder_pct_change`).
+No score/verdict.
 
 ## 4. Slices
 
-1. Port + SQLite: `get_ownership_history(ticker, limit)` with the dedupe rule.
+1. Port + SQLite: `get_ownership_history(ticker, limit, as_of_date=None)` with the
+   dedupe rule and the `as_of_date` cutoff applied before dedupe/limit (mirrors
+   `ShareholdingProvider.get_composition`'s existing `as_of_date` contract).
 2. Use case: `ViewTickerOwnershipHistoryUseCase` — series + deltas; PIT (`≤ as_of` by report_date).
 3. Agent tool: `TickerOwnershipHistoryTool` — args `ticker` (required), optional
    `limit` (cap, e.g. ≤ 8 periods). Bound bytes.
