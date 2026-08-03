@@ -83,12 +83,31 @@ Read before editing:
 5. **Docs:** flip coverage-matrix rows 1/2/4 to 🟢 with tool+field citations; add a
    journey SSOT changelog row.
 
+## 2b. Partial-data honesty (follow the shared policy)
+
+Apply the shared [partial-data honesty policy](../../docs/roadmap/ai_research_cockpit_tool_coverage.md#partial-data-honesty-policy-all-read-tools).
+Tool-specific mapping:
+
+| Case | Status |
+|---|---|
+| No summary + no bandar for ticker/date | UNAVAILABLE |
+| Summary present, tops genuinely empty (full-summary source) | SUCCESS + INFO `NO_NET_TOPS` |
+| Only one side has net desks | SUCCESS + INFO `NO_DISTRIBUTION_SIDE` / `NO_ACCUMULATION_SIDE` |
+| Named tops present, bandar snapshot missing | PARTIAL + WARN `BANDAR_SNAPSHOT_UNAVAILABLE` (null bandar fields) |
+| Bandar present, no named tops | PARTIAL + WARN `NAMED_TOPS_UNAVAILABLE` (empty desk lists) |
+| Tops empty only via tracked-broker fallback | PARTIAL + WARN `TOPS_FALLBACK_EMPTY` (use `tops_scope`) |
+
+Never fabricate desks; empty stays empty; null stays null. UNAVAILABLE is last resort.
+
 ## 3. Acceptance
 
 - [ ] `get_ticker_broker_flow` returns named accumulating **and** distributing
   desks for a ticker, with buyer/seller counts and multi-window consistency labels.
 - [ ] Single-session; `target_date` defaults to latest; `limit` ≤ 10 and result
   bytes enforced. No multi-day aggregation.
+- [ ] Partial-data honesty per §2b: UNAVAILABLE only with no data; empty/one-sided
+  tops → SUCCESS+INFO; missing bandar or tops dimension → PARTIAL+coded WARN; no
+  fabrication.
 - [ ] Missing backing data → `UNAVAILABLE`, never a fabricated desk list.
 - [ ] `side_effect=NONE`, no confirm; cache-only; no fetch/scrape/write.
 - [ ] Offered on all stages; deterministic Action authority untouched.

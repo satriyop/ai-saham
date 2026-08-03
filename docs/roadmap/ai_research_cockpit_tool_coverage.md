@@ -66,6 +66,29 @@ view — and the data already exists (`ViewTickerTopBrokersUseCase` +
 `BandarDetectorSnapshot`). See the [`get_ticker_broker_flow` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_broker_flow_tool.md) (under ADR-061). The orchestrator already emits this exact
 `TOOL_GAP` at runtime.
 
+## Partial-data honesty policy (all read tools)
+
+Every cockpit read tool follows one policy so status is consistent and never lies.
+It aligns with the `AgentToolExecutionResult` contract (`agent_tools.py`): SUCCESS =
+`data`, no error; PARTIAL = `data` + non-empty `warnings`; UNAVAILABLE = `data=None`
++ `error_code`+`error_message`.
+
+**Rule: SUCCESS vs PARTIAL is about *dimensions delivered*, not *rows returned*.
+Emptiness that is a true finding is SUCCESS; a promised dimension that is missing
+is PARTIAL. UNAVAILABLE only when there is nothing truthful to return.**
+
+| Case | Status |
+|---|---|
+| No backing data at all for the subject | UNAVAILABLE (data=None + error) |
+| Subject present, a result set genuinely empty (flat/one-sided) | SUCCESS + INFO note (e.g. `NO_NET_TOPS`, `NO_DISTRIBUTION_SIDE`) |
+| One promised dimension missing, others present | PARTIAL + coded WARN (e.g. `BANDAR_SNAPSHOT_UNAVAILABLE`, `NAMED_TOPS_UNAVAILABLE`) |
+| Only a degraded/fallback source yielded nothing | PARTIAL + coded WARN (e.g. `TOPS_FALLBACK_EMPTY`) |
+
+Guardrails: **UNAVAILABLE is last resort** — if any real datum exists, prefer
+SUCCESS/PARTIAL; **never fabricate** (empty lists stay empty, missing fields stay
+null); use **stable warning codes** (U7 honesty strip ranks WARN before INFO).
+Each tool task names its own dimension-specific codes.
+
 ## Guard test spec (regression + routing)
 
 Two offline tests keep this matrix from silently rotting:
