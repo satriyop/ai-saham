@@ -43,10 +43,11 @@ from src.adapters.tui.phase_sequence import (
     format_phase_sequence_section,
 )
 from src.adapters.tui.presenters.accum_presenter import AccumRowView, build_accum_focus
+from src.adapters.tui.theme import OC
 
 # Product-facing degradation when board row has no candidate object.
 LIMITED_JUDGE_BANNER = (
-    "[#d4b06a]Limited judge[/]  snapshot / no candidate object · "
+    f"[{OC.brass}]Limited judge[/]  snapshot / no candidate object · "
     "scalars only · [bold]j[/] re-judge or [bold]r[/] live for full desk"
 )
 
@@ -116,7 +117,7 @@ def present_accum_engine_inspect(
         readiness_s = format_setup_readiness(readiness, setup_family=fam, style="full")
 
     lines: list[str] = [
-        f"[bold #e8e8e8]Judge · {ticker}[/]",
+        f"[bold {OC.text_bright}]Judge · {ticker}[/]",
         f"[dim]Screen · accumulation · #{rank}/{total} by Signal · present-only[/]",
     ]
     if board_summary:
@@ -157,7 +158,7 @@ def present_accum_engine_inspect(
     if limited:
         lines.extend(
             [
-                "[#d4b06a]Decision stack[/]",
+                f"[{OC.brass}]Decision stack[/]",
                 f"  Action {action} · Gate {gate}",
                 f"  ← Signal {signal} · coverage — · strength —",
                 "  ← Risk —",
@@ -197,12 +198,12 @@ def present_accum_engine_inspect(
     else:
         lines.extend(
             [
-                "[#9b8fb8]Scalars (board row)[/]",
+                f"[{OC.purple}]Scalars (board row)[/]",
                 f"  phase {phase} · streak {getattr(row, 'streak', '—')} · "
                 f"rsi {getattr(row, 'rsi', '—')} · net {getattr(row, 'net_pct', '—')}",
                 f"  disc {getattr(row, 'disc_pct', '—')} · px {getattr(row, 'price', '—')}",
                 "",
-                "[#9b8fb8]Signal / Risk / TradeSetup[/]",
+                f"[{OC.purple}]Signal / Risk / TradeSetup[/]",
                 "  not available without candidate object — press [bold]j[/] re-judge",
                 "",
                 JUDGE_FOOTER_LIMITED,
@@ -220,21 +221,21 @@ def _action_markup(action: str) -> str:
     """Color Action for Verdict mast (semantic only)."""
     a = (action or "").strip().upper()
     if a in ENTER_LIKE:
-        return f"[bold #6fbf8a]{action}[/]"
+        return f"[bold {OC.mint}]{action}[/]"
     if a in AVOID_LIKE:
-        return f"[bold #c97a72]{action}[/]"
+        return f"[bold {OC.coral}]{action}[/]"
     if a in WATCH_LIKE:
-        return f"[bold #d4b06a]{action}[/]"
-    return f"[bold #e8e8e8]{action or '—'}[/]"
+        return f"[bold {OC.brass}]{action}[/]"
+    return f"[bold {OC.text_bright}]{action or '—'}[/]"
 
 
 def _gate_markup(gate: str) -> str:
     g = (gate or "").strip().upper()
     if g in {"OPEN", "PASS", "CLEAR"}:
-        return f"[#6fbf8a]Gate {gate}[/]"
+        return f"[{OC.mint}]Gate {gate}[/]"
     if g in {ACTION_BLOCK, "BLOCKED", "FAIL", "CLOSED"}:
-        return f"[#c97a72]Gate {gate}[/]"
-    return f"[#d4b06a]Gate {gate or '—'}[/]"
+        return f"[{OC.coral}]Gate {gate}[/]"
+    return f"[{OC.brass}]Gate {gate or '—'}[/]"
 
 
 def _verdict_mast(
@@ -256,7 +257,7 @@ def _verdict_mast(
     Replaces equal-weight Judgment field dump (design: tui-judge-desk.html).
     """
     lines = [
-        "[#d4b06a]Judgment · Verdict mast[/]",
+        f"[{OC.brass}]Judgment · Verdict mast[/]",
         f"  {_action_markup(action)}   {_gate_markup(gate)}",
         "",
         f"  {SIGNAL:<10} {signal}    {ACCUM:<10} {accum}",
@@ -275,7 +276,7 @@ def _verdict_mast(
 
 
 def _section_named_setups(source: Any) -> list[str]:
-    lines = ["[#9b8fb8]Named setups (diagnostic)[/]"]
+    lines = [f"[{OC.purple}]Named setups (diagnostic)[/]"]
     if source is None:
         lines.append("  —")
         return lines
@@ -292,7 +293,7 @@ def _section_named_setups(source: Any) -> list[str]:
 
 
 def _section_signal(source: Any) -> list[str]:
-    lines = ["[#9b8fb8]Signal[/]"]
+    lines = [f"[{OC.purple}]Signal[/]"]
     sa = getattr(source, "signal_assessment", None) if source is not None else None
     if sa is None:
         lines.append("  not available on this candidate")
@@ -352,7 +353,7 @@ def _section_signal(source: Any) -> list[str]:
 
 
 def _section_risk(source: Any) -> list[str]:
-    lines = ["[#9b8fb8]Risk[/]"]
+    lines = [f"[{OC.purple}]Risk[/]"]
     risk = getattr(source, "risk_assessment", None) if source is not None else None
     if risk is None:
         lines.append("  not available on this candidate")
@@ -387,7 +388,7 @@ def _section_risk(source: Any) -> list[str]:
 
 
 def _section_trade_setup(source: Any, *, action: str) -> list[str]:
-    lines = ["[#9b8fb8]TradeSetup[/]"]
+    lines = [f"[{OC.purple}]TradeSetup[/]"]
     ts = getattr(source, "trade_setup", None) if source is not None else None
     if ts is None:
         lines.append("  not available on this candidate")
@@ -411,14 +412,14 @@ def _section_trade_setup(source: Any, *, action: str) -> list[str]:
 
 def _section_accum(accum: str, breakdown: str) -> list[str]:
     return [
-        "[#9b8fb8]Accum (screen)[/]",
+        f"[{OC.purple}]Accum (screen)[/]",
         f"  total {accum}",
         f"  breakdown: {breakdown}",
     ]
 
 
 def _section_data(source: Any, *, lag: str) -> list[str]:
-    lines = ["[#9b8fb8]Data[/]"]
+    lines = [f"[{OC.purple}]Data[/]"]
     if source is None:
         lines.append("  —")
         return lines
@@ -447,7 +448,7 @@ def _section_data(source: Any, *, lag: str) -> list[str]:
 
 
 def _section_session(effective_session: Any | None) -> list[str]:
-    lines = ["[#9b8fb8]Session[/]"]
+    lines = [f"[{OC.purple}]Session[/]"]
     if effective_session is None:
         lines.append("  —")
         return lines

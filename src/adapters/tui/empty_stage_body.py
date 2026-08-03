@@ -7,6 +7,8 @@ Layer: Adapter
 
 from __future__ import annotations
 
+from src.adapters.tui.theme import OC
+
 
 def format_empty_stage_body(
     *,
@@ -88,13 +90,13 @@ def _is_zero_candidate_screen(title: str, meta: str, kind: str) -> bool:
 
 def _true_empty_cache(*, fetch_cue: str) -> str:
     return (
-        "[bold #c97a72]SESSION HEALTH · EMPTY[/]\n"
-        "[bold #e8e8e8]No local market data[/]\n\n"
+        f"[bold {OC.coral}]SESSION HEALTH · EMPTY[/]\n"
+        f"[bold {OC.text_bright}]No local market data[/]\n\n"
         "Nothing on disk for this session. Screens refuse to invent candidates.\n"
         "Cockpit refuses to invent rows when cache is empty.\n"
         "Online only if you ask.\n\n"
-        f"[#d4b06a]Next[/]  [bold]{fetch_cue}[/]\n\n"
-        "[#555555]What this protects[/]\n"
+        f"[{OC.brass}]Next[/]  [bold]{fetch_cue}[/]\n\n"
+        f"[{OC.text_mute}]What this protects[/]\n"
         "· No silent network on open\n"
         "· Fetch is explicit · same as CLI\n"
         "· Empty cache refuses invented rows"
@@ -103,11 +105,11 @@ def _true_empty_cache(*, fetch_cue: str) -> str:
 
 def _lag_poster(*, fetch_cue: str) -> str:
     return (
-        "[bold #d4b06a]POSTER · LAG[/]\n"
-        "[bold #e8e8e8]Local cache lagging[/]\n\n"
+        f"[bold {OC.brass}]POSTER · LAG[/]\n"
+        f"[bold {OC.text_bright}]Local cache lagging[/]\n\n"
         "Candle and broker dates disagree or trail the session.\n"
         "Board may still show rows later — do not pretend ready.\n\n"
-        f"[#d4b06a]Next[/]  Explicit fetch only if deliberate · {fetch_cue}\n"
+        f"[{OC.brass}]Next[/]  Explicit fetch only if deliberate · {fetch_cue}\n"
         "· Or continue when a board loads from local cache\n\n"
         "[dim]Local-first · fetch remains explicit · never automatic on open[/]"
     )
@@ -115,12 +117,12 @@ def _lag_poster(*, fetch_cue: str) -> str:
 
 def _ready_poster(*, fetch_cue: str) -> str:
     return (
-        "[bold #6fbf8a]POSTER · READY[/]\n"
-        "[bold #e8e8e8]Local cache ready[/]\n\n"
+        f"[bold {OC.mint}]POSTER · READY[/]\n"
+        f"[bold {OC.text_bright}]Local cache ready[/]\n\n"
         "Dates present and aligned on the Session rail.\n"
         "This empty stage means no board row set is open right now —\n"
         "not that SQLite is empty.\n\n"
-        "[#d4b06a]Try[/]\n"
+        f"[{OC.brass}]Try[/]\n"
         "· s a · Screen accumulation\n"
         "· s p · Screen pre-open\n"
         "· r · Refresh local when a board is open\n"
@@ -143,19 +145,19 @@ def _zero_candidate_body(*, status: str | None, fetch_cue: str, kind: str) -> st
     lag_line = ""
     if status == "lag":
         lag_line = (
-            "Session rail shows [bold #d4b06a]LAG[/] — data may be stale; "
+            f"Session rail shows [bold {OC.brass}]LAG[/] — data may be stale; "
             "fetch only if deliberate.\n\n"
         )
     elif status in {"ready", None, "unknown"}:
         lag_line = "Local cache is available (see Session · Cache rail).\n\n"
 
     return (
-        f"[bold #7aa2c4]POSTER · ZERO CANDIDATES[/]\n"
-        f"[bold #e8e8e8]No {kind} candidates[/]\n\n"
+        f"[bold {OC.blue}]POSTER · ZERO CANDIDATES[/]\n"
+        f"[bold {OC.text_bright}]No {kind} candidates[/]\n\n"
         f"{lag_line}"
         "The screen ran against local data and returned [bold]0 names[/].\n"
         "That is a real result — not missing market data and not invented rows.\n\n"
-        "[#d4b06a]Try[/]\n"
+        f"[{OC.brass}]Try[/]\n"
         "· r refresh local board (same cache)\n"
         "· Ctrl+P · other screens (pre-open / view)\n"
         f"· Fetch only if cache is empty/lag: {fetch_cue}\n\n"
@@ -166,18 +168,18 @@ def _zero_candidate_body(*, status: str | None, fetch_cue: str, kind: str) -> st
 def _preopen_empty(*, status: str | None, fetch_cue: str) -> str:
     if status == "empty":
         return (
-            "[bold #c97a72]POSTER · NO IEV SNAPSHOT[/]\n"
-            "[bold #e8e8e8]No pre-open snapshot[/]\n\n"
+            f"[bold {OC.coral}]POSTER · NO IEV SNAPSHOT[/]\n"
+            f"[bold {OC.text_bright}]No pre-open snapshot[/]\n\n"
             "Local IEV / NCP data is missing. Pre-open cannot invent IEP rows.\n\n"
-            f"[#d4b06a]Next[/]  explicit fetch iev (CLI/palette) · {fetch_cue}\n\n"
+            f"[{OC.brass}]Next[/]  explicit fetch iev (CLI/palette) · {fetch_cue}\n\n"
             "[dim]Never silent network on open.[/]"
         )
     return (
-        "[bold #7aa2c4]POSTER · NO IEP CANDIDATES[/]\n"
-        "[bold #e8e8e8]No IEP candidates[/]\n\n"
+        f"[bold {OC.blue}]POSTER · NO IEP CANDIDATES[/]\n"
+        f"[bold {OC.text_bright}]No IEP candidates[/]\n\n"
         "Pre-open read local IEV snapshot and found nothing to grade,\n"
         "or the snapshot has no names for this session.\n\n"
-        "[#d4b06a]Try[/]\n"
+        f"[{OC.brass}]Try[/]\n"
         "· r refresh pre-open from cache\n"
         "· Explicit [bold]fetch iev[/] if snapshot is missing/stale\n"
         "· s a · Screen accumulation for cash-session board\n\n"
@@ -187,11 +189,11 @@ def _preopen_empty(*, status: str | None, fetch_cue: str) -> str:
 
 def _broker_empty() -> str:
     return (
-        "[bold #9b8fb8]POSTER · NO DESKS[/]\n"
-        "[bold #e8e8e8]No broker desks to list[/]\n\n"
+        f"[bold {OC.purple}]POSTER · NO DESKS[/]\n"
+        f"[bold {OC.text_bright}]No broker desks to list[/]\n\n"
         "View broker has no tracked desks in config, or none matched filters.\n"
         "This is not the same as empty market candles.\n\n"
-        "[#d4b06a]Try[/]\n"
+        f"[{OC.brass}]Try[/]\n"
         "· Check broker tracking config\n"
         "· v t · view ticker · b desks from a stock\n"
         "· Explicit fetch broker if flow tables are empty"
@@ -200,9 +202,9 @@ def _broker_empty() -> str:
 
 def _unknown_health(*, fetch_cue: str) -> str:
     return (
-        "[bold #555555]POSTER · HEALTH UNKNOWN[/]\n"
-        "[bold #e8e8e8]Empty board · cache health unknown[/]\n\n"
+        f"[bold {OC.text_mute}]POSTER · HEALTH UNKNOWN[/]\n"
+        f"[bold {OC.text_bright}]Empty board · cache health unknown[/]\n\n"
         "Could not read local candle/broker dates. Refusing to invent rows.\n\n"
-        f"[#d4b06a]Next[/]  {fetch_cue} · or check DB path / lock\n\n"
+        f"[{OC.brass}]Next[/]  {fetch_cue} · or check DB path / lock\n\n"
         "[dim]Local-first · no silent network.[/]"
     )

@@ -11,6 +11,8 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from src.adapters.tui.theme import OC
+
 
 class FetchConfirmModal(ModalScreen[bool | None]):
     BINDINGS = [
@@ -28,9 +30,9 @@ class FetchConfirmModal(ModalScreen[bool | None]):
                 yield Static("Fetch market data", id="confirm-title")
                 yield Static("esc cancel", id="confirm-esc")
             body = (
-                "[bold #e8e8e8]Leave local-first · explicit online[/]\n\n"
+                f"[bold {OC.text_bright}]Leave local-first · explicit online[/]\n\n"
                 f"{self._plan_text}\n\n"
-                "[#d4b06a]This is the only path that may hit the network.[/]\n"
+                f"[{OC.brass}]This is the only path that may hit the network.[/]\n"
                 "Cockpit never fetches on open."
             )
             yield Static(body, id="confirm-body")

@@ -11,7 +11,9 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-HELP_BODY = """[#9b8fb8]What this app does[/]
+from src.adapters.tui.theme import OC
+
+HELP_BODY = f"""[{OC.purple}]What this app does[/]
 · Opens on [bold]Screen · accumulation[/] from local SQLite
 · Pre-open reads cached IEV snapshots (fetch iev)
 · Enter = [bold]Judge[/] focused accum row (ADR-054 · present-only)
@@ -22,7 +24,7 @@ HELP_BODY = """[#9b8fb8]What this app does[/]
 · Judge shows phase sequence from setup phase ledger (ADR-058 · read-only)
 · Fetch = explicit online (never on open)
 
-[#9b8fb8]Keys[/]
+[{OC.purple}]Keys[/]
   ctrl+p   commands
   ↑↓       move rows (arrows only · not j/k)
   enter    judge (accum) / inspect (pre-open) / desk home
@@ -41,7 +43,7 @@ HELP_BODY = """[#9b8fb8]What this app does[/]
   ?        this help
   q        quit
 
-[#9b8fb8]Same engine as CLI[/]
+[{OC.purple}]Same engine as CLI[/]
   saham screen accum · screen pre-open · plan swing
   saham view ticker show · view broker …
   Lab backtests stay CLI for now (palette shows hint)

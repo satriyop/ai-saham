@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.adapters.tui.theme import OC
+
 
 def format_paper_confirm_body(
     *,
@@ -22,21 +24,21 @@ def format_paper_confirm_body(
     """Notebook-style confirm body for PaperLogConfirmModal."""
     t = (ticker or "—").strip().upper() or "—"
     lines = [
-        "[bold #c9a68a]PAPER TAPE · CONFIRM[/]",
-        f"[bold #e8e8e8]Notebook · {t}[/]",
+        f"[bold {OC.peach}]PAPER TAPE · CONFIRM[/]",
+        f"[bold {OC.text_bright}]Notebook · {t}[/]",
         "",
-        "[#555555]GEOMETRY · from plan structure[/]",
-        f"  Entry   [bold #c9a68a]{entry or '—'}[/]",
-        f"  Stop    [bold #c97a72]{stop or '—'}[/]",
-        f"  Target  [bold #6fbf8a]{target or '—'}[/]",
-        f"  Lots    [bold #e8e8e8]{lots or '—'}[/]",
+        f"[{OC.text_mute}]GEOMETRY · from plan structure[/]",
+        f"  Entry   [bold {OC.peach}]{entry or '—'}[/]",
+        f"  Stop    [bold {OC.coral}]{stop or '—'}[/]",
+        f"  Target  [bold {OC.mint}]{target or '—'}[/]",
+        f"  Lots    [bold {OC.text_bright}]{lots or '—'}[/]",
     ]
     if plan_id:
         lines.append(f"  Plan    {plan_id}")
     lines.extend(
         [
             "",
-            "[#d4b06a]Paper only · no broker order.[/]",
+            f"[{OC.brass}]Paper only · no broker order.[/]",
             "[dim]Notebook write · geometry from plan structure[/]",
         ]
     )
@@ -56,9 +58,9 @@ def format_paper_outcome_tape(result: Any) -> str:
 
     if refused:
         return (
-            f"[bold #c97a72]PAPER TAPE · REFUSED[/]\n"
-            f"[bold #e8e8e8]{ticker}[/] · no write\n"
-            f"[#7a7a7a]{message or 'refused'}[/]\n"
+            f"[bold {OC.coral}]PAPER TAPE · REFUSED[/]\n"
+            f"[bold {OC.text_bright}]{ticker}[/] · no write\n"
+            f"[{OC.text_dim}]{message or 'refused'}[/]\n"
             "[dim]no broker order · plan stage still open[/]"
         )
     if written:
@@ -72,16 +74,16 @@ def format_paper_outcome_tape(result: Any) -> str:
         geo_s = " · ".join(geo) if geo else "geometry saved"
         pid = f" · plan {plan_id}" if plan_id else ""
         return (
-            f"[bold #6fbf8a]PAPER TAPE · LOGGED[/]\n"
-            f"[bold #e8e8e8]{ticker}[/] · notebook write{pid}\n"
-            f"[#7a7a7a]{geo_s}[/]\n"
-            f"[#7a7a7a]{message or 'logged'}[/]\n"
+            f"[bold {OC.mint}]PAPER TAPE · LOGGED[/]\n"
+            f"[bold {OC.text_bright}]{ticker}[/] · notebook write{pid}\n"
+            f"[{OC.text_dim}]{geo_s}[/]\n"
+            f"[{OC.text_dim}]{message or 'logged'}[/]\n"
             "[dim]paper only · no broker order[/]"
         )
     return (
-        f"[bold #d4b06a]PAPER TAPE · NO WRITE[/]\n"
-        f"[bold #e8e8e8]{ticker}[/]\n"
-        f"[#7a7a7a]{message or '0 rows / duplicate'}[/]\n"
+        f"[bold {OC.brass}]PAPER TAPE · NO WRITE[/]\n"
+        f"[bold {OC.text_bright}]{ticker}[/]\n"
+        f"[{OC.text_dim}]{message or '0 rows / duplicate'}[/]\n"
         "[dim]no broker order[/]"
     )
 

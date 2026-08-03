@@ -37,7 +37,7 @@ from src.adapters.tui.board_snapshot import (
 from src.adapters.tui.screens.help import HelpModal
 from src.adapters.tui.screens.palette import CommandPalette
 from src.adapters.tui.state import ScreenState, ScreenStatus
-from src.adapters.tui.theme import COCKPIT_CSS
+from src.adapters.tui.theme import COCKPIT_CSS, OC
 from src.adapters.tui.worker_lifecycle import dispatch_if_active
 
 # Injected callables (composition). Phase 0–1 may leave these None.
@@ -551,7 +551,7 @@ class CockpitApp(App[None]):
 
     def _shell_body(self) -> str:
         return (
-            "[bold #e8e8e8]Starting cockpit…[/]\n\n"
+            f"[bold {OC.text_bright}]Starting cockpit…[/]\n\n"
             "Loading [bold]Screen · accumulation[/] from local cache.\n"
             "No network on open — Fetch is explicit via Ctrl+P.\n\n"
             "[dim]Ctrl+P commands · ? help · q quit[/]"
@@ -1238,7 +1238,7 @@ class CockpitApp(App[None]):
             body.display = True
             self._hide_instrument_desks()
             body.update(
-                f"[#c97a72]Error[/]\n{self._error_text}\n\n[dim]r retry · Ctrl+P commands[/]"
+                f"[{OC.coral}]Error[/]\n{self._error_text}\n\n[dim]r retry · Ctrl+P commands[/]"
             )
             table.display = False
             evidence.display = False
@@ -3394,7 +3394,7 @@ class CockpitApp(App[None]):
         )
         parts: list[str] = []
         if self._board_summary:
-            parts.append(f"[#9b8fb8]Board[/]  {self._board_summary}")
+            parts.append(f"[{OC.purple}]Board[/]  {self._board_summary}")
         parts.append(focus.strip)
         self._evidence_text = "\n".join(parts)
         ev = self.query_one("#evidence-strip", Static)
@@ -3508,7 +3508,7 @@ class CockpitApp(App[None]):
         if error is not None:
             self._status_note = "judge"
             self._meta = f"re-judge failed · {error[:80]}"
-            banner = f"[#c97a72]Re-judge error[/]\n{error}\n\n"
+            banner = f"[{OC.coral}]Re-judge error[/]\n{error}\n\n"
             self._detail_text = banner + (self._detail_text or "")
             self._refresh_chrome()
             self.notify(f"Re-judge failed · {ticker}", timeout=2.5)
@@ -3519,7 +3519,7 @@ class CockpitApp(App[None]):
             self._status_note = "judge"
             self._meta = f"re-judge · no candidate for {ticker}"
             self._detail_text = (
-                f"[#d4b06a]Re-judge[/]  no candidate for {ticker} in local cache\n\n"
+                f"[{OC.brass}]Re-judge[/]  no candidate for {ticker} in local cache\n\n"
                 + (self._detail_text or "")
             )
             self._refresh_chrome()
@@ -3925,14 +3925,14 @@ class CockpitApp(App[None]):
             esc_line = "  esc desks" if self._desk_entry == "ticker-desks" else "  esc list"
             if "Actions (TUI)" not in text:
                 actions = (
-                    "\n\n[#9b8fb8]Actions (TUI)[/]\n"
+                    f"\n\n[{OC.purple}]Actions (TUI)[/]\n"
                     "  t top-stocks · f flow · c calendar · h history · m top-matrix\n"
                     "  v view ticker (top buy stock)\n"
                     f"{esc_line}\n"
                 )
                 text = text.rstrip() + actions
             header = (
-                f"[bold #e8e8e8]View · broker show · {code}[/]\n"
+                f"[bold {OC.text_bright}]View · broker show · {code}[/]\n"
                 f"[dim]local cache · tracked desk[/]\n\n"
             )
             dispatch_if_active(
@@ -4042,11 +4042,12 @@ class CockpitApp(App[None]):
             }
             label = titles.get(page, page)
             header = (
-                f"[bold #e8e8e8]View · broker {label} · {code}[/]\n"
+                f"[bold {OC.text_bright}]View · broker {label} · {code}[/]\n"
                 f"[dim]local cache · tracked desk[/]\n\n"
             )
             footer = (
-                "\n\n[#9b8fb8]Actions[/]\n  t/f/c/h/m switch deep · v view ticker · esc desk home\n"
+                f"\n\n[{OC.purple}]Actions[/]\n"
+                "  t/f/c/h/m switch deep · v view ticker · esc desk home\n"
             )
             dispatch_if_active(
                 self,
@@ -4168,9 +4169,9 @@ class CockpitApp(App[None]):
             model = model_from_loader_result(ticker, model_or_text)
         if not isinstance(model, TickerDeskModel):
             model = build_ticker_desk_model_from_text(ticker=ticker, body=str(model_or_text or ""))
-        actions = "\n\n[#9b8fb8]Actions (TUI)[/]\n  b f o x n jobs · d detail · Tab chips\n" + (
-            "  esc → desk home\n" if self._view_from_desk else "  esc trail\n"
-        )
+        actions = (
+            f"\n\n[{OC.purple}]Actions (TUI)[/]\n  b f o x n jobs · d detail · Tab chips\n"
+        ) + ("  esc → desk home\n" if self._view_from_desk else "  esc trail\n")
         body = model.body or ""
         if "Actions (TUI)" not in body:
             body = body + actions
@@ -4250,7 +4251,7 @@ class CockpitApp(App[None]):
                 return view.text
 
         # Unknown row shape: lean field dump
-        lines = [f"[bold #e8e8e8]{ticker}[/]", ""]
+        lines = [f"[bold {OC.text_bright}]{ticker}[/]", ""]
         for key, label in (
             ("action", "Act"),
             ("iep", "IEP"),
@@ -4427,7 +4428,7 @@ class CockpitApp(App[None]):
         if error is not None:
             self._status_note = "paper"
             self._paper_outcome = (
-                f"[bold #c97a72]PAPER TAPE · FAILED[/]\n"
+                f"[bold {OC.coral}]PAPER TAPE · FAILED[/]\n"
                 f"{ticker} · {error[:120]}\n"
                 "[dim]no broker order[/]"
             )

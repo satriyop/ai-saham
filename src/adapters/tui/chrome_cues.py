@@ -7,6 +7,8 @@ Layer: Adapter
 
 from __future__ import annotations
 
+from src.adapters.tui.theme import OC
+
 
 def snapshot_accum_footer(*, freshness: str = "") -> str:
     """Footer when accum board is last-run snapshot (no candidate source).
@@ -115,7 +117,7 @@ def broker_radar_meta(
 def broker_list_loading_body() -> str:
     """Main stage body while view-broker list worker is in flight."""
     return (
-        "[#d4b06a]Loading broker desk list…[/]\n\n"
+        f"[{OC.brass}]Loading broker desk list…[/]\n\n"
         "View · broker list\n\n"
         "Reading tracked desks from [bold]local cache[/] — not hung.\n"
         "Local cache only (recent sessions · no network).\n\n"
@@ -193,7 +195,11 @@ def loading_stage_body(
     title = (board_title or "Local board").strip() or "Local board"
     note = (status_note or "").strip().lower()
     if note.startswith("view ticker") or "ticker" in title:
-        return f"[#d4b06a]Loading…[/]\n\n{title}\n[dim]Local cache · ticker surface · not hung[/]"
+        return (
+            f"[{OC.brass}]Loading…[/]\n\n{title}\n[dim]Local cache · ticker surface · not hung[/]"
+        )
     if note.startswith("view broker") or "broker" in title:
-        return f"[#d4b06a]Loading…[/]\n\n{title}\n[dim]Local cache · broker surface · not hung[/]"
-    return f"[#d4b06a]Loading local board…[/]\n\n{title}\n[dim]Reading local cache · not hung[/]"
+        return (
+            f"[{OC.brass}]Loading…[/]\n\n{title}\n[dim]Local cache · broker surface · not hung[/]"
+        )
+    return f"[{OC.brass}]Loading local board…[/]\n\n{title}\n[dim]Reading local cache · not hung[/]"

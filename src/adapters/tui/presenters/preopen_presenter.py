@@ -21,6 +21,7 @@ from typing import Any
 # re-literalize domain Action strings — see architecture boundary guard
 # tests/architecture/test_tui_boundaries.py.
 from src.adapters.shared.trade_action_labels import ACTION_ENTER, ACTION_WATCH
+from src.adapters.tui.theme import OC
 
 # Locked board column labels (1:1 design contract).
 PREOPEN_BOARD_COLUMN_LABELS: tuple[str, ...] = (
@@ -491,11 +492,13 @@ def build_preopen_focus(
     lines: list[str] = []
     if session_strip is not None:
         lines.append(
-            f"[#9b8fb8]Session[/]  {session_strip.source} · {session_strip.phase} · "
+            f"[{OC.purple}]Session[/]  {session_strip.source} · {session_strip.phase} · "
             f"{session_strip.funnel} · {session_strip.window}"
         )
-    lines.append(f"[#9b8fb8]Focus · {ticker}[/]  #{rank}/{total}  ·  Act {action} · risk {risk}")
-    lines.append(f"[#d4b06a]Why[/]  {why}" if why else "Why  —")
+    lines.append(
+        f"[{OC.purple}]Focus · {ticker}[/]  #{rank}/{total}  ·  Act {action} · risk {risk}"
+    )
+    lines.append(f"[{OC.brass}]Why[/]  {why}" if why else "Why  —")
     lines.append(f"IEP {iep} · Δ% {delta} · IEV {iev} · NCP {ncp} · ΔIEV {delta_iev}")
     strip = "\n".join(lines)
     short_why = why if len(why) <= 42 else why[:39] + "…"

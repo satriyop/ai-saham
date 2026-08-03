@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.adapters.tui.theme import OC
 from src.adapters.tui.ticker_desk_model import (
     TickerDeskModel,
     build_ticker_desk_model_from_dashboard,
@@ -29,13 +30,13 @@ def format_harga_mast(
     t = (ticker or "—").strip().upper() or "—"
     p = (price or "—").strip() or "—"
     lines = [
-        f"[bold #e8e8e8]View · ticker · {t}[/]",
-        "[bold #c9a68a]LAST · LOCAL CLOSE[/]",
-        f"[bold #e8e8e8]{p}[/]",
+        f"[bold {OC.text_bright}]View · ticker · {t}[/]",
+        f"[bold {OC.peach}]LAST · LOCAL CLOSE[/]",
+        f"[bold {OC.text_bright}]{p}[/]",
     ]
     if change_line:
-        lines.append(f"[#7a7a7a]{change_line}[/]")
-    lines.append(f"[#555555]as_of {as_of or '—'} · {authority}[/]")
+        lines.append(f"[{OC.text_dim}]{change_line}[/]")
+    lines.append(f"[{OC.text_mute}]as_of {as_of or '—'} · {authority}[/]")
     lines.append("[dim]local cache · b desks[/]")
     lines.append("")
     return "\n".join(lines)

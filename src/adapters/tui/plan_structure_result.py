@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.adapters.tui.theme import OC
+
 
 @dataclass(frozen=True)
 class PlanStructureResult:
@@ -38,7 +40,7 @@ class PlanStructureResult:
 
 def structure_lines(result: PlanStructureResult | None, *, running: bool = False) -> list[str]:
     """Multi-line structure block for the plan stage body."""
-    lines = ["[#d4b06a]Structure result[/]"]
+    lines = [f"[{OC.brass}]Structure result[/]"]
     if running and (result is None or not (result.summary or result.has_geometry())):
         lines.append("  Running… local plan swing (structure only)")
         return lines
@@ -54,7 +56,7 @@ def structure_lines(result: PlanStructureResult | None, *, running: bool = False
     if result.plan_id_short:
         lines.append(f"  Plan id {result.plan_id_short}")
     if result.incomplete_reason:
-        lines.append(f"  [#d4b06a]Note[/]  {result.incomplete_reason}")
+        lines.append(f"  [{OC.brass}]Note[/]  {result.incomplete_reason}")
     if result.no_order:
         lines.append("  [bold]No broker order.[/]")
     if result.inherits_action:

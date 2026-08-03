@@ -16,6 +16,7 @@ from src.adapters.tui.plan_structure_result import (
     plan_structure_from_runner_object,
     structure_lines,
 )
+from src.adapters.tui.theme import OC
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,7 @@ def present_plan_stage(
 ) -> PlanStageView:
     """Board-aware plan page: judgment context from row, structure from runner."""
     lines: list[str] = [
-        f"[bold #e8e8e8]Plan · {ticker} · structure[/]",
+        f"[bold {OC.text_bright}]Plan · {ticker} · structure[/]",
         f"[dim]from {source}  ·  #{rank}/{total}[/]",
         "",
     ]
@@ -51,7 +52,7 @@ def present_plan_stage(
         lines.append(f"  ticker {ticker}")
 
     lines.append("")
-    lines.append("[#9b8fb8]On this page[/]")
+    lines.append(f"[{OC.purple}]On this page[/]")
     lines.append("  Structure desk (ADR-054): horizon / SL / TP / lots.")
     lines.append("  Action inherits screen judgment · [bold]no broker order.[/]")
     lines.append("  Paper notebook: [bold]l[/] after structure · confirm · no order.")
@@ -78,10 +79,10 @@ def _accum_facts(row: Any) -> list[str]:
     gate = str(getattr(row, "gate", "—") or "—")
     why = build_accum_focus(row).why or "—"
     return [
-        "[#9b8fb8]Board judgment (accum)[/]",
+        f"[{OC.purple}]Board judgment (accum)[/]",
         f"  Action {action} · Gate {gate}  [dim](inherited by structure)[/]",
         f"  Signal {signal} · Accum {accum}",
-        f"  [#d4b06a]Why[/]  {why}",
+        f"  [{OC.brass}]Why[/]  {why}",
     ]
 
 
@@ -92,14 +93,14 @@ def _preopen_facts(row: Any) -> list[str]:
     risk = str(getattr(row, "risk", "—") or "—")
     why = format_preopen_why(row) or "—"
     return [
-        "[#9b8fb8]Board context (pre-open)[/]",
+        f"[{OC.purple}]Board context (pre-open)[/]",
         f"  Act {action} · risk {risk}",
         (
             f"  IEP {getattr(row, 'iep', '—')} · Δ% {getattr(row, 'delta_pct', '—')} · "
             f"IEV {getattr(row, 'iev', '—')} · NCP {getattr(row, 'ncp', '—')} · "
             f"ΔIEV {getattr(row, 'delta_iev', '—')}"
         ),
-        f"  [#d4b06a]Why[/]  {why}",
+        f"  [{OC.brass}]Why[/]  {why}",
     ]
 
 

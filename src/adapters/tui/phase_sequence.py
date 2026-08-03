@@ -18,6 +18,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from src.adapters.tui.theme import OC
+
 
 @dataclass(frozen=True)
 class PhaseSequenceFact:
@@ -107,7 +109,7 @@ def format_phase_sequence_section(
     Empty facts + no unavailable_reason → honest empty history cue.
     unavailable_reason → cannot query without inventing.
     """
-    lines = ["[#9b8fb8]Phase sequence · ledger[/]"]
+    lines = [f"[{OC.purple}]Phase sequence · ledger[/]"]
     if unavailable_reason:
         lines.append(f"  {unavailable_reason}")
         lines.append("  [dim]production memory · not a re-score[/]")

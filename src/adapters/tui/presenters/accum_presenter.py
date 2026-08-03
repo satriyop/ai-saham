@@ -20,6 +20,7 @@ from src.adapters.shared.screen_accum_board_fields import (
     BOARD_COLUMN_LABELS,
     extract_screen_accum_board_fields,
 )
+from src.adapters.tui.theme import OC
 
 # Re-export for callers that imported from this module historically.
 __all__ = (
@@ -175,13 +176,13 @@ def build_accum_focus(
     disc_note = _disc_gloss(source, disc_pct)
 
     line1 = (
-        f"[#9b8fb8]Focus · {ticker}[/]  "
+        f"[{OC.purple}]Focus · {ticker}[/]  "
         f"#{rank}/{total} by Signal  ·  "
         f"Signal {signal} · Accum {accum} · "
         f"{action} · gate {gate}"
     )
-    line2 = f"[#d4b06a]Why {action}[/]  {why}" if why else f"Why {action}  —"
-    line3 = f"[#9b8fb8]Accum breakdown[/]  {breakdown}"
+    line2 = f"[{OC.brass}]Why {action}[/]  {why}" if why else f"Why {action}  —"
+    line3 = f"[{OC.purple}]Accum breakdown[/]  {breakdown}"
     line4_bits = [f"phase {phase}", f"streak {streak}", f"net {net_pct}"]
     if disc_note:
         line4_bits.append(disc_note)

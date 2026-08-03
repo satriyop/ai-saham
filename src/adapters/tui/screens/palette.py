@@ -12,6 +12,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, Static
 
 from src.adapters.tui.commands import CockpitCommand, filter_commands
+from src.adapters.tui.theme import OC
 
 
 class CommandPalette(ModalScreen[str | None]):
@@ -91,14 +92,14 @@ class CommandPalette(ModalScreen[str | None]):
         last_section = ""
         for i, cmd in enumerate(self._filtered):
             if cmd.section != last_section:
-                lines.append(f"[#9b8fb8]{cmd.section}[/]")
+                lines.append(f"[{OC.purple}]{cmd.section}[/]")
                 last_section = cmd.section
             marker = ">" if i == self._index else " "
             sc = f"  [dim]{cmd.shortcut}[/]" if cmd.shortcut else ""
             show_desc = bool(cmd.description and i == self._index)
             desc = f"\n    [dim]{cmd.description}[/]" if show_desc else ""
             if i == self._index:
-                lines.append(f"[bold #1a120c on #c9a68a]{marker} {cmd.label}{sc}[/]{desc}")
+                lines.append(f"[bold {OC.sel_text} on {OC.peach}]{marker} {cmd.label}{sc}[/]{desc}")
             else:
                 lines.append(f"{marker} {cmd.label}{sc}")
         self.query_one("#palette-list", Static).update("\n".join(lines))

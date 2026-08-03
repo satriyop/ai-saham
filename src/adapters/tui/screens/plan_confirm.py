@@ -15,6 +15,8 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from src.adapters.tui.theme import OC
+
 
 class PlanConfirmModal(ModalScreen[bool | None]):
     BINDINGS = [
@@ -49,9 +51,9 @@ class PlanConfirmModal(ModalScreen[bool | None]):
             with Horizontal(id="confirm-head"):
                 yield Static("Plan swing", id="confirm-title")
                 yield Static("esc cancel", id="confirm-esc")
-            why_line = f"[#d4b06a]Why {self._action}[/]  {self._why}\n" if self._why else ""
+            why_line = f"[{OC.brass}]Why {self._action}[/]  {self._why}\n" if self._why else ""
             body = (
-                f"[bold #e8e8e8]Plan {self._ticker} · {self._setup}[/]\n"
+                f"[bold {OC.text_bright}]Plan {self._ticker} · {self._setup}[/]\n"
                 f"[dim]Deliberate — Enter on a row only views.[/]\n\n"
                 f"[dim]Ticker[/]   {self._ticker}\n"
                 f"[dim]Signal[/]   {self._signal}\n"
@@ -60,7 +62,7 @@ class PlanConfirmModal(ModalScreen[bool | None]):
                 f"[dim]Gate[/]     {self._gate}\n"
                 f"[dim]Source[/]   {self._source} · local\n"
                 f"{why_line}"
-                f"\n[#d4b06a]No broker order.[/] Records intent + setup snapshot\n"
+                f"\n[{OC.brass}]No broker order.[/] Records intent + setup snapshot\n"
                 f"for audit only. Not a live order."
             )
             yield Static(body, id="confirm-body")

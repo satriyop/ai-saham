@@ -16,6 +16,7 @@ from typing import Any
 
 from src.adapters.shared.trade_action_labels import ACTION_SCAN_TOKENS
 from src.adapters.shared.view_number_format import format_value
+from src.adapters.tui.theme import OC
 from src.domain.entities.broker_flow import BrokerType
 
 # Full month grid: up to 6 weeks × 7 days
@@ -369,17 +370,17 @@ def format_calendar_cell_markup(cell: BrokerCalendarCellView) -> str:
         return ""
     if cell.kind == "blank":
         dn = cell.day_num if cell.day_num is not None else ""
-        return f"[#555555]{dn}[/]"
+        return f"[{OC.text_mute}]{dn}[/]"
     # session
     dn = cell.day_num if cell.day_num is not None else ""
     tone = cell.tone
-    net_col = "#6fbf8a" if tone == "pos" else ("#c97a72" if tone == "neg" else "#7a7a7a")
-    stk_col = "#e8e8e8" if tone == "pos" else "#6b6b6b"
+    net_col = OC.mint if tone == "pos" else (OC.coral if tone == "neg" else OC.text_dim)
+    stk_col = OC.text_bright if tone == "pos" else OC.dim
     as_mark = " ·" if cell.is_as_of else ""
     lines = [
-        f"[#6b6b6b]{dn}{as_mark}[/]",
+        f"[{OC.dim}]{dn}{as_mark}[/]",
         f"[bold {stk_col}]{cell.top_ticker or '—'}[/]",
         f"[bold {net_col}]{cell.net_display}[/]",
-        f"[#555555]B {cell.buy_display} · S {cell.sell_display}[/]",
+        f"[{OC.text_mute}]B {cell.buy_display} · S {cell.sell_display}[/]",
     ]
     return "\n".join(lines)
