@@ -86,18 +86,39 @@ and are unit-tested independently of the TUI.
 
 ### Request / execution-context generalization
 
-- `AgentTurnRequest` carries a **stage-tagged context** instead of a raw
-  `AccumulationCandidate`. Recommended shape: a `stage_kind` enum +
-  a typed `stage_context` (a common `AgentStageContext` supertype or a tagged
-  union of the per-stage projection types). The accumulation Judge becomes one
-  member; no behavior change for it.
+**Build ownership (decision D1): build once at open, carry the projection.**
+`AgentTurnRequest` carries the **already-built** `AgentStageContext` (a common
+frozen base discriminated by `stage_kind` + `schema_id`), **not** raw stage input.
+The build happens **once at cockpit open**, because gating already requires a build
+attempt there (the build *is* the availability check). An application facade
+`build_agent_stage_context(stage_kind, raw_stage_input) -> AgentStageContext`
+owns per-stage builder selection; the adapter calls it once, maps
+`AgentContextUnavailableError` → notify+refuse, and passes the built context
+through the request. Use cases consume the built context and **do not build**.
+
+Rejected alternative: request carries raw input (tagged union) and each use case
+dispatches to a builder. Rejected because it re-introduces the current
+double-build, spreads a `stage_kind` dispatch across every consumer, and risks
+lineage drift.
+
+- **All three current consumers** consume the built context (Finding 2):
+  `orchestrate_agent_turn_use_case`, `session_aware_agent_turn_use_case`, and
+  `explain_accumulation_candidate_use_case` (phase-1, wired as `phase_one_use_case`
+  in `composition/agent_model.py`). None may build the context internally after
+  Slice 0.
 - `AgentToolExecutionContext` holds the **active stage context**.
-  `get_visible_cockpit_result` returns the projection for whichever stage is
-  active. Other OUR tools remain closed and typed; a tool that a stage cannot
-  serve returns `UNAVAILABLE` (not a fabricated result).
-- Backward compatibility: the accumulation Judge path must remain **bit-identical**
-  in behavior and lineage (same `tui_agent.accum_judge.v1` hash for the same
-  input).
+- **Visible-result tool (decision D2): one polymorphic result.**
+  `get_visible_cockpit_result` remains a single closed tool with a single result
+  envelope; `VisibleCockpitResultData.context` becomes the `AgentStageContext`
+  union (discriminated by `stage_kind`/`schema_id`), **not** N per-stage result
+  types. The frozen-dataclass validator branches on `schema_id`. A stage that
+  cannot serve a tool returns `UNAVAILABLE` (never a fabricated result).
+- Backward compatibility (Finding 5): the accumulation Judge path stays
+  **bit-identical in output and lineage** (same `tui_agent.accum_judge.v1`
+  `context_reference` and painted answer for the same candidate). The internal
+  **double-build collapses to a single canonical build** — this is expected and
+  required, not a regression; the hash and painted output are unchanged because
+  the builder is pure.
 
 ### Stage catalog (destination priority order)
 
@@ -112,10 +133,24 @@ gating, tests, and golden pilot. Ship order is the operator's priority:
 | 4 | **Pre-open screen** board | `preopen_screen` | Pre-open cohort: as-of, IEV/calendar/regime context, candidate summaries | `tui_agent.preopen_screen.v1` |
 | 5 | **Plan swing** | `plan_swing` | Swing plan facts (setup, sizing inputs, evidence availability) | `tui_agent.plan_swing.v1` |
 
-Cohort/list stages (1, 4) project a **bounded** summary (top-N candidates +
-screen identity), never the full unbounded board, and never a per-candidate Judge
-(that remains the Judge stage). If the operator wants candidate depth, they drill
-into the Judge/ticker stage — the cockpit does not silently expand scope.
+Cohort/list stages (1, 4) project a **bounded** summary, never the full unbounded
+board, and never a per-candidate Judge (that remains the Judge stage). If the
+operator wants candidate depth, they drill into the Judge/ticker stage — the
+cockpit does not silently expand scope.
+
+**Cohort projection bound (decision D3):**
+
+- **top-N = 20**, ordered by the **screen's own existing deterministic rank**
+  (never a cockpit-invented sort). Always report `cohort_total` and
+  `shown = min(20, cohort_total)` so the summary is honestly N-of-M.
+- **Cohort identity** reuses the existing `canonical_reference` helper (no new
+  subsystem) over `(as_of_date, screen_kind, effective filter/policy params,
+  universe reference, ranked member tickers)`.
+- **Invariant:** every candidate summary's `as_of` == cohort `as_of`;
+  `shown == min(20, cohort_total)`; members are the real screened output.
+  Disagreement → `AgentContextInvariantError`.
+
+N is ADR-tunable; raising it is an amendment, not silent config.
 
 ### Gating (per stage)
 

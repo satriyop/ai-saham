@@ -63,8 +63,10 @@ Confirm:
 
 Layer plan:
 - Domain: not touched (unless a pure value object for a stage projection)
-- Application: per-stage build_agent_<stage>_context; AgentTurnRequest/AgentToolExecutionContext
-  generalization; stage_kind enum; get_visible_cockpit_result multi-stage support
+- Application: per-stage build_agent_<stage>_context + build_agent_stage_context facade
+  (only dispatch site); AgentStageContext base + AgentTurnRequest/AgentToolExecutionContext
+  generalization; refactor orchestrate + session_aware + explain (phase-1) to consume the
+  built context (none build internally); get_visible_cockpit_result polymorphic result
 - Infrastructure: ai.cockpit_multi_stage config flag; composition wiring per stage
 - Adapter (TUI): stage detection + gating (notify/refuse), context build call, / open on new stages
 ```
@@ -84,27 +86,51 @@ Read before editing:
 
 ## 2. Slice 0 — Generalization foundation (do first, no new destination yet)
 
-Refactor the request/execution-context to be **stage-tagged** without changing
-Judge behavior.
+Refactor the request/execution-context to be **stage-tagged** and **built once at
+open**, without changing Judge behavior. Resolved design calls (ADR-066 D1/D2):
 
+**Build ownership (D1 — build once at open, carry the projection):**
 - Add `AgentStageKind` enum (`accum_judge`, `accum_screen`, `view_ticker`,
   `view_broker`, `preopen_screen`, `plan_swing`).
-- Generalize `AgentTurnRequest` to carry `stage_kind` + typed `stage_context`
-  (common `AgentStageContext` supertype or tagged union). Accum Judge becomes the
-  first member.
-- Generalize `AgentToolExecutionContext` to hold the active stage context;
-  `get_visible_cockpit_result` returns the active stage projection; tools that a
-  stage cannot serve return `UNAVAILABLE`.
+- `AgentStageContext` = a common **frozen base** discriminated by `stage_kind` +
+  `schema_id`; `AgentAccumulationContext` becomes the `accum_judge` member.
+- Add an application facade `build_agent_stage_context(stage_kind, raw_stage_input)
+  -> AgentStageContext` that dispatches to the per-stage builder. **This is the
+  only dispatch site.**
+- `AgentTurnRequest` carries the **already-built** `stage_context: AgentStageContext`
+  (not raw input). The adapter calls the facade **once at cockpit open** (which
+  also serves gating), maps `AgentContextUnavailableError` → notify+refuse, and
+  passes the built context.
+- **All three consumers stop building context** and accept the built context:
+  `orchestrate_agent_turn_use_case` (:107), `session_aware_agent_turn_use_case`
+  (:104, also feeds `build_session_pack` from the passed context), and
+  `explain_accumulation_candidate_use_case` (:91, phase-1, wired as
+  `phase_one_use_case` in `composition/agent_model.py:95`). **Finding 2:** the
+  phase-1 consumer is explicitly in scope — do not leave it building.
+
+**Visible-result tool (D2 — one polymorphic result):**
+- `VisibleCockpitResultData.context` (`agent_visible_cockpit_tool.py:39`) becomes
+  the `AgentStageContext` union, discriminated by `stage_kind`/`schema_id`. One
+  tool, one result envelope; frozen-dataclass validator branches on `schema_id`.
+  Do **not** create N per-stage result types. Tools a stage can't serve →
+  `UNAVAILABLE`.
+
+**Config:**
 - Add `ai.cockpit_multi_stage` flag (default false) to `AiConfig` + `default.yaml`
   with a comment pointing at ADR-066.
 
 **Acceptance:**
-- [ ] Accum Judge turn is **bit-identical**: same painted answer path, same
+- [ ] Accum Judge turn is **bit-identical**: same painted answer, same
   `tui_agent.accum_judge.v1` `context_reference` for the same candidate.
+- [ ] **Finding 5:** the prior internal double-build (session_aware + orchestrate)
+  collapses to a **single canonical build**; assert the context is built exactly
+  once per turn and the hash is unchanged. This collapse is required, not a
+  regression.
+- [ ] Phase-1 (`explain`) path still works via the built context (no internal build).
 - [ ] Flag false → `/` opens only on Judge (all other stages notify + refuse).
 - [ ] Existing agent suite + golden UX pilot green.
 
-Commit: `refactor(agent): stage-tagged cockpit context foundation (ADR-066)`
+Commit: `refactor(agent): stage-tagged cockpit context built once at open (ADR-066)`
 
 ---
 
@@ -130,11 +156,21 @@ For **each** destination, do the same disciplined steps:
 
 | # | Stage | `stage_kind` | Subject / bound | Notes |
 |---|---|---|---|---|
-| 1 | Accum screen board | `accum_screen` | Cohort: as-of, filter/policy signature, regime, **top-N** candidate summaries | Lock N in code + test; not per-candidate Judge |
+| 1 | Accum screen board | `accum_screen` | Cohort: as-of, filter/policy signature, regime, **top-20** candidate summaries | See cohort bound below; not per-candidate Judge |
 | 2 | View ticker | `view_ticker` | Single ticker **cache-only** dashboard facts | Reuse existing ticker dashboard projection shape where possible |
 | 3 | View broker | `view_broker` | Broker desk view facts (desk code + shown view: top/flow/matrix) | Cache-only; no scrape |
-| 4 | Pre-open screen | `preopen_screen` | Pre-open cohort: as-of, IEV/calendar/regime, **top-N** summaries | Respect IDX NCP/pre-open data semantics |
+| 4 | Pre-open screen | `preopen_screen` | Pre-open cohort: as-of, IEV/calendar/regime, **top-20** summaries | See cohort bound below; respect IDX NCP/pre-open semantics |
 | 5 | Plan swing | `plan_swing` | Swing plan facts: setup, sizing inputs, evidence availability | Non-authoritative; plan stays deterministic |
+
+**Cohort bound (D3) — stages 1 & 4, locked:**
+- **N = 20**, ordered by the **screen's own existing deterministic rank** (never a
+  cockpit-invented sort). Always emit `cohort_total` and `shown = min(20, cohort_total)`.
+- **Cohort identity** = `canonical_reference(...)` (reuse `agent_tools.py` helper)
+  over `(as_of_date, screen_kind, effective filter/policy params, universe
+  reference, ranked member tickers)`. No new identity subsystem.
+- **Invariant test:** per-candidate `as_of` == cohort `as_of`;
+  `shown == min(20, cohort_total)`; members are the real screened output;
+  disagreement → `AgentContextInvariantError`.
 
 Commit theme per slice, e.g.:
 `feat(agent): accum_screen cockpit destination + context contract (ADR-066)` ·
