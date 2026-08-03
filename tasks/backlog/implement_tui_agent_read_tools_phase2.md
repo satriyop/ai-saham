@@ -1,6 +1,6 @@
 # Implement TUI Agent Phase 2 — Allowlisted Read-Tool Orchestration
 
-Status: `IN PROGRESS — EPIC (foundation and 8.1–8.3 complete; 8.4 pending)`
+Status: `IMPLEMENTED` — foundation and tools 8.1–8.4 complete (verified 2026-08-03)
 
 Activated on 2026-08-02 from `parked_tui_agent_read_tools_phase2.md`. The two
 activation triggers are now satisfied:
@@ -308,21 +308,21 @@ validation, budgets, transitive read-only tools, and the rule that tool content
 
 ## 13. Acceptance Criteria (epic close)
 
-- [ ] All four tools have activated subtasks and typed contract tests; each was
+- [x] All four tools have activated subtasks and typed contract tests; each was
       registered only after its transitive read-only audit passed.
-- [ ] The tool registry is closed, deterministic, and application-owned; the
+- [x] The tool registry is closed, deterministic, and application-owned; the
       runtime set is a subset of the four ADR-061 names.
-- [ ] Shared workflows/defaults are reused; adapters contain no business policy;
+- [x] Shared workflows/defaults are reused; adapters contain no business policy;
       tools call application entry points, never CLI/TUI presenters or output.
-- [ ] Read-only behavior and result lineage are independently proven (call-tree
+- [x] Read-only behavior and result lineage are independently proven (call-tree
       audit + tests: nonexistent paths stay nonexistent, no create/alter/insert/
       update/delete/migration, row/metadata counts unchanged).
-- [ ] Failure, partial, timeout, malformed, injection, budget, stale-lineage, and
+- [x] Failure, partial, timeout, malformed, injection, budget, stale-lineage, and
       no-retry cases are green.
-- [ ] AI-disabled and tools-disabled operation and all existing CLI/TUI journeys
+- [x] AI-disabled and tools-disabled operation and all existing CLI/TUI journeys
       are unchanged.
-- [ ] `NON_SEMANTIC` still holds (no canonical/persistence/authority change).
-- [ ] **Lint Gate** (`AGENT_QUICKSTART.md`): whole-repo `ruff check src/ tests/`
+- [x] `NON_SEMANTIC` still holds (no canonical/persistence/authority change).
+- [x] **Lint Gate** (`AGENT_QUICKSTART.md`): whole-repo `ruff check src/ tests/`
       and `ruff format --check src/ tests/` pass. No rule weakening or blanket
       ignores.
 
