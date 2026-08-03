@@ -83,11 +83,13 @@ def test_deepseek_contract_disables_tools_thinking_and_retries() -> None:
     assert "tools" not in completions.kwargs
 
 
-@pytest.mark.parametrize("finish_reason", ["tool_calls", "content_filter", None])
-def test_unsafe_or_unknown_finish_reason_is_malformed(finish_reason) -> None:
+def test_content_filter_finish_reason_is_malformed() -> None:
     response = SimpleNamespace(
         choices=[
-            SimpleNamespace(message=SimpleNamespace(content="answer"), finish_reason=finish_reason)
+            SimpleNamespace(
+                message=SimpleNamespace(content="answer"),
+                finish_reason="content_filter",
+            )
         ]
     )
     adapter = DeepSeekAgentModel(
@@ -95,8 +97,87 @@ def test_unsafe_or_unknown_finish_reason_is_malformed(finish_reason) -> None:
         client=SimpleNamespace(chat=SimpleNamespace(completions=_Completions(response))),
     )
     context = build_agent_accumulation_context(make_candidate())
-    with pytest.raises(AgentModelMalformedResponseError):
+    with pytest.raises(AgentModelMalformedResponseError, match="content filter"):
         adapter.generate(AgentModelRequest("policy", "why", context, 500))
+
+
+def test_none_finish_reason_with_text_is_accepted() -> None:
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(message=SimpleNamespace(content="WATCH remains."), finish_reason=None)
+        ],
+        model="deepseek-v4-flash",
+        id="response-none",
+        usage=None,
+    )
+    adapter = DeepSeekAgentModel(
+        "secret",
+        client=SimpleNamespace(chat=SimpleNamespace(completions=_Completions(response))),
+    )
+    context = build_agent_accumulation_context(make_candidate())
+    result = adapter.generate(AgentModelRequest("policy", "why", context, 500))
+    assert result.text == "WATCH remains."
+
+
+def test_list_content_parts_are_joined() -> None:
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content=[
+                        {"type": "text", "text": "Part A."},
+                        SimpleNamespace(type="text", text="Part B."),
+                    ]
+                ),
+                finish_reason="stop",
+            )
+        ],
+        model="deepseek-v4-flash",
+        id="response-parts",
+        usage=None,
+    )
+    adapter = DeepSeekAgentModel(
+        "secret",
+        client=SimpleNamespace(chat=SimpleNamespace(completions=_Completions(response))),
+    )
+    context = build_agent_accumulation_context(make_candidate())
+    result = adapter.generate(AgentModelRequest("policy", "why", context, 500))
+    assert "Part A." in result.text
+    assert "Part B." in result.text
+
+
+def test_malformed_tools_fall_back_to_text_when_present() -> None:
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="Fallback answer from text.",
+                    tool_calls=[],
+                ),
+                finish_reason="tool_calls",
+            )
+        ],
+        model="deepseek-v4-flash",
+        id="response-fallback",
+        usage=None,
+    )
+    adapter = DeepSeekAgentModel(
+        "secret",
+        client=SimpleNamespace(chat=SimpleNamespace(completions=_Completions(response))),
+    )
+    context = build_agent_accumulation_context(make_candidate())
+    result = adapter.generate(
+        AgentModelRequest(
+            "policy",
+            "why",
+            context,
+            500,
+            tool_definitions=(_definition(),),
+            tool_choice=AgentModelToolChoice.AUTO,
+        )
+    )
+    assert result.kind is AgentModelResponseKind.ANSWER
+    assert result.text == "Fallback answer from text."
 
 
 def test_resource_finish_reason_is_unavailable() -> None:
@@ -223,9 +304,9 @@ def test_final_tool_request_preserves_call_and_result_then_disables_tools() -> N
         [],
         [
             SimpleNamespace(
-                id="",
+                id="call-1",
                 type="function",
-                function=SimpleNamespace(name="x", arguments="{}"),
+                function=SimpleNamespace(name="", arguments="{}"),
             )
         ],
         [

@@ -10,7 +10,7 @@ from src.application.dto.accumulation_agent import (
     AgentModelResponse,
     AgentModelResponseKind,
 )
-from src.application.dto.agent_tools import AgentModelToolCall
+from src.application.dto.agent_tools import AgentModelToolCall, AgentModelToolChoice
 from src.application.ports.agent_model import (
     AgentModelAuthenticationError,
     AgentModelMalformedResponseError,
@@ -62,35 +62,80 @@ class DeepSeekAgentModel:
         choice = choices[0]
         finish_reason = getattr(choice, "finish_reason", None)
         message = getattr(choice, "message", None)
-        if finish_reason == "tool_calls":
-            calls = self._tool_calls(message)
+        text = _message_text(message)
+        model_name = str(getattr(response, "model", None) or self.default_model)
+        response_id = getattr(response, "id", None)
+        usage = getattr(response, "usage", None)
+        input_tokens = getattr(usage, "prompt_tokens", None)
+        output_tokens = getattr(usage, "completion_tokens", None)
+
+        if finish_reason == "insufficient_system_resource":
+            raise AgentModelUnavailableError("DeepSeek system resources unavailable")
+
+        wants_tools = request.tool_choice is AgentModelToolChoice.AUTO
+        raw_tool_calls = getattr(message, "tool_calls", None) if message is not None else None
+        has_tool_payload = bool(raw_tool_calls)
+
+        # Prefer tool calls when the provider signals them or when auto mode
+        # returns tool_calls even if finish_reason is missing/stop (API drift).
+        if wants_tools and (finish_reason == "tool_calls" or has_tool_payload):
+            try:
+                calls = self._tool_calls(message)
+            except AgentModelMalformedResponseError:
+                # If tools are unusable but plain text is present, fall back to answer.
+                if text:
+                    return AgentModelResponse(
+                        text=text,
+                        provider=self.provider,
+                        model=model_name,
+                        response_id=response_id,
+                        finish_reason=finish_reason or "stop",
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                    )
+                raise
             return AgentModelResponse(
                 text="",
                 provider=self.provider,
-                model=str(getattr(response, "model", None) or self.default_model),
-                response_id=getattr(response, "id", None),
-                finish_reason=finish_reason,
-                input_tokens=getattr(getattr(response, "usage", None), "prompt_tokens", None),
-                output_tokens=getattr(getattr(response, "usage", None), "completion_tokens", None),
+                model=model_name,
+                response_id=response_id,
+                finish_reason=finish_reason or "tool_calls",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
                 kind=AgentModelResponseKind.TOOL_CALLS,
                 tool_calls=calls,
             )
-        if finish_reason not in {"stop", "length"}:
-            if finish_reason == "insufficient_system_resource":
-                raise AgentModelUnavailableError("DeepSeek system resources unavailable")
-            raise AgentModelMalformedResponseError(f"Unsupported finish reason: {finish_reason}")
-        text = str(getattr(message, "content", "") or "").strip()
+
+        if finish_reason == "tool_calls" and not wants_tools:
+            # Final call must be an answer; use text if any, else fail clearly.
+            if text:
+                return AgentModelResponse(
+                    text=text,
+                    provider=self.provider,
+                    model=model_name,
+                    response_id=response_id,
+                    finish_reason="stop",
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                )
+            raise AgentModelMalformedResponseError("DeepSeek proposed tools after tool_choice=none")
+
+        if finish_reason not in {None, "stop", "length", "end_turn"}:
+            if finish_reason == "content_filter":
+                raise AgentModelMalformedResponseError("DeepSeek content filter blocked the answer")
+            raise AgentModelMalformedResponseError(f"Unsupported finish reason: {finish_reason!r}")
         if not text:
-            raise AgentModelMalformedResponseError("DeepSeek response text is empty")
-        usage = getattr(response, "usage", None)
+            raise AgentModelMalformedResponseError(
+                f"DeepSeek response text is empty (finish_reason={finish_reason!r})"
+            )
         return AgentModelResponse(
             text=text,
             provider=self.provider,
-            model=str(getattr(response, "model", None) or self.default_model),
-            response_id=getattr(response, "id", None),
-            finish_reason=finish_reason,
-            input_tokens=getattr(usage, "prompt_tokens", None),
-            output_tokens=getattr(usage, "completion_tokens", None),
+            model=model_name,
+            response_id=response_id,
+            finish_reason=finish_reason or "stop",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
 
     @staticmethod
@@ -127,20 +172,30 @@ class DeepSeekAgentModel:
             )
         calls: list[AgentModelToolCall] = []
         for raw in raw_calls:
-            if getattr(raw, "type", None) != "function":
+            raw_type = getattr(raw, "type", None)
+            if raw_type not in {None, "function"}:
                 raise AgentModelMalformedResponseError("DeepSeek returned a non-function tool")
             function = getattr(raw, "function", None)
+            name = str(getattr(function, "name", "") or "")
+            call_id = str(getattr(raw, "id", "") or "")
+            arguments = getattr(function, "arguments", None)
+            if isinstance(arguments, dict):
+                arguments_json = json.dumps(arguments, separators=(",", ":"), ensure_ascii=False)
+            else:
+                arguments_json = str(arguments or "").strip()
+            if not arguments_json:
+                arguments_json = "{}"
             try:
                 calls.append(
                     AgentModelToolCall(
-                        call_id=str(getattr(raw, "id", "") or ""),
-                        name=str(getattr(function, "name", "") or ""),
-                        arguments_json=str(getattr(function, "arguments", "") or ""),
+                        call_id=call_id or f"call-{len(calls) + 1}",
+                        name=name,
+                        arguments_json=arguments_json,
                     )
                 )
             except ValueError as exc:
                 raise AgentModelMalformedResponseError(
-                    "DeepSeek returned an invalid tool call"
+                    f"DeepSeek returned an invalid tool call: {exc}"
                 ) from exc
         return tuple(calls)
 
@@ -213,3 +268,30 @@ class DeepSeekAgentModel:
         if name in {"APIConnectionError", "InternalServerError"}:
             raise AgentModelUnavailableError("DeepSeek unavailable") from exc
         raise AgentModelTransportError("DeepSeek request failed") from exc
+
+
+def _message_text(message: Any) -> str:
+    """Normalize provider message content (string or content-part list) to text."""
+    if message is None:
+        return ""
+    content = getattr(message, "content", None)
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+                continue
+            if isinstance(item, dict):
+                text = item.get("text") or item.get("content") or ""
+                if text:
+                    parts.append(str(text))
+                continue
+            text = getattr(item, "text", None) or getattr(item, "content", None)
+            if text:
+                parts.append(str(text))
+        return "\n".join(part.strip() for part in parts if part and str(part).strip()).strip()
+    return str(content).strip()

@@ -105,10 +105,12 @@ class ExplainAccumulationCandidateUseCase:
             return _failed("Agent provider rate limit reached")
         except AgentModelUnavailableError:
             return _failed("Agent provider is temporarily unavailable")
-        except AgentModelMalformedResponseError:
-            return _failed("Agent provider returned an invalid response")
-        except AgentModelTransportError:
-            return _failed("Agent provider transport failed")
+        except AgentModelMalformedResponseError as exc:
+            detail = str(exc).strip() or "malformed response"
+            return _failed(f"Agent provider returned an invalid response: {detail}")
+        except AgentModelTransportError as exc:
+            detail = str(exc).strip() or "transport failed"
+            return _failed(f"Agent provider transport failed: {detail}")
         warnings = context.warnings
         if response.finish_reason == "length":
             warnings += ("Model answer reached the output limit",)

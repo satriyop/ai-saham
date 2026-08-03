@@ -179,12 +179,15 @@ class AgentTurnOrchestrator:
             return _failed("Agent provider rate limit reached")
         except AgentModelUnavailableError:
             return _failed("Agent provider is temporarily unavailable")
-        except AgentModelMalformedResponseError:
-            return _failed("Agent provider returned an invalid response")
-        except AgentModelTransportError:
-            return _failed("Agent provider transport failed")
-        except Exception:
-            return _failed("Agent provider failed unexpectedly")
+        except AgentModelMalformedResponseError as exc:
+            detail = str(exc).strip() or "malformed response"
+            return _failed(f"Agent provider returned an invalid response: {detail}")
+        except AgentModelTransportError as exc:
+            detail = str(exc).strip() or "transport failed"
+            return _failed(f"Agent provider transport failed: {detail}")
+        except Exception as exc:
+            detail = str(exc).strip() or type(exc).__name__
+            return _failed(f"Agent provider failed unexpectedly: {detail}")
 
     def _execute_tool(
         self,
