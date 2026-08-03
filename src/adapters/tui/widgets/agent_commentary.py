@@ -15,15 +15,15 @@ from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
 
-from src.adapters.tui.theme import bake_css
-from src.application.dto.accumulation_agent import AgentTurnResult, AgentTurnStatus
-from src.application.services.agent_data_honesty import (
+from src.adapters.shared.agent_data_honesty import (
     AgentDataHonestyView,
     AgentNoteSeverity,
     format_agent_more_notes,
     format_agent_status_strip,
     normalize_agent_data_notes,
 )
+from src.adapters.tui.theme import bake_css
+from src.application.dto.accumulation_agent import AgentTurnResult, AgentTurnStatus
 
 
 class AgentCommentary(Vertical):

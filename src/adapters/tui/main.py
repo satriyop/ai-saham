@@ -1988,12 +1988,12 @@ class CockpitApp(App[None]):
         self.notify(f"Agent session reset · {session_id}", timeout=1.8)
 
     def _submit_agent_turn(self, user_text: str) -> None:
-        from src.application.dto.accumulation_agent import AgentStageKind, AgentTurnRequest
-        from src.application.services.agent_stage_context import (
+        from src.adapters.shared.agent_stage_context import (
             AgentContextInvariantError,
             AgentContextUnavailableError,
             build_agent_stage_context,
         )
+        from src.application.dto.accumulation_agent import AgentStageKind, AgentTurnRequest
 
         on_judge = self._stage == "detail" and self._status_note in {"judge", "re-judging"}
         on_accum_board = self._stage == "accum" and self._board_kind == "accum"
@@ -2184,13 +2184,13 @@ class CockpitApp(App[None]):
 
     def _build_plan_swing_raw_input(self):
         """Assemble typed plan_swing input from plan stage structure (adapter-thin)."""
+        from src.adapters.shared.agent_stage_context import (
+            AgentContextUnavailableError,
+            AgentPlanSwingRawInput,
+        )
         from src.adapters.tui.plan_structure_result import (
             PlanStructureResult,
             plan_structure_from_runner_object,
-        )
-        from src.application.services.agent_plan_swing_context import AgentPlanSwingRawInput
-        from src.application.services.agent_stage_context import (
-            AgentContextUnavailableError,
         )
 
         ticker = str(self._plan_ticker or self._focus_ticker or "").strip().upper()
@@ -2254,11 +2254,9 @@ class CockpitApp(App[None]):
         """Assemble typed preopen_screen input from the focused board (adapter-thin)."""
         from datetime import date as date_cls
 
-        from src.application.services.agent_preopen_screen_context import (
-            AgentPreOpenScreenRawInput,
-        )
-        from src.application.services.agent_stage_context import (
+        from src.adapters.shared.agent_stage_context import (
             AgentContextUnavailableError,
+            AgentPreOpenScreenRawInput,
         )
 
         candidates: list[Any] = []
@@ -2326,13 +2324,11 @@ class CockpitApp(App[None]):
         """Assemble typed accum_screen input from the focused board (adapter-thin)."""
         from datetime import date as date_cls
 
-        from src.application.dto.accumulation_screen import AccumulationCandidate
-        from src.application.services.agent_accum_screen_context import (
+        from src.adapters.shared.agent_stage_context import (
             AgentAccumScreenRawInput,
-        )
-        from src.application.services.agent_stage_context import (
             AgentContextUnavailableError,
         )
+        from src.application.dto.accumulation_screen import AccumulationCandidate
 
         candidates: list[AccumulationCandidate] = []
         for row in self._rows:
