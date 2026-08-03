@@ -3,6 +3,7 @@ from dataclasses import dataclass, replace
 
 import pytest
 from textual.app import App, ComposeResult
+from textual.widgets import Static
 
 from src.adapters.tui.controllers.board_controller import BoardController
 from src.adapters.tui.main import CockpitApp
@@ -83,8 +84,8 @@ def test_commentary_renders_answer_and_context_without_action_styling() -> None:
     asyncio.run(scenario())
 
 
-def test_stage_mode_keeps_answer_primary_and_compacts_honesty() -> None:
-    """Stage: chips-only status; Do guides under more; long answer still renders."""
+def test_stage_mode_transcript_is_primary_no_fixed_honesty_chrome() -> None:
+    """Stage: chips-only sticky status; transcript 1fr; no permanent Do-guide block."""
 
     async def scenario() -> None:
         app = _App()
@@ -116,19 +117,65 @@ def test_stage_mode_keeps_answer_primary_and_compacts_honesty() -> None:
             status = str(widget.query_one(".agent-status").content)
             more = str(widget.query_one(".agent-more").content)
             answer = str(widget.query_one(".agent-answer").content)
-            # Compact header: no multi-line Do guides
+            # Sticky header: chips only
             assert "Turn  OK · ICBP" in status
             assert "AUTHORITY_INCOMPLETE:" not in status
             assert "secondary" not in status.lower()
-            # Guides still available under more
-            assert "Honesty guides" in more
-            assert "Do:" in more
-            # Full answer content is in the answer widget (not clipped by paint)
+            # No multi-line Do guides under the answer
+            assert "Honesty guides" not in more
+            assert "Do:" not in more
+            # Question + full answer live in the transcript body
+            assert "mengakumulasi" in answer or "›" in answer
             assert "Top akumulator" in answer or "top akumulator" in answer.lower()
             assert "YP net 15000" in answer
-            # Stage CSS gives the answer scroll a real share of height
+            # Transcript is the only 1fr child (primary surface)
             css = AgentCommentary.DEFAULT_CSS
-            assert "min-height: 12" in css or "min-height:12" in css.replace(" ", "")
+            assert "agent-transcript" in css
+            assert "height: 1fr" in css
+            # Meta/tools are inside the scroll tree, not fixed stage chrome
+            transcript = widget.query_one(".agent-transcript")
+            assert widget.query_one(".agent-answer") in transcript.query(Static)
+            assert widget.query_one(".agent-meta") in transcript.query(Static)
+            assert widget.query_one(".agent-tools") in transcript.query(Static)
+
+    asyncio.run(scenario())
+
+
+def test_stage_mode_appends_transcript_turns() -> None:
+    async def scenario() -> None:
+        app = _App()
+        async with app.run_test(size=(100, 30)) as pilot:
+            widget = app.query_one("#commentary", AgentCommentary)
+            widget.set_stage_mode(True)
+            widget.show_result(
+                AgentTurnResult(
+                    status=AgentTurnStatus.SUCCESS,
+                    answer="First answer.",
+                    context_reference="sha256:a",
+                    provider="deepseek",
+                    model="deepseek-v4-flash",
+                ),
+                as_of="2026-08-04",
+                ticker="ICBP",
+                question="q1",
+            )
+            widget.show_result(
+                AgentTurnResult(
+                    status=AgentTurnStatus.SUCCESS,
+                    answer="Second answer.",
+                    context_reference="sha256:b",
+                    provider="deepseek",
+                    model="deepseek-v4-flash",
+                ),
+                as_of="2026-08-04",
+                ticker="ICBP",
+                question="q2",
+            )
+            await pilot.pause()
+            body = str(widget.query_one(".agent-answer").content)
+            assert "First answer." in body
+            assert "Second answer." in body
+            assert "q1" in body and "q2" in body
 
     asyncio.run(scenario())
 
