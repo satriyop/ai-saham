@@ -26,9 +26,16 @@ Hard rules:
 
 - `side_effect=NONE`, `approval=NONE`; cache-only; no fetch/scrape/write.
 - Wrap **existing** read path: `SQLiteCorporateActionCalendarRepository` /
-  `CorporateActionCalendarEvent` (`corp_action_cache` / `corporate_action_events`).
+  `CorporateActionCalendarEvent` (`corporate_action_events` normalized schema).
+- **⚠️ Do NOT reuse `ticker_dashboard_corp_actions.calendar_event_to_display()`** —
+  it flattens to 5 named date fields (ex/cum/record/payment, `announcement_date=None`)
+  and **silently drops `rups_date`/`pubex_date`**, so RUPS/PUBEX/tender/IPO events
+  would come back dateless. The mission promises RUPS coverage, so project the raw
+  `event.dates` (role-keyed, lossless) directly. This is also richer than the current
+  CLI view — the shared use case can back an improved CLI/TUI corp-action view.
 - Bounded output: hard caps on events returned and result bytes.
-- `UNAVAILABLE` when no cached corp-action data — never fabricate.
+- `UNAVAILABLE` when no cached corp-action data — never fabricate. An event with
+  zero dated milestones → still SUCCESS with empty `dates[]` + INFO `NO_DATED_MILESTONES`.
 - Results are context only; deterministic Action authority untouched.
 - Offered on all stages (flat registry). Offline agent suite green.
 
@@ -53,21 +60,28 @@ Read first:
 ## 2. Slices
 
 1. **Contract:** `AgentToolName.GET_TICKER_CORPORATE_ACTIONS`; frozen result DTO
-   (`agent_tool.ticker_corp_action.v1`): events — `event_type`, `ex_date`,
-   `cum_date`, `record_date`, `payment_date`, `announcement_date`; grouped
-   upcoming vs recent relative to an `as_of`. Provenance + sync freshness.
+   (`agent_tool.ticker_corp_action.v1`). **Project `event.dates` role-keyed, not the
+   5-field flatten** (see ⚠️ below): per event → `event_type`, a `dates[]` list of
+   `{role, date, time?}` (all `CorporateActionDateRole` values incl. `rups_date`,
+   `pubex_date`), plus descriptive fields `amount_value`/`amount_currency`,
+   `ratio_old`/`ratio_new`, `price`, `event_note`, `active`, `company_name`; grouped
+   upcoming vs recent relative to `as_of`. Provenance + sync freshness.
 2. **Tool:** `TickerCorporateActionsTool` — args `ticker` (required), optional
    `window_days` (hard cap), `limit` (hard cap). Read-only over the repository.
 3. **Register:** in composition when `tools_enabled` + corp-action repo/DB present.
-4. **Tests (offline `pytest.mark.agent`):** happy path (upcoming + recent); caps
-   enforced; missing data → `UNAVAILABLE`; result byte cap; frozen-result
-   validation; flag gating.
+4. **Tests (offline `pytest.mark.agent`):** happy path (upcoming + recent); **a
+   RUPS-only event carries its `rups_date` in `dates[]`** (regression for the mapper
+   drop); dividend/split carry ex/cum/record/payment; caps enforced; missing data →
+   `UNAVAILABLE`; zero-date event → SUCCESS+`NO_DATED_MILESTONES`; result byte cap;
+   frozen-result; flag gating.
 5. **Docs:** flip coverage-matrix row 8 → 🟢 with tool+field citation; journey
    changelog row.
 
 ## 3. Acceptance
 
-- [ ] Returns upcoming/recent corporate actions for a ticker with dated milestones.
+- [ ] Returns upcoming/recent corporate actions with **role-keyed `dates[]`** (RUPS/
+  PUBEX included) + descriptive fields — not the lossy 5-field flatten.
+- [ ] RUPS-only event carries its `rups_date` (no silent-dateless events).
 - [ ] Caps enforced; missing data → `UNAVAILABLE` (no fabrication).
 - [ ] `side_effect=NONE`, no confirm; cache-only; no fetch/write.
 - [ ] Offline agent suite + golden UX pilot green; Ruff green.
