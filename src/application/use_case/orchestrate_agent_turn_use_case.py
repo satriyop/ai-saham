@@ -1,11 +1,19 @@
-"""Deterministic one-turn orchestration for closed read-only agent tools."""
+"""Deterministic orchestration for closed read-only Research Cockpit tools.
+
+L1 (ADR-061): one tool batch, two tools, two provider calls.
+L3 (ADR-064): multi-round OUR tools — 3 rounds / 4 tools / 2 per batch when
+``AgentToolTurnPolicy.multi_round`` is true.
+
+Layer: Application
+"""
 
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 from src.application.dto.accumulation_agent import (
     AgentModelRequest,
@@ -18,11 +26,13 @@ from src.application.dto.accumulation_agent import (
 from src.application.dto.agent_session import AgentSessionPack
 from src.application.dto.agent_tool_context import AgentToolExecutionContext
 from src.application.dto.agent_tools import (
+    AgentModelToolCall,
     AgentModelToolChoice,
     AgentToolExecutionResult,
     AgentToolExecutionStatus,
     AgentToolProvenance,
     AgentToolTurnPolicy,
+    canonical_json_bytes,
 )
 from src.application.ports.agent_model import (
     AgentModelAuthenticationError,
@@ -48,6 +58,7 @@ from src.application.use_case.explain_accumulation_candidate_use_case import SYS
 
 _T = TypeVar("_T")
 TimedCallRunner = Callable[[Callable[[], _T], float], _T]
+ProgressCallback = Callable[[str], None]
 
 
 class AgentTurnOrchestrator:
@@ -59,12 +70,14 @@ class AgentTurnOrchestrator:
         *,
         monotonic: Callable[[], float] = time.monotonic,
         timed_call: TimedCallRunner = None,
+        on_progress: ProgressCallback | None = None,
     ) -> None:
         self._model = model
         self._registry = registry
         self._policy = policy
         self._monotonic = monotonic
         self._timed_call = timed_call or _run_with_timeout
+        self._on_progress = on_progress
 
     def execute(
         self,
@@ -72,8 +85,10 @@ class AgentTurnOrchestrator:
         *,
         is_cancelled: Callable[[], bool] | None = None,
         session_pack: AgentSessionPack | None = None,
+        on_progress: ProgressCallback | None = None,
     ) -> AgentTurnResult:
         cancelled = is_cancelled or (lambda: False)
+        progress = on_progress or self._on_progress or (lambda _m: None)
         text = request.user_text.strip()
         if not text:
             return _failed("Question cannot be empty")
@@ -95,13 +110,87 @@ class AgentTurnOrchestrator:
             if self._policy.tools_enabled and not self._registry.empty
             else ()
         )
+        if not definitions:
+            # Zero-tool path: single provider call (L1 / tools off).
+            return self._single_answer_path(
+                text=text,
+                context=context,
+                session_pack=session_pack,
+                started=started,
+                cancelled=cancelled,
+            )
+
+        if not self._policy.multi_round:
+            return self._l1_path(
+                text=text,
+                context=context,
+                tool_context=tool_context,
+                definitions=definitions,
+                session_pack=session_pack,
+                started=started,
+                cancelled=cancelled,
+                progress=progress,
+            )
+
+        return self._l3_path(
+            text=text,
+            context=context,
+            tool_context=tool_context,
+            definitions=definitions,
+            session_pack=session_pack,
+            started=started,
+            cancelled=cancelled,
+            progress=progress,
+        )
+
+    def _single_answer_path(
+        self,
+        *,
+        text: str,
+        context,
+        session_pack: AgentSessionPack | None,
+        started: float,
+        cancelled: Callable[[], bool],
+    ) -> AgentTurnResult:
+        if cancelled():
+            return _cancelled()
+        req = AgentModelRequest(
+            system_policy=SYSTEM_POLICY,
+            user_text=text,
+            context=context,
+            max_output_tokens=500,
+            tool_definitions=(),
+            tool_choice=AgentModelToolChoice.NONE,
+            session_pack=session_pack,
+        )
+        response = self._provider_call(req, started)
+        if isinstance(response, AgentTurnResult):
+            return response
+        if response.kind is not AgentModelResponseKind.ANSWER:
+            return _failed("Agent provider proposed tools while tools are disabled")
+        return _answer_result(response, context.context_reference, context.warnings, ())
+
+    def _l1_path(
+        self,
+        *,
+        text: str,
+        context,
+        tool_context: AgentToolExecutionContext,
+        definitions,
+        session_pack: AgentSessionPack | None,
+        started: float,
+        cancelled: Callable[[], bool],
+        progress: ProgressCallback,
+    ) -> AgentTurnResult:
+        """Exact ADR-061: auto → optional one batch ≤2 → forced none."""
+        progress("AI Research Cockpit · round 1/2")
         initial_request = AgentModelRequest(
             system_policy=SYSTEM_POLICY,
             user_text=text,
             context=context,
             max_output_tokens=500,
             tool_definitions=definitions,
-            tool_choice=(AgentModelToolChoice.AUTO if definitions else AgentModelToolChoice.NONE),
+            tool_choice=AgentModelToolChoice.AUTO,
             session_pack=session_pack,
         )
         initial = self._provider_call(initial_request, started)
@@ -109,36 +198,33 @@ class AgentTurnOrchestrator:
             return initial
         if initial.kind is AgentModelResponseKind.ANSWER:
             return _answer_result(initial, context.context_reference, context.warnings, ())
-        if not definitions:
-            return _failed("Agent provider proposed tools while tools are disabled")
 
         try:
             prepared = self._registry.prepare_batch(
                 initial.tool_calls,
-                max_calls=self._policy.max_tool_calls,
+                max_calls=self._policy.max_tools_per_batch,
             )
         except AgentToolValidationError:
             return _failed("Agent provider proposed an invalid tool batch")
 
         tool_started = self._monotonic()
-        results: list[AgentToolExecutionResult] = []
-        total_bytes = 0
-        for call in prepared:
-            if cancelled():
-                return _cancelled()
-            result = self._execute_tool(call, tool_context, started, tool_started)
-            if isinstance(result, AgentTurnResult):
-                return result
-            size = result.serialized_size()
-            if size > call.tool.definition.max_result_bytes:
-                return _failed("Agent tool result exceeded its size limit")
-            total_bytes += size
-            if total_bytes > self._policy.max_total_result_bytes:
-                return _failed("Agent tool results exceeded the turn size limit")
-            results.append(result)
+        results, err = self._run_batch(
+            prepared,
+            tool_context=tool_context,
+            started=started,
+            tool_started=tool_started,
+            cancelled=cancelled,
+            progress=progress,
+            total_bytes=0,
+            seen_identities=set(),
+        )
+        if err is not None:
+            return err
+        assert results is not None
 
         if cancelled():
             return _cancelled()
+        progress("AI Research Cockpit · round 2/2 · final answer")
         final_request = AgentModelRequest(
             system_policy=SYSTEM_POLICY,
             user_text=text,
@@ -159,6 +245,158 @@ class AgentTurnOrchestrator:
             warning for result in results for warning in result.warnings
         )
         return _answer_result(final, context.context_reference, warnings, tuple(results))
+
+    def _l3_path(
+        self,
+        *,
+        text: str,
+        context,
+        tool_context: AgentToolExecutionContext,
+        definitions,
+        session_pack: AgentSessionPack | None,
+        started: float,
+        cancelled: Callable[[], bool],
+        progress: ProgressCallback,
+    ) -> AgentTurnResult:
+        """ADR-064 multi-round: up to 3 provider rounds and 4 tool executions."""
+        max_rounds = self._policy.max_provider_calls
+        max_tools = self._policy.max_tool_calls
+        rounds_used = 0
+        tools_used = 0
+        all_calls: list[AgentModelToolCall] = []
+        all_results: list[AgentToolExecutionResult] = []
+        seen_identities: set[tuple[str, bytes]] = set()
+        tool_started = self._monotonic()
+        total_bytes = 0
+
+        while rounds_used < max_rounds:
+            if cancelled():
+                return _cancelled()
+            remaining_tools = max_tools - tools_used
+            # Last allowed provider call must use tool_choice=none.
+            forced_final = (rounds_used == max_rounds - 1) or (remaining_tools <= 0)
+            choice = AgentModelToolChoice.NONE if forced_final else AgentModelToolChoice.AUTO
+            round_label = rounds_used + 1
+            if forced_final:
+                progress(f"AI Research Cockpit · round {round_label}/{max_rounds} · final answer")
+            else:
+                progress(f"AI Research Cockpit · round {round_label}/{max_rounds}")
+
+            model_request = AgentModelRequest(
+                system_policy=SYSTEM_POLICY,
+                user_text=text,
+                context=context,
+                max_output_tokens=500,
+                tool_definitions=definitions,
+                tool_choice=choice,
+                prior_tool_calls=tuple(all_calls),
+                tool_results=tuple(all_results),
+                session_pack=session_pack,
+            )
+            response = self._provider_call(model_request, started)
+            if isinstance(response, AgentTurnResult):
+                return response
+            rounds_used += 1
+
+            if response.kind is AgentModelResponseKind.ANSWER:
+                # Intermediate monologue while tools remain is not Turn OK when the
+                # model returned empty-ish planning with forced final handled below.
+                if not response.text.strip():
+                    return _failed("Agent provider returned an empty answer")
+                warnings = context.warnings + tuple(
+                    warning for result in all_results for warning in result.warnings
+                )
+                return _answer_result(
+                    response,
+                    context.context_reference,
+                    warnings,
+                    tuple(all_results),
+                )
+
+            if forced_final:
+                return _failed("Agent provider proposed tools after the final call")
+
+            if tools_used >= max_tools:
+                return _failed("AI Research Cockpit tool budget exhausted without an answer")
+
+            try:
+                prepared = self._registry.prepare_batch(
+                    response.tool_calls,
+                    max_calls=min(self._policy.max_tools_per_batch, remaining_tools),
+                )
+            except AgentToolValidationError:
+                return _failed("Agent provider proposed an invalid tool batch")
+
+            if tools_used + len(prepared) > max_tools:
+                return _failed("Agent provider proposed more tools than the turn budget allows")
+
+            batch_results, err = self._run_batch(
+                prepared,
+                tool_context=tool_context,
+                started=started,
+                tool_started=tool_started,
+                cancelled=cancelled,
+                progress=progress,
+                total_bytes=total_bytes,
+                seen_identities=seen_identities,
+            )
+            if err is not None:
+                return err
+            assert batch_results is not None
+            for call, result in zip(response.tool_calls, batch_results, strict=False):
+                # prepare_batch may reorder? It preserves order of input calls.
+                pass
+            # Match prepared order to model call order via call_id
+            by_id = {r.call_id: r for r in batch_results}
+            ordered_results: list[AgentToolExecutionResult] = []
+            for call in response.tool_calls:
+                result = by_id.get(call.call_id)
+                if result is None:
+                    return _failed("Agent tool batch identity mismatch")
+                ordered_results.append(result)
+                all_calls.append(call)
+                all_results.append(result)
+                total_bytes += result.serialized_size()
+            tools_used += len(ordered_results)
+
+        return _failed("AI Research Cockpit round budget exhausted without an answer")
+
+    def _run_batch(
+        self,
+        prepared: tuple[PreparedAgentToolCall, ...],
+        *,
+        tool_context: AgentToolExecutionContext,
+        started: float,
+        tool_started: float,
+        cancelled: Callable[[], bool],
+        progress: ProgressCallback,
+        total_bytes: int,
+        seen_identities: set[tuple[str, bytes]],
+    ) -> tuple[list[AgentToolExecutionResult] | None, AgentTurnResult | None]:
+        results: list[AgentToolExecutionResult] = []
+        running_bytes = total_bytes
+        for call in prepared:
+            if cancelled():
+                return None, _cancelled()
+            try:
+                identity = (call.name.value, canonical_json_bytes(call.arguments))
+            except (TypeError, ValueError):
+                return None, _failed("Agent tool arguments contain unsupported values")
+            if identity in seen_identities:
+                return None, _failed("Agent provider proposed a duplicate tool call in this turn")
+            seen_identities.add(identity)
+            progress(f"AI Research Cockpit · tool {call.name.value}…")
+            result = self._execute_tool(call, tool_context, started, tool_started)
+            if isinstance(result, AgentTurnResult):
+                return None, result
+            size = result.serialized_size()
+            if size > call.tool.definition.max_result_bytes:
+                return None, _failed("Agent tool result exceeded its size limit")
+            running_bytes += size
+            if running_bytes > self._policy.max_total_result_bytes:
+                return None, _failed("Agent tool results exceeded the turn size limit")
+            results.append(result)
+        return results, None
 
     def _provider_call(
         self,

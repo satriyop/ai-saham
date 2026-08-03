@@ -253,23 +253,54 @@ class AgentModelToolChoice(str, Enum):
 
 @dataclass(frozen=True)
 class AgentToolTurnPolicy:
+    """Budgets for one Research Cockpit turn with closed tools.
+
+    L1 (ADR-061): multi_round=False → 2 provider calls, 2 tools, 1 batch.
+    L3 (ADR-064): multi_round=True → 3 provider rounds, 4 tools, 2 per batch.
+    """
+
     tools_enabled: bool
+    multi_round: bool = False
     max_provider_calls: int = 2
     max_tool_calls: int = 2
+    max_tools_per_batch: int = 2
     provider_timeout_seconds: float = 10.0
     tool_budget_seconds: float = 15.0
     turn_deadline_seconds: float = 35.0
     max_total_result_bytes: int = 64 * 1024
 
     def __post_init__(self) -> None:
-        if self.max_provider_calls != 2 or self.max_tool_calls != 2:
-            raise ValueError("Phase 2 requires exactly the ADR-061 call ceilings")
         if self.provider_timeout_seconds != 10.0:
-            raise ValueError("Phase 2 provider timeout must be 10 seconds")
-        if self.tool_budget_seconds != 15.0 or self.turn_deadline_seconds != 35.0:
-            raise ValueError("Phase 2 tool/turn deadlines must match ADR-061")
+            raise ValueError("provider timeout must be 10 seconds")
         if self.max_total_result_bytes != 64 * 1024:
-            raise ValueError("Phase 2 total result limit must be 64 KiB")
+            raise ValueError("total result limit must be 64 KiB")
+        if self.max_tools_per_batch != 2:
+            raise ValueError("tools per batch must be 2")
+        if self.multi_round:
+            if self.max_provider_calls != 3 or self.max_tool_calls != 4:
+                raise ValueError("ADR-064 multi-round requires 3 provider rounds and 4 tools")
+            if self.tool_budget_seconds != 20.0 or self.turn_deadline_seconds != 45.0:
+                raise ValueError("ADR-064 multi-round requires 20s tool / 45s turn budgets")
+        else:
+            if self.max_provider_calls != 2 or self.max_tool_calls != 2:
+                raise ValueError("ADR-061 L1 requires exactly 2 provider calls and 2 tools")
+            if self.tool_budget_seconds != 15.0 or self.turn_deadline_seconds != 35.0:
+                raise ValueError("ADR-061 L1 tool/turn deadlines must match 15s / 35s")
+
+    @classmethod
+    def l1(cls, *, tools_enabled: bool = True) -> AgentToolTurnPolicy:
+        return cls(tools_enabled=tools_enabled, multi_round=False)
+
+    @classmethod
+    def l3(cls, *, tools_enabled: bool = True) -> AgentToolTurnPolicy:
+        return cls(
+            tools_enabled=tools_enabled,
+            multi_round=True,
+            max_provider_calls=3,
+            max_tool_calls=4,
+            tool_budget_seconds=20.0,
+            turn_deadline_seconds=45.0,
+        )
 
 
 def canonical_json_value(value: object) -> object:

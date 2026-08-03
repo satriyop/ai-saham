@@ -235,16 +235,21 @@ class AgentModelRequest:
     def __post_init__(self) -> None:
         if self.max_output_tokens <= 0:
             raise ValueError("agent model output limit must be positive")
-        if self.tool_choice is AgentModelToolChoice.AUTO:
-            if not self.tool_definitions or self.prior_tool_calls or self.tool_results:
-                raise ValueError("initial tool request requires definitions and no prior results")
-        elif self.prior_tool_calls or self.tool_results:
+        has_prior = bool(self.prior_tool_calls or self.tool_results)
+        if has_prior:
             if not self.tool_definitions or len(self.prior_tool_calls) != len(self.tool_results):
-                raise ValueError("final tool request requires matched calls, results, definitions")
+                raise ValueError("tool history requires matched calls, results, and definitions")
             if tuple(call.call_id for call in self.prior_tool_calls) != tuple(
                 result.call_id for result in self.tool_results
             ):
-                raise ValueError("final tool request call/result identities must match")
+                raise ValueError("tool history call/result identities must match")
+        if self.tool_choice is AgentModelToolChoice.AUTO:
+            if not self.tool_definitions:
+                raise ValueError("auto tool choice requires registered definitions")
+            # Initial auto: no prior. Multi-round continue: matched prior history.
+        elif self.tool_choice is AgentModelToolChoice.NONE:
+            # Final answer call: definitions optional; prior history when tools ran.
+            pass
         elif self.tool_definitions:
             raise ValueError("tool definitions without auto choice or prior results are invalid")
 

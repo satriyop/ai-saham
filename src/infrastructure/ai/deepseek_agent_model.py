@@ -224,36 +224,37 @@ class DeepSeekAgentModel:
             },
         ]
         if request.prior_tool_calls:
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": [
-                        {
-                            "id": call.call_id,
-                            "type": "function",
-                            "function": {
-                                "name": call.name,
-                                "arguments": call.arguments_json,
-                            },
-                        }
-                        for call in request.prior_tool_calls
-                    ],
-                }
-            )
-            messages.extend(
-                {
-                    "role": "tool",
-                    "tool_call_id": result.call_id,
-                    "content": json.dumps(
-                        result.canonical_payload(),
-                        ensure_ascii=False,
-                        allow_nan=False,
-                        separators=(",", ":"),
-                    ),
-                }
-                for result in request.tool_results
-            )
+            # Interleave call/result pairs so multi-round history stays ordered
+            # (ADR-064). L1 single-batch still works as consecutive pairs.
+            for call, result in zip(request.prior_tool_calls, request.tool_results, strict=True):
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": call.call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": call.name,
+                                    "arguments": call.arguments_json,
+                                },
+                            }
+                        ],
+                    }
+                )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": result.call_id,
+                        "content": json.dumps(
+                            result.canonical_payload(),
+                            ensure_ascii=False,
+                            allow_nan=False,
+                            separators=(",", ":"),
+                        ),
+                    }
+                )
         return messages
 
     @staticmethod

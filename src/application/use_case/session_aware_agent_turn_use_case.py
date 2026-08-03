@@ -87,9 +87,15 @@ class SessionAwareAgentTurnUseCase:
         request: AgentTurnRequest,
         *,
         is_cancelled: Callable[[], bool] | None = None,
+        on_progress: Callable[[str], None] | None = None,
     ) -> AgentTurnResult:
         if not self._policy.enabled or not self._session_certified():
-            return self._call_inner(request, is_cancelled=is_cancelled, session_pack=None)
+            return self._call_inner(
+                request,
+                is_cancelled=is_cancelled,
+                session_pack=None,
+                on_progress=on_progress,
+            )
 
         try:
             context = build_agent_accumulation_context(request.candidate)
@@ -119,8 +125,15 @@ class SessionAwareAgentTurnUseCase:
                 return _failed("Agent session context budget exceeded; reset the session")
             return _failed("Agent session pack failed")
 
-        result = self._call_inner(request, is_cancelled=is_cancelled, session_pack=pack)
-        if result.status is AgentTurnStatus.CANCELLED:
+        result = self._call_inner(
+            request,
+            is_cancelled=is_cancelled,
+            session_pack=pack,
+            on_progress=on_progress,
+        )
+        # ADR-064 fail-safe: only SUCCESS/PARTIAL commit commentary/tool memory.
+        # FAIL/CANCEL/UNAVAILABLE leave session as before this Enter.
+        if result.status not in {AgentTurnStatus.SUCCESS, AgentTurnStatus.PARTIAL}:
             self._store.abort_turn()
             return replace(
                 result,
@@ -128,37 +141,30 @@ class SessionAwareAgentTurnUseCase:
                 turn_sequence=state.turn_count + 1,
             )
 
-        commentary = None
-        tools: tuple[AgentSessionToolRecord, ...] = ()
-        failures: tuple[str, ...] = ()
-        warnings = pack.pack_warnings
-        if result.status in {AgentTurnStatus.SUCCESS, AgentTurnStatus.PARTIAL}:
-            commentary = AgentSessionCommentaryTurn(
-                turn_sequence=state.turn_count + 1,
-                turn_id=new_turn_id(),
-                question=request.user_text.strip(),
-                answer=result.answer,
-                status=result.status.value,
-                context_reference=result.context_reference or context.context_reference,
-                warnings=result.warnings,
+        commentary = AgentSessionCommentaryTurn(
+            turn_sequence=state.turn_count + 1,
+            turn_id=new_turn_id(),
+            question=request.user_text.strip(),
+            answer=result.answer,
+            status=result.status.value,
+            context_reference=result.context_reference or context.context_reference,
+            warnings=result.warnings,
+        )
+        tools = tuple(
+            AgentSessionToolRecord(
+                name=item.name.value,
+                status=item.status.value,
+                result_reference=item.result_reference,
+                source_reference=item.source_reference,
+                as_of=item.provenance.as_of,
+                schema_id=getattr(item.data, "schema_id", None) if item.data else None,
+                subject=_tool_subject(item),
+                context_reference=context.context_reference,
             )
-            tools = tuple(
-                AgentSessionToolRecord(
-                    name=item.name.value,
-                    status=item.status.value,
-                    result_reference=item.result_reference,
-                    source_reference=item.source_reference,
-                    as_of=item.provenance.as_of,
-                    schema_id=getattr(item.data, "schema_id", None) if item.data else None,
-                    subject=_tool_subject(item),
-                    context_reference=context.context_reference,
-                )
-                for item in result.tool_results
-            )
-        else:
-            failures = (result.error_message or result.status.value,)
+            for item in result.tool_results
+        )
 
-        merged_warnings = tuple(dict.fromkeys(result.warnings + pack.pack_warnings + warnings))
+        merged_warnings = tuple(dict.fromkeys(result.warnings + pack.pack_warnings))
         # Cross-turn display dedupe: hide data notes already shown earlier in-session.
         prior_seen = set(state.structural_warnings)
         display_warnings = tuple(item for item in merged_warnings if item not in prior_seen)
@@ -169,7 +175,7 @@ class SessionAwareAgentTurnUseCase:
             anchor_ticker=context.ticker,
             anchor_schema_id=context.schema_id,
             structural_warnings=merged_warnings,
-            structural_failures=failures,
+            structural_failures=(),
         )
         return replace(
             result,
@@ -190,22 +196,32 @@ class SessionAwareAgentTurnUseCase:
         *,
         is_cancelled: Callable[[], bool] | None,
         session_pack: AgentSessionPack | None,
+        on_progress: Callable[[str], None] | None = None,
     ) -> AgentTurnResult:
         try:
             return self._inner.execute(
                 request,
                 is_cancelled=is_cancelled,
                 session_pack=session_pack,
+                on_progress=on_progress,
             )
         except TypeError:
             # Phase 1 use case historically only accepted the request positional.
-            if is_cancelled is None and session_pack is None:
+            if is_cancelled is None and session_pack is None and on_progress is None:
                 return self._inner.execute(request)  # type: ignore[call-arg]
-            return self._inner.execute(  # type: ignore[call-arg]
-                request,
-                is_cancelled=is_cancelled,
-                session_pack=session_pack,
-            )
+            try:
+                return self._inner.execute(  # type: ignore[call-arg]
+                    request,
+                    is_cancelled=is_cancelled,
+                    session_pack=session_pack,
+                    on_progress=on_progress,
+                )
+            except TypeError:
+                return self._inner.execute(  # type: ignore[call-arg]
+                    request,
+                    is_cancelled=is_cancelled,
+                    session_pack=session_pack,
+                )
 
 
 def _tool_subject(item) -> str | None:

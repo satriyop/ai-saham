@@ -47,6 +47,7 @@ class AgentComposition:
     configured_provider: str
     tools_requested: bool
     tools_enabled: bool
+    tools_multi_round: bool
     session_requested: bool
     session_enabled: bool
     registered_tools: tuple[AgentToolName, ...]
@@ -65,6 +66,7 @@ def build_agent_composition(
     configured = resolve_ai_provider(explicit).strip().lower()
     enabled = bool(getattr(ai_config, "enabled", False))
     tools_requested = enabled and bool(getattr(ai_config, "tools_enabled", False))
+    multi_round_requested = tools_requested and bool(getattr(ai_config, "tools_multi_round", False))
     session_requested = enabled and bool(getattr(ai_config, "session_enabled", False))
     model = None
     reason = None
@@ -90,6 +92,7 @@ def build_agent_composition(
         ),
     )
     tools_enabled = tools_requested and model is not None and configured == "deepseek"
+    tools_multi_round = multi_round_requested and tools_enabled
     use_case: (
         ExplainAccumulationCandidateUseCase | AgentTurnOrchestrator | SessionAwareAgentTurnUseCase
     )
@@ -117,10 +120,15 @@ def build_agent_composition(
             if judge_ticker is not None:
                 tools.append(AccumulationJudgeTool(judge_ticker))
         registered_tools = tuple(tool.definition.name for tool in tools)
+        policy = (
+            AgentToolTurnPolicy.l3(tools_enabled=True)
+            if tools_multi_round
+            else AgentToolTurnPolicy.l1(tools_enabled=True)
+        )
         use_case = AgentTurnOrchestrator(
             model,
             AgentToolRegistry(tuple(tools)),
-            AgentToolTurnPolicy(tools_enabled=True),
+            policy,
         )
     else:
         use_case = phase_one_use_case
@@ -147,6 +155,7 @@ def build_agent_composition(
         configured,
         tools_requested,
         tools_enabled,
+        tools_multi_round,
         session_requested,
         session_enabled,
         registered_tools,
