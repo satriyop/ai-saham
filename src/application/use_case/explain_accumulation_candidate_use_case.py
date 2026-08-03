@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Callable
 
 from src.application.dto.accumulation_agent import (
+    AgentAccumulationContext,
     AgentModelRequest,
     AgentModelUnavailableReason,
     AgentTurnPolicy,
@@ -21,11 +22,6 @@ from src.application.ports.agent_model import (
     AgentModelTimeoutError,
     AgentModelTransportError,
     AgentModelUnavailableError,
-)
-from src.application.services.agent_accumulation_context import (
-    AgentContextInvariantError,
-    AgentContextUnavailableError,
-    build_agent_accumulation_context,
 )
 
 SYSTEM_POLICY = """You are the AI Research Cockpit for deterministic accumulation Judge facts.
@@ -87,15 +83,13 @@ class ExplainAccumulationCandidateUseCase:
             return _failed(f"Question exceeds {self._policy.max_question_chars} character limit")
         if self._model is None:
             return self._unavailable_copy()
-        try:
-            context = build_agent_accumulation_context(request.candidate)
-        except AgentContextUnavailableError as exc:
-            return AgentTurnResult(
-                status=AgentTurnStatus.UNAVAILABLE,
-                error_message=str(exc),
+        # ADR-066 D1: built once at open; phase-1 does not rebuild.
+        context = request.stage_context
+        if not isinstance(context, AgentAccumulationContext):
+            return _failed(
+                "Phase-1 explain requires accum_judge stage context, "
+                f"got {context.stage_kind.value}"
             )
-        except AgentContextInvariantError as exc:
-            return _failed(f"Canonical Judge context failed identity validation: {exc}")
         try:
             response = self._model.generate(
                 AgentModelRequest(

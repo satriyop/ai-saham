@@ -128,6 +128,8 @@ class AiConfig:
     web_research: bool = False
     ro_data_query: bool = False
     session_enabled: bool = False
+    # ADR-066: multi-stage Research Cockpit destinations beyond Judge (default off).
+    cockpit_multi_stage: bool = False
 
 
 @dataclass(frozen=True)

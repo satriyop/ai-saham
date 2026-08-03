@@ -159,6 +159,7 @@ class CockpitApp(App[None]):
         agent_turn_runner: AgentTurnRunner | None = None,
         agent_provider: str = "deepseek",
         agent_provider_available: bool = False,
+        agent_cockpit_multi_stage: bool = False,
     ) -> None:
         super().__init__()
         self._accum_loader = accum_loader
@@ -183,6 +184,8 @@ class CockpitApp(App[None]):
         self._agent_turn_runner = agent_turn_runner
         self._agent_provider = agent_provider
         self._agent_provider_available = agent_provider_available
+        # ADR-066: when false, Research Cockpit stays Judge-only (default).
+        self._agent_cockpit_multi_stage = bool(agent_cockpit_multi_stage)
         self._accum_controller = accum_controller
         self._preopen_controller = preopen_controller
         self._accum_presenter = accum_presenter
@@ -1949,13 +1952,28 @@ class CockpitApp(App[None]):
         self.notify(f"Agent session reset · {session_id}", timeout=1.8)
 
     def _submit_agent_turn(self, user_text: str) -> None:
-        from src.application.dto.accumulation_agent import AgentTurnRequest
+        from src.application.dto.accumulation_agent import AgentStageKind, AgentTurnRequest
+        from src.application.services.agent_stage_context import (
+            AgentContextInvariantError,
+            AgentContextUnavailableError,
+            build_agent_stage_context,
+        )
 
-        if self._stage != "detail" or self._status_note not in {"judge", "re-judging"}:
-            self.notify(
-                "Agent is available only in accumulation Judge · Enter a row first",
-                timeout=2.2,
-            )
+        # Slice 0: only Judge is wired. Multi-stage destinations land later under
+        # ai.cockpit_multi_stage; when the flag is off, keep exact Judge-only copy.
+        on_judge = self._stage == "detail" and self._status_note in {"judge", "re-judging"}
+        if not on_judge:
+            if self._agent_cockpit_multi_stage:
+                self.notify(
+                    "Research Cockpit multi-stage destinations are not available yet "
+                    "· open accumulation Judge (Enter a row)",
+                    timeout=2.4,
+                )
+            else:
+                self.notify(
+                    "Agent is available only in accumulation Judge · Enter a row first",
+                    timeout=2.2,
+                )
             return
         row = self._rows[self._row_index] if self._rows else None
         source = getattr(row, "source", None)
@@ -1966,6 +1984,15 @@ class CockpitApp(App[None]):
             self._show_agent_unavailable(
                 "Agent commentary is unavailable · check ai.enabled and API key"
             )
+            return
+        # ADR-066 D1: build once at open (also the availability gate).
+        try:
+            stage_context = build_agent_stage_context(AgentStageKind.ACCUM_JUDGE, source)
+        except AgentContextUnavailableError:
+            self._show_agent_unavailable("Full Judge context required · press j to re-judge")
+            return
+        except AgentContextInvariantError as exc:
+            self._show_agent_unavailable(f"Judge context identity failed · {exc}")
             return
         # Cancel in-flight without collapsing stage if we are already in agent stage.
         keep_stage = self._agent_stage_open
@@ -2005,7 +2032,7 @@ class CockpitApp(App[None]):
             stage_id,
             ticker,
             source,
-            AgentTurnRequest(user_text=user_text, candidate=source),
+            AgentTurnRequest(user_text=user_text, stage_context=stage_context),
         )
 
     def _show_agent_unavailable(self, message: str) -> None:

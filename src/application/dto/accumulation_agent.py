@@ -1,4 +1,4 @@
-"""Channel-neutral DTOs for one read-only accumulation commentary turn."""
+"""Channel-neutral DTOs for one read-only Research Cockpit commentary turn."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any
 
-from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.application.dto.agent_session import AgentSessionPack
 from src.application.dto.agent_tools import (
     AgentModelToolCall,
@@ -36,10 +35,43 @@ class AgentModelUnavailableReason(str, Enum):
     MISSING_CREDENTIAL = "MISSING_CREDENTIAL"
 
 
+class AgentStageKind(str, Enum):
+    """Named AI Research Cockpit destination stages (ADR-066)."""
+
+    ACCUM_JUDGE = "accum_judge"
+    ACCUM_SCREEN = "accum_screen"
+    VIEW_TICKER = "view_ticker"
+    VIEW_BROKER = "view_broker"
+    PREOPEN_SCREEN = "preopen_screen"
+    PLAN_SWING = "plan_swing"
+
+
+@dataclass(frozen=True)
+class AgentStageContext:
+    """Common frozen base for per-stage pure projections (ADR-066).
+
+    Discriminated by ``stage_kind`` (property on members) + ``schema_id``.
+    ``stage_kind`` is not a dataclass field so content hashes stay bit-stable
+    when existing member schemas gain the discriminator API.
+    """
+
+    schema_id: str
+    context_reference: str
+
+    @property
+    def stage_kind(self) -> AgentStageKind:
+        raise NotImplementedError
+
+    def canonical_payload(self) -> dict[str, Any]:
+        return _json_value(self, exclude_context_reference=True)
+
+
 @dataclass(frozen=True)
 class AgentTurnRequest:
+    """One cockpit turn carrying the already-built stage projection (ADR-066 D1)."""
+
     user_text: str
-    candidate: AccumulationCandidate
+    stage_context: AgentStageContext
 
 
 @dataclass(frozen=True)
@@ -199,9 +231,9 @@ class AgentSourceDates:
 
 
 @dataclass(frozen=True)
-class AgentAccumulationContext:
-    schema_id: str
-    context_reference: str
+class AgentAccumulationContext(AgentStageContext):
+    """Judge-stage projection member (`stage_kind=accum_judge`, schema tui_agent.accum_judge.v1)."""
+
     ticker: str
     as_of: date
     trade_setup: AgentTradeSetupFacts
@@ -219,15 +251,16 @@ class AgentAccumulationContext:
     top_brokers: tuple[str, ...] = ()
     institutional_flag: bool | None = None
 
-    def canonical_payload(self) -> dict[str, Any]:
-        return _json_value(self, exclude_context_reference=True)
+    @property
+    def stage_kind(self) -> AgentStageKind:
+        return AgentStageKind.ACCUM_JUDGE
 
 
 @dataclass(frozen=True)
 class AgentModelRequest:
     system_policy: str
     user_text: str
-    context: AgentAccumulationContext
+    context: AgentStageContext
     max_output_tokens: int
     tool_definitions: tuple[AgentToolDefinition, ...] = ()
     tool_choice: AgentModelToolChoice = AgentModelToolChoice.NONE

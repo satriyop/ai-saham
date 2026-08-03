@@ -114,3 +114,6 @@ ai:
   web_research: false
   ro_data_query: false
   session_enabled: false # process-local multi-turn follow-ups (ADR-063)
+  # ADR-066: open Research Cockpit from additional stages (accum screen, view
+  # ticker/broker, pre-open, plan). Default false keeps Judge-only entry.
+  cockpit_multi_stage: false

@@ -47,11 +47,6 @@ from src.application.ports.agent_model import (
     AgentModelTransportError,
     AgentModelUnavailableError,
 )
-from src.application.services.agent_accumulation_context import (
-    AgentContextInvariantError,
-    AgentContextUnavailableError,
-    build_agent_accumulation_context,
-)
 from src.application.services.agent_tool_registry import (
     AgentToolExecutionContractError,
     AgentToolRegistry,
@@ -103,17 +98,13 @@ class AgentTurnOrchestrator:
             return _failed("Question cannot be empty")
         if len(text) > 2_000:
             return _failed("Question exceeds 2000 character limit")
-        try:
-            context = build_agent_accumulation_context(request.candidate)
-        except AgentContextUnavailableError as exc:
-            return AgentTurnResult(status=AgentTurnStatus.UNAVAILABLE, error_message=str(exc))
-        except AgentContextInvariantError as exc:
-            return _failed(f"Canonical Judge context failed identity validation: {exc}")
+        # ADR-066 D1: context is built once at cockpit open; consumers do not rebuild.
+        context = request.stage_context
         if cancelled():
             return _cancelled()
 
         started = self._monotonic()
-        tool_context = AgentToolExecutionContext(visible_accumulation_context=context)
+        tool_context = AgentToolExecutionContext(stage_context=context)
         definitions = (
             self._registry.definitions
             if self._policy.tools_enabled and not self._registry.empty

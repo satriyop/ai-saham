@@ -123,6 +123,7 @@ def create_tui_app(
         agent_turn_runner=agent_turn_runner,
         agent_provider=agent_composition.configured_provider,
         agent_provider_available=agent_composition.provider_available,
+        agent_cockpit_multi_stage=bool(getattr(config.ai, "cockpit_multi_stage", False)),
     )
 
 

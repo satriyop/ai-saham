@@ -7,6 +7,7 @@ from dataclasses import replace
 from typing import Any, Callable, Protocol
 
 from src.application.dto.accumulation_agent import (
+    AgentAccumulationContext,
     AgentTurnRequest,
     AgentTurnResult,
     AgentTurnStatus,
@@ -17,11 +18,6 @@ from src.application.dto.agent_session import (
     AgentSessionPack,
     AgentSessionPolicy,
     AgentSessionToolRecord,
-)
-from src.application.services.agent_accumulation_context import (
-    AgentContextInvariantError,
-    AgentContextUnavailableError,
-    build_agent_accumulation_context,
 )
 from src.application.services.agent_session_pack import build_session_pack
 from src.application.services.agent_session_store import (
@@ -100,14 +96,12 @@ class SessionAwareAgentTurnUseCase:
                 on_approval=on_approval,
             )
 
-        try:
-            context = build_agent_accumulation_context(request.candidate)
-        except AgentContextUnavailableError as exc:
-            return AgentTurnResult(status=AgentTurnStatus.UNAVAILABLE, error_message=str(exc))
-        except AgentContextInvariantError as exc:
-            return AgentTurnResult(
-                status=AgentTurnStatus.FAILED,
-                error_message=f"Canonical Judge context failed identity validation: {exc}",
+        # ADR-066 D1: built once at open; session layer consumes the passed projection.
+        context = request.stage_context
+        if not isinstance(context, AgentAccumulationContext):
+            # Session pack still anchors on Judge ticker identity until multi-stage pack.
+            return _failed(
+                f"Agent session requires accum_judge stage context, got {context.stage_kind.value}"
             )
 
         try:
