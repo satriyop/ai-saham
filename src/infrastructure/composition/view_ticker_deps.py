@@ -213,3 +213,22 @@ def build_read_only_ticker_broker_flow_deps(
         top_brokers=ViewTickerTopBrokersUseCase(repo, foreign_broker_codes=foreign),
         bandar_source=SQLiteTickerDashboardSource(resolved, initialize_schema=False),
     )
+
+
+def build_read_only_ticker_foreign_history_use_case(
+    db_path: Path | str,
+) -> ViewTickerForeignHistoryUseCase:
+    """Construct foreign-history use case without schema initialization.
+
+    Reserved for side-effect-free agent tool registration. Requires an existing
+    DB file; never creates or migrates tables.
+    """
+    from src.infrastructure.persistence.sqlite_broker_repository import (
+        SQLiteBrokerRepository,
+    )
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"ticker foreign-history database is unavailable: {resolved}")
+    repo = SQLiteBrokerRepository(resolved, initialize_schema=False)
+    return ViewTickerForeignHistoryUseCase(repo)

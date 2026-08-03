@@ -18,6 +18,7 @@ class AgentToolName(str, Enum):
     JUDGE_ACCUMULATION_TICKER = "judge_accumulation_ticker"
     GET_BROKER_DESK = "get_broker_desk"
     GET_TICKER_BROKER_FLOW = "get_ticker_broker_flow"
+    GET_TICKER_FOREIGN_FLOW = "get_ticker_foreign_flow"
     # ADR-065 elevated / external (opt-in flags)
     WEB_RESEARCH = "web_research"
     RO_DATA_QUERY = "ro_data_query"

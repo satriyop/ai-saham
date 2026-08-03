@@ -129,6 +129,11 @@ def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
         "build_read_only_ticker_broker_flow_deps",
         lambda path: sentinel_flow,
     )
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_ticker_foreign_history_use_case",
+        lambda path: object(),
+    )
 
     result = build_agent_composition(
         AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
@@ -140,6 +145,7 @@ def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
         AgentToolName.GET_TICKER_DASHBOARD,
         AgentToolName.GET_BROKER_DESK,
         AgentToolName.GET_TICKER_BROKER_FLOW,
+        AgentToolName.GET_TICKER_FOREIGN_FLOW,
     )
 
 
@@ -172,6 +178,11 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
             {"top_brokers": object(), "bandar_source": object()},
         )(),
     )
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_ticker_foreign_history_use_case",
+        lambda path: object(),
+    )
 
     result = build_agent_composition(
         AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
@@ -184,6 +195,7 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
         AgentToolName.GET_TICKER_DASHBOARD,
         AgentToolName.GET_BROKER_DESK,
         AgentToolName.GET_TICKER_BROKER_FLOW,
+        AgentToolName.GET_TICKER_FOREIGN_FLOW,
         AgentToolName.JUDGE_ACCUMULATION_TICKER,
     )
 

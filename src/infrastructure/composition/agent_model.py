@@ -19,6 +19,7 @@ from src.application.services.agent_ro_data_query_tool import RoDataQueryTool
 from src.application.services.agent_session_store import InMemoryAgentSessionStore
 from src.application.services.agent_ticker_broker_flow_tool import TickerBrokerFlowTool
 from src.application.services.agent_ticker_dashboard_tool import TickerDashboardTool
+from src.application.services.agent_ticker_foreign_flow_tool import TickerForeignFlowTool
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_visible_cockpit_tool import VisibleCockpitResultTool
 from src.application.services.agent_web_research_tool import (
@@ -41,6 +42,7 @@ from src.infrastructure.composition.view_broker_deps import (
 from src.infrastructure.composition.view_ticker_deps import (
     build_read_only_ticker_broker_flow_deps,
     build_read_only_ticker_dashboard_use_case,
+    build_read_only_ticker_foreign_history_use_case,
 )
 from src.infrastructure.config.local_env import read_local_env_value
 from src.infrastructure.persistence.sqlite_allowlisted_ro_query import (
@@ -137,6 +139,12 @@ def build_agent_composition(
                         ticker_flow.bandar_source,
                     )
                 )
+            try:
+                foreign_history = build_read_only_ticker_foreign_history_use_case(db_path)
+            except (OSError, ValueError):
+                foreign_history = None
+            if foreign_history is not None:
+                tools.append(TickerForeignFlowTool(foreign_history))
         if accumulation_judge_factory is not None:
             try:
                 judge_ticker = accumulation_judge_factory()

@@ -28,6 +28,7 @@ ADR-065 did). The behavioral half is the runtime `TOOL_GAP` clue.
 | `judge_accumulation_ticker` | OUR / NONE | `AgentAccumulationFacts` (`consecutive_streak`, `net_buy_ratio`, `bb_width_pctile`, `bci_label`, `bci_tier1_count`), `AgentSetupPhaseFacts` (`current_phase`, `phase_age_sessions`, `detection_strength`) |
 | `get_broker_desk` | OUR / NONE | **desk→ticker** views (SHOW/TOP_STOCKS/TOP_MATRIX/FLOW/CALENDAR/HISTORY) |
 | `get_ticker_broker_flow` | OUR / NONE | **ticker→desks** single-session: `top_accumulating`/`top_distributing` (net + avg buy/sell price), `bandar.total_buyers`/`total_sellers`/`number_broker_buysell`, `broker_accdist` + `five_day`/`top1`/`top3`/`top5`/`top10_accdist`, `tops_source`/`tops_scope`, `as_of` |
+| `get_ticker_foreign_flow` | OUR / NONE | foreign net series: `cumulative_net_idr`, `latest_net_idr`, `net_buy_sessions`/`active_sessions`, `trend_direction` (rising/falling/flat), capped `(date, net_value_idr)` tail, `resolved_source` |
 | `web_research` | External / NETWORK_READ | external snippets (confirm) |
 | `ro_data_query` | Elevated / LOCAL_READ_ELEVATED | 3 allowlisted shapes: ticker close, ticker volume, broker day net (confirm) |
 
@@ -73,7 +74,7 @@ All data is **local** (🟡 projection gaps) → each an implement task under AD
 
 | # | Canonical question | Required datum | Carrier (exists) → tool | State |
 |---|---|---|---|---|
-| 9 | Is **foreign/smart money** accumulating (net trend over weeks)? | `foreign_flow_points` series | `ViewTickerForeignHistoryUseCase` (cache-only, `days`) → [`get_ticker_foreign_flow` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_foreign_flow_tool.md) | 🟡→ task |
+| 9 | Is **foreign/smart money** accumulating (net trend over weeks)? | `foreign_flow_points` series | ✅ `get_ticker_foreign_flow` (`cumulative_net_idr`, `latest_net_idr`, `trend_direction`, `net_buy_sessions`, point tail) — complements dashboard window summaries | 🟢 covered |
 | 10 | What's the current **market regime / breadth**? | `market_context_snapshots` + `regime_observations` | `BuildMarketContextUseCase` (stored snapshot) → [`get_market_regime` task](../../tasks/backlog/implement_ai_research_cockpit_market_regime_tool.md) | 🟡→ task |
 | 11 | Is the **float tightening** / who owns it? | `shareholding_composition` (`institution_pct`, `individual_pct`, `top_holder_*`, `total_shares`) | → [`get_ticker_ownership` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_ownership_tool.md) | 🟡→ task |
 | 12 | **Pre-open IEV** / NCP snapshot / IEV delta? | `iev_snapshots` | `SQLiteIEVRepository` (`get_ncp_snapshot`, `get_iev_delta`, `get_locked_iev_baseline`) → [`get_preopen_iev` task](../../tasks/backlog/implement_ai_research_cockpit_preopen_iev_tool.md) | 🟡→ task |
