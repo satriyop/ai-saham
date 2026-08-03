@@ -119,10 +119,11 @@ def test_flow_bar_cell_includes_pct_and_mint_coral():
     )
 
     cell = format_flow_bar_cell(42, width=16, neg=False)
-    assert _bar(42, width=16) in cell
+    assert "█" in cell and "░" in cell
     assert "42%" in cell
     assert "#6fbf8a" in cell
     assert "#555555" in cell  # mute % label
+    assert "#1a1a1a" in cell  # scalar_track residual
 
     neg = format_flow_bar_cell(50, width=16, neg=True)
     assert "50%" in neg

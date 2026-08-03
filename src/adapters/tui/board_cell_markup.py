@@ -21,17 +21,19 @@ from src.adapters.shared.trade_action_labels import (
     ENTER_LIKE,
     WATCH_LIKE,
 )
+from src.adapters.tui.theme import OC
 
-# OpenCode semantic tokens (foreground only on board cells — no opaque ``on``
-# backgrounds; those punch black holes through DataTable peach cursor wash.)
-_MINT = "#6fbf8a"
-_BRASS = "#d4b06a"
-_CORAL = "#c97a72"
-_FOG = "#e8e8e8"
-_MIST = "#7a7a7a"
-_ASH = "#555555"
-_TICKER = "#e8e8e8"
-_PEACH = "#c9a68a"
+# OpenCode semantic tokens via OC (foreground only on board cells — no opaque
+# ``on`` backgrounds; those punch black holes through DataTable peach cursor wash.)
+_MINT = OC.mint
+_BRASS = OC.brass
+_CORAL = OC.coral
+_FOG = OC.text_bright
+_MIST = OC.text_dim
+_ASH = OC.text_mute
+_TICKER = OC.text_bright
+_PEACH = OC.peach
+_SCALAR_TRACK = OC.scalar_track
 
 
 def format_accum_board_cells(row: Any) -> tuple[Text | str, ...]:
@@ -289,11 +291,12 @@ def format_scalar_bar_markup(
     Pair with :func:`format_of_max_pct_markup` — bar alone is forbidden (design).
     """
     pct = clamp_of_max_pct(bar_pct)
+    track = _SCALAR_TRACK
     if pct <= 0:
-        return f"[{_ASH}]{'░' * width}[/]"
+        return f"[{track}]{'░' * width}[/]"
     n = max(1, min(width, int(round(width * pct / 100.0))))
     fill_c = tone or _FOG
-    return f"[{fill_c}]{'█' * n}[/][{_ASH}]{'░' * (width - n)}[/]"
+    return f"[{fill_c}]{'█' * n}[/][{track}]{'░' * (width - n)}[/]"
 
 
 def format_broker_list_cells(row: Any) -> tuple[Text | str, ...]:

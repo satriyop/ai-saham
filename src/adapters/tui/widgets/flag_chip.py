@@ -15,9 +15,9 @@ from textual.widgets import Static
 
 # Design tokens — brass = nav keys · peach fill = is-on
 _BRASS = "#d4b06a"
-_LABEL = "#a0a0a0"
+_LABEL = "#7a7a7a"
 _ON_INK = "#1a120c"
-_DIM_KEY = "#6b5a3a"
+_DIM_KEY = "#d4b06a"
 _DIM_LAB = "#555555"
 
 
@@ -62,7 +62,7 @@ class FlagChip(Static):
         width: auto;
         min-width: 9;
         height: 3;
-        color: #c8c8c8;
+        color: #d8d8d8;
         background: #141414;
         border: solid #2a2a2a;
         padding: 0 1;
@@ -92,7 +92,7 @@ class FlagChip(Static):
     }
     FlagChip.warn {
         color: #d4b06a;
-        border: solid #3a3220;
+        border: solid #1a1810;
         background: #1a1810;
     }
     FlagChip.warn.is-on {

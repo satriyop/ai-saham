@@ -373,8 +373,8 @@ def format_calendar_cell_markup(cell: BrokerCalendarCellView) -> str:
     # session
     dn = cell.day_num if cell.day_num is not None else ""
     tone = cell.tone
-    net_col = "#6fbf8a" if tone == "pos" else ("#c97a72" if tone == "neg" else "#a0a0a0")
-    stk_col = "#ececec" if tone == "pos" else "#8a8a8a"
+    net_col = "#6fbf8a" if tone == "pos" else ("#c97a72" if tone == "neg" else "#7a7a7a")
+    stk_col = "#e8e8e8" if tone == "pos" else "#6b6b6b"
     as_mark = " ·" if cell.is_as_of else ""
     lines = [
         f"[#6b6b6b]{dn}{as_mark}[/]",

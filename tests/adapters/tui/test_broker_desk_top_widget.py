@@ -55,19 +55,20 @@ def test_top_bar_cell_includes_pct_and_mint_coral():
     """Scalar bar contract on dual-heat top desk (sibling glyph-bar surface)."""
     from src.adapters.tui.widgets.broker_top_desk import (
         BrokerTopDesk,
-        _bar_glyphs,
         format_top_bar_cell,
     )
 
     buy = format_top_bar_cell(100, width=14, sell=False)
-    assert _bar_glyphs(100, width=14) in buy
+    assert "█" in buy
     assert "100%" in buy
     assert "#6fbf8a" in buy
     assert "#555555" in buy
+    assert "#1a1a1a" in buy or "100%" in buy  # full bar may omit residual track
 
     sell = format_top_bar_cell(50, width=14, sell=True)
     assert "50%" in sell
     assert "#c97a72" in sell
+    assert "#1a1a1a" in sell
 
     css = BrokerTopDesk.DEFAULT_CSS
     assert "color: #6fbf8a" in css

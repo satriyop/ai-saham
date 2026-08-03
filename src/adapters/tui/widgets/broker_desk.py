@@ -117,7 +117,7 @@ class BrokerDesk(Vertical):
 
     BrokerDesk .bd-stat {
         height: auto;
-        color: #a0a0a0;
+        color: #7a7a7a;
         margin-bottom: 0;
     }
 
@@ -168,7 +168,7 @@ class BrokerDesk(Vertical):
 
     BrokerDesk .bd-row {
         height: auto;
-        color: #c8c8c8;
+        color: #d8d8d8;
         border-top: solid #1c1c1c;
         padding: 0 0;
     }
@@ -176,7 +176,7 @@ class BrokerDesk(Vertical):
     BrokerDesk .bd-row .tk {
         width: 8;
         text-style: bold;
-        color: #ececec;
+        color: #e8e8e8;
     }
 
     BrokerDesk .bd-row .nv.pos { color: #6fbf8a; }
@@ -185,7 +185,7 @@ class BrokerDesk(Vertical):
     BrokerDesk .bd-hub {
         background: #141414;
         border: solid #1c1c1c;
-        border-left: solid #3a4252;
+        border-left: solid #2a2a2a;
         padding: 0 1;
         height: auto;
         color: #9b8fb8;
@@ -277,7 +277,7 @@ class BrokerDesk(Vertical):
             if i < len(model.top_buy):
                 r = model.top_buy[i]
                 col = "#6fbf8a" if r.tone == "pos" else "#c97a72"
-                buy.update(f"[bold #ececec]{r.ticker:<6}[/]  [{col}]{r.net_display}[/]")
+                buy.update(f"[bold #e8e8e8]{r.ticker:<6}[/]  [{col}]{r.net_display}[/]")
             else:
                 buy.update("[dim]—[/]" if i == 0 and not model.top_buy else "")
 
@@ -286,7 +286,7 @@ class BrokerDesk(Vertical):
             if i < len(model.top_sell):
                 r = model.top_sell[i]
                 col = "#6fbf8a" if r.tone == "pos" else "#c97a72"
-                sell.update(f"[bold #ececec]{r.ticker:<6}[/]  [{col}]{r.net_display}[/]")
+                sell.update(f"[bold #e8e8e8]{r.ticker:<6}[/]  [{col}]{r.net_display}[/]")
             else:
                 sell.update("[dim]—[/]" if i == 0 and not model.top_sell else "")
 

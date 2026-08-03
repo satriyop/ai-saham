@@ -143,7 +143,7 @@ class PlanDesk(Vertical):
         margin-top: 1;
         background: #1a1810;
         color: #c9a68a;
-        border: solid #3a3220;
+        border: solid #1a1810;
         padding: 0 1;
         height: auto;
     }
@@ -151,7 +151,7 @@ class PlanDesk(Vertical):
     PlanDesk .running-banner {
         background: #1a1810;
         color: #d4b06a;
-        border: solid #3a3220;
+        border: solid #1a1810;
         padding: 0 1;
         margin-bottom: 1;
         height: auto;
@@ -172,7 +172,7 @@ class PlanDesk(Vertical):
         width: 1fr;
         background: #141414;
         border: solid #1c1c1c;
-        border-left: solid #3a4252;
+        border-left: solid #2a2a2a;
         padding: 1 2;
         margin-right: 1;
         height: auto;
@@ -186,11 +186,11 @@ class PlanDesk(Vertical):
     PlanDesk .plan-card.tone-open { border-left: solid #6fbf8a; }
     PlanDesk .plan-card.tone-block { border-left: solid #c97a72; }
     PlanDesk .plan-card.tone-watch { border-left: solid #d4b06a; }
-    PlanDesk .plan-card.tone-neutral { border-left: solid #a89cc9; }
+    PlanDesk .plan-card.tone-neutral { border-left: solid #9b8fb8; }
 
     PlanDesk .paper-tape {
         background: #1a1810;
-        border: solid #3a3220;
+        border: solid #1a1810;
         border-left: solid #c9a68a;
         padding: 1 1;
         margin-bottom: 1;

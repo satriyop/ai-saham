@@ -54,7 +54,7 @@ class JudgeDesk(Vertical):
     JudgeDesk .limited-banner {
         background: #1a1810;
         color: #d4b06a;
-        border: solid #3a3220;
+        border: solid #1a1810;
         padding: 0 1;
         margin-bottom: 1;
         height: auto;
@@ -111,13 +111,13 @@ class JudgeDesk(Vertical):
     JudgeDesk .verdict-gate.gate-open {
         color: #6fbf8a;
         background: #121a14;
-        border: solid #1c4038;
+        border: solid #121a14;
     }
 
     JudgeDesk .verdict-gate.gate-block {
         color: #c97a72;
         background: #1a1212;
-        border: solid #3a2220;
+        border: solid #1a1212;
     }
 
     JudgeDesk .verdict-gate.gate-other { color: #d4b06a; }
@@ -151,7 +151,7 @@ class JudgeDesk(Vertical):
 
     JudgeDesk .verdict-why {
         margin-top: 1;
-        color: #a0a0a0;
+        color: #7a7a7a;
         height: auto;
         border-top: solid #1c1c1c;
         padding-top: 1;
@@ -219,7 +219,7 @@ class JudgeDesk(Vertical):
         width: 1fr;
         background: #141414;
         border: solid #1c1c1c;
-        border-left: solid #3a4252;
+        border-left: solid #2a2a2a;
         padding: 1 2;
         margin-right: 1;
         height: auto;
@@ -244,7 +244,7 @@ class JudgeDesk(Vertical):
     }
 
     JudgeDesk .judge-card.tone-neutral {
-        border-left: solid #a89cc9;
+        border-left: solid #9b8fb8;
     }
 
     JudgeDesk .judge-footer {
@@ -404,7 +404,7 @@ class JudgeDesk(Vertical):
 
         why = model.why if model.why and model.why != "—" else "—"
         self.query_one("#jd-why", Static).update(
-            f"[bold #c9a68a]Why[/] [bold #e8e8e8]{model.action or '—'}[/]  [#a0a0a0]{why}[/]"
+            f"[bold #c9a68a]Why[/] [bold #e8e8e8]{model.action or '—'}[/]  [#7a7a7a]{why}[/]"
         )
 
         # Phase timeline: always on (primary). Extra detail when phase+ open.
@@ -577,4 +577,4 @@ def _format_phase_arrow(arrow: str) -> str:
     *head, last = parts
     bits = [f"[#6b6b6b]{h}[/]" for h in head]
     bits.append(f"[bold #d4b06a]{last}[/]")
-    return " [#3a4252]→[/] ".join(bits)
+    return " [#2a2a2a]→[/] ".join(bits)

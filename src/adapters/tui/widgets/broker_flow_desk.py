@@ -12,6 +12,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
 from src.adapters.tui.broker_desk_flow_model import DISPLAY_LIMIT, BrokerDeskFlowModel
+from src.adapters.tui.theme import OC
 
 
 def _bar(pct: int, *, width: int = 16) -> str:
@@ -30,11 +31,16 @@ def format_flow_bar_cell(pct: int, *, width: int = 16, neg: bool = False) -> str
     """Bar + mute ``%`` — mint/coral filled track (bible scalar bar).
 
     Rich markup so ``%`` stays text-mute even when the cell CSS is signed-tone.
+    Residual glyphs use Tier-2 ``scalar_track``.
     """
     p = max(0, min(100, int(pct or 0)))
-    track = _bar(p, width=width)
-    tone = "#c97a72" if neg else "#6fbf8a"
-    return f"[{tone}]{track}[/] [#555555]{_pct_label(p)}[/]"
+    filled = max(0, min(width, round(p * width / 100)))
+    tone = OC.coral if neg else OC.mint
+    filled_s = "█" * filled
+    rest_s = "░" * (width - filled)
+    if filled <= 0:
+        return f"[{OC.scalar_track}]{rest_s}[/] [{OC.text_mute}]{_pct_label(p)}[/]"
+    return f"[{tone}]{filled_s}[/][{OC.scalar_track}]{rest_s}[/] [{OC.text_mute}]{_pct_label(p)}[/]"
 
 
 class BrokerFlowDesk(Vertical):
@@ -67,7 +73,7 @@ class BrokerFlowDesk(Vertical):
         width: 100%;
         border-top: solid #1c1c1c;
     }
-    BrokerFlowDesk .fl-date { width: 12; color: #a0a0a0; }
+    BrokerFlowDesk .fl-date { width: 12; color: #7a7a7a; }
     BrokerFlowDesk .fl-net { width: 12; text-align: right; text-style: bold; }
     BrokerFlowDesk .fl-net.pos { color: #6fbf8a; }
     BrokerFlowDesk .fl-net.neg { color: #c97a72; }
@@ -79,7 +85,7 @@ class BrokerFlowDesk(Vertical):
     BrokerFlowDesk .fl-hub {
         background: #141414;
         border: solid #1c1c1c;
-        border-left: solid #3a4252;
+        border-left: solid #2a2a2a;
         padding: 0 1;
         height: auto;
         color: #9b8fb8;

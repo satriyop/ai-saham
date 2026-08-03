@@ -47,8 +47,8 @@ class BrokerHistoryDesk(Vertical):
         width: 100%;
         border-top: solid #1c1c1c;
     }
-    BrokerHistoryDesk .hi-date { width: 12; color: #a0a0a0; }
-    BrokerHistoryDesk .hi-t { width: 8; color: #ececec; text-style: bold; }
+    BrokerHistoryDesk .hi-date { width: 12; color: #7a7a7a; }
+    BrokerHistoryDesk .hi-t { width: 8; color: #e8e8e8; text-style: bold; }
     BrokerHistoryDesk .hi-net { width: 12; text-align: right; text-style: bold; }
     BrokerHistoryDesk .hi-net.pos { color: #6fbf8a; }
     BrokerHistoryDesk .hi-net.neg { color: #c97a72; }
@@ -58,7 +58,7 @@ class BrokerHistoryDesk(Vertical):
     BrokerHistoryDesk .hi-hub {
         background: #141414;
         border: solid #1c1c1c;
-        border-left: solid #3a4252;
+        border-left: solid #2a2a2a;
         padding: 0 1;
         height: auto;
         color: #9b8fb8;

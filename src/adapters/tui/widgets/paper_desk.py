@@ -37,7 +37,7 @@ class PaperDesk(Vertical):
         height: auto;
         border-top: solid #1c1c1c;
         padding: 0 0;
-        color: #c8c8c8;
+        color: #d8d8d8;
     }
     PaperDesk .pp-row.ok { border-left: solid #6fbf8a; padding-left: 1; }
     PaperDesk .pp-row.refuse { border-left: solid #c97a72; padding-left: 1; }

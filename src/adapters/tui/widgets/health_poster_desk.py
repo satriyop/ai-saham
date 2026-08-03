@@ -41,7 +41,7 @@ class HealthPosterDesk(Vertical):
         padding-top: 1;
     }
     HealthPosterDesk .hp-body {
-        color: #a0a0a0;
+        color: #7a7a7a;
         height: auto;
         margin-bottom: 1;
     }
@@ -66,9 +66,9 @@ class HealthPosterDesk(Vertical):
     HealthPosterDesk.kind-empty .hp-card { border-left: solid #c97a72; }
     HealthPosterDesk.kind-lag .hp-card { border-left: solid #d4b06a; }
     HealthPosterDesk.kind-ready .hp-card { border-left: solid #6fbf8a; }
-    HealthPosterDesk.kind-zero .hp-card { border-left: solid #8eb4d8; }
-    HealthPosterDesk.kind-preopen .hp-card { border-left: solid #8eb4d8; }
-    HealthPosterDesk.kind-broker .hp-card { border-left: solid #a89cc9; }
+    HealthPosterDesk.kind-zero .hp-card { border-left: solid #7aa2c4; }
+    HealthPosterDesk.kind-preopen .hp-card { border-left: solid #7aa2c4; }
+    HealthPosterDesk.kind-broker .hp-card { border-left: solid #9b8fb8; }
     """
 
     def compose(self) -> ComposeResult:

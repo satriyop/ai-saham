@@ -150,7 +150,7 @@ def _zero_candidate_body(*, status: str | None, fetch_cue: str, kind: str) -> st
         lag_line = "Local cache is available (see Session · Cache rail).\n\n"
 
     return (
-        f"[bold #8eb4d8]POSTER · ZERO CANDIDATES[/]\n"
+        f"[bold #7aa2c4]POSTER · ZERO CANDIDATES[/]\n"
         f"[bold #e8e8e8]No {kind} candidates[/]\n\n"
         f"{lag_line}"
         "The screen ran against local data and returned [bold]0 names[/].\n"
@@ -173,7 +173,7 @@ def _preopen_empty(*, status: str | None, fetch_cue: str) -> str:
             "[dim]Never silent network on open.[/]"
         )
     return (
-        "[bold #8eb4d8]POSTER · NO IEP CANDIDATES[/]\n"
+        "[bold #7aa2c4]POSTER · NO IEP CANDIDATES[/]\n"
         "[bold #e8e8e8]No IEP candidates[/]\n\n"
         "Pre-open read local IEV snapshot and found nothing to grade,\n"
         "or the snapshot has no names for this session.\n\n"
@@ -187,7 +187,7 @@ def _preopen_empty(*, status: str | None, fetch_cue: str) -> str:
 
 def _broker_empty() -> str:
     return (
-        "[bold #a89cc9]POSTER · NO DESKS[/]\n"
+        "[bold #9b8fb8]POSTER · NO DESKS[/]\n"
         "[bold #e8e8e8]No broker desks to list[/]\n\n"
         "View broker has no tracked desks in config, or none matched filters.\n"
         "This is not the same as empty market candles.\n\n"

@@ -80,14 +80,14 @@ class PreopenInspectDesk(Vertical):
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
-        color: #c8c8c8;
+        color: #d8d8d8;
     }
     PreopenInspectDesk .poi-sec-title {
         color: #555555;
         text-style: bold;
     }
     PreopenInspectDesk .poi-why {
-        color: #a0a0a0;
+        color: #7a7a7a;
         height: auto;
         margin-bottom: 1;
     }
@@ -97,11 +97,11 @@ class PreopenInspectDesk(Vertical):
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
-        color: #a0a0a0;
+        color: #7a7a7a;
     }
     PreopenInspectDesk .poi-warn {
         background: #1a1810;
-        border: solid #3a3220;
+        border: solid #1a1810;
         color: #d4b06a;
         padding: 0 1;
         margin-bottom: 1;

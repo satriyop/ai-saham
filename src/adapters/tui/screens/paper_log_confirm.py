@@ -32,7 +32,7 @@ class PaperLogConfirmModal(ModalScreen[bool | None]):
         max-width: 90%;
         height: auto;
         background: #141414;
-        border: solid #3a3220;
+        border: solid #1a1810;
         border-left: solid #c9a68a;
         padding: 1 2;
     }

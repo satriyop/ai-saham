@@ -99,7 +99,7 @@ def _paint_depth_fact_line(ln: str) -> str:
             return f"[#6fbf8a]{s}[/]"
         if " SELL" in f" {s}" or s.endswith(" SELL") or " SELL " in s:
             return f"[#c97a72]{s}[/]"
-        return f"[#c8c8c8]{s}[/]"
+        return f"[#d8d8d8]{s}[/]"
 
     lab = None
     rest = s
@@ -135,7 +135,7 @@ def _paint_depth_fact_line(ln: str) -> str:
             if "BUY" in right.upper()
             else ("#c97a72" if "SELL" in right.upper() else "#e8e8e8")
         )
-        return f"[#c8c8c8]{left.strip()}[/] → [{r_tone}]{right}[/]"
+        return f"[#d8d8d8]{left.strip()}[/] → [{r_tone}]{right}[/]"
     return f"[{tone}]{s}[/]"
 
 
@@ -220,12 +220,12 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-fp.ok {
-        border: solid #1e3a28;
+        border: solid #121a14;
         color: #6fbf8a;
     }
 
     TickerDesk .td-fp.stale {
-        border: solid #3a3220;
+        border: solid #1a1810;
         color: #d4b06a;
     }
 
@@ -298,13 +298,13 @@ class TickerDesk(Vertical):
     TickerDesk .td-chg.pos {
         color: #6fbf8a;
         background: #121a14;
-        border: solid #1c4038;
+        border: solid #121a14;
     }
 
     TickerDesk .td-chg.neg {
         color: #c97a72;
         background: #1a1212;
-        border: solid #3a2220;
+        border: solid #1a1212;
     }
 
     TickerDesk .td-mast-right {
@@ -316,7 +316,7 @@ class TickerDesk(Vertical):
 
     TickerDesk .td-hz-line {
         height: auto;
-        color: #a0a0a0;
+        color: #7a7a7a;
         margin-bottom: 0;
     }
 
@@ -359,7 +359,7 @@ class TickerDesk(Vertical):
         width: 1fr;
         background: #141414;
         border: solid #1c1c1c;
-        border-left: solid #8eb4d8;
+        border-left: solid #7aa2c4;
         padding: 1 1;
         margin-right: 1;
         height: auto;
@@ -368,7 +368,7 @@ class TickerDesk(Vertical):
 
     TickerDesk .td-pulse.tone-pos { border-left: solid #6fbf8a; }
     TickerDesk .td-pulse.tone-neg { border-left: solid #c97a72; }
-    TickerDesk .td-pulse.tone-neutral { border-left: solid #a89cc9; }
+    TickerDesk .td-pulse.tone-neutral { border-left: solid #9b8fb8; }
 
     TickerDesk .td-pulse-title {
         color: #6b6b6b;
@@ -390,7 +390,7 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-pulse-body {
-        color: #a0a0a0;
+        color: #7a7a7a;
         height: auto;
         margin-top: 0;
     }
@@ -404,7 +404,7 @@ class TickerDesk(Vertical):
     TickerDesk .td-section {
         background: #141414;
         border: solid #1c1c1c;
-        border-left: solid #3a4252;
+        border-left: solid #2a2a2a;
         padding: 1 1;
         margin-bottom: 1;
         height: auto;
@@ -435,12 +435,12 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-secondary {
-        color: #a0a0a0;
+        color: #7a7a7a;
         height: auto;
     }
 
     TickerDesk .td-sec-body {
-        color: #c8c8c8;
+        color: #d8d8d8;
         height: auto;
     }
 
@@ -484,7 +484,7 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-depth-body {
-        color: #c8c8c8;
+        color: #d8d8d8;
         padding: 0 1 1 1;
         height: auto;
     }
@@ -556,7 +556,7 @@ class TickerDesk(Vertical):
     TickerDesk .td-flow-pv.neg { color: #c97a72; }
 
     TickerDesk .td-flow-days {
-        color: #a0a0a0;
+        color: #7a7a7a;
         height: auto;
     }
 
@@ -603,7 +603,7 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-dist-col-body {
-        color: #a0a0a0;
+        color: #7a7a7a;
         height: auto;
     }
 
@@ -628,7 +628,7 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-fin-card.balance {
-        border-left: solid #a89cc9;
+        border-left: solid #9b8fb8;
     }
 
     TickerDesk .td-fin-card.cashflow {
@@ -643,7 +643,7 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-fin-card-body {
-        color: #a0a0a0;
+        color: #7a7a7a;
         height: auto;
     }
 
@@ -1046,8 +1046,8 @@ class TickerDesk(Vertical):
                 color = {
                     "pos": "#6fbf8a",
                     "neg": "#c97a72",
-                    "neutral": "#a0a0a0",
-                }.get(hz.tone, "#a0a0a0")
+                    "neutral": "#7a7a7a",
+                }.get(hz.tone, "#7a7a7a")
                 val = (hz.value or "—").strip() or "—"
                 if val in {"—", "-", "–"}:
                     # Honest empty horizon — no grey wallpaper bar
@@ -1475,7 +1475,7 @@ class TickerDesk(Vertical):
         )
         lines = [head]
         for d in desk.days:
-            tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#a0a0a0")
+            tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#7a7a7a")
             bar_s = format_scalar_bar_markup(d.bar_pct, width=bar_w, tone=tone)
             pct_s = format_of_max_pct_markup(d.bar_pct, width=4)
             lines.append(
@@ -1483,8 +1483,8 @@ class TickerDesk(Vertical):
                 f"{bar_s} {pct_s}  "
                 f"[{tone}]{d.net_s:>10}[/]  "
                 f"[#7a7a7a]{d.ratio_s:>7}[/]  "
-                f"[#c8c8c8]{d.buyer:>6}[/]  "
-                f"[#c8c8c8]{d.seller:>6}[/]"
+                f"[#d8d8d8]{d.buyer:>6}[/]  "
+                f"[#d8d8d8]{d.seller:>6}[/]"
             )
         self.query_one("#td-flow-days", Static).update("\n".join(lines))
 
@@ -1525,7 +1525,7 @@ class TickerDesk(Vertical):
         )
         lines = [head]
         for d in desk.days:
-            tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#a0a0a0")
+            tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#7a7a7a")
             bar_s = format_scalar_bar_markup(d.bar_pct, width=bar_w, tone=tone)
             pct_s = format_of_max_pct_markup(d.bar_pct, width=4)
             lines.append(
@@ -1533,8 +1533,8 @@ class TickerDesk(Vertical):
                 f"{bar_s} {pct_s}  "
                 f"[#7a7a7a]{d.source:10}[/]  "
                 f"[{tone}]{d.net_s:>10}[/]  "
-                f"[#c8c8c8]{d.lot_s:>10}[/]  "
-                f"[#c8c8c8]{d.avg_s:>8}[/]"
+                f"[#d8d8d8]{d.lot_s:>10}[/]  "
+                f"[#d8d8d8]{d.avg_s:>8}[/]"
             )
         self.query_one("#td-flow-days", Static).update("\n".join(lines))
 
@@ -1549,7 +1549,7 @@ class TickerDesk(Vertical):
 
         def _pill(tag: str) -> str:
             # Round-ish type badge · F Foreign · L Local · G gov — never A
-            c = {"F": "#7aa2c4", "L": "#8a8a8a", "G": "#d4b06a"}.get(tag, "#8a8a8a")
+            c = {"F": "#7aa2c4", "L": "#6b6b6b", "G": "#d4b06a"}.get(tag, "#6b6b6b")
             return f"([{c}]{tag}[/])"
 
         def _side_text(
@@ -1571,8 +1571,8 @@ class TickerDesk(Vertical):
                 for cp in s.cps:
                     # CP row: arrow · code · pill · amount · %
                     lines.append(
-                        f"  [#555555]{arrow}[/] [#c8c8c8]{cp.code}[/] {_pill(cp.type_tag)}  "
-                        f"[#a0a0a0]{cp.amount_s}[/]  [#6b6b6b]{cp.pct}%[/]"
+                        f"  [#555555]{arrow}[/] [#d8d8d8]{cp.code}[/] {_pill(cp.type_tag)}  "
+                        f"[#7a7a7a]{cp.amount_s}[/]  [#6b6b6b]{cp.pct}%[/]"
                     )
                     # Horizontal share track under CP (design heat bar — not a side tower)
                     bar = bar_glyphs(cp.bar_pct, width=track_w, hollow=True)

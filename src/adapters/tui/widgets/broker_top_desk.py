@@ -17,6 +17,7 @@ from src.adapters.tui.broker_desk_top_model import (
     BrokerDeskTopModel,
     BrokerTopHeatRow,
 )
+from src.adapters.tui.theme import OC
 
 
 def _bar_glyphs(pct: int, *, width: int = 14) -> str:
@@ -33,9 +34,13 @@ def _pct_label(pct: int) -> str:
 def format_top_bar_cell(pct: int, *, width: int = 14, sell: bool = False) -> str:
     """Bar + mute ``%`` — mint buy / coral sell (bible scalar bar)."""
     p = max(0, min(100, int(pct or 0)))
-    track = _bar_glyphs(p, width=width)
-    tone = "#c97a72" if sell else "#6fbf8a"
-    return f"[{tone}]{track}[/] [#555555]{_pct_label(p)}[/]"
+    filled = max(0, min(width, round(p * width / 100)))
+    tone = OC.coral if sell else OC.mint
+    filled_s = "█" * filled
+    rest_s = "░" * (width - filled)
+    if filled <= 0:
+        return f"[{OC.scalar_track}]{rest_s}[/] [{OC.text_mute}]{_pct_label(p)}[/]"
+    return f"[{tone}]{filled_s}[/][{OC.scalar_track}]{rest_s}[/] [{OC.text_mute}]{_pct_label(p)}[/]"
 
 
 class BrokerTopDesk(Vertical):
@@ -106,7 +111,7 @@ class BrokerTopDesk(Vertical):
         width: 100%;
         padding: 0 0;
         border-top: solid #1c1c1c;
-        color: #c8c8c8;
+        color: #d8d8d8;
     }
 
     BrokerTopDesk .tp-rank {
@@ -117,7 +122,7 @@ class BrokerTopDesk(Vertical):
 
     BrokerTopDesk .tp-t {
         width: 7;
-        color: #ececec;
+        color: #e8e8e8;
         text-style: bold;
     }
 
@@ -157,7 +162,7 @@ class BrokerTopDesk(Vertical):
     BrokerTopDesk .tp-hub {
         background: #141414;
         border: solid #1c1c1c;
-        border-left: solid #3a4252;
+        border-left: solid #2a2a2a;
         padding: 0 1;
         height: auto;
         color: #9b8fb8;

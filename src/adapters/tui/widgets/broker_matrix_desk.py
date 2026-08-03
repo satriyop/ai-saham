@@ -106,7 +106,7 @@ class BrokerMatrixDesk(Vertical):
 
     BrokerMatrixDesk .mx-win-h.def {
         color: #c9a68a;
-        background: #1a1612;
+        background: #1a1810;
     }
 
     BrokerMatrixDesk .mx-row {
@@ -125,12 +125,12 @@ class BrokerMatrixDesk(Vertical):
         width: 1fr;
         height: auto;
         padding: 0 1;
-        color: #c8c8c8;
+        color: #d8d8d8;
         border-left: solid #1c1c1c;
     }
 
     BrokerMatrixDesk .mx-cell.def {
-        background: #1a1612;
+        background: #1a1810;
         border-left: solid #c9a68a;
     }
 
@@ -143,7 +143,7 @@ class BrokerMatrixDesk(Vertical):
     BrokerMatrixDesk .mx-hub {
         background: #141414;
         border: solid #1c1c1c;
-        border-left: solid #3a4252;
+        border-left: solid #2a2a2a;
         padding: 0 1;
         height: auto;
         color: #9b8fb8;
@@ -204,7 +204,7 @@ class BrokerMatrixDesk(Vertical):
                     continue
                 slot.ticker = cell.ticker
                 # ticker + streak, net, avg — avg prominent
-                tk_color = "#c9a68a" if cell.is_default_window else "#ececec"
+                tk_color = "#c9a68a" if cell.is_default_window else "#e8e8e8"
                 slot.update(
                     f"[bold {tk_color}]{cell.ticker}[/] [bold #c9a68a]{cell.streak_label}[/]\n"
                     f"[#6fbf8a]{cell.net_display}[/]\n"
