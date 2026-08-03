@@ -26,7 +26,16 @@ from src.adapters.tui.controllers.board_controller import BoardController
 from src.adapters.tui.judge_desk_model import build_judge_desk_model
 from src.adapters.tui.main import CockpitApp
 from src.adapters.tui.presenters.accum_presenter import AccumPresenter, AccumRowView
-from src.adapters.tui.theme import COCKPIT_CSS, FORBIDDEN_PRODUCT_MARKERS, OPENCODE_TOKENS
+from src.adapters.tui.theme import (
+    COCKPIT_CSS,
+    FORBIDDEN_PRODUCT_MARKERS,
+    OC,
+    OPENCODE_DERIVED,
+    OPENCODE_TOKENS,
+    bake_css,
+    off_palette_hexes_in_tree,
+    palette_allowlist,
+)
 from src.adapters.tui.ticker_desk_model import build_ticker_desk_model_from_dashboard
 from src.domain.entities.broker_flow import BrokerType
 
@@ -76,6 +85,10 @@ def test_broker_deep_empty_shell_is_structured_not_cli_dump():
 def test_opencode_tokens_locked_in_theme():
     assert OPENCODE_TOKENS["bg"] == "#0b0b0b"
     assert OPENCODE_TOKENS["sel_bg"] == "#c9a68a"
+    assert OPENCODE_DERIVED["scalar_track"] == "#1a1a1a"
+    assert OC.mint == OPENCODE_TOKENS["green"]
+    assert OC.scalar_track == "#1a1a1a"
+    assert bake_css("color: $oc_text;") == f"color: {OPENCODE_TOKENS['text']};"
     assert "#0b0b0b" in COCKPIT_CSS
     assert "#c9a68a" in COCKPIT_CSS
     # Peach selection on board cursor (not brass night-ink wash)
@@ -126,6 +139,55 @@ def test_product_tui_sources_have_no_journey_skin_markers():
         # night-ink surface hexes must not remain in product widgets
         for bad in ("#080b12", "#0d121c", "#121a28", "#1c2430"):
             assert bad not in text, f"{path}: {bad}"
+
+
+def test_tui_sources_have_no_off_palette_hexes():
+    """Guard: every #rrggbb under src/adapters/tui is token, derived, or ban-list."""
+    allow = palette_allowlist()
+    assert "#0b0b0b" in allow
+    assert "#1a1a1a" in allow  # scalar_track
+    hits = off_palette_hexes_in_tree(Path("src/adapters/tui"))
+    assert hits == [], f"off-palette hexes: {hits[:20]}"
+
+
+def test_off_palette_hex_scanner_detects_drift():
+    """Scanner fails closed: a deliberate off-allowlist hex is reported."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "leaky.py").write_text('COLOR = "#ff00aa"\n', encoding="utf-8")
+        hits = off_palette_hexes_in_tree(root)
+        assert any(h[1].lower() == "#ff00aa" for h in hits)
+
+
+def test_agent_commentary_title_and_no_night_ink_ramp():
+    """AI Research Cockpit title in all states; cool ramp hexes gone."""
+    from src.adapters.tui.widgets.agent_commentary import AgentCommentary
+
+    src = Path("src/adapters/tui/widgets/agent_commentary.py").read_text(encoding="utf-8")
+    assert src.count("AI Research Cockpit") >= 4
+    assert 'update("Agent")' not in src
+    assert 'Static("Agent"' not in src
+    for bad in (
+        "#101014",
+        "#0e0e12",
+        "#24242c",
+        "#686878",
+        "#8a8aaa",
+        "#aaaabc",
+        "#9a9aac",
+        "#858596",
+        "#5a5a6a",
+        "#2a2a34",
+        "#d0d0d8",
+        "#555566",
+        "#14141a",
+    ):
+        assert bad not in src
+    css = AgentCommentary.DEFAULT_CSS
+    assert "#0e0e0e" in css or "#101010" in css  # neutral near-black
+    assert "#9b8fb8" in css  # token purple accent on stage
 
 
 def test_board_column_contracts_and_no_jargon_in_markup_module():

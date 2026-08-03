@@ -4,10 +4,24 @@ Authority: docs/design/tui-cockpit-opencode.md + mock `.app` tokens.
 Near-black surfaces, peach selection, hairline borders.
 No journey night-ink skin, no design-tools strip.
 
+Single source of truth for TUI colors:
+- Tier 1: ``OPENCODE_TOKENS`` (canonical 22)
+- Tier 2: ``OPENCODE_DERIVED`` (named chrome/washes/scalar track)
+- CSS: bake ``$oc_*`` via :func:`bake_css` (import-time substitute; avoids
+  f-string brace collision with Textual rule blocks)
+- Rich markup: :data:`OC` Python constants from the same maps
+
 Layer: Adapter
 """
 
-# Canonical OpenCode token map (mock :root)
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from string import Template
+from types import SimpleNamespace
+
+# Canonical OpenCode token map (mock :root) — Tier 1
 OPENCODE_TOKENS: dict[str, str] = {
     "bg": "#0b0b0b",
     "bg_elevated": "#141414",
@@ -31,6 +45,22 @@ OPENCODE_TOKENS: dict[str, str] = {
     "purple": "#9b8fb8",
 }
 
+# Tier 2 — named derived shades (role comments; not casual hex)
+OPENCODE_DERIVED: dict[str, str] = {
+    # chrome
+    "scrollbar": "#3a3a3a",  # scrollbar thumb
+    "track_inactive": "#121212",  # scrollbar track / inactive rail
+    "hairline_strong": "#2a2a2a",  # stronger hairline than border
+    "status_bg": "#090909",  # status strip under stage
+    "dim": "#6b6b6b",  # secondary dim (between text_dim and text_mute)
+    # semantic washes (bg behind status lines)
+    "warn_bg": "#1a1810",
+    "ok_bg": "#121a14",
+    "fail_bg": "#1a1212",
+    # scalar bar contract (bible-locked track)
+    "scalar_track": "#1a1a1a",
+}
+
 # Forbidden journey / night-ink product chrome markers (tests assert absence)
 FORBIDDEN_PRODUCT_MARKERS: tuple[str, ...] = (
     "Fraunces",
@@ -42,6 +72,92 @@ FORBIDDEN_PRODUCT_MARKERS: tuple[str, ...] = (
     "#121a28",
     "#1c2430",
 )
+
+_HEX_RE = re.compile(r"#[0-9a-fA-F]{6}")
+
+
+def _oc_template_map() -> dict[str, str]:
+    """``$oc_<name>`` → hex for :func:`bake_css` / string.Template."""
+    out: dict[str, str] = {}
+    for key, value in OPENCODE_TOKENS.items():
+        out[f"oc_{key}"] = value
+    for key, value in OPENCODE_DERIVED.items():
+        out[f"oc_{key}"] = value
+    # friendly aliases used in widgets
+    out["oc_mint"] = OPENCODE_TOKENS["green"]
+    out["oc_coral"] = OPENCODE_TOKENS["red"]
+    out["oc_brass"] = OPENCODE_TOKENS["amber"]
+    out["oc_peach"] = OPENCODE_TOKENS["sel_bg"]
+    return out
+
+
+def bake_css(template: str) -> str:
+    """Substitute ``$oc_*`` placeholders into Textual CSS at class-definition time.
+
+    Prefer this over f-strings (Textual CSS rule blocks use ``{ }``) and over
+    runtime Theme ``$vars`` when registration order is unreliable.
+    """
+    return Template(template).safe_substitute(_oc_template_map())
+
+
+def _build_oc_namespace() -> SimpleNamespace:
+    """Python constants for Rich ``[#hex]`` markup — same values as the maps."""
+    ns: dict[str, str] = {}
+    ns.update(OPENCODE_TOKENS)
+    ns.update(OPENCODE_DERIVED)
+    ns["mint"] = OPENCODE_TOKENS["green"]
+    ns["coral"] = OPENCODE_TOKENS["red"]
+    ns["brass"] = OPENCODE_TOKENS["amber"]
+    ns["peach"] = OPENCODE_TOKENS["sel_bg"]
+    return SimpleNamespace(**ns)
+
+
+OC = _build_oc_namespace()
+
+
+def palette_allowlist() -> frozenset[str]:
+    """Hex values legal in product TUI CSS/markup (case-normalized lowercase)."""
+    values = set(OPENCODE_TOKENS.values()) | set(OPENCODE_DERIVED.values())
+    return frozenset(v.lower() for v in values)
+
+
+def palette_exception_hexes() -> frozenset[str]:
+    """Hexes allowed only as ban-list documentation (FORBIDDEN markers)."""
+    return frozenset(m.lower() for m in FORBIDDEN_PRODUCT_MARKERS if m.startswith("#"))
+
+
+def collect_hexes_in_text(text: str) -> list[str]:
+    """All ``#rrggbb`` occurrences in *text* (original case preserved)."""
+    return _HEX_RE.findall(text)
+
+
+def off_palette_hexes_in_tree(
+    root: Path | None = None,
+) -> list[tuple[str, str, int]]:
+    """Scan ``src/adapters/tui/**/*.py`` for hexes outside the allowlist.
+
+    Returns list of ``(path, hex, line_no)`` for each off-allowlist hit.
+    Exception: ``FORBIDDEN_PRODUCT_MARKERS`` hexes are allowed only inside
+    ``theme.py`` (the ban list itself).
+    """
+    base = root or Path("src/adapters/tui")
+    allow = palette_allowlist()
+    exceptions = palette_exception_hexes()
+    hits: list[tuple[str, str, int]] = []
+    for path in sorted(base.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        rel = str(path)
+        is_theme = path.name == "theme.py"
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            for raw in collect_hexes_in_text(line):
+                low = raw.lower()
+                if low in allow:
+                    continue
+                if is_theme and low in exceptions:
+                    continue
+                hits.append((rel, raw, lineno))
+    return hits
+
 
 COCKPIT_CSS = """
 Screen {
@@ -214,11 +330,11 @@ Screen {
 }
 
 #prompt-rail.is-focus {
-    background: #161412;
-    border-top: solid #3a3228;
-    border-bottom: solid #3a3228;
+    background: #1a1810;
+    border-top: solid #1a1810;
+    border-bottom: solid #1a1810;
     border-left: solid #c9a68a;
-    border-right: solid #3a3228;
+    border-right: solid #1a1810;
 }
 
 #prompt-row-input {
@@ -261,12 +377,12 @@ Screen {
 }
 
 #prompt-input:focus {
-    background: #161412;
+    background: #1a1810;
     border: none !important;
 }
 
 #prompt-rail.is-focus #prompt-input {
-    background: #161412;
+    background: #1a1810;
 }
 
 #prompt-mode {
