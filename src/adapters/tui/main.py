@@ -235,6 +235,7 @@ class CockpitApp(App[None]):
         self._agent_loading = False
         self._agent_stage_open = False
         self._agent_last_question = ""
+        self._agent_last_good: dict | None = None
         self._judge_ticker = ""
         self._judge_limited = False
         self._cache_health: Any | None = None
@@ -2031,12 +2032,37 @@ class CockpitApp(App[None]):
                 message,
             )
 
+        def _approval(req: Any) -> bool:
+            # Sync confirm from worker: block until UI posts decision.
+            import threading
+
+            box: dict[str, bool | None] = {"ok": None}
+            done = threading.Event()
+
+            def _ask() -> None:
+                try:
+                    self._ask_elevated_tool_confirm(req, box, done)
+                except Exception:
+                    box["ok"] = False
+                    done.set()
+
+            try:
+                self.call_from_thread(_ask)
+            except Exception:
+                box["ok"] = False
+                done.set()
+            done.wait(timeout=120.0)
+            return bool(box["ok"])
+
         try:
             runner = self._agent_turn_runner
             try:
-                result = runner(request, on_progress=_progress)
+                result = runner(request, on_progress=_progress, on_approval=_approval)
             except TypeError:
-                result = runner(request)
+                try:
+                    result = runner(request, on_progress=_progress)
+                except TypeError:
+                    result = runner(request)
         except Exception:
             from src.application.dto.accumulation_agent import (
                 AgentTurnResult,
@@ -2081,6 +2107,75 @@ class CockpitApp(App[None]):
         except Exception:
             pass
 
+    def _ask_elevated_tool_confirm(self, req: Any, box: dict, done: Any) -> None:
+        """Light y/n confirm (default Yes). Free-text chat is not authorization."""
+        from textual.containers import Horizontal, Vertical
+        from textual.screen import ModalScreen
+        from textual.widgets import Button, Static
+
+        tool = str(getattr(req, "tool_name", "tool"))
+        summary = str(getattr(req, "arg_summary", ""))
+        implication = str(getattr(req, "implication", ""))
+
+        class _Confirm(ModalScreen[bool]):
+            def compose(self):  # type: ignore[no-untyped-def]
+                with Vertical(id="agent-confirm"):
+                    yield Static("AI Research Cockpit · confirm", classes="title")
+                    yield Static(f"Tool: {tool}")
+                    yield Static(f"Args: {summary}")
+                    yield Static(implication)
+                    with Horizontal():
+                        yield Button("Yes", id="yes", variant="success")
+                        yield Button("No", id="no", variant="error")
+
+            def on_mount(self) -> None:
+                try:
+                    self.query_one("#yes", Button).focus()
+                except Exception:
+                    pass
+
+            def on_button_pressed(self, event: Button.Pressed) -> None:
+                self.dismiss(event.button.id == "yes")
+
+        def _done(result: bool | None) -> None:
+            box["ok"] = bool(result)
+            done.set()
+
+        self.push_screen(_Confirm(), _done)
+
+    def _remember_agent_success(
+        self, result: Any, *, as_of: str, ticker: str, question: str
+    ) -> None:
+        if getattr(result, "status", None) is None:
+            return
+        from src.application.dto.accumulation_agent import AgentTurnStatus
+
+        if result.status not in {AgentTurnStatus.SUCCESS, AgentTurnStatus.PARTIAL}:
+            return
+        self._agent_last_good = {
+            "result": result,
+            "as_of": as_of,
+            "ticker": ticker,
+            "question": question,
+        }
+
+    def _restore_agent_last_good(self, *, error: str) -> bool:
+        snap = getattr(self, "_agent_last_good", None)
+        if not snap:
+            return False
+        try:
+            commentary = self.query_one("#agent-commentary")
+            commentary.show_result(
+                snap["result"],
+                as_of=snap["as_of"],
+                question=snap.get("question") or "",
+                ticker=snap.get("ticker") or "—",
+            )
+            commentary.query_one(".agent-error").update(error)
+            return True
+        except Exception:
+            return False
+
     def _on_agent_turn_done(
         self,
         generation: int,
@@ -2104,11 +2199,27 @@ class CockpitApp(App[None]):
             self._enter_agent_stage(ready=False)
         commentary = self.query_one("#agent-commentary")
         commentary.set_stage_mode(True)
+        from src.application.dto.accumulation_agent import AgentTurnStatus
+
+        status = getattr(result, "status", None)
+        if status in {AgentTurnStatus.FAILED, AgentTurnStatus.CANCELLED} and getattr(
+            result, "restore_last_good", False
+        ):
+            if self._restore_agent_last_good(
+                error=str(getattr(result, "error_message", None) or "turn failed")
+            ):
+                return
         commentary.show_result(
             result,
             as_of=as_of,
             question=self._agent_last_question,
             ticker=ticker,
+        )
+        self._remember_agent_success(
+            result,
+            as_of=as_of,
+            ticker=ticker,
+            question=self._agent_last_question,
         )
 
     def on_input_blurred(self, event: Input.Blurred) -> None:
