@@ -147,6 +147,57 @@ def test_session_dedupes_repeated_data_warnings_across_turns() -> None:
     assert second.warnings == ()
 
 
+def test_typeerror_in_inner_runs_exactly_once() -> None:
+    """F1: a TypeError from the inner turn must NOT re-run the turn.
+
+    The old retry ladder caught the TypeError and re-invoked ``execute`` with
+    progressively fewer kwargs — re-running a turn that may already have spent
+    the provider and dropping the approval callback. It now runs exactly once.
+    """
+
+    class _RaisingInner:
+        provider_available = True
+        configured_provider = "deepseek"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def execute(self, request, **kwargs):
+            self.calls += 1
+            raise TypeError("boom during execution")
+
+    inner = _RaisingInner()
+    store = InMemoryAgentSessionStore(AgentSessionPolicy(enabled=True))
+    uc = SessionAwareAgentTurnUseCase(
+        inner,
+        store,
+        AgentSessionPolicy(enabled=True),
+        certification=DEEPSEEK_SESSION_CERTIFICATION,
+        configured_provider="deepseek",
+    )
+    with pytest.raises(TypeError):
+        uc.execute(
+            AgentTurnRequest("q", make_candidate()),
+            on_progress=lambda _m: None,
+            on_approval=lambda _r: True,
+        )
+    assert inner.calls == 1
+
+
+def test_inner_without_callback_kwargs_still_invoked_once() -> None:
+    """F1 boundary: signature probing (not error-catching) adapts to a narrow inner."""
+    uc, inner = _session_uc(enabled=True)
+    result = uc.execute(
+        AgentTurnRequest("why watch?", make_candidate()),
+        on_progress=lambda _m: None,
+        on_approval=lambda _r: True,
+    )
+    # _FakeInner.execute accepts only is_cancelled/session_pack; the extra
+    # callbacks are filtered out up front so it is called exactly once.
+    assert result.status is AgentTurnStatus.SUCCESS
+    assert len(inner.calls) == 1
+
+
 def test_stale_focus_warning_when_context_changes() -> None:
     uc, inner = _session_uc(enabled=True)
     first_candidate = make_candidate()

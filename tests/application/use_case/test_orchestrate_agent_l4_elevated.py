@@ -114,6 +114,29 @@ class _WebOk:
         return (snip,)[:max_results]
 
 
+class _WebCounting:
+    """Web client that would succeed — counts calls to prove it never ran."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def research(self, query: str, *, max_results: int):
+        self.calls += 1
+        snip = WebResearchSnippet("T", "https://example.com", f"about {query}")
+        return (snip,)[:max_results]
+
+
+class _DenyThenApprove:
+    """Deny the first confirm, approve every one after (stateful operator)."""
+
+    def __init__(self) -> None:
+        self.seen = 0
+
+    def __call__(self, req: AgentApprovalRequest) -> bool:
+        self.seen += 1
+        return self.seen >= 2
+
+
 def test_web_research_requires_confirm_and_counts_as_tool() -> None:
     web = WebResearchTool(_WebOk())  # type: ignore[arg-type]
     local = _LocalTool()
@@ -266,6 +289,132 @@ def test_elevated_counts_toward_l3_tool_budget() -> None:
     assert result.status is AgentTurnStatus.SUCCESS
     assert len(result.tool_results) == 4
     assert model.requests[-1].tool_choice is AgentModelToolChoice.NONE
+
+
+def test_no_approver_fails_closed_and_continues() -> None:
+    """F2: elevated PER_CALL tool + no approval callback must NOT execute."""
+    client = _WebCounting()
+    web = WebResearchTool(client)  # type: ignore[arg-type]
+    model = _Model(
+        [
+            _tools(AgentModelToolCall("w1", "web_research", '{"query":"x"}')),
+            _answer("Answered from Judge context only."),
+        ]
+    )
+    orch = AgentTurnOrchestrator(
+        model,
+        AgentToolRegistry((web,)),
+        AgentToolTurnPolicy.l1(tools_enabled=True),
+        # No on_approval anywhere: a missing approver is not consent.
+    )
+    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    assert client.calls == 0  # never executed — no network egress
+    assert result.status is AgentTurnStatus.PARTIAL
+    assert result.tool_results[0].error_code == "TOOL_NO_APPROVER"
+    assert result.tool_results[0].status is AgentToolExecutionStatus.UNAVAILABLE
+    assert result.answer.startswith("Answered")
+    assert result.elevated_attempted is True
+
+
+def test_side_effect_none_tool_runs_without_approver() -> None:
+    """F2 boundary: ordinary OUR tools still run with no approval callback."""
+    local = _LocalTool()
+    model = _Model(
+        [
+            _tools(AgentModelToolCall("g1", "get_visible_cockpit_result", '{"reference":"r"}')),
+            _answer("Used the visible result."),
+        ]
+    )
+    orch = AgentTurnOrchestrator(
+        model,
+        AgentToolRegistry((local,)),
+        AgentToolTurnPolicy.l1(tools_enabled=True),
+    )
+    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    assert local.executed == 1
+    assert result.status is AgentTurnStatus.SUCCESS
+
+
+def test_typeerror_midturn_fails_once_without_rerun() -> None:
+    """F1: a genuine TypeError mid-turn maps to FAILED and never re-runs."""
+    local = _LocalTool()
+
+    class _RaiseOnSecond:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, request):
+            self.calls += 1
+            if self.calls == 1:
+                return _tools(
+                    AgentModelToolCall("g1", "get_visible_cockpit_result", '{"reference":"r"}')
+                )
+            raise TypeError("boom mid-turn")
+
+    model = _RaiseOnSecond()
+    orch = AgentTurnOrchestrator(
+        model,
+        AgentToolRegistry((local,)),
+        AgentToolTurnPolicy.l1(tools_enabled=True),
+    )
+    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    assert result.status is AgentTurnStatus.FAILED
+    assert local.executed == 1  # tool ran exactly once — no restart
+    assert model.calls == 2  # first (tool_calls) + second (raises); no re-run
+
+
+def test_deny_then_different_tool_continues_and_executes() -> None:
+    """F3: a deny skips-and-continues; a different OUR tool still executes."""
+    web = WebResearchTool(_WebOk())  # type: ignore[arg-type]
+    local = _LocalTool()
+    model = _Model(
+        [
+            _tools(
+                AgentModelToolCall("w1", "web_research", '{"query":"x"}'),
+                AgentModelToolCall("g1", "get_visible_cockpit_result", '{"reference":"r"}'),
+            ),
+            _answer("Answered with the local result only."),
+        ]
+    )
+    orch = AgentTurnOrchestrator(
+        model,
+        AgentToolRegistry((web, local)),
+        AgentToolTurnPolicy.l3(tools_enabled=True),
+        on_approval=lambda _r: False,  # deny the elevated call
+    )
+    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    assert result.status is AgentTurnStatus.PARTIAL  # deny is non-success
+    assert local.executed == 1  # different tool still ran after the deny
+    codes = [r.error_code for r in result.tool_results]
+    assert "TOOL_DENIED" in codes  # deny kept in the trace for honesty
+    assert result.answer.startswith("Answered")
+
+
+def test_deny_then_repropose_same_tool_is_not_duplicate() -> None:
+    """F3: a denied tool's identity is not seeded, so re-proposal is allowed."""
+    client = _WebCounting()
+    web = WebResearchTool(client)  # type: ignore[arg-type]
+    model = _Model(
+        [
+            _tools(AgentModelToolCall("w1", "web_research", '{"query":"x"}')),
+            _tools(AgentModelToolCall("w2", "web_research", '{"query":"x"}')),  # same args
+            _answer("Second attempt was approved."),
+        ]
+    )
+    orch = AgentTurnOrchestrator(
+        model,
+        AgentToolRegistry((web,)),
+        AgentToolTurnPolicy.l3(tools_enabled=True),
+        on_approval=_DenyThenApprove(),
+    )
+    result = orch.execute(AgentTurnRequest("q", make_candidate()))
+    # Old behavior failed the turn here as a duplicate tool call.
+    assert result.status is AgentTurnStatus.PARTIAL
+    assert client.calls == 1  # executed exactly once (the approved re-proposal)
+    assert not any("duplicate" in (w or "").lower() for w in result.warnings)
+    codes = [r.error_code for r in result.tool_results]
+    assert codes.count("TOOL_DENIED") == 1  # first attempt denied, in trace
+    assert result.answer.startswith("Second attempt")
 
 
 def test_composition_registers_elevated_only_with_flags(monkeypatch, tmp_path) -> None:
