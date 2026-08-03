@@ -110,10 +110,16 @@ flags may tighten or expand by ADR as the cockpit matures; vocabulary stays.
 | L3 | Bounded multi-round OUR tools (3 rounds / 4 tools); `ai.tools_multi_round` | **Implemented** (default false → L1 ceilings) |
 | L4 | Named external + RO data research + confirm y/n + fail-safe | **Implemented** (flags default false; ADR-065) |
 
-**v1 entry scope (shipped):** invocation is fully wired on **accumulation Judge**
-with full candidate context. **Destination:** invoke from **every TUI stage**
-with a stage-appropriate context projection (board, broker desk, plan, …)—each
-stage needs an explicit context contract before `/` opens Research Cockpit there.
+**Entry scope (shipped):**
+
+| Stage | `stage_kind` | Flag | Status |
+|---|---|---|---|
+| Accumulation **Judge** | `accum_judge` | always (with `ai.enabled`) | **Shipped** — full candidate context |
+| Accumulation **screen** board | `accum_screen` | `ai.cockpit_multi_stage` | **Shipped** — bounded top-20 cohort (ADR-066) |
+| View ticker / broker, pre-open, plan | … | `ai.cockpit_multi_stage` | Journey work — notify + refuse until each contract lands |
+
+**Destination:** invoke from every TUI stage with a stage-appropriate context
+projection—each stage needs an explicit context contract before `/` opens there.
 
 ### Authority (unchanged)
 
@@ -135,11 +141,11 @@ Application authority rules are unchanged (ADR-060/061/063).
 
 | # | Lock | Required behavior |
 |---|---|---|
-| U1 | Invocation `/` | On accumulation Judge, `/` opens the **AI Research Cockpit** and **replaces** the main stage (Judge hidden while open). |
-| U2 | Invocation free-text | Any non-empty prompt submit that is not a mode/reset command **auto-enters agent mode** and dispatches an agent turn when Judge context is valid. Idle must **not** silently drop questions. |
+| U1 | Invocation `/` | On a stage with a valid context contract, `/` opens the **AI Research Cockpit** and **replaces** the main stage (prior deterministic stage hidden while open). v1 default: accumulation Judge; with `ai.cockpit_multi_stage`: also accum board. |
+| U2 | Invocation free-text | Any non-empty prompt submit that is not a mode/reset command **auto-enters agent mode** and dispatches an agent turn when the **current stage** context is valid. Idle must **not** silently drop questions. |
 | U3 | Invocation `:` | Focuses the prompt rail without forcing stage replace by itself. |
-| U4 | Leave | `Esc` while agent stage is open closes agent stage and **restores** deterministic Judge (or prior chrome). Does not quit the app. |
-| U5 | Scope | Agent runs only on accumulation **Judge** with full `row.source`. Board list alone must notify and not invent context. Limited judge → re-judge (`j`). |
+| U4 | Leave | `Esc` while agent stage is open closes agent stage and **restores** the prior deterministic stage. Does not quit the app. |
+| U5 | Scope | Opens only when the stage builder succeeds (identity-validated projection). **Judge:** full `row.source`. **Accum board** (`ai.cockpit_multi_stage`): bounded top-20 cohort — never full board dump, never per-candidate Judge. Missing/partial → notify + refuse; never fabricate. Limited judge → re-judge (`j`). |
 | U6 | Stage layout (top→bottom) | **Status strip** → question echo → answer → meta → tool trace → **More data notes** (if any) → error → hint. Answer is not buried under a raw warning dump. |
 | U7 | Status strip | Shows `Turn OK\|FAIL · {ticker} · as-of {date}` and ranked **Data** notes. Primary notes ≤ **3**, **WARN** before **INFO**, each with stable **code** + **Do** guide (`agent_data_honesty`). |
 | U8 | Severity defaults | `RISK_SNAPSHOT_LAG`, `AUTHORITY_INCOMPLETE` → **WARN**. Settlement-within-lag / bandar diagnostic → **INFO**. |
@@ -427,6 +433,7 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | L3 runtime | `tools_multi_round` + orchestrator 3/4/2 + Research Cockpit progress (`d1166b0b` family) |
 | 2026-08-03 | L4 runtime | confirm + `web_research` + `ro_data_query` + TOOL_GAP + fail-safe restore |
 | 2026-08-03 | L4 confirm hardening | Consent fail-closed: no approver ⇒ `TOOL_NO_APPROVER` skip (never execute); removed fail-open runner retry (one-shot signature probe, no turn re-run); denies no longer consume tool/byte budget or block re-proposal |
+| 2026-08-03 | ADR-066 Slice 0–1 | Stage-tagged context built once at open; `ai.cockpit_multi_stage`; `accum_screen` top-20 cohort destination; U5 generalized |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same

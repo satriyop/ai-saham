@@ -220,3 +220,95 @@ def test_golden_provider_failure_shows_explicit_error() -> None:
             assert "FAIL" in status
 
     asyncio.run(scenario())
+
+
+def test_golden_accum_board_refuses_without_multi_stage_flag() -> None:
+    """U5 — board alone refuses when ai.cockpit_multi_stage is false."""
+
+    async def scenario() -> None:
+        seen = []
+
+        def runner(request):
+            seen.append(request)
+            return AgentTurnResult(
+                status=AgentTurnStatus.SUCCESS,
+                answer="should not run",
+                context_reference="sha256:x",
+                provider="deepseek",
+                model="deepseek-v4-flash",
+            )
+
+        app = CockpitApp(
+            accum_loader=_accum_payload,
+            accum_controller=BoardController(_accum_payload),
+            accum_presenter=AccumPresenter(),
+            agent_turn_runner=runner,
+            agent_provider_available=True,
+            agent_cockpit_multi_stage=False,
+        )
+        async with app.run_test(size=(100, 36)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            assert app._stage == "accum"
+            app._submit_agent_turn("summarize the board")
+            await pilot.pause()
+            assert seen == []
+
+    asyncio.run(scenario())
+
+
+def test_golden_accum_board_opens_with_multi_stage_flag() -> None:
+    """U5 / ADR-066 — accum_screen destination when flag on."""
+
+    async def scenario() -> None:
+        seen = []
+
+        def runner(request):
+            seen.append(request.stage_context)
+            return AgentTurnResult(
+                status=AgentTurnStatus.SUCCESS,
+                answer="Board cohort summary only.",
+                context_reference=request.stage_context.context_reference,
+                provider="deepseek",
+                model="deepseek-v4-flash",
+            )
+
+        app = CockpitApp(
+            accum_loader=_accum_payload,
+            accum_controller=BoardController(_accum_payload),
+            accum_presenter=AccumPresenter(),
+            agent_turn_runner=runner,
+            agent_provider_available=True,
+            agent_cockpit_multi_stage=True,
+        )
+        async with app.run_test(size=(120, 40)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            assert app._stage == "accum"
+            app.action_focus_agent()
+            await pilot.pause()
+            assert app._agent_stage_open is True
+            app._submit_agent_turn("Summarize top names on this board")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if seen and not app._agent_loading:
+                    break
+            assert len(seen) == 1
+            ctx = seen[0]
+            assert ctx.stage_kind.value == "accum_screen"
+            assert ctx.schema_id == "tui_agent.accum_screen.v1"
+            assert ctx.shown == min(20, ctx.cohort_total)
+            assert ctx.context_reference.startswith("sha256:")
+            commentary = app.query_one("#agent-commentary", AgentCommentary)
+            for _ in range(20):
+                await pilot.pause(0.05)
+                answer = str(commentary.query_one(".agent-answer").content)
+                if "Board cohort" in answer or "summary" in answer.lower():
+                    break
+            assert "Board cohort" in answer or "summary" in answer.lower()
+
+    asyncio.run(scenario())
