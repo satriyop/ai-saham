@@ -117,10 +117,26 @@ top-N ≤ 10 each side. Report `window_sessions`, `as_of`, and provenance.
 
 ## 5. Non-goals
 
-- Any blended/evaluative **score** (facts only — governance line).
-- Per-session or per-week time series / sparkline (aggregate view only; extension later).
+- Any blended/evaluative **score** (facts only — governance line, stays).
 - Calendar-month bucketing (window is trading sessions).
 - New provider/fetch; external/elevated access; model-invented tools; any write.
+
+## 2c. Depth extension (menu C, Depth policy 2026-08-04)
+
+Thinness lifted — add these **descriptive** dimensions (all from raw
+`broker_daily_flow`, still facts-not-score):
+
+- **Rotation:** desks **entering / leaving** the top accumulator (and distributor)
+  set across sub-windows (e.g. recent 20 vs prior 40 sessions) — surfaces "new
+  money in / old money out."
+- **Foreign vs local split:** aggregate net + counts split by the config-driven
+  foreign/tier-1 classification (already available), per side.
+- **Per-desk trajectory (optional):** a bounded **weekly rollup** series per top
+  desk (cumulative net by week) for a sparkline — capped points, bytes bounded.
+
+Keep the shared-use-case shape: these live in `TickerDeskFlowHistoryService` so a
+broker-desk CLI/TUI view can reuse them. Add tests for rotation set-diff and the
+foreign/local split; weekly rollup point cap.
 
 ## 6. Completion record (fill when done)
 

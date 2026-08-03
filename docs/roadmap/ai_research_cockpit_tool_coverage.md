@@ -101,8 +101,20 @@ All data is **local** (🟡 projection gaps) → each an implement task under AD
 | 12 | **Pre-open IEV** / NCP snapshot / IEV delta? | `iev_snapshots` | `SQLiteIEVRepository` (`get_ncp_snapshot`, `get_iev_delta`, `get_locked_iev_baseline`) → [`get_preopen_iev` task](../../tasks/backlog/implement_ai_research_cockpit_preopen_iev_tool.md) | 🟡→ task |
 | 13 | **Sector** strength / rotation / peers? | sector macro context evidence (ADR-053) | rescoped deeper → **`BuildTickerSectorContextUseCase`** (shared CLI/TUI/agent; descriptive, not scored) via [`get_ticker_sector_context` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) | 🟡→ task (rescoped) |
 
-**Honorable mentions (not yet tasked):** fundamentals/earnings trend (partial
-overlap with `get_ticker_dashboard`); `get_macro_calendar` (`macro_calendar_events`).
+**Honorable mentions (not yet tasked):** `get_macro_calendar` (`macro_calendar_events`).
+
+## Deepenings (menu A–E, Depth policy 2026-08-04)
+
+Depth over thinness — each built as a **shared use case** (CLI/TUI/agent adapters),
+descriptive (no authority/score):
+
+| Menu | Deepening | Task |
+|---|---|---|
+| A | Ownership **history / float trend** (new port `get_ownership_history` + dedupe per `report_date`) | [`get_ticker_ownership_history`](../../tasks/backlog/implement_ai_research_cockpit_ticker_ownership_history_tool.md) |
+| B | Sector context as a **shared use case** (`BuildTickerSectorContextUseCase`) | [`get_ticker_sector_context`](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) |
+| C | Desk flow **rotation + foreign/local split + weekly trajectory** | [`get_ticker_desk_flow_history` §2c](../../tasks/backlog/implement_ai_research_cockpit_ticker_desk_flow_history_tool.md) |
+| D | Fundamentals / **earnings trend** over quarters | [`get_ticker_fundamentals_trend`](../../tasks/backlog/implement_ai_research_cockpit_ticker_fundamentals_trend_tool.md) |
+| E | **Ticker research brief** — one composed, PIT-aligned bundle (surfaces Judge Action; **no minted verdict**, ADR-042) | [`get_ticker_research_brief`](../../tasks/backlog/implement_ai_research_cockpit_ticker_research_brief_tool.md) |
 
 ## Partial-data honesty policy (all read tools)
 
