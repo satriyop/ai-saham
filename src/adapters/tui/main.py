@@ -248,6 +248,8 @@ class CockpitApp(App[None]):
         self._ticker_desk_model: Any | None = None
         # Cache-only TickerDashboard for the open view-ticker desk (ADR-066 stage context).
         self._ticker_dashboard: Any | None = None
+        # Cache-only desk use-case result for the open view-broker page (ADR-066).
+        self._broker_desk_result: Any | None = None
         self._chord_prefix: str | None = None
         self._chord_timer: Timer | None = None
         # Board load UX: keep prior rows while recomputing; snapshot on open.
@@ -1857,6 +1859,7 @@ class CockpitApp(App[None]):
         }
         on_accum_board = self._stage == "accum" and self._board_kind == "accum"
         on_view_ticker = self._is_view_ticker_stage()
+        on_view_broker = self._is_view_broker_stage()
         if on_judge:
             self._enter_agent_stage(ready=True)
             placeholder = "ask about this Judge · Enter send · Esc leave agent"
@@ -1866,7 +1869,12 @@ class CockpitApp(App[None]):
         elif on_view_ticker and self._agent_cockpit_multi_stage:
             self._enter_agent_stage(ready=True)
             placeholder = "ask about this ticker dashboard · Enter send · Esc leave agent"
-        elif (on_accum_board or on_view_ticker) and not self._agent_cockpit_multi_stage:
+        elif on_view_broker and self._agent_cockpit_multi_stage:
+            self._enter_agent_stage(ready=True)
+            placeholder = "ask about this broker desk · Enter send · Esc leave agent"
+        elif (
+            on_accum_board or on_view_ticker or on_view_broker
+        ) and not self._agent_cockpit_multi_stage:
             self.notify(
                 "Agent is available only in accumulation Judge · Enter a row first "
                 "(or enable ai.cockpit_multi_stage)",
@@ -1981,9 +1989,12 @@ class CockpitApp(App[None]):
         on_judge = self._stage == "detail" and self._status_note in {"judge", "re-judging"}
         on_accum_board = self._stage == "accum" and self._board_kind == "accum"
         on_view_ticker = self._is_view_ticker_stage()
-        multi_ok = self._agent_cockpit_multi_stage and (on_accum_board or on_view_ticker)
+        on_view_broker = self._is_view_broker_stage()
+        multi_ok = self._agent_cockpit_multi_stage and (
+            on_accum_board or on_view_ticker or on_view_broker
+        )
         if not on_judge and not multi_ok:
-            if on_accum_board or on_view_ticker:
+            if on_accum_board or on_view_ticker or on_view_broker:
                 self.notify(
                     "Agent is available only in accumulation Judge · Enter a row first "
                     "(or enable ai.cockpit_multi_stage)",
@@ -1992,7 +2003,7 @@ class CockpitApp(App[None]):
             elif self._agent_cockpit_multi_stage:
                 self.notify(
                     "Research Cockpit multi-stage destinations are not available yet "
-                    "· open Judge, accum board, or view ticker",
+                    "· open Judge, accum board, view ticker, or broker desk",
                     timeout=2.4,
                 )
             else:
@@ -2023,7 +2034,7 @@ class CockpitApp(App[None]):
                 raw = self._build_accum_screen_raw_input()
                 stage_context = build_agent_stage_context(AgentStageKind.ACCUM_SCREEN, raw)
                 source = raw
-            else:
+            elif on_view_ticker:
                 dashboard = self._ticker_dashboard
                 if dashboard is None:
                     self._show_agent_unavailable(
@@ -2032,17 +2043,38 @@ class CockpitApp(App[None]):
                     return
                 stage_context = build_agent_stage_context(AgentStageKind.VIEW_TICKER, dashboard)
                 source = dashboard
+            else:
+                desk_result = self._broker_desk_result
+                page = str(self._broker_page or "")
+                if desk_result is None or not page:
+                    self._show_agent_unavailable(
+                        "View broker context unavailable · open a desk view (show/top/flow/…)"
+                    )
+                    return
+                stage_context = build_agent_stage_context(
+                    AgentStageKind.VIEW_BROKER, (page, desk_result)
+                )
+                source = desk_result
         except AgentContextUnavailableError as exc:
             if on_judge:
                 hint = "Full Judge context required · press j to re-judge"
             elif on_accum_board:
                 hint = f"Accum board context unavailable · {exc}"
-            else:
+            elif on_view_ticker:
                 hint = f"View ticker context unavailable · {exc}"
+            else:
+                hint = f"View broker context unavailable · {exc}"
             self._show_agent_unavailable(hint)
             return
         except AgentContextInvariantError as exc:
-            label = "Judge" if on_judge else ("Accum board" if on_accum_board else "View ticker")
+            if on_judge:
+                label = "Judge"
+            elif on_accum_board:
+                label = "Accum board"
+            elif on_view_ticker:
+                label = "View ticker"
+            else:
+                label = "View broker"
             self._show_agent_unavailable(f"{label} context identity failed · {exc}")
             return
         except TypeError as exc:
@@ -2059,9 +2091,11 @@ class CockpitApp(App[None]):
             except Exception:
                 pass
         generation = self._agent_generation
-        # Status strip subject: ticker for Judge/view ticker; board label for cohort.
+        # Status strip subject: ticker for Judge/view ticker; board/broker labels otherwise.
         if on_accum_board:
             subject = f"BOARD:{getattr(stage_context, 'as_of', '—')}"
+        elif on_view_broker:
+            subject = f"BROKER:{getattr(stage_context, 'broker_code', '—')}"
         else:
             subject = str(self._focus_ticker).upper()
         stage_id = (self._stage, self._status_note)
@@ -2102,6 +2136,14 @@ class CockpitApp(App[None]):
             return False
         note = str(self._status_note or "")
         return note == "view ticker" or note.startswith("view ticker")
+
+    def _is_view_broker_stage(self) -> bool:
+        """True when a broker desk page is open (show/top/flow/matrix/history/cal)."""
+        if self._stage != "detail":
+            return False
+        if not self._broker_desk_code:
+            return False
+        return self._broker_page in {"show", "top", "flow", "history", "matrix", "cal"}
 
     def _build_accum_screen_raw_input(self):
         """Assemble typed accum_screen input from the focused board (adapter-thin)."""
@@ -2372,9 +2414,13 @@ class CockpitApp(App[None]):
             return
         if (self._stage, self._status_note) != stage_id:
             return
-        # Judge turns pin focus ticker; cohort/board subjects use BOARD:… prefix.
+        # Judge/view-ticker pin focus ticker; cohort/broker subjects use prefixes.
         subject = str(ticker)
-        if not subject.startswith("BOARD:") and str(self._focus_ticker).upper() != subject:
+        if (
+            not subject.startswith("BOARD:")
+            and not subject.startswith("BROKER:")
+            and str(self._focus_ticker).upper() != subject
+        ):
             return
         if hasattr(source, "trade_setup") and hasattr(source, "ticker"):
             # Judge candidate identity: drop if the focused row moved.
@@ -3663,6 +3709,7 @@ class CockpitApp(App[None]):
                 self._broker_show_loader(code) if self._broker_show_loader is not None else None
             )
             home_model = None
+            desk_result = None
             if payload is None:
                 text = f"[bold]{code}[/]\n\n[dim]broker show loader not wired[/]"
                 jump = None
@@ -3674,6 +3721,7 @@ class CockpitApp(App[None]):
                 jump = getattr(payload, "jump_ticker", None)
                 jump = str(jump).upper() if jump else None
                 home_model = getattr(payload, "model", None)
+                desk_result = getattr(payload, "desk_result", None)
             if not text.strip():
                 text = (
                     f"[bold]{code}[/]\n\n"
@@ -3716,6 +3764,12 @@ class CockpitApp(App[None]):
                 header + text,
                 jump,
                 home_model,
+                None,
+                None,
+                None,
+                None,
+                None,
+                desk_result,
             )
         except Exception as exc:
             dispatch_if_active(
@@ -3724,6 +3778,12 @@ class CockpitApp(App[None]):
                 code,
                 "show",
                 f"[bold]View · broker show · {code}[/]\n\n[dim]error: {exc}[/]",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
                 None,
                 None,
             )
@@ -3740,6 +3800,7 @@ class CockpitApp(App[None]):
             }.get(page)
             raw = loader(code) if loader is not None else None
             deep_model = None
+            desk_result = None
             jump = self._broker_jump_ticker
             if raw is None:
                 text = ""
@@ -3748,6 +3809,7 @@ class CockpitApp(App[None]):
             else:
                 text = str(getattr(raw, "text", "") or "")
                 deep_model = getattr(raw, "model", None)
+                desk_result = getattr(raw, "desk_result", None)
                 jt = getattr(raw, "jump_ticker", None)
                 if jt:
                     jump = str(jt).upper()
@@ -3820,6 +3882,7 @@ class CockpitApp(App[None]):
                 deep_model if page == "flow" else None,
                 deep_model if page == "history" else None,
                 deep_model if page == "cal" else None,
+                desk_result,
             )
         except Exception as exc:
             dispatch_if_active(
@@ -3828,6 +3891,7 @@ class CockpitApp(App[None]):
                 code,
                 page,
                 f"[bold]View · broker {page} · {code}[/]\n\n[dim]error: {exc}[/]",
+                None,
                 None,
                 None,
                 None,
@@ -3849,6 +3913,7 @@ class CockpitApp(App[None]):
         flow_model: Any | None = None,
         history_model: Any | None = None,
         calendar_model: Any | None = None,
+        desk_result: Any | None = None,
     ) -> None:
         # Drop stale worker results when user already moved on.
         if self._broker_desk_code != code or self._broker_page != page:
@@ -3862,6 +3927,7 @@ class CockpitApp(App[None]):
         self._broker_desk_flow_model = flow_model if page == "flow" else None
         self._broker_desk_history_model = history_model if page == "history" else None
         self._broker_desk_calendar_model = calendar_model if page == "cal" else None
+        self._broker_desk_result = desk_result
         self._stage = "detail"
         titles = {
             "show": f"View · broker show · {code}",

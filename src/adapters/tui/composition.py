@@ -771,6 +771,7 @@ class _BrokerShowLoader:
                 text=body,
                 jump_ticker=model.jump_ticker,
                 model=model,
+                desk_result=result,  # ADR-066 view_broker stage context
             )
 
 
@@ -836,6 +837,7 @@ class _BrokerDeepLoader:
                     text=text,
                     model=model,
                     jump_ticker=model.jump_ticker,
+                    desk_result=result,
                 )
             if self._page == "matrix":
                 from types import SimpleNamespace
@@ -858,6 +860,7 @@ class _BrokerDeepLoader:
                     text=text,
                     model=model,
                     jump_ticker=model.jump_ticker,
+                    desk_result=result,
                 )
             if self._page == "flow":
                 from types import SimpleNamespace
@@ -876,7 +879,7 @@ class _BrokerDeepLoader:
                     if result is not None
                     else format_broker_desk_flow_scraper_text(model)
                 )
-                return SimpleNamespace(text=text, model=model, jump_ticker=None)
+                return SimpleNamespace(text=text, model=model, jump_ticker=None, desk_result=result)
             if self._page == "history":
                 from types import SimpleNamespace
 
@@ -898,6 +901,7 @@ class _BrokerDeepLoader:
                     text=text,
                     model=model,
                     jump_ticker=model.jump_ticker,
+                    desk_result=result,
                 )
             if self._page == "cal":
                 from types import SimpleNamespace
@@ -920,6 +924,7 @@ class _BrokerDeepLoader:
                     text=text,
                     model=model,
                     jump_ticker=model.jump_ticker,
+                    desk_result=result,
                 )
             return empty
 

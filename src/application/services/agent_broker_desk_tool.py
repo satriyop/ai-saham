@@ -349,8 +349,47 @@ def _execute_view(
 ) -> tuple[BrokerDeskResultData, tuple[str, ...], date | None] | None:
     if view == "SHOW":
         result = use_cases.show.execute(ViewBrokerDeskShowRequest(broker_code=broker_code))
-        if result is None:
-            return None
+        return project_broker_desk_from_result(view, result)
+
+    if view == "TOP_STOCKS":
+        result = use_cases.top_stocks.execute(
+            ViewBrokerDeskTopStocksRequest(broker_code=broker_code)
+        )
+        return project_broker_desk_from_result(view, result)
+
+    if view == "TOP_MATRIX":
+        result = use_cases.top_matrix.execute(
+            ViewBrokerDeskTopMatrixRequest(broker_code=broker_code)
+        )
+        return project_broker_desk_from_result(view, result)
+
+    if view == "FLOW":
+        result = use_cases.flow.execute(ViewBrokerDeskFlowRequest(broker_code=broker_code))
+        return project_broker_desk_from_result(view, result)
+
+    if view == "CALENDAR":
+        result = use_cases.calendar.execute(ViewBrokerDeskCalendarRequest(broker_code=broker_code))
+        return project_broker_desk_from_result(view, result)
+
+    if view == "HISTORY":
+        result = use_cases.history.execute(ViewBrokerDeskHistoryRequest(broker_code=broker_code))
+        return project_broker_desk_from_result(view, result)
+
+    raise ValueError(f"unsupported broker desk view: {view!r}")
+
+
+def project_broker_desk_from_result(
+    view: str,
+    result: object | None,
+) -> tuple[BrokerDeskResultData, tuple[str, ...], date | None] | None:
+    """Pure allow-listed projection of one desk use-case result (tool + stage context).
+
+    Accepts the real use-case result types or duck-typed test fixtures with the
+    same attributes.
+    """
+    if result is None:
+        return None
+    if view == "SHOW":
         data = _base_result(
             result.broker_code,
             result.broker_name,
@@ -369,11 +408,6 @@ def _execute_view(
         return data, (), result.as_of
 
     if view == "TOP_STOCKS":
-        result = use_cases.top_stocks.execute(
-            ViewBrokerDeskTopStocksRequest(broker_code=broker_code)
-        )
-        if result is None:
-            return None
         data = _base_result(
             result.broker_code,
             result.broker_name,
@@ -390,11 +424,6 @@ def _execute_view(
         return data, (), result.date
 
     if view == "TOP_MATRIX":
-        result = use_cases.top_matrix.execute(
-            ViewBrokerDeskTopMatrixRequest(broker_code=broker_code)
-        )
-        if result is None:
-            return None
         columns = tuple(
             BrokerDeskMatrixColumnData(
                 window=window,
@@ -422,9 +451,6 @@ def _execute_view(
         return data, tuple(warnings), result.as_of
 
     if view == "FLOW":
-        result = use_cases.flow.execute(ViewBrokerDeskFlowRequest(broker_code=broker_code))
-        if result is None:
-            return None
         as_of = result.days[-1].date if result.days else None
         data = _base_result(
             result.broker_code,
@@ -438,9 +464,6 @@ def _execute_view(
         return data, (), as_of
 
     if view == "CALENDAR":
-        result = use_cases.calendar.execute(ViewBrokerDeskCalendarRequest(broker_code=broker_code))
-        if result is None:
-            return None
         data = _base_result(
             result.broker_code,
             result.broker_name,
@@ -456,13 +479,12 @@ def _execute_view(
         return data, (), result.as_of
 
     if view == "HISTORY":
-        result = use_cases.history.execute(ViewBrokerDeskHistoryRequest(broker_code=broker_code))
-        if result is None:
-            return None
         rows, total, truncated, as_of = _history_rows(result.flows)
-        warnings = ()
+        hist_warnings: tuple[str, ...] = ()
         if truncated:
-            warnings = (f"Broker desk history truncated by {_HISTORY_ROW_LIMIT} row display cap",)
+            hist_warnings = (
+                f"Broker desk history truncated by {_HISTORY_ROW_LIMIT} row display cap",
+            )
         data = _base_result(
             result.broker_code,
             result.broker_name,
@@ -477,7 +499,7 @@ def _execute_view(
                 truncated_row_count=truncated,
             ),
         )
-        return data, warnings, as_of
+        return data, hist_warnings, as_of
 
     raise ValueError(f"unsupported broker desk view: {view!r}")
 

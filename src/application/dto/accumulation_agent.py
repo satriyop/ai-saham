@@ -358,6 +358,37 @@ class AgentViewTickerContext(AgentStageContext):
 
 
 @dataclass(frozen=True)
+class AgentViewBrokerContext(AgentStageContext):
+    """View-broker desk (`stage_kind=view_broker`, tui_agent.view_broker.v1).
+
+    Nested desk payload reuses BrokerDeskResultData field shapes from the closed
+    get_broker_desk tool so stage context and tools stay aligned.
+    """
+
+    broker_code: str
+    broker_name: str
+    broker_type: str
+    view: str
+    as_of: date | None
+    scope_note: str
+    show: Any | None
+    top_stocks: Any | None
+    top_matrix: Any | None
+    flow: Any | None
+    calendar: Any | None
+    history: Any | None
+    warnings: tuple[str, ...] = ()
+
+    @property
+    def stage_kind(self) -> AgentStageKind:
+        return AgentStageKind.VIEW_BROKER
+
+    @property
+    def session_subject(self) -> str:
+        return f"BROKER:{self.broker_code}:{self.view}"
+
+
+@dataclass(frozen=True)
 class AgentModelRequest:
     system_policy: str
     user_text: str

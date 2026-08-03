@@ -20,6 +20,11 @@ from src.application.services.agent_accumulation_context import (
     AgentContextUnavailableError,
     build_agent_accumulation_context,
 )
+from src.application.services.agent_broker_desk_tool import BrokerDeskResultData
+from src.application.services.agent_view_broker_context import (
+    build_agent_view_broker_context,
+    build_agent_view_broker_context_from_result,
+)
 from src.application.services.agent_view_ticker_context import build_agent_view_ticker_context
 
 __all__ = [
@@ -69,6 +74,22 @@ def build_agent_stage_context(
                 f"got {type(raw_stage_input).__name__}"
             )
         return build_agent_view_ticker_context(raw_stage_input)
+
+    if stage_kind is AgentStageKind.VIEW_BROKER:
+        # Accept either pre-projected BrokerDeskResultData or (page, use_case_result).
+        if isinstance(raw_stage_input, BrokerDeskResultData):
+            return build_agent_view_broker_context(raw_stage_input)
+        if (
+            isinstance(raw_stage_input, tuple)
+            and len(raw_stage_input) == 2
+            and isinstance(raw_stage_input[0], str)
+        ):
+            page, result = raw_stage_input
+            return build_agent_view_broker_context_from_result(page, result)
+        raise TypeError(
+            "view_broker raw_stage_input must be BrokerDeskResultData or "
+            f"(page, desk_result), got {type(raw_stage_input).__name__}"
+        )
 
     # Remaining destinations land in later slices; refuse honestly rather than fabricate.
     raise AgentContextUnavailableError(
