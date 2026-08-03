@@ -146,6 +146,81 @@ def test_list_content_parts_are_joined() -> None:
     assert "Part B." in result.text
 
 
+_DSML_SAMPLE = (
+    "<|> DSML | | tool_calls>\n"
+    '<|> DSML | | invoke name="get_broker_desk">\n'
+    '<|> DSML | | parameter name="broker_code" string="true">ZP</ | | DSML | | parameter>\n'
+    '<|> DSML | | parameter name="view" string="true">CALENDAR</ | | DSML | | parameter>\n'
+    "</ | | DSML | | invoke>\n"
+    "</ | | DSML | | tool_calls>"
+)
+
+
+def test_dsml_content_in_auto_mode_parses_as_tool_calls() -> None:
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=_DSML_SAMPLE, tool_calls=None),
+                finish_reason="stop",
+            )
+        ],
+        model="deepseek-v4-flash",
+        id="response-dsml",
+        usage=None,
+    )
+    adapter = DeepSeekAgentModel(
+        "secret",
+        client=SimpleNamespace(chat=SimpleNamespace(completions=_Completions(response))),
+    )
+    context = build_agent_accumulation_context(make_candidate())
+    result = adapter.generate(
+        AgentModelRequest(
+            "policy",
+            "how long is ZP accumulating?",
+            context,
+            500,
+            tool_definitions=(_definition(),),
+            tool_choice=AgentModelToolChoice.AUTO,
+        )
+    )
+    assert result.kind is AgentModelResponseKind.TOOL_CALLS
+    assert result.text == ""
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].name == AgentToolName.GET_BROKER_DESK.value
+    assert '"broker_code":"ZP"' in result.tool_calls[0].arguments_json
+    assert '"view":"CALENDAR"' in result.tool_calls[0].arguments_json
+
+
+def test_dsml_content_on_final_answer_is_rejected() -> None:
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=_DSML_SAMPLE, tool_calls=None),
+                finish_reason="stop",
+            )
+        ],
+        model="deepseek-v4-flash",
+        id="response-dsml-final",
+        usage=None,
+    )
+    adapter = DeepSeekAgentModel(
+        "secret",
+        client=SimpleNamespace(chat=SimpleNamespace(completions=_Completions(response))),
+    )
+    context = build_agent_accumulation_context(make_candidate())
+    with pytest.raises(AgentModelMalformedResponseError, match="tool markup"):
+        adapter.generate(
+            AgentModelRequest(
+                "policy",
+                "how long is ZP accumulating?",
+                context,
+                500,
+                tool_definitions=(_definition(),),
+                tool_choice=AgentModelToolChoice.NONE,
+            )
+        )
+
+
 def test_malformed_tools_fall_back_to_text_when_present() -> None:
     response = SimpleNamespace(
         choices=[

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from src.application.dto.accumulation_agent import (
@@ -18,6 +19,19 @@ from src.application.ports.agent_model import (
     AgentModelTimeoutError,
     AgentModelTransportError,
     AgentModelUnavailableError,
+)
+
+# DeepSeek occasionally emits closed-tool proposals as DSML text in ``content``
+# instead of structured ``message.tool_calls``. Never show that markup as the
+# operator-facing answer.
+_DSML_INVOKE_RE = re.compile(
+    r'invoke\s+name\s*=\s*"(?P<name>[^"]+)"\s*>(?P<body>.*?)'
+    r"(?=invoke\s+name\s*=|$)",
+    re.IGNORECASE | re.DOTALL,
+)
+_DSML_PARAM_RE = re.compile(
+    r'parameter\s+name\s*=\s*"(?P<key>[^"]+)"[^>]*>\s*(?P<val>.*?)\s*</',
+    re.IGNORECASE | re.DOTALL,
 )
 
 
@@ -75,6 +89,7 @@ class DeepSeekAgentModel:
         wants_tools = request.tool_choice is AgentModelToolChoice.AUTO
         raw_tool_calls = getattr(message, "tool_calls", None) if message is not None else None
         has_tool_payload = bool(raw_tool_calls)
+        dsml_markup = looks_like_tool_markup(text)
 
         # Prefer tool calls when the provider signals them or when auto mode
         # returns tool_calls even if finish_reason is missing/stop (API drift).
@@ -82,8 +97,28 @@ class DeepSeekAgentModel:
             try:
                 calls = self._tool_calls(message)
             except AgentModelMalformedResponseError:
-                # If tools are unusable but plain text is present, fall back to answer.
-                if text:
+                # Structured tools unusable — try DSML-in-content, else plain text.
+                if dsml_markup:
+                    try:
+                        calls = parse_dsml_tool_calls(text)
+                    except AgentModelMalformedResponseError:
+                        if text and not dsml_markup:
+                            pass
+                        else:
+                            raise
+                    else:
+                        return AgentModelResponse(
+                            text="",
+                            provider=self.provider,
+                            model=model_name,
+                            response_id=response_id,
+                            finish_reason=finish_reason or "tool_calls",
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            kind=AgentModelResponseKind.TOOL_CALLS,
+                            tool_calls=calls,
+                        )
+                if text and not dsml_markup:
                     return AgentModelResponse(
                         text=text,
                         provider=self.provider,
@@ -106,9 +141,24 @@ class DeepSeekAgentModel:
                 tool_calls=calls,
             )
 
+        # Auto mode with empty structured tools but DSML body → treat as tool batch.
+        if wants_tools and dsml_markup and not has_tool_payload:
+            calls = parse_dsml_tool_calls(text)
+            return AgentModelResponse(
+                text="",
+                provider=self.provider,
+                model=model_name,
+                response_id=response_id,
+                finish_reason="tool_calls",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                kind=AgentModelResponseKind.TOOL_CALLS,
+                tool_calls=calls,
+            )
+
         if finish_reason == "tool_calls" and not wants_tools:
-            # Final call must be an answer; use text if any, else fail clearly.
-            if text:
+            # Final call must be an answer — never surface tool markup.
+            if text and not dsml_markup:
                 return AgentModelResponse(
                     text=text,
                     provider=self.provider,
@@ -127,6 +177,11 @@ class DeepSeekAgentModel:
         if not text:
             raise AgentModelMalformedResponseError(
                 f"DeepSeek response text is empty (finish_reason={finish_reason!r})"
+            )
+        if dsml_markup:
+            # stop + DSML content (common on forced final) — never paint as answer.
+            raise AgentModelMalformedResponseError(
+                "DeepSeek returned tool markup instead of a final prose answer"
             )
         return AgentModelResponse(
             text=text,
@@ -296,3 +351,56 @@ def _message_text(message: Any) -> str:
                 parts.append(str(text))
         return "\n".join(part.strip() for part in parts if part and str(part).strip()).strip()
     return str(content).strip()
+
+
+def looks_like_tool_markup(text: str) -> bool:
+    """True when content is tool-call markup (DSML / invoke blocks), not prose."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    low = raw.lower()
+    has_invoke = bool(re.search(r"invoke\s+name\s*=", raw, re.I))
+    has_param = bool(re.search(r"parameter\s+name\s*=", raw, re.I))
+    if has_invoke and has_param:
+        return True
+    if "tool_calls" in low and has_invoke:
+        return True
+    if "dsml" in low and has_invoke:
+        return True
+    return False
+
+
+def parse_dsml_tool_calls(text: str) -> tuple[AgentModelToolCall, ...]:
+    """Parse DeepSeek DSML-style invoke blocks into closed tool calls (max 2)."""
+    calls: list[AgentModelToolCall] = []
+    for index, match in enumerate(_DSML_INVOKE_RE.finditer(text or ""), start=1):
+        name = match.group("name").strip()
+        body = match.group("body") or ""
+        args: dict[str, str] = {}
+        for param in _DSML_PARAM_RE.finditer(body):
+            key = param.group("key").strip()
+            val = param.group("val").strip()
+            # Drop trailing markup debris inside the value capture.
+            val = re.split(r"[|\n]", val, maxsplit=1)[0].strip()
+            val = re.sub(r"\s*<.*$", "", val).strip()
+            if key:
+                args[key] = val
+        if not name:
+            continue
+        try:
+            calls.append(
+                AgentModelToolCall(
+                    call_id=f"dsml-{index}",
+                    name=name,
+                    arguments_json=json.dumps(args, separators=(",", ":"), ensure_ascii=False),
+                )
+            )
+        except ValueError as exc:
+            raise AgentModelMalformedResponseError(
+                f"DeepSeek DSML tool call invalid: {exc}"
+            ) from exc
+    if not 1 <= len(calls) <= 2:
+        raise AgentModelMalformedResponseError(
+            "DeepSeek DSML tool markup requires one or two invoke blocks"
+        )
+    return tuple(calls)

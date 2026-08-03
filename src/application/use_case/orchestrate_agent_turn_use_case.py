@@ -9,6 +9,7 @@ Layer: Application
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -670,6 +671,16 @@ def _answer_result(
     elevated_attempted: bool = False,
 ) -> AgentTurnResult:
     text = response.text.strip()
+    # Never paint provider tool markup (DeepSeek DSML) as the operator answer.
+    if _looks_like_tool_markup_answer(text):
+        return AgentTurnResult(
+            status=AgentTurnStatus.FAILED,
+            error_message=(
+                "Model returned tool markup instead of a prose answer. "
+                "Tools may already have run — re-ask for a plain-language summary "
+                "from the tool facts (no DSML / invoke blocks)."
+            ),
+        )
     extra: list[str] = list(warnings)
     if response.finish_reason == "length":
         extra.append("Model answer reached the output limit")
@@ -799,6 +810,23 @@ def _implication(side_effect: AgentToolSideEffect) -> str:
     if side_effect is AgentToolSideEffect.LOCAL_READ_ELEVATED:
         return "Local read-only allowlisted query · broader surface · does not change Action"
     return "Read-only · does not change Action"
+
+
+def _looks_like_tool_markup_answer(text: str) -> bool:
+    """Detect DSML / invoke tool markup wrongly painted as a final answer."""
+    raw = (text or "").strip()
+    if not raw:
+        return False
+    has_invoke = bool(re.search(r"invoke\s+name\s*=", raw, re.I))
+    has_param = bool(re.search(r"parameter\s+name\s*=", raw, re.I))
+    if has_invoke and has_param:
+        return True
+    low = raw.lower()
+    if "tool_calls" in low and has_invoke:
+        return True
+    if "dsml" in low and has_invoke:
+        return True
+    return False
 
 
 def _looks_like_planning_only(text: str) -> bool:
