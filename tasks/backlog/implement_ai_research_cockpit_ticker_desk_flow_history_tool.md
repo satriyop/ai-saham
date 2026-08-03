@@ -10,7 +10,7 @@
 |---|---|
 | [ADR-061](../../docs/adr/ADR-061-closed-read-tool-orchestration-for-context-agent.md) | **Binding** — closed read-tool registry authorization. Read-only, `side_effect=NONE`; **descriptive facts only** (no score) → stays a task, no new ADR |
 | Coverage matrix | [`docs/roadmap/ai_research_cockpit_tool_coverage.md`](../../docs/roadmap/ai_research_cockpit_tool_coverage.md) (row 3 multi-day) |
-| Sibling (single-session) | [`implement_ai_research_cockpit_ticker_broker_flow_tool.md`](implement_ai_research_cockpit_ticker_broker_flow_tool.md) — "who today" |
+| Sibling (single-session) | [`implement_ai_research_cockpit_ticker_broker_flow_tool.md`](../done/implement_ai_research_cockpit_ticker_broker_flow_tool.md) — "who today" (IMPLEMENTED) |
 | Reference tools | `agent_ticker_dashboard_tool.py`, `agent_broker_desk_tool.py` (tool shape) |
 | Reuse primitives | `institutional_flow_broker_metrics.py` (`_net_by_broker`, `_top_brokers_by_net`), `sqlite_broker_daily_flow_store.get_broker_daily_flows` |
 

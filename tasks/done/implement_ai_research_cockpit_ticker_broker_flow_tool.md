@@ -1,6 +1,6 @@
 # Goal Instruction — Implement `get_ticker_broker_flow` (stock-centric broker tool)
 
-**Status:** `READY FOR AGENT`
+**Status:** `IMPLEMENTED`
 **Audience:** Implementation agent (any coding agent in this repo)
 **Product term:** **AI Research Cockpit** (`/`)
 
@@ -124,18 +124,18 @@ Never fabricate desks; empty stays empty; null stays null. UNAVAILABLE is last r
 
 ## 3. Acceptance
 
-- [ ] `get_ticker_broker_flow` returns named accumulating **and** distributing
+- [x] `get_ticker_broker_flow` returns named accumulating **and** distributing
   desks for a ticker, with buyer/seller counts and multi-window consistency labels.
-- [ ] Single-session; `target_date` defaults to latest; `limit` ≤ 10 and result
+- [x] Single-session; `target_date` defaults to latest; `limit` ≤ 10 and result
   bytes enforced. No multi-day aggregation.
-- [ ] Partial-data honesty per §2b: UNAVAILABLE only with no data; empty/one-sided
+- [x] Partial-data honesty per §2b: UNAVAILABLE only with no data; empty/one-sided
   tops → SUCCESS+INFO; missing bandar or tops dimension → PARTIAL+coded WARN; no
   fabrication.
-- [ ] Missing backing data → `UNAVAILABLE`, never a fabricated desk list.
-- [ ] `side_effect=NONE`, no confirm; cache-only; no fetch/scrape/write.
-- [ ] Offered on all stages; deterministic Action authority untouched.
-- [ ] Offline agent suite + golden UX pilot green; Ruff green.
-- [ ] Coverage matrix rows 1/2/4 → 🟢, and row 5 → 🟢 (avg-price closes its last
+- [x] Missing backing data → `UNAVAILABLE`, never a fabricated desk list.
+- [x] `side_effect=NONE`, no confirm; cache-only; no fetch/scrape/write.
+- [x] Offered on all stages; deterministic Action authority untouched.
+- [x] Offline agent suite + golden UX pilot green; Ruff green.
+- [x] Coverage matrix rows 1/2/4 → 🟢, and row 5 → 🟢 (avg-price closes its last
   sub-part; volume/net already covered); completion record filled.
 
 ## 4. Verification
@@ -157,13 +157,20 @@ ruff format --check src/ tests/
   (≤60-session window, facts-not-score), not part of this single-session tool.
   This tool still surfaces the single-session 5-day/top-N smoothed labels;
   `judge_accumulation_ticker.consecutive_streak` covers the daily streak.
-- Per-broker average price / monthly aggregation (revisit if asked).
+- Multi-day/monthly aggregation of per-broker average price (single-session
+  avg buy/sell prices **are** in scope and shipped on each desk row).
 - External/network or elevated access; model-invented tools.
 - Any write/fetch/refresh.
 
 ## 6. Completion record (fill when done)
 
 - Authorizing ADR: ADR-061 (routine closed read tool; no dedicated ADR)
-- Implemented date:
-- Commits:
+- Implemented date: 2026-08-03
+- Commits: `52af6e4b` (tool), `6b3c387d` (ro_data layer fix; gate), `861c7d68` (docs)
 - Coverage rows flipped: 1, 2, 4, 5 (avg-price sub-part; volume/net already covered)
+- Code: `src/application/services/agent_ticker_broker_flow_tool.py`,
+  `AgentToolName.GET_TICKER_BROKER_FLOW`,
+  `build_read_only_ticker_broker_flow_deps` in `view_ticker_deps.py`,
+  registration in `agent_model.py`
+- Tests: `tests/application/services/test_agent_ticker_broker_flow_tool.py`
+  (+ composition registration assertions)

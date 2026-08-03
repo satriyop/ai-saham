@@ -441,6 +441,7 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | ADR-066 Slice 3 | `view_broker` desk destination; reuses broker desk projection; U5 entry map |
 | 2026-08-03 | ADR-066 Slice 4 | `preopen_screen` top-20 cohort destination; U5 entry map |
 | 2026-08-03 | ADR-066 Slice 5 | `plan_swing` structure destination; multi-stage catalog complete under flag |
+| 2026-08-03 | `get_ticker_broker_flow` | Stock-centric single-session top desks + bandar tool (ADR-061); coverage rows 1/2/4/5 |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same

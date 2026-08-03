@@ -27,44 +27,43 @@ ADR-065 did). The behavioral half is the runtime `TOOL_GAP` clue.
 | `get_ticker_dashboard` | OUR / NONE | price/volume/fundamentals cache summary |
 | `judge_accumulation_ticker` | OUR / NONE | `AgentAccumulationFacts` (`consecutive_streak`, `net_buy_ratio`, `bb_width_pctile`, `bci_label`, `bci_tier1_count`), `AgentSetupPhaseFacts` (`current_phase`, `phase_age_sessions`, `detection_strength`) |
 | `get_broker_desk` | OUR / NONE | **desk→ticker** views (SHOW/TOP_STOCKS/TOP_MATRIX/FLOW/CALENDAR/HISTORY) |
+| `get_ticker_broker_flow` | OUR / NONE | **ticker→desks** single-session: `top_accumulating`/`top_distributing` (net + avg buy/sell price), `bandar.total_buyers`/`total_sellers`/`number_broker_buysell`, `broker_accdist` + `five_day`/`top1`/`top3`/`top5`/`top10_accdist`, `tops_source`/`tops_scope`, `as_of` |
 | `web_research` | External / NETWORK_READ | external snippets (confirm) |
 | `ro_data_query` | Elevated / LOCAL_READ_ELEVATED | 3 allowlisted shapes: ticker close, ticker volume, broker day net (confirm) |
 
 Domain data that exists locally but is **not** exposed to the agent today (all
 🟡 projection gaps — the data is in the DB / domain, just not projected):
 
-- `BandarDetectorSnapshot` (`total_buyer/total_seller`, `top1/3/5/10_accdist`,
-  `top1_percent`, `number_broker_buysell`, `total_volume`).
-- `ViewTickerTopBrokersUseCase` (named `top_buyers`/`top_sellers` per ticker).
-- `broker_flow` entity (`avg_buy_price`, `avg_sell_price`) — per-desk average price.
 - **`insider_cache`** table + `InsiderTransaction` VO + `InsiderActivityProvider`
   port (`name`, `action_type`, `shares`, `price`, `transaction_date`); already
   read via `ticker_dashboard_source`.
 - **`corp_action_cache`** table + `SQLiteCorporateActionCalendarRepository` +
   `CorporateActionCalendarEvent` (`event_type`, `ex_date`, `cum_date`,
   `record_date`, `payment_date`, `announcement_date`).
+- Multi-day per-desk persistence over a session window (row 3 remainder) —
+  sibling tool task `get_ticker_desk_flow_history`.
 
 **Correction (2026-08-03):** rows 5, 7, 8 were first mis-graded 🔴 capability gaps
 by auditing only agent-facing DTOs. The underlying data is **local** — they are
-🟡 projection gaps. There are currently **no true capability gaps** in this list.
+🟡 projection gaps (rows 1/2/4/5 closed by `get_ticker_broker_flow`). There are
+currently **no true capability gaps** in this list.
 
 ## Matrix — "is this ticker being accumulated or distributed?"
 
 | # | Canonical question | Required datum | Carrier (tool · field) | State |
 |---|---|---|---|---|
-| 1 | **Which** desks are accumulating this ticker (named) | ticker→named brokers, buy side | *none yet* — `get_broker_desk` is desk-centric; `ViewTickerTopBrokersUseCase.top_buyers` exists but is not a tool | 🔴→ [`get_ticker_broker_flow` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_broker_flow_tool.md) (under ADR-061) |
-| 2 | **How many** desks accumulating | `total_buyer` / `number_broker_buysell` | exists in `BandarDetectorSnapshot`; agent sees only `bci_tier1_count` | 🟡 projection |
-| 3 | **Consistency** — streak (days), months | daily streak; multi-window smoothing; multi-day per-desk agg | days ✅ `AgentAccumulationFacts.consecutive_streak`; single-session `five_day/top-N accdist` via `get_ticker_broker_flow`; multi-day per-desk streak/frequency over ≤60 sessions → [`get_ticker_desk_flow_history` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_desk_flow_history_tool.md) (under ADR-061) | 🟡→🟢 (task) |
-| 4 | All of 1–3 for **distribution/selling** | ticker→named sellers; `Dis` labels; `total_seller` | `top_sellers` exists (no tool); `broker_accdist="Dis"`, `total_seller` unexposed | 🔴→ [`get_ticker_broker_flow` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_broker_flow_tool.md) (under ADR-061) + 🟡 |
-| 5 | All of 1–4 on **volume / qty / price avg** | per-ticker volume; per-broker net; per-broker avg price | volume ✅ dashboard; per-broker net ✅ `get_broker_desk`/`ro_data_query`; per-broker avg price (`broker_flow.avg_buy_price/avg_sell_price`) → [`get_ticker_broker_flow` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_broker_flow_tool.md) closes the last sub-part | 🟡→🟢 (avg price via task) |
+| 1 | **Which** desks are accumulating this ticker (named) | ticker→named brokers, buy side | ✅ `get_ticker_broker_flow.top_accumulating` (`broker_code`, `net_value_idr`, `avg_buy_price`) | 🟢 covered |
+| 2 | **How many** desks accumulating | `total_buyer` / `number_broker_buysell` | ✅ `get_ticker_broker_flow.bandar.total_buyers` / `number_broker_buysell` | 🟢 covered |
+| 3 | **Consistency** — streak (days), months | daily streak; multi-window smoothing; multi-day per-desk agg | days ✅ `AgentAccumulationFacts.consecutive_streak`; single-session `five_day/top-N accdist` ✅ `get_ticker_broker_flow.bandar.*_accdist`; multi-day per-desk over ≤60 sessions → [`get_ticker_desk_flow_history` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_desk_flow_history_tool.md) | 🟡 (multi-day remainder) |
+| 4 | All of 1–3 for **distribution/selling** | ticker→named sellers; `Dis` labels; `total_seller` | ✅ `get_ticker_broker_flow.top_distributing`; `bandar.broker_accdist` / `total_sellers` | 🟢 covered |
+| 5 | All of 1–4 on **volume / qty / price avg** | per-ticker volume; per-broker net; per-broker avg price | volume ✅ dashboard; per-broker net ✅ desk/RO + `get_ticker_broker_flow` net fields; avg price ✅ `top_*.avg_buy_price` / `avg_sell_price` | 🟢 covered |
 | 6 | Phase **compression / breakout** | setup phase; BB width percentile | ✅ `AgentSetupPhaseFacts.current_phase`; ✅ `AgentAccumulationFacts.bb_width_pctile` | 🟢 covered |
 | 7 | Recent **insider activity** | insider transactions | **exists** — `insider_cache` + `InsiderTransaction` + `InsiderActivityProvider` (via `ticker_dashboard_source`); no agent tool/projection | 🟡 projection |
 | 8 | Upcoming **corporate action** | corp-action calendar (div/split/RUPS) | **exists** — `corp_action_cache` + `SQLiteCorporateActionCalendarRepository` + `CorporateActionCalendarEvent`; no agent tool/projection | 🟡 projection |
 
-**Headline:** Q1/Q2/Q4 are one missing tool — a **stock-centric** ticker→desks
-view — and the data already exists (`ViewTickerTopBrokersUseCase` +
-`BandarDetectorSnapshot`). See the [`get_ticker_broker_flow` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_broker_flow_tool.md) (under ADR-061). The orchestrator already emits this exact
-`TOOL_GAP` at runtime.
+**Headline:** Q1/Q2/Q4/Q5 (avg-price) are closed by **`get_ticker_broker_flow`**
+(single-session stock-centric ticker→desks + bandar). Remaining open projection
+work: multi-day desk history (row 3), insider (7), corp-action (8).
 
 ## Partial-data honesty policy (all read tools)
 
