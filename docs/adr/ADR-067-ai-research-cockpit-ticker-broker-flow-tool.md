@@ -95,8 +95,12 @@ Signal/Risk/MCE/`TradeSetup`/sizing/observations/labels/tuning/promotion.
 | 3 consistency (streak/multi-window) | improved (daily streak already in judgment; multi-window labels now surfaced) |
 | 5 per-broker net/value | improved (named desk net values) |
 
-Per-broker **average price**, **monthly** aggregation, insider (7), and corporate
-action (8) remain out of scope (separate rows / ADRs).
+Per-broker **average price** exists (`broker_flow.avg_buy_price/avg_sell_price`);
+include it in the desk rows to also close row 5's avg-price part. **Monthly**
+aggregation (row 3) is a compute/projection follow-up. Insider (7) and corporate
+action (8) are **local projection gaps** — `insider_cache` and `corp_action_cache`
+already hold the data — so each is a **thin tool of its own** (separate ADR), not a
+new provider.
 
 ## Hard invariants
 
@@ -109,8 +113,9 @@ action (8) remain out of scope (separate rows / ADRs).
 
 ## Non-goals
 
-- New data providers (insider, corp-action) — separate ADRs.
-- Per-broker average-price or monthly aggregation (revisit if asked).
+- Insider / corporate-action tools — their data is already local (`insider_cache`,
+  `corp_action_cache`); each is its own thin-tool ADR, not a new provider.
+- Monthly-aggregation consistency (row 3) — compute/projection follow-up.
 - External/network or elevated access (that is ADR-065's `web_research`/RO).
 - Model-invented tools.
 
@@ -131,4 +136,6 @@ action (8) remain out of scope (separate rows / ADRs).
 
 - Implement `implement_ai_research_cockpit_ticker_broker_flow_tool.md`.
 - Update the coverage matrix rows 1/2/4 to 🟢 with tool+field citations on landing.
-- Insider (row 7) and corporate action (row 8) remain open capability gaps.
+- Insider (row 7) and corporate action (row 8) are **local projection gaps** —
+  `insider_cache` / `corp_action_cache` already hold the data — each deserving its
+  own thin-tool ADR (not a provider).

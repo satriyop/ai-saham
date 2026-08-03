@@ -28,10 +28,23 @@ ADR). The behavioral half is the runtime `TOOL_GAP` clue.
 | `web_research` | External / NETWORK_READ | external snippets (confirm) |
 | `ro_data_query` | Elevated / LOCAL_READ_ELEVATED | 3 allowlisted shapes: ticker close, ticker volume, broker day net (confirm) |
 
-Domain data that exists but is **not** fully exposed to the agent today:
-`BandarDetectorSnapshot` (`total_buyer/total_seller`, `top1/3/5/10_accdist`,
-`top1_percent`, `number_broker_buysell`, `total_volume`), and
-`ViewTickerTopBrokersUseCase` (named `top_buyers`/`top_sellers` per ticker).
+Domain data that exists locally but is **not** exposed to the agent today (all
+🟡 projection gaps — the data is in the DB / domain, just not projected):
+
+- `BandarDetectorSnapshot` (`total_buyer/total_seller`, `top1/3/5/10_accdist`,
+  `top1_percent`, `number_broker_buysell`, `total_volume`).
+- `ViewTickerTopBrokersUseCase` (named `top_buyers`/`top_sellers` per ticker).
+- `broker_flow` entity (`avg_buy_price`, `avg_sell_price`) — per-desk average price.
+- **`insider_cache`** table + `InsiderTransaction` VO + `InsiderActivityProvider`
+  port (`name`, `action_type`, `shares`, `price`, `transaction_date`); already
+  read via `ticker_dashboard_source`.
+- **`corp_action_cache`** table + `SQLiteCorporateActionCalendarRepository` +
+  `CorporateActionCalendarEvent` (`event_type`, `ex_date`, `cum_date`,
+  `record_date`, `payment_date`, `announcement_date`).
+
+**Correction (2026-08-03):** rows 5, 7, 8 were first mis-graded 🔴 capability gaps
+by auditing only agent-facing DTOs. The underlying data is **local** — they are
+🟡 projection gaps. There are currently **no true capability gaps** in this list.
 
 ## Matrix — "is this ticker being accumulated or distributed?"
 
@@ -41,10 +54,10 @@ Domain data that exists but is **not** fully exposed to the agent today:
 | 2 | **How many** desks accumulating | `total_buyer` / `number_broker_buysell` | exists in `BandarDetectorSnapshot`; agent sees only `bci_tier1_count` | 🟡 projection |
 | 3 | **Consistency** — streak (days), months | daily streak; multi-window smoothing; monthly agg | days ✅ `AgentAccumulationFacts.consecutive_streak`; multi-window `five_day/top-N accdist` exists unexposed; **monthly not aggregated** | 🟡 / 🔴 (months) |
 | 4 | All of 1–3 for **distribution/selling** | ticker→named sellers; `Dis` labels; `total_seller` | `top_sellers` exists (no tool); `broker_accdist="Dis"`, `total_seller` unexposed | 🔴→ [ADR-067](../adr/ADR-067-ai-research-cockpit-ticker-broker-flow-tool.md) + 🟡 |
-| 5 | All of 1–4 on **volume / qty / price avg** | per-ticker volume; per-broker net; per-broker avg price | volume ✅ dashboard; per-broker net ✅ `get_broker_desk`/`ro_data_query`; **per-broker avg price: verify — likely gap** | 🟡 / 🔴 (avg price) |
+| 5 | All of 1–4 on **volume / qty / price avg** | per-ticker volume; per-broker net; per-broker avg price | volume ✅ dashboard; per-broker net ✅ `get_broker_desk`/`ro_data_query`; per-broker avg price **exists** — `broker_flow.avg_buy_price/avg_sell_price` — unexposed | 🟡 projection (avg price) |
 | 6 | Phase **compression / breakout** | setup phase; BB width percentile | ✅ `AgentSetupPhaseFacts.current_phase`; ✅ `AgentAccumulationFacts.bb_width_pctile` | 🟢 covered |
-| 7 | Recent **insider activity** | insider transaction feed | no local data, no tool | 🔴 capability (needs provider; `web_research` stopgap) |
-| 8 | Upcoming **corporate action** | corp-action calendar (div/split/RUPS) | only `dividend_yield` ratio; no event calendar | 🔴 capability (needs provider; `web_research` stopgap) |
+| 7 | Recent **insider activity** | insider transactions | **exists** — `insider_cache` + `InsiderTransaction` + `InsiderActivityProvider` (via `ticker_dashboard_source`); no agent tool/projection | 🟡 projection |
+| 8 | Upcoming **corporate action** | corp-action calendar (div/split/RUPS) | **exists** — `corp_action_cache` + `SQLiteCorporateActionCalendarRepository` + `CorporateActionCalendarEvent`; no agent tool/projection | 🟡 projection |
 
 **Headline:** Q1/Q2/Q4 are one missing tool — a **stock-centric** ticker→desks
 view — and the data already exists (`ViewTickerTopBrokersUseCase` +
