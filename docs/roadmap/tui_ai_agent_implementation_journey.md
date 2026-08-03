@@ -4,18 +4,21 @@
 context agent: what each phase shipped, which flags unlock it, and how to smoke
 the live Textual cockpit against the **current** implementation.
 
-**Status:** Journey current through **Phase 3** (ephemeral sessions), commit
-family ending at `afb9d677` (2026-08-03).
+**Status:** Journey current through **Phase 3** + **v1 agent stage UX locks**
+(OpenCode-style stage, auto agent mode, data-honesty strip). See **§ Agent stage
+UX locks (v1)**.
 
 **Not this doc:** Architecture contracts live in ADRs; task DoD and test gates
-live in backlog files. This doc tracks **product journey + live verification**.
+live in backlog files. This doc tracks **product journey + live verification +
+operator UX locks**.
 
 | Kind | Authority |
 |---|---|
 | Binding architecture | [ADR-060](../adr/ADR-060-read-only-tui-context-agent.md), [ADR-061](../adr/ADR-061-closed-read-tool-orchestration-for-context-agent.md), [ADR-063](../adr/ADR-063-ephemeral-agent-session-and-context-budget.md) |
 | Sequencing / phase map | [roadmap_tui_ai_agent_implementation.md](roadmap_tui_ai_agent_implementation.md) |
 | Task contracts & offline DoD | `tasks/backlog/implement_tui_agent_*.md` |
-| **Live journey + smoke (this file)** | **What to do in `saham tui` and what “good” looks like** |
+| **Operator UX locks + journey smoke (this file)** | **§ Agent stage UX locks** + profiles A–D |
+| Offline golden pilot (UX regression) | `tests/adapters/tui/test_agent_stage_ux_golden.py` · `pytest -m agent` |
 
 When this file and a backlog completion record disagree on **commit hashes**,
 prefer `git log`. When they disagree on **behavior**, prefer ADRs + executable
@@ -43,12 +46,13 @@ code, then update this journey.
 ```text
 Operator opens accumulation board
         → Enter (or j) for full Judge context
-        → Focus prompt (: or /) · mode agent
-        → Ask a question
+        → /  opens agent stage (OpenCode-style replace)
+           or type a question (auto agent mode)
+        → Stage: status strip · question · answer · meta · tools · more notes
         → Optional closed read tools (if ai.tools_enabled)
         → Optional follow-ups in-process (if ai.session_enabled)
-        → Commentary card: answer · meta · tool trace · warnings
-        → Deterministic Judge never overwritten by the model
+        → Esc leaves agent · deterministic Judge restored
+        → Judge/Action never overwritten by the model
 ```
 
 ### What is explicitly out of the current journey
@@ -58,6 +62,45 @@ Operator opens accumulation board
 - Write tools: refresh, paper, watchlist, config (Phase 5)  
 - Telegram / Hermes / OpenClaw transport (separate roadmaps)  
 - Model-authored Action, scoring, or evidence authority  
+- Agent-initiated fetch/refresh/write  
+
+---
+
+## Agent stage UX locks (v1)
+
+**Status:** Locked for v1. Changing any row requires an intentional doc/ADR update
+and golden pilot update — not silent TUI drift.
+
+These locks amend the original Phase 1 “compact card under Judge only” placement
+with a Judge-scoped **stage replace** surface. Application authority rules are
+unchanged (ADR-060/061/063).
+
+| # | Lock | Required behavior |
+|---|---|---|
+| U1 | Invocation `/` | On accumulation Judge, `/` enters **agent mode** and **replaces** the main stage with the agent surface (Judge hidden while agent is open). |
+| U2 | Invocation free-text | Any non-empty prompt submit that is not a mode/reset command **auto-enters agent mode** and dispatches an agent turn when Judge context is valid. Idle must **not** silently drop questions. |
+| U3 | Invocation `:` | Focuses the prompt rail without forcing stage replace by itself. |
+| U4 | Leave | `Esc` while agent stage is open closes agent stage and **restores** deterministic Judge (or prior chrome). Does not quit the app. |
+| U5 | Scope | Agent runs only on accumulation **Judge** with full `row.source`. Board list alone must notify and not invent context. Limited judge → re-judge (`j`). |
+| U6 | Stage layout (top→bottom) | **Status strip** → question echo → answer → meta → tool trace → **More data notes** (if any) → error → hint. Answer is not buried under a raw warning dump. |
+| U7 | Status strip | Shows `Turn OK\|FAIL · {ticker} · as-of {date}` and ranked **Data** notes. Primary notes ≤ **3**, **WARN** before **INFO**, each with stable **code** + **Do** guide (`agent_data_honesty`). |
+| U8 | Severity defaults | `RISK_SNAPSHOT_LAG`, `AUTHORITY_INCOMPLETE` → **WARN**. Settlement-within-lag / bandar diagnostic → **INFO**. |
+| U9 | Risk date lag | Risk as-of may lag decision as-of: **warn**, do not hard-fail the whole turn (decision identity remains Trade/Signal/Accum). |
+| U10 | Session dedupe | With `ai.session_enabled`, identical data-note strings already shown earlier in the process session are **not** re-displayed on later turns. |
+| U11 | Authority | Model output and data notes are **non-authoritative**. Deterministic Action/scores stay on Judge. No write/fetch from agent stage. |
+| U12 | Fail visibility | Provider/identity failures show an explicit error string (including detail when available), not a blank stage. |
+| U13 | Mode chrome | Agent mode must not claim “design only · not wired” when the live path is configured. |
+
+**Regression gate (offline):**
+
+```bash
+.venv/bin/python -m pytest tests/adapters/tui/test_agent_stage_ux_golden.py -q
+# or
+.venv/bin/python -m pytest -m agent -q
+```
+
+**Do not interpret as:** general chat route, multi-board agent, CLI execution, or
+Phase 4/5 authority.
 
 ---
 
@@ -313,7 +356,8 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | `agent-live-call` suite | Automated live smoke package `tests/agent_live/` for A–D + N |
 | 2026-08-03 | Agent stage UX | Auto agent mode on free-text; `/` opens OpenCode-style full stage replace; Esc leaves |
 | 2026-08-03 | Data honesty strip | Ranked notes + Do guides; risk lag / authority WARN; settlement INFO; session dedupe |
-| _next_ | Phase 4/5 | Update this table + §1 + smoke sections |
+| 2026-08-03 | UX locks + golden pilot | § Agent stage UX locks (v1); `test_agent_stage_ux_golden.py` |
+| _next_ | Phase 4/5 or pause | Update this table + §1 + smoke sections |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same

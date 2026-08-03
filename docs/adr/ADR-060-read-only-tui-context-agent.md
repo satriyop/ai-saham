@@ -207,10 +207,16 @@ or TUI.
 
 ### Cockpit placement
 
-The adapter mounts one compact `AgentCommentary` region immediately after
-`JudgeDesk` inside `#stage-scroll`. It is visible only with an accumulation
-Judge, remains visually non-authoritative, and never replaces or mutates the
-Judge. Prompt metadata discloses `remote · deepseek` before a remote submission.
+**Original Phase 1 placement:** compact `AgentCommentary` after `JudgeDesk`
+inside `#stage-scroll`, non-authoritative, Judge remains primary.
+
+**v1 operator UX (locked in journey SSOT):** on accumulation Judge, `/` (and
+auto agent free-text submit) may **temporarily replace** the main stage with an
+OpenCode-style agent surface (Judge hidden while open; `Esc` restores Judge).
+The agent surface still must not mutate deterministic Action, scores, or board
+rows. Layout and data-honesty strip rules are product locks in
+[`docs/roadmap/tui_ai_agent_implementation_journey.md`](../roadmap/tui_ai_agent_implementation_journey.md)
+§ Agent stage UX locks (v1) — not a second scoring authority.
 
 ### Future channel reuse
 
@@ -239,8 +245,9 @@ construct model clients.
 - Do not copy provider SDK imports into application code.
 - Do not persist transcripts, inferred preferences, audit rows, or result
   payloads in this slice.
-- Do not restore a full-screen chat route; the daily cockpit remains the owning
-  product surface.
+- Do not restore a multi-route full-app chat product; the daily cockpit remains
+  the owning surface. A temporary Judge-scoped agent stage replace (v1 UX lock)
+  is allowed and is not a separate chat application.
 - Do not make AI availability affect board loading, Judge rendering, planning,
   fetch, paper logging, or deterministic command behavior.
 

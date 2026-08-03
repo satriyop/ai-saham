@@ -8,8 +8,9 @@ implemented (Phase 3 runtime `afb9d677`, 2026-08-03)
 **Supersedes implementation sequencing in:**
 [`roadmap_conversational_agent_architecture.md`](roadmap_conversational_agent_architecture.md)
 
-**Operator journey + live TUI smoke (SSOT):**
+**Operator journey + live TUI smoke + v1 UX locks (SSOT):**
 [`tui_ai_agent_implementation_journey.md`](tui_ai_agent_implementation_journey.md)
+(§ Agent stage UX locks; golden pilot `tests/adapters/tui/test_agent_stage_ux_golden.py`)
 
 **Depends on:** ADR-002, ADR-003, ADR-013, ADR-014, ADR-040, ADR-042, ADR-045,
 ADR-051, ADR-054, ADR-057, ADR-060, ADR-061, and ADR-063
