@@ -15,10 +15,15 @@ from src.application.dto.agent_session import AgentSessionPolicy
 from src.application.dto.agent_tools import AgentToolName, AgentToolTurnPolicy
 from src.application.services.agent_accumulation_judge_tool import AccumulationJudgeTool
 from src.application.services.agent_broker_desk_tool import BrokerDeskTool
+from src.application.services.agent_ro_data_query_tool import RoDataQueryTool
 from src.application.services.agent_session_store import InMemoryAgentSessionStore
 from src.application.services.agent_ticker_dashboard_tool import TickerDashboardTool
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_visible_cockpit_tool import VisibleCockpitResultTool
+from src.application.services.agent_web_research_tool import (
+    NullWebResearchClient,
+    WebResearchTool,
+)
 from src.application.use_case.explain_accumulation_candidate_use_case import (
     ExplainAccumulationCandidateUseCase,
 )
@@ -48,6 +53,7 @@ class AgentComposition:
     tools_requested: bool
     tools_enabled: bool
     tools_multi_round: bool
+    external_tools: bool
     session_requested: bool
     session_enabled: bool
     registered_tools: tuple[AgentToolName, ...]
@@ -67,6 +73,9 @@ def build_agent_composition(
     enabled = bool(getattr(ai_config, "enabled", False))
     tools_requested = enabled and bool(getattr(ai_config, "tools_enabled", False))
     multi_round_requested = tools_requested and bool(getattr(ai_config, "tools_multi_round", False))
+    external_master = tools_requested and bool(getattr(ai_config, "external_tools", False))
+    web_research_on = external_master and bool(getattr(ai_config, "web_research", False))
+    ro_data_on = external_master and bool(getattr(ai_config, "ro_data_query", False))
     session_requested = enabled and bool(getattr(ai_config, "session_enabled", False))
     model = None
     reason = None
@@ -119,6 +128,14 @@ def build_agent_composition(
                 judge_ticker = None
             if judge_ticker is not None:
                 tools.append(AccumulationJudgeTool(judge_ticker))
+        if web_research_on:
+            # Default null client is offline-safe; live composition may inject HTTP later.
+            tools.append(WebResearchTool(NullWebResearchClient()))
+        if ro_data_on and db_path is not None:
+            try:
+                tools.append(RoDataQueryTool(db_path))
+            except (OSError, ValueError):
+                pass
         registered_tools = tuple(tool.definition.name for tool in tools)
         policy = (
             AgentToolTurnPolicy.l3(tools_enabled=True)
@@ -156,6 +173,7 @@ def build_agent_composition(
         tools_requested,
         tools_enabled,
         tools_multi_round,
+        external_master and tools_enabled,
         session_requested,
         session_enabled,
         registered_tools,
