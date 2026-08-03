@@ -557,3 +557,133 @@ def test_golden_view_broker_opens_with_multi_stage_flag() -> None:
             assert "desk" in answer.lower() or "summary" in answer.lower()
 
     asyncio.run(scenario())
+
+
+def test_golden_preopen_board_refuses_without_multi_stage_flag() -> None:
+    """U5 — pre-open board refuses when ai.cockpit_multi_stage is false."""
+
+    async def scenario() -> None:
+        seen = []
+
+        def runner(request):
+            seen.append(request)
+            return AgentTurnResult(
+                status=AgentTurnStatus.SUCCESS,
+                answer="should not run",
+                context_reference="sha256:x",
+                provider="deepseek",
+                model="deepseek-v4-flash",
+            )
+
+        app = CockpitApp(
+            accum_loader=_accum_payload,
+            accum_controller=BoardController(_accum_payload),
+            accum_presenter=AccumPresenter(),
+            agent_turn_runner=runner,
+            agent_provider_available=True,
+            agent_cockpit_multi_stage=False,
+        )
+        async with app.run_test(size=(100, 36)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            app._stage = "preopen"
+            app._board_kind = "preopen"
+            app._submit_agent_turn("summarize pre-open")
+            await pilot.pause()
+            assert seen == []
+
+    asyncio.run(scenario())
+
+
+def test_golden_preopen_board_opens_with_multi_stage_flag() -> None:
+    """U5 / ADR-066 — preopen_screen destination when flag on."""
+
+    async def scenario() -> None:
+        from datetime import date
+        from types import SimpleNamespace
+
+        from src.adapters.tui.presenters.preopen_presenter import PreOpenRowView
+
+        cand = SimpleNamespace(
+            ticker="BBCA",
+            iep=6275,
+            iep_gap_pct=1.2,
+            iev=800_000,
+            delta_iev=12_000,
+            action="WATCH",
+            is_ncp_locked=False,
+            snapshot_date=date(2026, 8, 1),
+        )
+        row = PreOpenRowView(
+            ticker="BBCA",
+            action="WATCH",
+            iep="6,275",
+            delta_pct="+1.2",
+            iev="800K",
+            ncp="disc",
+            delta_iev="+12K",
+            risk="—",
+            evidence="Act WATCH · NCP disc",
+            source=cand,
+        )
+        seen = []
+
+        def runner(request):
+            seen.append(request.stage_context)
+            return AgentTurnResult(
+                status=AgentTurnStatus.SUCCESS,
+                answer="Pre-open cohort summary only.",
+                context_reference=request.stage_context.context_reference,
+                provider="deepseek",
+                model="deepseek-v4-flash",
+            )
+
+        app = CockpitApp(
+            accum_loader=_accum_payload,
+            accum_controller=BoardController(_accum_payload),
+            accum_presenter=AccumPresenter(),
+            agent_turn_runner=runner,
+            agent_provider_available=True,
+            agent_cockpit_multi_stage=True,
+        )
+        async with app.run_test(size=(120, 40)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            app._stage = "preopen"
+            app._board_kind = "preopen"
+            app._rows = [row]
+            app._row_index = 0
+            app._preopen_snapshot_date = "2026-08-01"
+            app._preopen_session_strip = SimpleNamespace(
+                source="SNAPSHOT",
+                phase="discovery-only",
+                funnel="10 · 1 · E—/W—",
+                window="as of 2026-08-01",
+            )
+            app.action_focus_agent()
+            await pilot.pause()
+            assert app._agent_stage_open is True
+            app._submit_agent_turn("Summarize pre-open board")
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if seen and not app._agent_loading:
+                    break
+            assert len(seen) == 1
+            ctx = seen[0]
+            assert ctx.stage_kind.value == "preopen_screen"
+            assert ctx.schema_id == "tui_agent.preopen_screen.v1"
+            assert ctx.shown == min(20, ctx.cohort_total)
+            assert ctx.members[0].ticker == "BBCA"
+            commentary = app.query_one("#agent-commentary", AgentCommentary)
+            for _ in range(20):
+                await pilot.pause(0.05)
+                answer = str(commentary.query_one(".agent-answer").content)
+                if "pre-open" in answer.lower() or "summary" in answer.lower():
+                    break
+            assert "pre-open" in answer.lower() or "summary" in answer.lower()
+
+    asyncio.run(scenario())
