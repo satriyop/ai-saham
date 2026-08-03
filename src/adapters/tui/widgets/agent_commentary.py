@@ -39,6 +39,7 @@ class AgentCommentary(Vertical):
         border: solid $oc_hairline_strong;
         border-left: solid $oc_purple;
         background: $oc_bg_sidebar;
+        layout: vertical;
     }
     AgentCommentary .agent-title { color: $oc_text; text-style: bold; height: auto; }
     AgentCommentary .agent-status {
@@ -48,6 +49,12 @@ class AgentCommentary(Vertical):
         padding: 1 1;
         background: $oc_bg_elevated;
         border-left: solid $oc_text_mute;
+    }
+    /* Stage: chips-only strip (no multi-line Do guides) — keep header short. */
+    AgentCommentary.is-stage .agent-status {
+        margin-top: 0;
+        padding: 0 1;
+        max-height: 4;
     }
     AgentCommentary .agent-status.has-warn {
         color: $oc_brass;
@@ -64,6 +71,9 @@ class AgentCommentary(Vertical):
         height: auto;
         margin-top: 1;
     }
+    AgentCommentary.is-stage .agent-question {
+        margin-top: 0;
+    }
     AgentCommentary .agent-answer-scroll {
         height: auto;
         max-height: 24;
@@ -71,9 +81,12 @@ class AgentCommentary(Vertical):
         scrollbar-color: $oc_scrollbar $oc_track_inactive;
         scrollbar-size-vertical: 1;
     }
+    /* Stage: answer is the primary pane — claim remaining height, not a sliver. */
     AgentCommentary.is-stage .agent-answer-scroll {
         height: 1fr;
+        min-height: 12;
         max-height: 100%;
+        margin-top: 1;
     }
     AgentCommentary .agent-answer { color: $oc_text; height: auto; }
     AgentCommentary .agent-meta { color: $oc_text_dim; height: auto; margin-top: 1; }
@@ -82,6 +95,16 @@ class AgentCommentary(Vertical):
         color: $oc_text_mute;
         height: auto;
         margin-top: 1;
+    }
+    AgentCommentary.is-stage .agent-meta,
+    AgentCommentary.is-stage .agent-tools,
+    AgentCommentary.is-stage .agent-hint {
+        margin-top: 0;
+    }
+    AgentCommentary.is-stage .agent-more {
+        margin-top: 0;
+        max-height: 8;
+        overflow-y: auto;
     }
     AgentCommentary .agent-error { color: $oc_coral; height: auto; margin-top: 1; }
     AgentCommentary .agent-hint { color: $oc_text_mute; height: auto; margin-top: 1; }
@@ -195,11 +218,14 @@ class AgentCommentary(Vertical):
         answered = result.status in {AgentTurnStatus.SUCCESS, AgentTurnStatus.PARTIAL}
         turn_ok = answered
         notes = normalize_agent_data_notes(result.warnings)
+        stage = self.has_class("is-stage")
         self._paint_status(
             turn_ok=turn_ok,
             ticker=ticker or "—",
             as_of=as_of,
             notes=notes,
+            # Stage keeps the header to chips only; Do guides go under more.
+            compact_honesty=stage,
         )
         answer = result.answer if answered else ""
         if question.strip():
@@ -221,11 +247,18 @@ class AgentCommentary(Vertical):
             for item in result.tool_results
         )
         self.query_one(".agent-tools", Static).update(Text(trace))
-        self.query_one(".agent-more", Static).update(Text(format_agent_more_notes(notes)))
+        self.query_one(".agent-more", Static).update(
+            Text(
+                format_agent_more_notes(
+                    notes,
+                    include_primary_guides=stage,
+                )
+            )
+        )
         self.query_one(".agent-error", Static).update(Text(result.error_message or ""))
         self.query_one(".agent-hint", Static).update(
             Text("Esc leave agent · / ask again · deterministic Judge unchanged")
-            if self.has_class("is-stage")
+            if stage
             else Text("")
         )
 
@@ -238,6 +271,7 @@ class AgentCommentary(Vertical):
         notes: AgentDataHonestyView,
         loading: bool = False,
         force_empty_msg: bool = False,
+        compact_honesty: bool = False,
     ) -> None:
         status = self.query_one(".agent-status", Static)
         status.remove_class("has-warn", "is-fail")
@@ -257,6 +291,7 @@ class AgentCommentary(Vertical):
             ticker=ticker,
             as_of=as_of,
             notes=notes,
+            include_do_guides=not compact_honesty,
         )
         status.update(Text(body))
         if not turn_ok:

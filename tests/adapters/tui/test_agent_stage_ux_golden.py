@@ -132,12 +132,14 @@ def test_golden_free_text_auto_agent_and_status_strip_do_guides() -> None:
             assert "Turn  OK" in status
             assert "RISK_SNAPSHOT_LAG" in status or "Risk lag" in status
             assert "AUTHORITY_INCOMPLETE" in status or "Authority" in status
-            # Do guides present for primary notes
-            assert "Do" in status or "secondary" in status.lower() or "refresh" in status.lower()
+            # Stage: chips only in the strip — Do guides live under more so the
+            # answer pane keeps vertical room (not a tiny scroll sliver).
+            assert "secondary" not in status.lower()
+            assert "refresh" not in status.lower() or "Data  " in status
             assert "ENTER" in answer
             more = str(commentary.query_one(".agent-more", Static).content)
-            # bandar / extra notes collapse under More when primary is full
-            assert "More data notes" in more or more == ""
+            assert "Honesty guides" in more or "Do:" in more
+            assert "More data notes" in more or "Honesty guides" in more
 
             # Mode chrome must not claim not-wired when provider available (U13)
             sub = str(app.query_one("#prompt-sub", Static).content)

@@ -83,6 +83,56 @@ def test_commentary_renders_answer_and_context_without_action_styling() -> None:
     asyncio.run(scenario())
 
 
+def test_stage_mode_keeps_answer_primary_and_compacts_honesty() -> None:
+    """Stage: chips-only status; Do guides under more; long answer still renders."""
+
+    async def scenario() -> None:
+        app = _App()
+        async with app.run_test(size=(100, 30)) as pilot:
+            widget = app.query_one("#commentary", AgentCommentary)
+            widget.set_stage_mode(True)
+            long_answer = "Fakta deterministik — top akumulator (net buy):\n" + "\n".join(
+                f"{i}. YP net {i * 1000}" for i in range(1, 16)
+            )
+            widget.show_result(
+                AgentTurnResult(
+                    status=AgentTurnStatus.SUCCESS,
+                    answer=long_answer,
+                    context_reference="sha256:ctx",
+                    provider="deepseek",
+                    model="deepseek-v4-flash",
+                    warnings=(
+                        "Risk snapshot 2026-07-31 differs from decision as-of 2026-08-03",
+                        "Incomplete signal authority coverage — not source-authoritative",
+                        "bandar_detector",
+                        "SESSION_ALIGNED_LATE_WITHIN_LAG",
+                    ),
+                ),
+                as_of="2026-08-03",
+                ticker="ICBP",
+                question="broker apa saja yang sedang mengakumulasi?",
+            )
+            await pilot.pause()
+            status = str(widget.query_one(".agent-status").content)
+            more = str(widget.query_one(".agent-more").content)
+            answer = str(widget.query_one(".agent-answer").content)
+            # Compact header: no multi-line Do guides
+            assert "Turn  OK · ICBP" in status
+            assert "AUTHORITY_INCOMPLETE:" not in status
+            assert "secondary" not in status.lower()
+            # Guides still available under more
+            assert "Honesty guides" in more
+            assert "Do:" in more
+            # Full answer content is in the answer widget (not clipped by paint)
+            assert "Top akumulator" in answer or "top akumulator" in answer.lower()
+            assert "YP net 15000" in answer
+            # Stage CSS gives the answer scroll a real share of height
+            css = AgentCommentary.DEFAULT_CSS
+            assert "min-height: 12" in css or "min-height:12" in css.replace(" ", "")
+
+    asyncio.run(scenario())
+
+
 def test_partial_commentary_renders_answer_and_ordered_safe_tool_trace() -> None:
     async def scenario() -> None:
         app = _App()

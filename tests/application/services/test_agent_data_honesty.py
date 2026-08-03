@@ -70,3 +70,29 @@ def test_status_strip_and_more_format() -> None:
     assert "RISK_SNAPSHOT_LAG:" in strip or "Risk lag" in strip
     more = format_agent_more_notes(notes)
     assert more.startswith("More data notes")
+
+
+def test_stage_compact_strip_moves_do_guides_to_more() -> None:
+    notes = normalize_agent_data_notes(
+        (
+            "Risk snapshot 2026-07-31 differs from decision as-of 2026-08-03",
+            "SESSION_ALIGNED_LATE_WITHIN_LAG",
+            "bandar_detector",
+        ),
+        max_primary=2,
+    )
+    compact = format_agent_status_strip(
+        turn_ok=True,
+        ticker="ICBP",
+        as_of="2026-08-03",
+        notes=notes,
+        include_do_guides=False,
+    )
+    assert compact.count("\n") == 1  # turn + chips only
+    assert "RISK_SNAPSHOT_LAG:" not in compact
+    assert "secondary" not in compact.lower()
+    assert "+ " in compact or "more" in compact.lower()
+    more = format_agent_more_notes(notes, include_primary_guides=True)
+    assert "Honesty guides" in more
+    assert "Do:" in more
+    assert "More data notes" in more

@@ -91,8 +91,13 @@ def format_agent_status_strip(
     ticker: str,
     as_of: str,
     notes: AgentDataHonestyView,
+    include_do_guides: bool = True,
 ) -> str:
-    """Single-block status strip for agent stage header."""
+    """Status strip for the agent surface.
+
+    When ``include_do_guides`` is False (stage mode), only turn + chips are
+    shown so the answer pane keeps vertical room; Do guides live under more.
+    """
     turn = "OK" if turn_ok else "FAIL"
     line1 = f"Turn  {turn} · {ticker or '—'} · as-of {as_of or '—'}"
     if notes.empty:
@@ -101,22 +106,41 @@ def format_agent_status_strip(
     for note in notes.primary:
         chips.append(note.title)
     more_n = len(notes.more)
+    # Stage-compact: primary Do guides move to more, so count them as "more".
+    if not include_do_guides:
+        more_n += len(notes.primary)
     data_line = "Data  " + " · ".join(chips)
     if more_n:
         data_line += f" · +{more_n} more"
+    if not include_do_guides:
+        return "\n".join([line1, data_line])
     guide_lines = [f"  {note.code}: {note.do_line}" for note in notes.primary]
     return "\n".join([line1, data_line, *guide_lines])
 
 
-def format_agent_more_notes(notes: AgentDataHonestyView) -> str:
-    if not notes.more:
-        return ""
-    lines = [f"More data notes ({len(notes.more)})"]
-    for note in notes.more:
-        lines.append(f"  [{note.severity.value}] {note.code} — {note.title}")
-        lines.append(f"    Do: {note.do_line}")
-        if note.detail and note.detail != note.title:
-            lines.append(f"    Detail: {note.detail}")
+def format_agent_more_notes(
+    notes: AgentDataHonestyView,
+    *,
+    include_primary_guides: bool = False,
+) -> str:
+    """Overflow / Do-guide block under the answer.
+
+    Stage mode sets ``include_primary_guides`` so honesty guidance stays
+    available without crowding the answer viewport.
+    """
+    lines: list[str] = []
+    if include_primary_guides and notes.primary:
+        lines.append(f"Honesty guides ({len(notes.primary)})")
+        for note in notes.primary:
+            lines.append(f"  [{note.severity.value}] {note.code} — {note.title}")
+            lines.append(f"    Do: {note.do_line}")
+    if notes.more:
+        lines.append(f"More data notes ({len(notes.more)})")
+        for note in notes.more:
+            lines.append(f"  [{note.severity.value}] {note.code} — {note.title}")
+            lines.append(f"    Do: {note.do_line}")
+            if note.detail and note.detail != note.title:
+                lines.append(f"    Detail: {note.detail}")
     return "\n".join(lines)
 
 
