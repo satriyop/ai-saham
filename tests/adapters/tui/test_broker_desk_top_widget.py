@@ -49,3 +49,28 @@ def test_top_paint_contract_buy_and_sell_sides():
     assert model.body_contains_action_authority() is False
     text = format_broker_desk_top_scraper_text(model)
     assert "AMMN" in text and "BBCA" in text
+
+
+def test_top_bar_cell_includes_pct_and_mint_coral():
+    """Scalar bar contract on dual-heat top desk (sibling glyph-bar surface)."""
+    from src.adapters.tui.widgets.broker_top_desk import (
+        BrokerTopDesk,
+        _bar_glyphs,
+        format_top_bar_cell,
+    )
+
+    buy = format_top_bar_cell(100, width=14, sell=False)
+    assert _bar_glyphs(100, width=14) in buy
+    assert "100%" in buy
+    assert "#6fbf8a" in buy
+    assert "#555555" in buy
+
+    sell = format_top_bar_cell(50, width=14, sell=True)
+    assert "50%" in sell
+    assert "#c97a72" in sell
+
+    css = BrokerTopDesk.DEFAULT_CSS
+    assert "color: #6fbf8a" in css
+    assert "color: #c97a72" in css
+    assert "#3a5a48" not in css
+    assert "#5a3a3a" not in css

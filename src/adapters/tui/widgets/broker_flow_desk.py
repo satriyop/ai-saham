@@ -15,8 +15,26 @@ from src.adapters.tui.broker_desk_flow_model import DISPLAY_LIMIT, BrokerDeskFlo
 
 
 def _bar(pct: int, *, width: int = 16) -> str:
-    filled = max(0, min(width, round(pct * width / 100)))
+    """Glyph track only (0–100 of-max). Pair with a ``%`` label — never alone."""
+    p = max(0, min(100, int(pct or 0)))
+    filled = max(0, min(width, round(p * width / 100)))
     return "█" * filled + "░" * (width - filled)
+
+
+def _pct_label(pct: int) -> str:
+    """Integer percent label for Scalar bar contract (plain text)."""
+    return f"{max(0, min(100, int(pct or 0)))}%"
+
+
+def format_flow_bar_cell(pct: int, *, width: int = 16, neg: bool = False) -> str:
+    """Bar + mute ``%`` — mint/coral filled track (bible scalar bar).
+
+    Rich markup so ``%`` stays text-mute even when the cell CSS is signed-tone.
+    """
+    p = max(0, min(100, int(pct or 0)))
+    track = _bar(p, width=width)
+    tone = "#c97a72" if neg else "#6fbf8a"
+    return f"[{tone}]{track}[/] [#555555]{_pct_label(p)}[/]"
 
 
 class BrokerFlowDesk(Vertical):
@@ -55,8 +73,8 @@ class BrokerFlowDesk(Vertical):
     BrokerFlowDesk .fl-net.neg { color: #c97a72; }
     BrokerFlowDesk .fl-lot { width: 10; color: #6b6b6b; text-align: right; }
     BrokerFlowDesk .fl-n { width: 4; color: #6b6b6b; text-align: right; }
-    BrokerFlowDesk .fl-bar { width: 1fr; color: #3a5a48; }
-    BrokerFlowDesk .fl-bar.neg { color: #5a3a3a; }
+    BrokerFlowDesk .fl-bar { width: 1fr; color: #6fbf8a; }
+    BrokerFlowDesk .fl-bar.neg { color: #c97a72; }
     BrokerFlowDesk .fl-empty { color: #6b6b6b; height: auto; margin: 1 0; }
     BrokerFlowDesk .fl-hub {
         background: #141414;
@@ -123,12 +141,12 @@ class BrokerFlowDesk(Vertical):
                 bar.remove_class("neg")
                 if d.tone == "neg":
                     bar.add_class("neg")
-                bar.update(_bar(d.bar_pct))
+                bar.update(format_flow_bar_cell(d.bar_pct, neg=(d.tone == "neg")))
                 # keep monoline for scrapers/tests that look for fl-row content
                 mirror = self.query_one(f"#fl-row-text-{i}", Static)
                 mirror.update(
                     f"{d.date_label}  {d.net_display}  {d.lot_display}  "
-                    f"{d.ticker_count}  {_bar(d.bar_pct)}"
+                    f"{d.ticker_count}  {_bar(d.bar_pct)}  {_pct_label(d.bar_pct)}"
                 )
             else:
                 row_el.display = False

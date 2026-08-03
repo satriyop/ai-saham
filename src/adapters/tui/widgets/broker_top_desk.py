@@ -20,8 +20,22 @@ from src.adapters.tui.broker_desk_top_model import (
 
 
 def _bar_glyphs(pct: int, *, width: int = 14) -> str:
-    filled = max(0, min(width, round(pct * width / 100)))
+    """Glyph track only (0–100 of-max). Pair with a ``%`` label — never alone."""
+    p = max(0, min(100, int(pct or 0)))
+    filled = max(0, min(width, round(p * width / 100)))
     return "█" * filled + "░" * (width - filled)
+
+
+def _pct_label(pct: int) -> str:
+    return f"{max(0, min(100, int(pct or 0)))}%"
+
+
+def format_top_bar_cell(pct: int, *, width: int = 14, sell: bool = False) -> str:
+    """Bar + mute ``%`` — mint buy / coral sell (bible scalar bar)."""
+    p = max(0, min(100, int(pct or 0)))
+    track = _bar_glyphs(p, width=width)
+    tone = "#c97a72" if sell else "#6fbf8a"
+    return f"[{tone}]{track}[/] [#555555]{_pct_label(p)}[/]"
 
 
 class BrokerTopDesk(Vertical):
@@ -109,12 +123,12 @@ class BrokerTopDesk(Vertical):
 
     BrokerTopDesk .tp-bar {
         width: 1fr;
-        color: #3a5a48;
+        color: #6fbf8a;
         height: auto;
     }
 
     BrokerTopDesk .tp-bar.sell {
-        color: #5a3a3a;
+        color: #c97a72;
     }
 
     BrokerTopDesk .tp-n {
@@ -238,7 +252,7 @@ class BrokerTopDesk(Vertical):
                 row_el.display = True
                 rank_el.update(str(i + 1))
                 t_el.update(r.ticker)
-                bar_el.update(_bar_glyphs(r.bar_pct))
+                bar_el.update(format_top_bar_cell(r.bar_pct, sell=(side == "sell")))
                 n_el.update(r.net_display)
                 lot_el.update(r.lot_display)
             elif empty_first and i == 0:

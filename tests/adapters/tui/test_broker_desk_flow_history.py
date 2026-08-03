@@ -109,6 +109,37 @@ def test_flow_paint_contract_date_and_hub():
     assert "2026-07-29" in text
 
 
+def test_flow_bar_cell_includes_pct_and_mint_coral():
+    """Scalar bar contract: integer % adjacent to glyph track; mint/coral tones."""
+    from src.adapters.tui.widgets.broker_flow_desk import (
+        BrokerFlowDesk,
+        _bar,
+        _pct_label,
+        format_flow_bar_cell,
+    )
+
+    cell = format_flow_bar_cell(42, width=16, neg=False)
+    assert _bar(42, width=16) in cell
+    assert "42%" in cell
+    assert "#6fbf8a" in cell
+    assert "#555555" in cell  # mute % label
+
+    neg = format_flow_bar_cell(50, width=16, neg=True)
+    assert "50%" in neg
+    assert "#c97a72" in neg
+
+    # Mirror row text path used by paint scrapers
+    mirror = f"2026-07-29  +3.0B  50  4  {_bar(100)}  {_pct_label(100)}"
+    assert "100%" in mirror
+    assert "█" in mirror
+
+    css = BrokerFlowDesk.DEFAULT_CSS
+    assert ".fl-bar { width: 1fr; color: #6fbf8a;" in css or "color: #6fbf8a" in css
+    assert ".fl-bar.neg { color: #c97a72;" in css or "color: #c97a72" in css
+    assert "#3a5a48" not in css
+    assert "#5a3a3a" not in css
+
+
 def test_history_paint_contract_ticker_row():
     """What #hi-t-0 paint would show after hub h."""
     model = build_broker_desk_history_model(
