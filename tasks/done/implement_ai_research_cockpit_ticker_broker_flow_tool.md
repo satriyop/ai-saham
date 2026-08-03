@@ -166,7 +166,7 @@ ruff format --check src/ tests/
 
 - Authorizing ADR: ADR-061 (routine closed read tool; no dedicated ADR)
 - Implemented date: 2026-08-03
-- Commits: `52af6e4b` (tool), `6b3c387d` (ro_data layer fix; gate), `861c7d68` (docs)
+- Commits: `52af6e4b` (tool), `6b3c387d` (ro_data layer fix), `a3f9c5e8` (docs)
 - Coverage rows flipped: 1, 2, 4, 5 (avg-price sub-part; volume/net already covered)
 - Code: `src/application/services/agent_ticker_broker_flow_tool.py`,
   `AgentToolName.GET_TICKER_BROKER_FLOW`,
