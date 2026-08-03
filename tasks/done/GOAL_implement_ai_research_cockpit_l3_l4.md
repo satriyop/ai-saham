@@ -1,6 +1,6 @@
 # Goal Instruction — Implement AI Research Cockpit L3 then L4
 
-**Status:** `READY FOR AGENT`  
+**Status:** `COMPLETE` — L3 (ADR-064) and L4 (ADR-065) both implemented 2026-08-03; see the two implement_*.md completion records  
 **Audience:** Implementation agent (any coding agent in this repo)  
 **Product term:** **AI Research Cockpit** (`/`) — use this name in code comments,
 commits, UI strings, and docs. Prefer it over “agent stage/chat.”

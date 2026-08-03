@@ -1,6 +1,6 @@
 # Goal Instruction — Implement TUI Agent Live Smoke Tests (Journey SSOT)
 
-**Status:** `READY FOR AGENT`  
+**Status:** `IMPLEMENTED` — live smoke suite landed 2026-08-03 (see §11)  
 **Audience:** Implementation agent (any coding agent working in this repo)  
 **Authority for checklist content:**  
 [`docs/roadmap/tui_ai_agent_implementation_journey.md`](../../docs/roadmap/tui_ai_agent_implementation_journey.md)  
