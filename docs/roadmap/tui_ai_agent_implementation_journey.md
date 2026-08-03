@@ -108,7 +108,7 @@ flags may tighten or expand by ADR as the cockpit matures; vocabulary stays.
 | L1 | One-batch OUR tools | Shipped (ADR-061) |
 | L2 | Prompt/UX quality (no tools-ran honesty, etc.) | Incremental |
 | L3 | Bounded multi-round OUR tools (3 rounds / 4 tools); `ai.tools_multi_round` | **Implemented** (default false → L1 ceilings) |
-| L4 | Named external + RO data research + confirm y/n + fail-safe | **ADR-065 accepted**; runtime not started (after L3) |
+| L4 | Named external + RO data research + confirm y/n + fail-safe | **Implemented** (flags default false; ADR-065) |
 
 **v1 entry scope (shipped):** invocation is fully wired on **accumulation Judge**
 with full candidate context. **Destination:** invoke from **every TUI stage**
@@ -173,6 +173,9 @@ All defaults are **safe-off**. Compose from `config/default.yaml` + local
 | `ai.provider` | `deepseek` | Only `deepseek` is supported for live agent |
 | `ai.tools_enabled` | `false` | Closed ADR-061 tools during a turn |
 | `ai.tools_multi_round` | `false` | ADR-064 L3 multi-round (3 rounds / 4 tools); requires tools_enabled |
+| `ai.external_tools` | `false` | ADR-065 master: elevated/external tools may register |
+| `ai.web_research` | `false` | Register `web_research` (requires master) |
+| `ai.ro_data_query` | `false` | Register `ro_data_query` allowlisted RO (requires master) |
 | `ai.session_enabled` | `false` | Process-local multi-turn packing (ADR-063) |
 
 | Credential | Source |
@@ -422,7 +425,7 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | ADR-064 | L3 multi-round OUR tools authorized; implement task activated |
 | 2026-08-03 | ADR-065 | L4 web_research + RO data ask + confirm/gap clues authorized |
 | 2026-08-03 | L3 runtime | `tools_multi_round` + orchestrator 3/4/2 + Research Cockpit progress (`d1166b0b` family) |
-| _next_ | L4 runtime | ADR-065; goal brief `GOAL_implement_ai_research_cockpit_l3_l4.md` |
+| 2026-08-03 | L4 runtime | confirm + `web_research` + `ro_data_query` + TOOL_GAP + fail-safe restore |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same

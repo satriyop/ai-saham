@@ -1,7 +1,6 @@
 # Implement AI Research Cockpit L4 — External Research, RO Data Ask, Confirm
 
-Status: `ACTIVATED` — architecture authorized by ADR-065 (2026-08-03); **prefer
-L3 runtime (ADR-064) before this epic**; runtime not started
+Status: `IMPLEMENTED` — architecture ADR-065; runtime landed after L3 (2026-08-03)
 
 Source:
 
@@ -29,15 +28,15 @@ Source:
 
 ## 4. Acceptance (epic)
 
-- [ ] ADR-065 budgets/confirm/fail-safe/gap clues implemented per slice  
-- [ ] Ordinary NONE tools unchanged without elevated flags  
-- [ ] Elevated/external count toward L3 tool budget when multi-round on  
-- [ ] Offline agent tests green without network  
-- [ ] Live paths opt-in only  
-- [ ] Ruff gate  
+- [x] ADR-065 budgets/confirm/fail-safe/gap clues implemented per slice  
+- [x] Ordinary NONE tools unchanged without elevated flags  
+- [x] Elevated/external count toward L3 tool budget when multi-round on  
+- [x] Offline agent tests green without network  
+- [x] Live paths opt-in only  
+- [x] Ruff gate  
 
 ## 5. Completion Record
 
 - Activation ADR: ADR-065  
-- Implemented date:  
-- Commit(s):  
+- Implemented date: 2026-08-03  
+- Commit(s): see git log for L4 family after L3 `dcecaee3`
