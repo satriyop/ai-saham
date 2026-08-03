@@ -58,13 +58,22 @@ def build_agent_accumulation_context(
     tickers = {candidate.ticker, trade.ticker, signal.ticker, accum.ticker}
     if len({value.upper() for value in tickers}) != 1:
         raise AgentContextInvariantError(f"Agent context ticker mismatch: {sorted(tickers)}")
-    dates = {trade.snapshot_date, signal.snapshot_date, accum.snapshot_date}
-    risk = candidate.risk_assessment
-    if risk is not None:
-        dates.add(risk.snapshot_date)
-    if len(dates) != 1:
+    # Decision identity is TradeSetup + Signal + Accum on one as-of date.
+    # Risk may lag (different cache as-of) on live boards — do not hard-fail the
+    # whole agent turn; surface an explicit warning instead (common IDX case).
+    decision_dates = {trade.snapshot_date, signal.snapshot_date, accum.snapshot_date}
+    if len(decision_dates) != 1:
         raise AgentContextInvariantError(
-            "Agent context snapshot mismatch: " + ", ".join(sorted(v.isoformat() for v in dates))
+            "Agent context decision snapshot mismatch: "
+            + ", ".join(sorted(v.isoformat() for v in decision_dates))
+        )
+    risk = candidate.risk_assessment
+    identity_warnings: list[str] = []
+    if risk is not None and risk.snapshot_date != trade.snapshot_date:
+        identity_warnings.append(
+            "Risk snapshot "
+            f"{risk.snapshot_date.isoformat()} differs from decision as-of "
+            f"{trade.snapshot_date.isoformat()}; risk is shown as diagnostic only"
         )
 
     constraints = signal.decision_constraints
@@ -202,7 +211,7 @@ def build_agent_accumulation_context(
         for group in (response.setup_source_availability, response.flow_source_availability)
         if group is not None
     )
-    warnings = _warnings(response, phase, availability)
+    warnings = tuple(identity_warnings) + _warnings(response, phase, availability)
     context = AgentAccumulationContext(
         schema_id=SCHEMA_ID,
         context_reference="",

@@ -107,3 +107,26 @@ def test_projection_is_allow_listed_and_digest_is_stable() -> None:
 def test_projection_fails_closed_on_identity_mismatch() -> None:
     with pytest.raises(AgentContextInvariantError, match="ticker mismatch"):
         build_agent_accumulation_context(make_candidate(trade_ticker="TLKM"))
+
+
+def test_risk_snapshot_lag_is_warning_not_hard_fail() -> None:
+    """Live boards often have Risk as-of behind Signal/Trade/Accum — still explainable."""
+    from dataclasses import replace
+    from datetime import timedelta
+
+    from src.domain.value_objects.risk_assessment import RiskAssessment
+
+    candidate = make_candidate()
+    lag = RiskAssessment(
+        rationale=("open",),
+        snapshot_date=candidate.trade_setup.snapshot_date - timedelta(days=3),
+        indicators=None,  # type: ignore[arg-type]
+        gate_triggered=None,
+    )
+    candidate = replace(candidate, risk_assessment=lag)
+
+    context = build_agent_accumulation_context(candidate)
+    assert context.risk is not None
+    assert context.risk.snapshot_date == lag.snapshot_date
+    assert context.as_of == candidate.trade_setup.snapshot_date
+    assert any("Risk snapshot" in item and "differs" in item for item in context.warnings)

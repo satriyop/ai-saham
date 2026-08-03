@@ -85,8 +85,8 @@ class ExplainAccumulationCandidateUseCase:
                 status=AgentTurnStatus.UNAVAILABLE,
                 error_message=str(exc),
             )
-        except AgentContextInvariantError:
-            return _failed("Canonical Judge context failed identity validation")
+        except AgentContextInvariantError as exc:
+            return _failed(f"Canonical Judge context failed identity validation: {exc}")
         try:
             response = self._model.generate(
                 AgentModelRequest(

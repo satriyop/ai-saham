@@ -83,8 +83,8 @@ class AgentTurnOrchestrator:
             context = build_agent_accumulation_context(request.candidate)
         except AgentContextUnavailableError as exc:
             return AgentTurnResult(status=AgentTurnStatus.UNAVAILABLE, error_message=str(exc))
-        except AgentContextInvariantError:
-            return _failed("Canonical Judge context failed identity validation")
+        except AgentContextInvariantError as exc:
+            return _failed(f"Canonical Judge context failed identity validation: {exc}")
         if cancelled():
             return _cancelled()
 

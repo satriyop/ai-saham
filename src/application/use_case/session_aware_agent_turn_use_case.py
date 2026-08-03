@@ -95,10 +95,10 @@ class SessionAwareAgentTurnUseCase:
             context = build_agent_accumulation_context(request.candidate)
         except AgentContextUnavailableError as exc:
             return AgentTurnResult(status=AgentTurnStatus.UNAVAILABLE, error_message=str(exc))
-        except AgentContextInvariantError:
+        except AgentContextInvariantError as exc:
             return AgentTurnResult(
                 status=AgentTurnStatus.FAILED,
-                error_message="Canonical Judge context failed identity validation",
+                error_message=f"Canonical Judge context failed identity validation: {exc}",
             )
 
         try:
