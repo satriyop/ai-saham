@@ -111,6 +111,11 @@ For every elevated/external capability execution:
 
 1. Orchestrator pauses in application state `PENDING_APPROVAL` (not adapter
    policy).
+   > Implementation note: `PENDING_APPROVAL` is realized as a **synchronous
+   > blocking approval callback** (`on_approval`) with application-owned policy
+   > (`_implication`, `_arg_summary`), not an `AgentTurnStatus` enum value. It is
+   > a callback seam; do not hunt for a status of that name. A missing approver is
+   > fail-closed (the tool is skipped with `TOOL_NO_APPROVER`), never auto-approved.
 2. Research Cockpit shows a **light confirm** (in-stage y/n control or equivalent
    light modal owned by the cockpit):
    - capability name;

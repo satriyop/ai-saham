@@ -426,6 +426,7 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | ADR-065 | L4 web_research + RO data ask + confirm/gap clues authorized |
 | 2026-08-03 | L3 runtime | `tools_multi_round` + orchestrator 3/4/2 + Research Cockpit progress (`d1166b0b` family) |
 | 2026-08-03 | L4 runtime | confirm + `web_research` + `ro_data_query` + TOOL_GAP + fail-safe restore |
+| 2026-08-03 | L4 confirm hardening | Consent fail-closed: no approver ⇒ `TOOL_NO_APPROVER` skip (never execute); removed fail-open runner retry (one-shot signature probe, no turn re-run); denies no longer consume tool/byte budget or block re-proposal |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same
