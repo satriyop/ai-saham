@@ -259,6 +259,7 @@ Known baseline data warnings (if any):
 | Sessions / pack | ADR-063 · `implement_tui_agent_ephemeral_sessions_phase3.md` |
 | Hermes / OpenClaw | `roadmap_hermes_agent_integration.md`, `roadmap_openclaw_integration.md` |
 | Offline agent tests | `pytest -m agent` |
+| Live smoke test implementation brief | [`tasks/backlog/implement_tui_agent_live_smoke_tests.md`](../../tasks/backlog/implement_tui_agent_live_smoke_tests.md) (marker `agent-live-call`; not implemented until that task lands) |
 
 ---
 
