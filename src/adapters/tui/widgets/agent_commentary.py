@@ -27,26 +27,26 @@ class AgentCommentary(Vertical):
         width: 100%;
         margin-bottom: 1;
         padding: 1 2;
-        background: #101014;
-        border: solid #24242c;
-        border-left: solid #686878;
+        background: #101010;
+        border: solid #1c1c1c;
+        border-left: solid #7a7a7a;
     }
     AgentCommentary.is-stage {
         height: 1fr;
         margin: 0;
         padding: 1 2 1 2;
-        border: solid #2a2a34;
-        border-left: solid #8a8aaa;
-        background: #0e0e12;
+        border: solid #2a2a2a;
+        border-left: solid #9b8fb8;
+        background: #0e0e0e;
     }
-    AgentCommentary .agent-title { color: #aaaabc; text-style: bold; height: auto; }
+    AgentCommentary .agent-title { color: #d8d8d8; text-style: bold; height: auto; }
     AgentCommentary .agent-status {
-        color: #9a9aac;
+        color: #7a7a7a;
         height: auto;
         margin-top: 1;
         padding: 1 1;
-        background: #14141a;
-        border-left: solid #5a5a6a;
+        background: #141414;
+        border-left: solid #555555;
     }
     AgentCommentary .agent-status.has-warn {
         color: #d4b06a;
@@ -59,7 +59,7 @@ class AgentCommentary(Vertical):
         background: #1a1212;
     }
     AgentCommentary .agent-question {
-        color: #858596;
+        color: #555555;
         height: auto;
         margin-top: 1;
     }
@@ -74,20 +74,20 @@ class AgentCommentary(Vertical):
         height: 1fr;
         max-height: 100%;
     }
-    AgentCommentary .agent-answer { color: #d0d0d8; height: auto; }
-    AgentCommentary .agent-meta { color: #686878; height: auto; margin-top: 1; }
-    AgentCommentary .agent-tools { color: #858596; height: auto; margin-top: 1; }
+    AgentCommentary .agent-answer { color: #d8d8d8; height: auto; }
+    AgentCommentary .agent-meta { color: #7a7a7a; height: auto; margin-top: 1; }
+    AgentCommentary .agent-tools { color: #555555; height: auto; margin-top: 1; }
     AgentCommentary .agent-more {
-        color: #858596;
+        color: #555555;
         height: auto;
         margin-top: 1;
     }
     AgentCommentary .agent-error { color: #c97a72; height: auto; margin-top: 1; }
-    AgentCommentary .agent-hint { color: #555566; height: auto; margin-top: 1; }
+    AgentCommentary .agent-hint { color: #555555; height: auto; margin-top: 1; }
     """
 
     def compose(self) -> ComposeResult:
-        yield Static("Agent", classes="agent-title")
+        yield Static("AI Research Cockpit", classes="agent-title")
         yield Static("", classes="agent-status")
         yield Static("", classes="agent-question")
         with VerticalScroll(classes="agent-answer-scroll"):
@@ -117,13 +117,13 @@ class AgentCommentary(Vertical):
             self.query_one(selector, Static).update("")
         status = self.query_one(".agent-status", Static)
         status.remove_class("has-warn", "is-fail")
-        self.query_one(".agent-title", Static).update("Agent")
+        self.query_one(".agent-title", Static).update("AI Research Cockpit")
 
     def show_stage_ready(self, *, ticker: str, action: str, provider: str) -> None:
         """Empty OpenCode-style stage before the first question."""
         self.set_stage_mode(True)
         self.display = True
-        self.query_one(".agent-title", Static).update("Agent")
+        self.query_one(".agent-title", Static).update("AI Research Cockpit")
         self._paint_status(
             turn_ok=True,
             ticker=ticker,
@@ -190,6 +190,7 @@ class AgentCommentary(Vertical):
         ticker: str = "—",
     ) -> None:
         self.display = True
+        self.query_one(".agent-title", Static).update("AI Research Cockpit")
         answered = result.status in {AgentTurnStatus.SUCCESS, AgentTurnStatus.PARTIAL}
         turn_ok = answered
         notes = normalize_agent_data_notes(result.warnings)
