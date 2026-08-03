@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import re
-import sqlite3
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from src.application.dto.agent_tool_context import AgentToolExecutionContext
 from src.application.dto.agent_tools import (
@@ -25,7 +23,6 @@ from src.application.dto.agent_tools import (
 _ARGUMENT_SCHEMA_ID = "agent_tool.ro_data_query.args.v1"
 _RESULT_SCHEMA_ID = "agent_tool.ro_data_query.result.v1"
 _MAX_ROWS = 50
-_STATEMENT_TIMEOUT_MS = 2_000
 
 # Closed prepared shapes only (not free SQL).
 _SHAPES: dict[str, str] = {
@@ -40,6 +37,17 @@ _SHAPES: dict[str, str] = {
         "WHERE broker_code = :broker_code ORDER BY date DESC LIMIT :limit"
     ),
 }
+
+
+class _AllowlistedRoQueryResult(Protocol):
+    columns: tuple[str, ...]
+    rows: tuple[tuple[str, ...], ...]
+
+
+class _AllowlistedRoQuery(Protocol):
+    def is_available(self) -> bool: ...
+
+    def execute(self, sql: str, params: dict[str, Any]) -> _AllowlistedRoQueryResult: ...
 
 
 @dataclass(frozen=True)
@@ -93,8 +101,8 @@ class RoDataQueryTool:
         approval=AgentToolApproval.PER_CALL,
     )
 
-    def __init__(self, db_path: Path | str) -> None:
-        self._db_path = Path(db_path)
+    def __init__(self, query: _AllowlistedRoQuery) -> None:
+        self._query = query
 
     @property
     def definition(self) -> AgentToolDefinition:
@@ -122,7 +130,7 @@ class RoDataQueryTool:
             source="ro-data-query",
             source_reference=f"ro_data_query:{shape}:{subject}",
         )
-        if not self._db_path.is_file():
+        if not self._query.is_available():
             return AgentToolExecutionResult.create(
                 call_id=call_id,
                 name=self.definition.name,
@@ -139,12 +147,8 @@ class RoDataQueryTool:
         if "broker_code" in sql:
             params["broker_code"] = subject
         try:
-            with sqlite3.connect(f"file:{self._db_path}?mode=ro", uri=True) as conn:
-                conn.execute(f"PRAGMA busy_timeout={_STATEMENT_TIMEOUT_MS}")
-                cur = conn.execute(sql, params)
-                colnames = tuple(d[0] for d in (cur.description or ()))
-                raw_rows = cur.fetchmany(_MAX_ROWS)
-        except sqlite3.Error:
+            result = self._query.execute(sql, params)
+        except Exception:
             return AgentToolExecutionResult.create(
                 call_id=call_id,
                 name=self.definition.name,
@@ -155,7 +159,7 @@ class RoDataQueryTool:
                 provenance=provenance,
                 side_effect=AgentToolSideEffect.LOCAL_READ_ELEVATED,
             )
-        rows = tuple(tuple("" if c is None else str(c) for c in row) for row in raw_rows)
+        rows = result.rows[:_MAX_ROWS]
         if not rows:
             return AgentToolExecutionResult.create(
                 call_id=call_id,
@@ -171,7 +175,7 @@ class RoDataQueryTool:
             schema_id=_RESULT_SCHEMA_ID,
             shape=shape,
             subject=subject,
-            columns=colnames,
+            columns=result.columns,
             rows=rows,
             row_count=len(rows),
         )

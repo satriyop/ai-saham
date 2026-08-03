@@ -238,7 +238,11 @@ def test_ro_data_query_allowlist_and_confirm(tmp_path: Path) -> None:
         conn.execute("CREATE TABLE candles (ticker TEXT, date TEXT, close REAL, volume REAL)")
         conn.execute("INSERT INTO candles VALUES ('BBCA','2026-08-01',100.0,1.0)")
         conn.commit()
-    tool = RoDataQueryTool(db)
+    from src.infrastructure.persistence.sqlite_allowlisted_ro_query import (
+        SqliteAllowlistedRoQuery,
+    )
+
+    tool = RoDataQueryTool(SqliteAllowlistedRoQuery(db))
     model = _Model(
         [
             _tools(
