@@ -69,8 +69,9 @@ Read before editing:
 2. **Tool:** `TickerBrokerFlowTool` — args `ticker` (required), optional
    `target_date` (default = latest summary date, mirrors
    `ViewTickerTopBrokersRequest`), optional `limit` (cap 10). Compose
-   `ViewTickerTopBrokersUseCase` for the named desks + `BandarDetectorSnapshot`
-   (same session) for counts + built-in multi-window consistency labels. Cap
+   `ViewTickerTopBrokersUseCase` for the named desks + the cache-only bandar reader
+   (see §2a) for counts + built-in multi-window consistency labels, loaded at the
+   tops' **resolved** `session_date`. Cap
    output bytes; return `UNAVAILABLE` with a typed error when backing data is
    missing. **No multi-day aggregation** — consistency comes from the snapshot's
    `five_day/top1/3/5/10_accdist` labels, not from looping days.
@@ -80,9 +81,30 @@ Read before editing:
    consistency labels); default `target_date` = latest and an explicit past date;
    `limit` cap enforced; missing-data → `UNAVAILABLE` (no fabrication); result byte
    cap; frozen-dataclass result validation; registration gated by flags.
+   - **bandar session alignment:** bandar is read at the tops' resolved
+     `session_date` (not the raw `target_date`); a fake source asserts the date
+     passed to `get_bandar` equals `tops_result.date`.
+   - **no-fetch:** the tool uses the cache-only source, never
+     `BandarDetectorProvider`/browser (no network in offline tests).
 5. **Docs:** flip coverage-matrix rows 1/2/4 to 🟢, and row 5 to 🟢 (avg-price was
    its last open sub-part; volume/net already covered), with tool+field citations;
    add a journey SSOT changelog row.
+
+## 2a. Bandar load path (decided)
+
+- **Reader:** `TickerDashboardSource.get_bandar(ticker, session_date)` — **cache-only**
+  (`SQLiteTickerDashboardSource`).
+- **Composition:** via the `view_ticker_deps` family — reuse
+  `ViewTickerTopBrokersUseCase` + a `SQLiteTickerDashboardSource`, through a thin
+  factory, mirroring the other tools in `composition/agent_model.py`.
+- **🚫 Do NOT use `BandarDetectorProvider` / `stockbit_bandar`** — that is the
+  browser/**fetch** path and would violate `side_effect=NONE` / cache-only.
+- **⚠️ session_date alignment (correctness):** call
+  `get_bandar(ticker, tops_result.date)` — the **resolved** date from
+  `ViewTickerTopBrokersResult.date`, **not** the raw request `target_date`
+  (`None`=latest). Misalignment makes bandar counts/labels describe a different
+  session than the named desks. `get_bandar` None for that date →
+  PARTIAL + `BANDAR_SNAPSHOT_UNAVAILABLE`.
 
 ## 2b. Partial-data honesty (follow the shared policy)
 
