@@ -14,6 +14,7 @@ from dataclasses import replace as dc_replace
 from datetime import date
 from pathlib import Path
 from threading import Lock
+from types import SimpleNamespace
 from typing import Any
 
 from src.adapters.composition.screen_accum_request import (
@@ -317,7 +318,9 @@ class _ViewTickerDashboardLoader:
             )
             body = format_ticker_dashboard_text(dashboard)
             # Structured Harga-mast model for TickerDesk widget (not CLI paste).
-            return build_ticker_desk_model_from_dashboard(dashboard, body=body)
+            model = build_ticker_desk_model_from_dashboard(dashboard, body=body)
+            # Bundle dashboard for ADR-066 view_ticker stage context (cache-only).
+            return SimpleNamespace(model=model, dashboard=dashboard)
 
 
 # ── View broker (list → show → deep-dives) ──────────────────

@@ -10,6 +10,7 @@ from src.application.dto.accumulation_agent import (
     AgentTurnRequest,
 )
 from src.application.dto.accumulation_screen import AccumulationCandidate
+from src.application.dto.ticker_dashboard import TickerDashboard
 from src.application.services.agent_accum_screen_context import (
     AgentAccumScreenRawInput,
     build_agent_accum_screen_context,
@@ -19,6 +20,7 @@ from src.application.services.agent_accumulation_context import (
     AgentContextUnavailableError,
     build_agent_accumulation_context,
 )
+from src.application.services.agent_view_ticker_context import build_agent_view_ticker_context
 
 __all__ = [
     "AgentAccumScreenRawInput",
@@ -59,6 +61,14 @@ def build_agent_stage_context(
                 f"got {type(raw_stage_input).__name__}"
             )
         return build_agent_accum_screen_context(raw_stage_input)
+
+    if stage_kind is AgentStageKind.VIEW_TICKER:
+        if not isinstance(raw_stage_input, TickerDashboard):
+            raise TypeError(
+                "view_ticker raw_stage_input must be TickerDashboard, "
+                f"got {type(raw_stage_input).__name__}"
+            )
+        return build_agent_view_ticker_context(raw_stage_input)
 
     # Remaining destinations land in later slices; refuse honestly rather than fabricate.
     raise AgentContextUnavailableError(

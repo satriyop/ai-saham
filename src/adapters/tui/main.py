@@ -246,6 +246,8 @@ class CockpitApp(App[None]):
         self._paper_outcome: str = ""
         self._paper_tape: list[Any] = []
         self._ticker_desk_model: Any | None = None
+        # Cache-only TickerDashboard for the open view-ticker desk (ADR-066 stage context).
+        self._ticker_dashboard: Any | None = None
         self._chord_prefix: str | None = None
         self._chord_timer: Timer | None = None
         # Board load UX: keep prior rows while recomputing; snapshot on open.
@@ -1854,13 +1856,17 @@ class CockpitApp(App[None]):
             "re-judging",
         }
         on_accum_board = self._stage == "accum" and self._board_kind == "accum"
+        on_view_ticker = self._is_view_ticker_stage()
         if on_judge:
             self._enter_agent_stage(ready=True)
             placeholder = "ask about this Judge · Enter send · Esc leave agent"
         elif on_accum_board and self._agent_cockpit_multi_stage:
             self._enter_agent_stage(ready=True)
             placeholder = "ask about this accum board · Enter send · Esc leave agent"
-        elif on_accum_board:
+        elif on_view_ticker and self._agent_cockpit_multi_stage:
+            self._enter_agent_stage(ready=True)
+            placeholder = "ask about this ticker dashboard · Enter send · Esc leave agent"
+        elif (on_accum_board or on_view_ticker) and not self._agent_cockpit_multi_stage:
             self.notify(
                 "Agent is available only in accumulation Judge · Enter a row first "
                 "(or enable ai.cockpit_multi_stage)",
@@ -1974,8 +1980,10 @@ class CockpitApp(App[None]):
 
         on_judge = self._stage == "detail" and self._status_note in {"judge", "re-judging"}
         on_accum_board = self._stage == "accum" and self._board_kind == "accum"
-        if not on_judge and not (on_accum_board and self._agent_cockpit_multi_stage):
-            if on_accum_board:
+        on_view_ticker = self._is_view_ticker_stage()
+        multi_ok = self._agent_cockpit_multi_stage and (on_accum_board or on_view_ticker)
+        if not on_judge and not multi_ok:
+            if on_accum_board or on_view_ticker:
                 self.notify(
                     "Agent is available only in accumulation Judge · Enter a row first "
                     "(or enable ai.cockpit_multi_stage)",
@@ -1984,7 +1992,7 @@ class CockpitApp(App[None]):
             elif self._agent_cockpit_multi_stage:
                 self.notify(
                     "Research Cockpit multi-stage destinations are not available yet "
-                    "· open accumulation Judge (Enter a row) or accum board",
+                    "· open Judge, accum board, or view ticker",
                     timeout=2.4,
                 )
             else:
@@ -2011,20 +2019,30 @@ class CockpitApp(App[None]):
                     )
                     return
                 stage_context = build_agent_stage_context(AgentStageKind.ACCUM_JUDGE, source)
-            else:
+            elif on_accum_board:
                 raw = self._build_accum_screen_raw_input()
                 stage_context = build_agent_stage_context(AgentStageKind.ACCUM_SCREEN, raw)
                 source = raw
+            else:
+                dashboard = self._ticker_dashboard
+                if dashboard is None:
+                    self._show_agent_unavailable(
+                        "View ticker context unavailable · reopen view ticker (v t)"
+                    )
+                    return
+                stage_context = build_agent_stage_context(AgentStageKind.VIEW_TICKER, dashboard)
+                source = dashboard
         except AgentContextUnavailableError as exc:
-            hint = (
-                "Full Judge context required · press j to re-judge"
-                if on_judge
-                else f"Accum board context unavailable · {exc}"
-            )
+            if on_judge:
+                hint = "Full Judge context required · press j to re-judge"
+            elif on_accum_board:
+                hint = f"Accum board context unavailable · {exc}"
+            else:
+                hint = f"View ticker context unavailable · {exc}"
             self._show_agent_unavailable(hint)
             return
         except AgentContextInvariantError as exc:
-            label = "Judge" if on_judge else "Accum board"
+            label = "Judge" if on_judge else ("Accum board" if on_accum_board else "View ticker")
             self._show_agent_unavailable(f"{label} context identity failed · {exc}")
             return
         except TypeError as exc:
@@ -2041,11 +2059,11 @@ class CockpitApp(App[None]):
             except Exception:
                 pass
         generation = self._agent_generation
-        # Status strip subject: ticker for Judge; board label for cohort.
-        if on_judge:
-            subject = str(self._focus_ticker).upper()
-        else:
+        # Status strip subject: ticker for Judge/view ticker; board label for cohort.
+        if on_accum_board:
             subject = f"BOARD:{getattr(stage_context, 'as_of', '—')}"
+        else:
+            subject = str(self._focus_ticker).upper()
         stage_id = (self._stage, self._status_note)
         self._agent_loading = True
         self._agent_last_question = user_text
@@ -2075,6 +2093,15 @@ class CockpitApp(App[None]):
             source,
             AgentTurnRequest(user_text=user_text, stage_context=stage_context),
         )
+
+    def _is_view_ticker_stage(self) -> bool:
+        """True when the operator is on the view-ticker desk (not Judge)."""
+        if self._stage != "detail":
+            return False
+        if self._status_note in {"judge", "re-judging"}:
+            return False
+        note = str(self._status_note or "")
+        return note == "view ticker" or note.startswith("view ticker")
 
     def _build_accum_screen_raw_input(self):
         """Assemble typed accum_screen input from the focused board (adapter-thin)."""
@@ -3859,6 +3886,7 @@ class CockpitApp(App[None]):
         from src.adapters.tui.ticker_desk_present import model_from_loader_result
 
         try:
+            dashboard = None
             if self._ticker_detail_loader is not None:
                 raw = self._ticker_detail_loader(ticker)
             else:
@@ -3866,18 +3894,23 @@ class CockpitApp(App[None]):
                     ticker=ticker,
                     body="view ticker loader not wired (composition)",
                 )
-            model = model_from_loader_result(ticker, raw)
+            # Composition may return SimpleNamespace(model=…, dashboard=…).
+            if hasattr(raw, "model") and hasattr(raw, "dashboard"):
+                dashboard = getattr(raw, "dashboard", None)
+                model = getattr(raw, "model", None)
+            else:
+                model = model_from_loader_result(ticker, raw)
             if not isinstance(model, TickerDeskModel):
                 model = build_ticker_desk_model_from_text(ticker=ticker, body=str(raw or ""))
-            dispatch_if_active(self, self._on_view_ticker_ready, ticker, model)
+            dispatch_if_active(self, self._on_view_ticker_ready, ticker, model, dashboard)
         except Exception as exc:
             err_model = build_ticker_desk_model_from_text(
                 ticker=ticker,
                 body=f"error: {exc}",
             )
-            dispatch_if_active(self, self._on_view_ticker_ready, ticker, err_model)
+            dispatch_if_active(self, self._on_view_ticker_ready, ticker, err_model, None)
 
-    def _on_view_ticker_ready(self, ticker: str, model_or_text: Any) -> None:
+    def _on_view_ticker_ready(self, ticker: str, model_or_text: Any, dashboard: Any = None) -> None:
         from src.adapters.tui.ticker_desk_model import (
             TickerDeskModel,
             build_ticker_desk_model_from_text,
@@ -3901,6 +3934,7 @@ class CockpitApp(App[None]):
 
         model = replace(model, body=body.strip())
         self._ticker_desk_model = model
+        self._ticker_dashboard = dashboard
         self._ticker_detail_open = False  # brief default · d → detail is-on
         self._detail_text = model.as_text()
         self._stage = "detail"

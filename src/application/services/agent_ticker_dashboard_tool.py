@@ -255,7 +255,7 @@ class TickerDashboardTool:
                     today=self._today(),
                 )
             )
-            data, warnings, usable = _project_dashboard(dashboard)
+            data, warnings, usable = project_ticker_dashboard_for_agent(dashboard)
         except Exception:
             return AgentToolExecutionResult.create(
                 call_id=call_id,
@@ -302,9 +302,10 @@ class TickerDashboardTool:
         )
 
 
-def _project_dashboard(
+def project_ticker_dashboard_for_agent(
     dashboard: TickerDashboard,
 ) -> tuple[TickerDashboardResultData, tuple[str, ...], bool]:
+    """Allow-listed cache-only projection shared by the tool and stage context (ADR-066)."""
     freshness = tuple(
         TickerDashboardFreshnessData(
             key=item.key,

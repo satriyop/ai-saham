@@ -309,6 +309,55 @@ class AgentAccumScreenContext(AgentStageContext):
 
 
 @dataclass(frozen=True)
+class AgentViewTickerContext(AgentStageContext):
+    """View-ticker cache dashboard (`stage_kind=view_ticker`, tui_agent.view_ticker.v1).
+
+    Field shapes reuse the closed tool projection (price/flow/fundamentals, …)
+    so stage context and get_ticker_dashboard stay aligned.
+    """
+
+    ticker: str
+    as_of: date | None
+    today: date
+    mode: str
+    # Nested projection is a plain mapping-friendly frozen object graph built by
+    # project_ticker_dashboard_for_agent (typed as Any to avoid a circular import
+    # between dto and services; runtime type is TickerDashboardResultData fields).
+    freshness: tuple[Any, ...]
+    identity: Any | None
+    price: Any | None
+    fundamentals: Any | None
+    forward_estimates: Any | None
+    analyst: Any | None
+    earnings: tuple[Any, ...]
+    ownership: Any | None
+    bandar: Any | None
+    foreign_flow: Any | None
+    corporate_action_count: int
+    corporate_action_status: str
+    insider_transaction_count: int
+    insider_status: str
+    insider_last_known: date | None
+    iev_row_count: int
+    sentiment_log_count: int
+    profile_available: bool
+    seasonality_available: bool
+    sector_macro_diagnostic_available: bool
+    missing_branches: tuple[str, ...]
+    stale_branches: tuple[str, ...]
+    error_branches: tuple[str, ...]
+    warnings: tuple[str, ...] = ()
+
+    @property
+    def stage_kind(self) -> AgentStageKind:
+        return AgentStageKind.VIEW_TICKER
+
+    @property
+    def session_subject(self) -> str:
+        return self.ticker.upper()
+
+
+@dataclass(frozen=True)
 class AgentModelRequest:
     system_policy: str
     user_text: str
