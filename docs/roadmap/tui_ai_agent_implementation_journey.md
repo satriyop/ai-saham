@@ -4,20 +4,19 @@
 context agent: what each phase shipped, which flags unlock it, and how to smoke
 the live Textual cockpit against the **current** implementation.
 
-**Status:** Journey current through **Phase 3** + **v1 agent stage UX locks**
-(OpenCode-style stage, auto agent mode, data-honesty strip). See **§ Agent stage
-UX locks (v1)**.
+**Status:** Journey current through **Phase 3** + **v1 AI Research Cockpit UX
+locks**. Product term for `/` is **AI Research Cockpit** (see § below).
 
 **Not this doc:** Architecture contracts live in ADRs; task DoD and test gates
 live in backlog files. This doc tracks **product journey + live verification +
-operator UX locks**.
+operator UX locks + vocabulary**.
 
 | Kind | Authority |
 |---|---|
 | Binding architecture | [ADR-060](../adr/ADR-060-read-only-tui-context-agent.md), [ADR-061](../adr/ADR-061-closed-read-tool-orchestration-for-context-agent.md), [ADR-063](../adr/ADR-063-ephemeral-agent-session-and-context-budget.md) |
 | Sequencing / phase map | [roadmap_tui_ai_agent_implementation.md](roadmap_tui_ai_agent_implementation.md) |
 | Task contracts & offline DoD | `tasks/backlog/implement_tui_agent_*.md` |
-| **Operator UX locks + journey smoke (this file)** | **§ Agent stage UX locks** + profiles A–D |
+| **AI Research Cockpit vocabulary + UX locks + smoke** | This file |
 | Offline golden pilot (UX regression) | `tests/adapters/tui/test_agent_stage_ux_golden.py` · `pytest -m agent` |
 
 When this file and a backlog completion record disagree on **commit hashes**,
@@ -44,14 +43,13 @@ code, then update this journey.
 ### Vertical product path (what exists today)
 
 ```text
-Operator opens accumulation board
-        → Enter (or j) for full Judge context
-        → /  opens agent stage (OpenCode-style replace)
-           or type a question (auto agent mode)
-        → Stage: status strip · question · answer · meta · tools · more notes
-        → Optional closed read tools (if ai.tools_enabled)
+Operator works any cockpit stage (v1 entry: accumulation Judge)
+        → /  opens AI Research Cockpit (stage replace)
+           or type a question (auto agent mode when context valid)
+        → Research Cockpit: status strip · question · answer · meta · tools · more notes
+        → OUR closed read tools (if ai.tools_enabled)
         → Optional follow-ups in-process (if ai.session_enabled)
-        → Esc leaves agent · deterministic Judge restored
+        → Esc leaves Research Cockpit · prior deterministic stage restored
         → Judge/Action never overwritten by the model
 ```
 
@@ -63,21 +61,79 @@ Operator opens accumulation board
 - Telegram / Hermes / OpenClaw transport (separate roadmaps)  
 - Model-authored Action, scoring, or evidence authority  
 - Agent-initiated fetch/refresh/write  
+- Model-invented / unregistered tools  
 
 ---
 
-## Agent stage UX locks (v1)
+## AI Research Cockpit (product term)
+
+**Canonical name:** **AI Research Cockpit**  
+**Primary invoke:** `/` (also free-text auto-agent when a valid stage context exists)  
+**Use this term** in docs, ADRs, backlog, and UI copy going forward. Prefer it over
+ambiguous “agent stage,” “chat,” or “OpenCode panel” except when explaining
+implementation ancestry.
+
+### Definition
+
+The **AI Research Cockpit** is the operator-facing research surface of the daily
+TUI. From **any cockpit stage** (destination), the end user may invoke it to
+investigate the current focused context without making the model the source of
+Action authority.
+
+It may:
+
+1. **Call OUR tools** — closed, application-registered, typed tools that project
+   existing deterministic or cache results (ADR-061 family and successors).  
+2. **Conduct research that may involve external capability** — only via
+   **named capabilities we register later** (e.g. web research), with **safe
+   defaults** and **y/n confirm** before network/external execution.  
+3. **Surface design clues** — when the model *proposes* or *needs* a capability
+   we do not provide, that gap is **indicative product signal** for designing an
+   **OUR** internal tool later. The model does **not** get to invent or run
+   unregistered tools.
+
+**Non-goals of the term:** general autonomous agent, multi-route chat app,
+trading bot, or silent background research.
+
+### Journey, not a fixed ceiling
+
+Phases and L1→L3→L4 capability layers are a **progress journey** for the AI
+Research Cockpit—not a permanent bound that forbids improvement. Budgets and
+flags may tighten or expand by ADR as the cockpit matures; vocabulary stays.
+
+| Layer | Research Cockpit capability | Status |
+|---|---|---|
+| L1 | One-batch OUR tools | Shipped (ADR-061) |
+| L2 | Prompt/UX quality (no tools-ran honesty, etc.) | Incremental |
+| L3 | Bounded multi-round OUR tools (e.g. 3 rounds / 4 tools); flag progressive | Planned journey |
+| L4 | Named external + RO data research + confirm y/n + fail-safe | Planned journey |
+
+**v1 entry scope (shipped):** invocation is fully wired on **accumulation Judge**
+with full candidate context. **Destination:** invoke from **every TUI stage**
+with a stage-appropriate context projection (board, broker desk, plan, …)—each
+stage needs an explicit context contract before `/` opens Research Cockpit there.
+
+### Authority (unchanged)
+
+- Deterministic engines remain champion.  
+- Research Cockpit output is non-authoritative commentary + tool projections.  
+- External research is never Action authority.  
+- Gaps → honest refuse + clue for OUR tool design, not model-defined tools.
+
+---
+
+## AI Research Cockpit UX locks (v1)
 
 **Status:** Locked for v1. Changing any row requires an intentional doc/ADR update
 and golden pilot update — not silent TUI drift.
 
 These locks amend the original Phase 1 “compact card under Judge only” placement
-with a Judge-scoped **stage replace** surface. Application authority rules are
-unchanged (ADR-060/061/063).
+with a Judge-scoped **stage replace** surface for the AI Research Cockpit.
+Application authority rules are unchanged (ADR-060/061/063).
 
 | # | Lock | Required behavior |
 |---|---|---|
-| U1 | Invocation `/` | On accumulation Judge, `/` enters **agent mode** and **replaces** the main stage with the agent surface (Judge hidden while agent is open). |
+| U1 | Invocation `/` | On accumulation Judge, `/` opens the **AI Research Cockpit** and **replaces** the main stage (Judge hidden while open). |
 | U2 | Invocation free-text | Any non-empty prompt submit that is not a mode/reset command **auto-enters agent mode** and dispatches an agent turn when Judge context is valid. Idle must **not** silently drop questions. |
 | U3 | Invocation `:` | Focuses the prompt rail without forcing stage replace by itself. |
 | U4 | Leave | `Esc` while agent stage is open closes agent stage and **restores** deterministic Judge (or prior chrome). Does not quit the app. |
@@ -99,8 +155,8 @@ unchanged (ADR-060/061/063).
 .venv/bin/python -m pytest -m agent -q
 ```
 
-**Do not interpret as:** general chat route, multi-board agent, CLI execution, or
-Phase 4/5 authority.
+**Do not interpret as:** general chat route, multi-board autonomous agent, CLI
+execution, Phase 4/5 write authority, or model-invented tools.
 
 ---
 
@@ -276,16 +332,16 @@ Known baseline data warnings (if any):
 
 | Action | How |
 |---|---|
-| Open agent stage (OpenCode-style) | `/` while on accumulation Judge |
+| Open **AI Research Cockpit** | `/` while on accumulation Judge (v1) |
 | Focus prompt (generic) | `:` |
-| Agent mode | **Auto** on any real question · or `mode agent` · or `/` |
-| Leave agent stage | `Esc` (Judge restored) |
+| Agent / research mode | **Auto** on any real question · or `mode agent` · or `/` |
+| Leave Research Cockpit | `Esc` (Judge restored) |
 | Idle / CLI chrome | `mode idle` / `mode cli` (CLI not wired) |
 | Reset session | `session reset` · `reset session` |
 | Full Judge context | Enter on accum row · `j` re-judge if limited |
 | Cancel / invalidate | Escape, navigate, refresh, newer submit (generation) |
 
-**Agent stage fields** (full stage replace, not under-board only)
+**AI Research Cockpit fields** (full stage replace, not under-board only)
 
 - **Status strip (top):** Turn OK/FAIL · ticker · as-of · ranked Data notes  
   with codes + **Do** guides (max 3; WARN before INFO)  
@@ -356,8 +412,9 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | `agent-live-call` suite | Automated live smoke package `tests/agent_live/` for A–D + N |
 | 2026-08-03 | Agent stage UX | Auto agent mode on free-text; `/` opens OpenCode-style full stage replace; Esc leaves |
 | 2026-08-03 | Data honesty strip | Ranked notes + Do guides; risk lag / authority WARN; settlement INFO; session dedupe |
-| 2026-08-03 | UX locks + golden pilot | § Agent stage UX locks (v1); `test_agent_stage_ux_golden.py` |
-| _next_ | Phase 4/5 or pause | Update this table + §1 + smoke sections |
+| 2026-08-03 | UX locks + golden pilot | § AI Research Cockpit UX locks (v1); `test_agent_stage_ux_golden.py` |
+| 2026-08-03 | Vocabulary | Coined **AI Research Cockpit** for `/`; multi-stage destination; L3/L4 journey |
+| _next_ | L3 multi-round / L4 external research ADRs | Keep term; expand stage coverage |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same

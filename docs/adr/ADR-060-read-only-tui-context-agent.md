@@ -210,13 +210,15 @@ or TUI.
 **Original Phase 1 placement:** compact `AgentCommentary` after `JudgeDesk`
 inside `#stage-scroll`, non-authoritative, Judge remains primary.
 
-**v1 operator UX (locked in journey SSOT):** on accumulation Judge, `/` (and
-auto agent free-text submit) may **temporarily replace** the main stage with an
-OpenCode-style agent surface (Judge hidden while open; `Esc` restores Judge).
-The agent surface still must not mutate deterministic Action, scores, or board
-rows. Layout and data-honesty strip rules are product locks in
+**v1 operator UX (locked in journey SSOT):** the product name for `/` is **AI
+Research Cockpit**. On accumulation Judge, `/` (and auto agent free-text submit)
+may **temporarily replace** the main stage with that surface (Judge hidden while
+open; `Esc` restores Judge). Destination: invoke from every TUI stage once a
+context projection exists. The Research Cockpit must not mutate deterministic
+Action, scores, or board rows. Layout, honesty strip, and vocabulary are product
+locks in
 [`docs/roadmap/tui_ai_agent_implementation_journey.md`](../roadmap/tui_ai_agent_implementation_journey.md)
-§ Agent stage UX locks (v1) — not a second scoring authority.
+(§ AI Research Cockpit) — not a second scoring authority.
 
 ### Future channel reuse
 
