@@ -1861,7 +1861,10 @@ class CockpitApp(App[None]):
         on_view_ticker = self._is_view_ticker_stage()
         on_view_broker = self._is_view_broker_stage()
         on_preopen_board = self._stage == "preopen" and self._board_kind == "preopen"
-        multi_stage_open = on_accum_board or on_view_ticker or on_view_broker or on_preopen_board
+        on_plan_swing = self._stage == "plan"
+        multi_stage_open = (
+            on_accum_board or on_view_ticker or on_view_broker or on_preopen_board or on_plan_swing
+        )
         if on_judge:
             self._enter_agent_stage(ready=True)
             placeholder = "ask about this Judge · Enter send · Esc leave agent"
@@ -1871,6 +1874,9 @@ class CockpitApp(App[None]):
         elif on_preopen_board and self._agent_cockpit_multi_stage:
             self._enter_agent_stage(ready=True)
             placeholder = "ask about this pre-open board · Enter send · Esc leave agent"
+        elif on_plan_swing and self._agent_cockpit_multi_stage:
+            self._enter_agent_stage(ready=True)
+            placeholder = "ask about this plan structure · Enter send · Esc leave agent"
         elif on_view_ticker and self._agent_cockpit_multi_stage:
             self._enter_agent_stage(ready=True)
             placeholder = "ask about this ticker dashboard · Enter send · Esc leave agent"
@@ -1994,11 +2000,18 @@ class CockpitApp(App[None]):
         on_view_ticker = self._is_view_ticker_stage()
         on_view_broker = self._is_view_broker_stage()
         on_preopen_board = self._stage == "preopen" and self._board_kind == "preopen"
+        on_plan_swing = self._stage == "plan"
         multi_ok = self._agent_cockpit_multi_stage and (
-            on_accum_board or on_view_ticker or on_view_broker or on_preopen_board
+            on_accum_board or on_view_ticker or on_view_broker or on_preopen_board or on_plan_swing
         )
         if not on_judge and not multi_ok:
-            if on_accum_board or on_view_ticker or on_view_broker or on_preopen_board:
+            if (
+                on_accum_board
+                or on_view_ticker
+                or on_view_broker
+                or on_preopen_board
+                or on_plan_swing
+            ):
                 self.notify(
                     "Agent is available only in accumulation Judge · Enter a row first "
                     "(or enable ai.cockpit_multi_stage)",
@@ -2007,7 +2020,7 @@ class CockpitApp(App[None]):
             elif self._agent_cockpit_multi_stage:
                 self.notify(
                     "Research Cockpit multi-stage destinations are not available yet "
-                    "· open Judge, accum/preopen board, view ticker, or broker desk",
+                    "· open a shipped stage (Judge, boards, ticker, broker, plan)",
                     timeout=2.4,
                 )
             else:
@@ -2042,6 +2055,10 @@ class CockpitApp(App[None]):
                 raw = self._build_preopen_screen_raw_input()
                 stage_context = build_agent_stage_context(AgentStageKind.PREOPEN_SCREEN, raw)
                 source = raw
+            elif on_plan_swing:
+                raw = self._build_plan_swing_raw_input()
+                stage_context = build_agent_stage_context(AgentStageKind.PLAN_SWING, raw)
+                source = raw
             elif on_view_ticker:
                 dashboard = self._ticker_dashboard
                 if dashboard is None:
@@ -2070,6 +2087,8 @@ class CockpitApp(App[None]):
                 hint = f"Accum board context unavailable · {exc}"
             elif on_preopen_board:
                 hint = f"Pre-open board context unavailable · {exc}"
+            elif on_plan_swing:
+                hint = f"Plan structure context unavailable · {exc}"
             elif on_view_ticker:
                 hint = f"View ticker context unavailable · {exc}"
             else:
@@ -2083,6 +2102,8 @@ class CockpitApp(App[None]):
                 label = "Accum board"
             elif on_preopen_board:
                 label = "Pre-open board"
+            elif on_plan_swing:
+                label = "Plan structure"
             elif on_view_ticker:
                 label = "View ticker"
             else:
@@ -2103,11 +2124,13 @@ class CockpitApp(App[None]):
             except Exception:
                 pass
         generation = self._agent_generation
-        # Status strip subject: ticker for Judge/view ticker; board/broker labels otherwise.
+        # Status strip subject: ticker for Judge/view ticker; board/broker/plan labels otherwise.
         if on_accum_board:
             subject = f"BOARD:{getattr(stage_context, 'as_of', '—')}"
         elif on_preopen_board:
             subject = f"PREOPEN:{getattr(stage_context, 'as_of', '—')}"
+        elif on_plan_swing:
+            subject = f"PLAN:{getattr(stage_context, 'ticker', '—')}"
         elif on_view_broker:
             subject = f"BROKER:{getattr(stage_context, 'broker_code', '—')}"
         else:
@@ -2158,6 +2181,74 @@ class CockpitApp(App[None]):
         if not self._broker_desk_code:
             return False
         return self._broker_page in {"show", "top", "flow", "history", "matrix", "cal"}
+
+    def _build_plan_swing_raw_input(self):
+        """Assemble typed plan_swing input from plan stage structure (adapter-thin)."""
+        from src.adapters.tui.plan_structure_result import (
+            PlanStructureResult,
+            plan_structure_from_runner_object,
+        )
+        from src.application.services.agent_plan_swing_context import AgentPlanSwingRawInput
+        from src.application.services.agent_stage_context import (
+            AgentContextUnavailableError,
+        )
+
+        ticker = str(self._plan_ticker or self._focus_ticker or "").strip().upper()
+        if not ticker or ticker == "—":
+            raise AgentContextUnavailableError("no focused ticker for plan structure")
+
+        struct = self._plan_structure
+        if struct is not None and not isinstance(struct, PlanStructureResult):
+            struct = plan_structure_from_runner_object(struct)
+
+        row = self._rows[self._row_index] if self._rows else None
+        board_kind = None
+        if self._board_kind in {"accum", "preopen"}:
+            board_kind = str(self._board_kind)
+        elif self._detail_return_stage in {"accum", "preopen"}:
+            board_kind = str(self._detail_return_stage)
+
+        if struct is None:
+            if self._plan_running:
+                return AgentPlanSwingRawInput(ticker=ticker, running=True)
+            # Allow summary-only path if result line exists.
+            summary = str(self._plan_result or "").strip()
+            if not summary:
+                raise AgentContextUnavailableError(
+                    "no plan structure yet · press p to run structure desk"
+                )
+            return AgentPlanSwingRawInput(
+                ticker=ticker,
+                summary=summary,
+                running=False,
+                board_kind=board_kind,
+                board_signal=str(getattr(row, "signal", "") or "") or None,
+                board_accum=str(getattr(row, "accum", "") or "") or None,
+                board_gate=str(getattr(row, "gate", "") or "") or None,
+                board_action=str(getattr(row, "action", "") or "") or None,
+            )
+
+        return AgentPlanSwingRawInput(
+            ticker=str(getattr(struct, "ticker", "") or ticker).upper() or ticker,
+            action=str(getattr(struct, "action", "—") or "—"),
+            entry=str(getattr(struct, "entry", "—") or "—"),
+            stop=str(getattr(struct, "stop", "—") or "—"),
+            target=str(getattr(struct, "target", "—") or "—"),
+            lots=str(getattr(struct, "lots", "—") or "—"),
+            risk_pct=str(getattr(struct, "risk_pct", "—") or "—"),
+            horizon=str(getattr(struct, "horizon", "swing") or "swing"),
+            incomplete_reason=str(getattr(struct, "incomplete_reason", "") or ""),
+            plan_id_short=str(getattr(struct, "plan_id_short", "") or ""),
+            inherits_action=bool(getattr(struct, "inherits_action", True)),
+            no_order=bool(getattr(struct, "no_order", True)),
+            summary=str(getattr(struct, "summary", "") or self._plan_result or ""),
+            board_kind=board_kind,
+            board_signal=str(getattr(row, "signal", "") or "") or None,
+            board_accum=str(getattr(row, "accum", "") or "") or None,
+            board_gate=str(getattr(row, "gate", "") or "") or None,
+            board_action=str(getattr(row, "action", "") or "") or None,
+            running=bool(self._plan_running),
+        )
 
     def _build_preopen_screen_raw_input(self):
         """Assemble typed preopen_screen input from the focused board (adapter-thin)."""
@@ -2505,6 +2596,7 @@ class CockpitApp(App[None]):
         if (
             not subject.startswith("BOARD:")
             and not subject.startswith("PREOPEN:")
+            and not subject.startswith("PLAN:")
             and not subject.startswith("BROKER:")
             and str(self._focus_ticker).upper() != subject
         ):

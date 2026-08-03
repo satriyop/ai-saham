@@ -21,6 +21,10 @@ from src.application.services.agent_accumulation_context import (
     build_agent_accumulation_context,
 )
 from src.application.services.agent_broker_desk_tool import BrokerDeskResultData
+from src.application.services.agent_plan_swing_context import (
+    AgentPlanSwingRawInput,
+    build_agent_plan_swing_context,
+)
 from src.application.services.agent_preopen_screen_context import (
     AgentPreOpenScreenRawInput,
     build_agent_preopen_screen_context,
@@ -33,6 +37,7 @@ from src.application.services.agent_view_ticker_context import build_agent_view_
 
 __all__ = [
     "AgentAccumScreenRawInput",
+    "AgentPlanSwingRawInput",
     "AgentPreOpenScreenRawInput",
     "AgentContextInvariantError",
     "AgentContextUnavailableError",
@@ -103,6 +108,14 @@ def build_agent_stage_context(
                 f"got {type(raw_stage_input).__name__}"
             )
         return build_agent_preopen_screen_context(raw_stage_input)
+
+    if stage_kind is AgentStageKind.PLAN_SWING:
+        if not isinstance(raw_stage_input, AgentPlanSwingRawInput):
+            raise TypeError(
+                "plan_swing raw_stage_input must be AgentPlanSwingRawInput, "
+                f"got {type(raw_stage_input).__name__}"
+            )
+        return build_agent_plan_swing_context(raw_stage_input)
 
     # Remaining destinations land in later slices; refuse honestly rather than fabricate.
     raise AgentContextUnavailableError(

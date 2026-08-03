@@ -434,6 +434,44 @@ class AgentViewBrokerContext(AgentStageContext):
 
 
 @dataclass(frozen=True)
+class AgentPlanSwingContext(AgentStageContext):
+    """Plan swing structure desk (`stage_kind=plan_swing`, tui_agent.plan_swing.v1).
+
+    Non-authoritative structure facts only (ADR-054). Action is inherited from
+    the board/screen judgment; cockpit never places orders.
+    """
+
+    ticker: str
+    action: str
+    entry: str
+    stop: str
+    target: str
+    lots: str
+    risk_pct: str
+    horizon: str
+    incomplete_reason: str
+    plan_id_short: str
+    inherits_action: bool
+    no_order: bool
+    geometry_available: bool
+    summary: str
+    board_kind: str | None
+    board_signal: str | None
+    board_accum: str | None
+    board_gate: str | None
+    board_action: str | None
+    warnings: tuple[str, ...] = ()
+
+    @property
+    def stage_kind(self) -> AgentStageKind:
+        return AgentStageKind.PLAN_SWING
+
+    @property
+    def session_subject(self) -> str:
+        return f"PLAN_SWING:{self.ticker}"
+
+
+@dataclass(frozen=True)
 class AgentModelRequest:
     system_policy: str
     user_text: str
