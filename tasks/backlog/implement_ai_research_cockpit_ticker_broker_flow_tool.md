@@ -27,7 +27,8 @@ Hard rules:
 - `side_effect=NONE`, `approval=NONE`; cache-only; **no fetch/scrape/write**.
 - Wrap existing read-only composition: `ViewTickerTopBrokersUseCase` (named
   desks) + `BandarDetectorSnapshot` (counts + multi-window consistency) when present.
-- Bounded output: hard caps on `window_days` (≤ 20), `limit` (≤ 10), result bytes.
+- **Single-session only** (both backing reads are single-day): no multi-day
+  aggregation. Bounded output: hard caps on `limit` (≤ 10) and result bytes.
 - Available on all stages (flat registry); `UNAVAILABLE` when backing data absent —
   **never** a fabricated desk list.
 - Results are context only; deterministic Action authority untouched.
@@ -66,15 +67,19 @@ Read before editing:
    `total_buyers`/`total_sellers`/`number_broker_buysell`; `broker_accdist` +
    `five_day/top1/3/5/10_accdist`; provenance `tops_source`/`tops_scope`; `as_of`.
 2. **Tool:** `TickerBrokerFlowTool` — args `ticker` (required), optional
-   `window_days` (cap 20), `limit` (cap 10). Compose `ViewTickerTopBrokersUseCase`
-   (+ bandar snapshot when available). Cap output bytes; return `UNAVAILABLE` with a
-   typed error when backing data is missing.
+   `target_date` (default = latest summary date, mirrors
+   `ViewTickerTopBrokersRequest`), optional `limit` (cap 10). Compose
+   `ViewTickerTopBrokersUseCase` for the named desks + `BandarDetectorSnapshot`
+   (same session) for counts + built-in multi-window consistency labels. Cap
+   output bytes; return `UNAVAILABLE` with a typed error when backing data is
+   missing. **No multi-day aggregation** — consistency comes from the snapshot's
+   `five_day/top1/3/5/10_accdist` labels, not from looping days.
 3. **Register:** in composition, add the tool when `tools_enabled` and its backing
    use case/DB are available (mirror `TickerDashboardTool`/`BrokerDeskTool`).
 4. **Tests (offline, `pytest.mark.agent`):** happy path (named desks + counts +
-   consistency labels); `window_days`/`limit` caps enforced; missing-data →
-   `UNAVAILABLE` (no fabrication); result byte cap; frozen-dataclass result
-   validation; registration gated by flags.
+   consistency labels); default `target_date` = latest and an explicit past date;
+   `limit` cap enforced; missing-data → `UNAVAILABLE` (no fabrication); result byte
+   cap; frozen-dataclass result validation; registration gated by flags.
 5. **Docs:** flip coverage-matrix rows 1/2/4 to 🟢 with tool+field citations; add a
    journey SSOT changelog row.
 
@@ -82,7 +87,8 @@ Read before editing:
 
 - [ ] `get_ticker_broker_flow` returns named accumulating **and** distributing
   desks for a ticker, with buyer/seller counts and multi-window consistency labels.
-- [ ] Caps enforced (`window_days` ≤ 20, `limit` ≤ 10, result bytes).
+- [ ] Single-session; `target_date` defaults to latest; `limit` ≤ 10 and result
+  bytes enforced. No multi-day aggregation.
 - [ ] Missing backing data → `UNAVAILABLE`, never a fabricated desk list.
 - [ ] `side_effect=NONE`, no confirm; cache-only; no fetch/scrape/write.
 - [ ] Offered on all stages; deterministic Action authority untouched.
@@ -103,6 +109,12 @@ ruff format --check src/ tests/
 
 - Insider (row 7) and corporate action (row 8) — their data is also local but they
   are **separate sibling tasks** under ADR-061, not part of this one.
+- **Multi-day per-desk aggregation / streak (row 3 "how many days/months")** — the
+  backing reads are single-session and no multi-day top-desk ranker exists. Building
+  one is genuine new analysis (ranking across sessions, per-desk streak definition),
+  **not** a thin projection — carve it out as a **separate future task** (single
+  daily streak stays covered by `judge_accumulation_ticker.consecutive_streak`; the
+  snapshot's 5-day/top-N smoothed labels are surfaced here).
 - Per-broker average price / monthly aggregation (revisit if asked).
 - External/network or elevated access; model-invented tools.
 - Any write/fetch/refresh.
