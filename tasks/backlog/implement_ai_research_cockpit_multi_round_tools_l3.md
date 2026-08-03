@@ -1,7 +1,6 @@
 # Implement AI Research Cockpit L3 — Bounded Multi-Round OUR Tools
 
-Status: `ACTIVATED` — architecture authorized by ADR-064 (2026-08-03); runtime
-not started
+Status: `IMPLEMENTED` — architecture ADR-064; runtime landed 2026-08-03
 
 Source:
 
@@ -44,20 +43,20 @@ commit ADR-063 session state. With multi_round false, ADR-061 L1 is unchanged.
 
 ## 5. Acceptance Criteria
 
-- [ ] `ai.tools_multi_round` in config (default false)  
-- [ ] L1 path bit-identical when flag false  
-- [ ] L3 path enforces 3 rounds / 4 tools / 2 per batch / sequential / no retry  
-- [ ] Last provider call forced `tool_choice=none` when at round cap  
-- [ ] Intermediate provider text is not Turn OK answer  
-- [ ] Invalid batch / exhaustion → FAILED with detail  
-- [ ] Session atomic commit (ADR-063 + ADR-064)  
-- [ ] Offline `pytest -m agent` green; multi-round unit tests with fakes  
-- [ ] Ruff whole-repo gate  
-- [ ] Journey SSOT L3 row updated on completion  
+- [x] `ai.tools_multi_round` in config (default false)  
+- [x] L1 path bit-identical when flag false  
+- [x] L3 path enforces 3 rounds / 4 tools / 2 per batch / sequential / no retry  
+- [x] Last provider call forced `tool_choice=none` when at round cap  
+- [x] Intermediate provider text is not Turn OK answer  
+- [x] Invalid batch / exhaustion → FAILED with detail  
+- [x] Session atomic commit (ADR-063 + ADR-064)  
+- [x] Offline `pytest -m agent` green; multi-round unit tests with fakes  
+- [x] Ruff whole-repo gate  
+- [x] Journey SSOT L3 row updated on completion  
 
 ## 6. Completion Record
 
 - Activation ADR: ADR-064  
-- Implemented date:  
-- Commit(s):  
-- Verification:  
+- Implemented date: 2026-08-03  
+- Commit(s): `383b4495` config · `022c5f97` orchestrator · `2352ccc9` UX · `d1166b0b` tests · docs follow  
+- Verification: `pytest -m agent` 150 passed + 40 skipped (live); multi-round module 8 passed; whole-repo Ruff green

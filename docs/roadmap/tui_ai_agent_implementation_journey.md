@@ -37,6 +37,7 @@ code, then update this journey.
 | **2.3** | Tool: `judge_accumulation_ticker` (read-only composition) | Implemented | `a768f963` |
 | **2.4** | Tool: `get_broker_desk` (cache-only named view) | Implemented | `813305b2` · epic close `2f1fa01d` |
 | **3** | Process-local multi-turn session + budgets + reset | Implemented | ADR-063 `e5587381` · runtime `afb9d677` |
+| **L3** | Bounded multi-round OUR tools (3 rounds / 4 tools) | Implemented | ADR-064 · `ai.tools_multi_round` · `d1166b0b` family |
 | **4** | Durable audit / transcript store | **Parked** | needs dedicated ADR |
 | **5** | Consequential / write tools | **Parked** | per-tool ADR |
 
@@ -48,6 +49,7 @@ Operator works any cockpit stage (v1 entry: accumulation Judge)
            or type a question (auto agent mode when context valid)
         → Research Cockpit: status strip · question · answer · meta · tools · more notes
         → OUR closed read tools (if ai.tools_enabled)
+        → Optional multi-round OUR tools (if ai.tools_multi_round; ADR-064 L3)
         → Optional follow-ups in-process (if ai.session_enabled)
         → Esc leaves Research Cockpit · prior deterministic stage restored
         → Judge/Action never overwritten by the model
@@ -105,8 +107,8 @@ flags may tighten or expand by ADR as the cockpit matures; vocabulary stays.
 |---|---|---|
 | L1 | One-batch OUR tools | Shipped (ADR-061) |
 | L2 | Prompt/UX quality (no tools-ran honesty, etc.) | Incremental |
-| L3 | Bounded multi-round OUR tools (3 rounds / 4 tools); `ai.tools_multi_round` | **ADR-064 accepted**; runtime not started |
-| L4 | Named external + RO data research + confirm y/n + fail-safe | **ADR-065 accepted**; runtime not started (after L3 preferred) |
+| L3 | Bounded multi-round OUR tools (3 rounds / 4 tools); `ai.tools_multi_round` | **Implemented** (default false → L1 ceilings) |
+| L4 | Named external + RO data research + confirm y/n + fail-safe | **ADR-065 accepted**; runtime not started (after L3) |
 
 **v1 entry scope (shipped):** invocation is fully wired on **accumulation Judge**
 with full candidate context. **Destination:** invoke from **every TUI stage**
@@ -170,6 +172,7 @@ All defaults are **safe-off**. Compose from `config/default.yaml` + local
 | `ai.enabled` | `false` | Any agent call |
 | `ai.provider` | `deepseek` | Only `deepseek` is supported for live agent |
 | `ai.tools_enabled` | `false` | Closed ADR-061 tools during a turn |
+| `ai.tools_multi_round` | `false` | ADR-064 L3 multi-round (3 rounds / 4 tools); requires tools_enabled |
 | `ai.session_enabled` | `false` | Process-local multi-turn packing (ADR-063) |
 
 | Credential | Source |
@@ -183,16 +186,18 @@ All defaults are **safe-off**. Compose from `config/default.yaml` + local
 | **A — Offline / AI off** | all AI flags false | Prove cockpit without agent |
 | **B — Phase 1 only** | `enabled=true`, tools/session false | One-shot commentary |
 | **C — Phase 2 tools** | `enabled=true`, `tools_enabled=true` | Tool trace + grounded reads |
+| **C3 — L3 multi-round** | C + `tools_multi_round=true` | Up to 3 rounds / 4 tools; progress lines |
 | **D — Phase 3 session** | C + `session_enabled=true` | Follow-ups + `/reset` |
 | **E — Fail-soft** | `enabled=true`, no key / wrong provider | Explicit unavailable, Judge intact |
 
-Example **Profile D** fragment for `config/user.yaml` (local only; do not commit secrets):
+Example **Profile C3** fragment for `config/user.yaml` (local only; do not commit secrets):
 
 ```yaml
 ai:
   enabled: true
   provider: deepseek
   tools_enabled: true
+  tools_multi_round: true
   session_enabled: true
 ```
 
@@ -416,7 +421,8 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | Vocabulary | Coined **AI Research Cockpit** for `/`; multi-stage destination; L3/L4 journey |
 | 2026-08-03 | ADR-064 | L3 multi-round OUR tools authorized; implement task activated |
 | 2026-08-03 | ADR-065 | L4 web_research + RO data ask + confirm/gap clues authorized |
-| _next_ | Implement L3 then L4 runtime | Goal brief: `tasks/backlog/GOAL_implement_ai_research_cockpit_l3_l4.md` |
+| 2026-08-03 | L3 runtime | `tools_multi_round` + orchestrator 3/4/2 + Research Cockpit progress (`d1166b0b` family) |
+| _next_ | L4 runtime | ADR-065; goal brief `GOAL_implement_ai_research_cockpit_l3_l4.md` |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same
