@@ -17,10 +17,22 @@ class AgentToolName(str, Enum):
     GET_TICKER_DASHBOARD = "get_ticker_dashboard"
     JUDGE_ACCUMULATION_TICKER = "judge_accumulation_ticker"
     GET_BROKER_DESK = "get_broker_desk"
+    # ADR-065 elevated / external (opt-in flags)
+    WEB_RESEARCH = "web_research"
+    RO_DATA_QUERY = "ro_data_query"
 
 
 class AgentToolSideEffect(str, Enum):
     NONE = "NONE"
+    NETWORK_READ = "NETWORK_READ"
+    LOCAL_READ_ELEVATED = "LOCAL_READ_ELEVATED"
+
+
+class AgentToolApproval(str, Enum):
+    """Confirm policy before execute (ADR-065)."""
+
+    NONE = "NONE"
+    PER_CALL = "PER_CALL"
 
 
 class AgentToolArgumentType(str, Enum):
@@ -54,6 +66,7 @@ class AgentToolDefinition:
     timeout_ms: int
     max_result_bytes: int
     side_effect: AgentToolSideEffect = AgentToolSideEffect.NONE
+    approval: AgentToolApproval = AgentToolApproval.NONE
 
     def __post_init__(self) -> None:
         if not self.description.strip():
@@ -69,8 +82,17 @@ class AgentToolDefinition:
         names = tuple(item.name for item in self.arguments)
         if len(names) != len(set(names)):
             raise ValueError("agent tool argument names must be unique")
-        if self.side_effect is not AgentToolSideEffect.NONE:
-            raise ValueError("Phase 2 agent tools must be side-effect free")
+        if self.side_effect is AgentToolSideEffect.NONE:
+            if self.approval is not AgentToolApproval.NONE:
+                raise ValueError("side_effect=NONE tools cannot require per-call approval")
+        elif self.side_effect in {
+            AgentToolSideEffect.NETWORK_READ,
+            AgentToolSideEffect.LOCAL_READ_ELEVATED,
+        }:
+            if self.approval is not AgentToolApproval.PER_CALL:
+                raise ValueError("elevated/external tools require PER_CALL approval")
+        else:
+            raise ValueError(f"unsupported agent tool side_effect: {self.side_effect}")
 
 
 class AgentToolArguments:
@@ -145,10 +167,14 @@ class AgentToolExecutionResult:
     def __post_init__(self) -> None:
         if not self.call_id.strip():
             raise ValueError("agent tool call id cannot be empty")
-        if self.side_effect is not AgentToolSideEffect.NONE:
-            raise ValueError("Phase 2 agent tool result must have side_effect=NONE")
+        if self.side_effect not in {
+            AgentToolSideEffect.NONE,
+            AgentToolSideEffect.NETWORK_READ,
+            AgentToolSideEffect.LOCAL_READ_ELEVATED,
+        }:
+            raise ValueError(f"unsupported agent tool result side_effect: {self.side_effect}")
         if self.retryable:
-            raise ValueError("Phase 2 agent tool results cannot be retryable")
+            raise ValueError("agent tool results cannot be retryable")
         if self.status is AgentToolExecutionStatus.SUCCESS:
             if self.data is None or self.error_code is not None or self.error_message is not None:
                 raise ValueError("successful agent tool result requires only typed data")
@@ -181,6 +207,7 @@ class AgentToolExecutionResult:
         freshness: AgentToolFreshness | None = None,
         provenance: AgentToolProvenance,
         source_reference: str | None = None,
+        side_effect: AgentToolSideEffect = AgentToolSideEffect.NONE,
     ) -> AgentToolExecutionResult:
         envelope = _AgentToolResultEnvelope(
             call_id=call_id,
@@ -194,7 +221,7 @@ class AgentToolExecutionResult:
             provenance=provenance,
             source_reference=source_reference,
             retryable=False,
-            side_effect=AgentToolSideEffect.NONE,
+            side_effect=side_effect,
         )
         return cls(
             call_id=call_id,
@@ -208,6 +235,7 @@ class AgentToolExecutionResult:
             provenance=provenance,
             source_reference=source_reference,
             result_reference=canonical_reference(envelope),
+            side_effect=side_effect,
         )
 
     def canonical_payload(self) -> dict[str, object]:
@@ -300,6 +328,40 @@ class AgentToolTurnPolicy:
             max_tool_calls=4,
             tool_budget_seconds=20.0,
             turn_deadline_seconds=45.0,
+        )
+
+
+@dataclass(frozen=True)
+class AgentApprovalRequest:
+    """Application-owned confirm request before elevated/external execute (ADR-065)."""
+
+    call_id: str
+    tool_name: str
+    arg_summary: str
+    implication: str
+    side_effect: AgentToolSideEffect
+
+    def __post_init__(self) -> None:
+        if not self.call_id.strip() or not self.tool_name.strip():
+            raise ValueError("approval request requires call_id and tool_name")
+        if not self.arg_summary.strip() or not self.implication.strip():
+            raise ValueError("approval request requires arg_summary and implication")
+
+
+@dataclass(frozen=True)
+class AgentToolGapClue:
+    """Structured clue when the model wants an unregistered / blocked capability."""
+
+    requested_name: str
+    suggested_our_tool: str
+    purpose: str
+    reason: str
+    code: str = "TOOL_GAP"
+
+    def operator_line(self) -> str:
+        return (
+            f"{self.code} · suggested our tool: {self.suggested_our_tool} "
+            f"({self.purpose}) · requested {self.requested_name}"
         )
 
 

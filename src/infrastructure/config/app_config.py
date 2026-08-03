@@ -123,6 +123,10 @@ class AiConfig:
     tools_enabled: bool = False
     # ADR-064: bounded multi-round OUR tools (L3). Default false keeps ADR-061 L1.
     tools_multi_round: bool = False
+    # ADR-065: elevated/external master + per-capability (all default false).
+    external_tools: bool = False
+    web_research: bool = False
+    ro_data_query: bool = False
     session_enabled: bool = False
 
 

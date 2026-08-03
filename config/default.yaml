@@ -109,4 +109,8 @@ ai:
   # ADR-064 L3: when true (+ tools_enabled), allow up to 3 provider rounds / 4 tools / 2 per batch.
   # Default false keeps exact ADR-061 L1 ceilings (1 tool batch, 2 tools, 2 provider calls).
   tools_multi_round: false
+  # ADR-065 L4: elevated/external capabilities (master + per-capability; all default false).
+  external_tools: false
+  web_research: false
+  ro_data_query: false
   session_enabled: false # process-local multi-turn follow-ups (ADR-063)

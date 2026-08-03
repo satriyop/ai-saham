@@ -294,6 +294,11 @@ class AgentTurnResult:
     tool_results: tuple[AgentToolExecutionResult, ...] = ()
     session_id: str | None = None
     turn_sequence: int | None = None
+    # ADR-065: structured tool-gap clues (also mirrored into warnings operator lines)
+    gap_clues: tuple = ()
+    # True when this turn executed or denied an elevated/external tool after approve path
+    elevated_attempted: bool = False
+    restore_last_good: bool = False
 
     def __post_init__(self) -> None:
         if self.turn_sequence is not None and self.turn_sequence < 1:
