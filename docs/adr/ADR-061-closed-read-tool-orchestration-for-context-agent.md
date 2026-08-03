@@ -429,6 +429,11 @@ transport, sessions, persistence, or writes.
     Multi-turn process-local sessions are authorized only by
     [ADR-063](ADR-063-ephemeral-agent-session-and-context-budget.md), not by this
     ADR alone.
+11. Phase 2 is a **single tool batch** per user turn. Bounded multi-round tool
+    execution (L3) is authorized only by
+    [ADR-064](ADR-064-ai-research-cockpit-bounded-multi-round-tools.md) when
+    `ai.tools_multi_round` is enabled; otherwise this ADR’s one-batch ceilings
+    remain exact.
 
 ## Non-goals
 

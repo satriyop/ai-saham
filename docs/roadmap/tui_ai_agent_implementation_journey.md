@@ -105,8 +105,8 @@ flags may tighten or expand by ADR as the cockpit matures; vocabulary stays.
 |---|---|---|
 | L1 | One-batch OUR tools | Shipped (ADR-061) |
 | L2 | Prompt/UX quality (no tools-ran honesty, etc.) | Incremental |
-| L3 | Bounded multi-round OUR tools (e.g. 3 rounds / 4 tools); flag progressive | Planned journey |
-| L4 | Named external + RO data research + confirm y/n + fail-safe | Planned journey |
+| L3 | Bounded multi-round OUR tools (3 rounds / 4 tools); `ai.tools_multi_round` | **ADR-064 accepted**; runtime not started |
+| L4 | Named external + RO data research + confirm y/n + fail-safe | Planned journey (separate ADR) |
 
 **v1 entry scope (shipped):** invocation is fully wired on **accumulation Judge**
 with full candidate context. **Destination:** invoke from **every TUI stage**
@@ -414,7 +414,8 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | Data honesty strip | Ranked notes + Do guides; risk lag / authority WARN; settlement INFO; session dedupe |
 | 2026-08-03 | UX locks + golden pilot | § AI Research Cockpit UX locks (v1); `test_agent_stage_ux_golden.py` |
 | 2026-08-03 | Vocabulary | Coined **AI Research Cockpit** for `/`; multi-stage destination; L3/L4 journey |
-| _next_ | L3 multi-round / L4 external research ADRs | Keep term; expand stage coverage |
+| 2026-08-03 | ADR-064 | L3 multi-round OUR tools authorized; implement task activated |
+| _next_ | Implement L3 runtime · L4 ADR | Research Cockpit journey continues |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same
