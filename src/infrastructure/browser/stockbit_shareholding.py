@@ -349,6 +349,64 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
             logger.warning("shareholding: cache read failed for %s: %s", ticker, e)
             return None
 
+    def get_history(
+        self,
+        ticker: str,
+        limit: int,
+        as_of_date: date | None = None,
+    ) -> tuple[ShareholdingComposition, ...]:
+        """Public cache-only read. Never fetches; dedupes re-fetches per period."""
+        where = "WHERE ticker=?"
+        params: list[object] = [ticker]
+        if as_of_date is not None:
+            where += " AND COALESCE(date(report_date), date(fetched_date)) <= date(?)"
+            params.append(as_of_date.isoformat())
+        query = (
+            "WITH ranked AS ("
+            "  SELECT ticker, fetched_date, report_date, institution_pct, individual_pct,"
+            "         top_holder_name, top_holder_pct, total_shares, total_shares_formatted,"
+            "         COALESCE(date(report_date), date(fetched_date)) AS period_key"
+            "  FROM shareholding_composition "
+            f"  {where}"
+            "), latest_per_period AS ("
+            "  SELECT period_key, MAX(fetched_date) AS max_fetched"
+            "  FROM ranked GROUP BY period_key"
+            ") "
+            "SELECT r.fetched_date, r.report_date, r.institution_pct, r.individual_pct, "
+            "       r.top_holder_name, r.top_holder_pct, r.total_shares, r.total_shares_formatted "
+            "FROM ranked r "
+            "JOIN latest_per_period l "
+            "  ON r.period_key = l.period_key AND r.fetched_date = l.max_fetched "
+            "ORDER BY r.period_key DESC "
+            "LIMIT ?"
+        )
+        params.append(int(limit))
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                rows = conn.execute(query, tuple(params)).fetchall()
+        except Exception as e:
+            logger.warning("shareholding: history read failed for %s: %s", ticker, e)
+            return ()
+        results: list[ShareholdingComposition] = []
+        for row in rows:
+            fetched_at = _parse_fetched_at(row[0])
+            if fetched_at is None:
+                continue
+            results.append(
+                ShareholdingComposition(
+                    ticker=ticker,
+                    report_date=_parse_date(row[1] or ""),
+                    institution_pct=float(row[2] or 0),
+                    individual_pct=float(row[3] or 0),
+                    top_holder_name=str(row[4] or ""),
+                    top_holder_pct=float(row[5] or 0),
+                    total_shares=int(row[6]) if row[6] is not None else None,
+                    total_shares_formatted=row[7],
+                    fetched_at=fetched_at,
+                )
+            )
+        return tuple(results)
+
     def _write_cache(self, comp: ShareholdingComposition) -> None:
         fetched_str = comp.fetched_at.isoformat() if comp.fetched_at else datetime.now().isoformat()
 

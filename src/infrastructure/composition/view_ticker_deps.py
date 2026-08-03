@@ -23,6 +23,9 @@ from src.application.use_case.view_ticker_flow_use_case import ViewTickerFlowUse
 from src.application.use_case.view_ticker_foreign_history_use_case import (
     ViewTickerForeignHistoryUseCase,
 )
+from src.application.use_case.view_ticker_ownership_history_use_case import (
+    ViewTickerOwnershipHistoryUseCase,
+)
 from src.application.use_case.view_ticker_top_brokers_use_case import (
     ViewTickerTopBrokersUseCase,
 )
@@ -273,3 +276,29 @@ def build_read_only_ticker_ownership_source(
     if not resolved.is_file():
         raise FileNotFoundError(f"ticker ownership database is unavailable: {resolved}")
     return SQLiteTickerDashboardSource(resolved, initialize_schema=False)
+
+
+def build_read_only_ticker_ownership_history_use_case(
+    db_path: Path | str,
+) -> ViewTickerOwnershipHistoryUseCase:
+    """Construct the ownership-history use case without schema initialization.
+
+    Reserved for side-effect-free agent tool registration. Requires an existing
+    DB file; never creates or migrates tables; never opens a live API client.
+    """
+    from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
+    from src.infrastructure.browser.stockbit_shareholding import StockbitShareholdingProvider
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"ticker ownership-history database is unavailable: {resolved}")
+    provider = StockbitShareholdingProvider(
+        api_client=None,
+        db_path=resolved,
+        connection_provider=StockbitSQLiteConnectionProvider(initialize_schema=False),
+        stockbit_config=load_stockbit_provider_config(),
+    )
+    return ViewTickerOwnershipHistoryUseCase(provider)

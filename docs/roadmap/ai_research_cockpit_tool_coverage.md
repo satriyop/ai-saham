@@ -51,6 +51,7 @@ What still binds (these are governance, not style):
 | `get_ticker_foreign_flow` | OUR / NONE | foreign net series: `cumulative_net_idr`, `latest_net_idr`, `net_buy_sessions`/`active_sessions`, `trend_direction` (rising/falling/flat), capped `(date, net_value_idr)` tail, `resolved_source` |
 | `get_ticker_desk_flow_history` | OUR / NONE | multi-session desks: `top_accumulating`/`top_distributing` (cumulative_net, active/net_buy sessions, longest_streak, avg prices, weekly_net), rotation, foreign/local split |
 | `get_ticker_ownership` | OUR / NONE | `institution_pct`, `individual_pct`, `top_holder_name`/`top_holder_pct`, `total_shares`(+formatted), `report_date` |
+| `get_ticker_ownership_history` | OUR / NONE | deduped `periods[]` (`report_date`, `institution_pct`, `individual_pct`, `free_float_pct`, `top_holder_name`/`top_holder_pct`, `total_shares`), latest-vs-previous `institution_pct_change`/`float_change`/`top_holder_pct_change`; PIT via `as_of_date` |
 | `web_research` | External / NETWORK_READ | external snippets (confirm) |
 | `ro_data_query` | Elevated / LOCAL_READ_ELEVATED | 3 allowlisted shapes: ticker close, ticker volume, broker day net (confirm) |
 
@@ -97,7 +98,7 @@ All data is **local** (🟡 projection gaps) → each an implement task under AD
 |---|---|---|---|---|
 | 9 | Is **foreign/smart money** accumulating (net trend over weeks)? | `foreign_flow_points` series | ✅ `get_ticker_foreign_flow` (`cumulative_net_idr`, `latest_net_idr`, `trend_direction`, `net_buy_sessions`, point tail) — complements dashboard window summaries | 🟢 covered |
 | 10 | What's the current **market regime / breadth**? | `market_context_snapshots` + `regime_observations` | `BuildMarketContextUseCase` (stored snapshot) → [`get_market_regime` task](../../tasks/backlog/implement_ai_research_cockpit_market_regime_tool.md) | 🟡→ task |
-| 11 | Is the **float tightening** / who owns it? | `shareholding_composition` (`institution_pct`, `individual_pct`, `top_holder_*`, `total_shares`) | ✅ `get_ticker_ownership` (`institution_pct`, `individual_pct`, `top_holder_name`, `top_holder_pct`, `total_shares`, `report_date`) | 🟢 covered |
+| 11 | Is the **float tightening** / who owns it? | `shareholding_composition` (`institution_pct`, `individual_pct`, `top_holder_*`, `total_shares`) | ✅ `get_ticker_ownership` (single latest); history via `get_ticker_ownership_history` (`periods[]`, `institution_pct_change`, `float_change`, `top_holder_pct_change`) | 🟢 covered |
 | 12 | **Pre-open IEV** / NCP snapshot / IEV delta? | `iev_snapshots` | `SQLiteIEVRepository` (`get_ncp_snapshot`, `get_iev_delta`, `get_locked_iev_baseline`) → [`get_preopen_iev` task](../../tasks/backlog/implement_ai_research_cockpit_preopen_iev_tool.md) | 🟡→ task |
 | 13 | **Sector** strength / rotation / peers? | sector macro context evidence (ADR-053) | rescoped deeper → **`BuildTickerSectorContextUseCase`** (shared CLI/TUI/agent; descriptive, not scored) via [`get_ticker_sector_context` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) | 🟡→ task (rescoped) |
 
@@ -110,7 +111,7 @@ descriptive (no authority/score):
 
 | Menu | Deepening | Task |
 |---|---|---|
-| A | Ownership **history / float trend** (new port `get_ownership_history` + dedupe per `report_date`) | [`get_ticker_ownership_history`](../../tasks/backlog/implement_ai_research_cockpit_ticker_ownership_history_tool.md) |
+| A | Ownership **history / float trend** (new port `get_ownership_history` + dedupe per `report_date`) | ✅ `get_ticker_ownership_history` (IMPLEMENTED; see `tasks/done/…ownership_history…`) |
 | B | Sector context as a **shared use case** (`BuildTickerSectorContextUseCase`) | [`get_ticker_sector_context`](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) |
 | C | Desk flow **rotation + foreign/local split + weekly trajectory** | ✅ `get_ticker_desk_flow_history` (IMPLEMENTED; see `tasks/done/…desk_flow_history…`) |
 | D | Fundamentals / **earnings trend** over quarters | [`get_ticker_fundamentals_trend`](../../tasks/backlog/implement_ai_research_cockpit_ticker_fundamentals_trend_tool.md) |

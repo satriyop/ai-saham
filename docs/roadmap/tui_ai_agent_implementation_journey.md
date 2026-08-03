@@ -445,6 +445,7 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-04 | `get_ticker_foreign_flow` | Foreign net-flow trend series tool (ADR-061); coverage row 9 |
 | 2026-08-04 | `get_ticker_desk_flow_history` | Multi-session desk persistence + rotation/split (ADR-061); coverage row 3 multi-day |
 | 2026-08-04 | `get_ticker_ownership` | Ownership composition / float facts tool (ADR-061); coverage row 11 |
+| 2026-08-04 | `get_ticker_ownership_history` | Ownership period history + latest deltas, new `ShareholdingProvider.get_history` port + PIT `as_of_date` (ADR-061, Depth policy Menu A); coverage row 11 deepened |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same

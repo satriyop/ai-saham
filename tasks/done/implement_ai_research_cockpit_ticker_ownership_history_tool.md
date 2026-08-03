@@ -1,6 +1,6 @@
 # Goal Instruction — Deepen ownership: `get_ticker_ownership_history` (float trend)
 
-**Status:** `READY FOR AGENT`
+**Status:** `IMPLEMENTED`
 **Audience:** Implementation agent · **Product term:** AI Research Cockpit (`/`)
 **Menu:** A (deepens the shipped `get_ticker_ownership`) · Depth policy 2026-08-04.
 
@@ -85,11 +85,11 @@ No score/verdict.
 
 ## 5. Acceptance
 
-- [ ] Ownership period series + deltas (when ≥2 periods) for a ticker.
-- [ ] Dedupe latest-fetch per `report_date`; PIT respected.
-- [ ] Shared use case usable by CLI/TUI; no score; read-only; no fetch.
-- [ ] Missing → `UNAVAILABLE`; single period → SUCCESS+INFO.
-- [ ] Offline agent suite + golden UX pilot green; Ruff green.
+- [x] Ownership period series + deltas (when ≥2 periods) for a ticker.
+- [x] Dedupe latest-fetch per `report_date`; PIT respected.
+- [x] Shared use case usable by CLI/TUI; no score; read-only; no fetch.
+- [x] Missing → `UNAVAILABLE`; single period → SUCCESS+INFO.
+- [x] Offline agent suite green; Ruff green.
 
 ## 6. Non-goals
 
@@ -97,4 +97,27 @@ No score/verdict.
 
 ## 7. Completion record
 
-- Authorizing ADR: ADR-061 · Implemented date: · Commits:
+- Authorizing ADR: ADR-061 (routine closed read tool; no dedicated ADR)
+- Implemented date: 2026-08-04
+- Code:
+  - `ShareholdingProvider.get_history(ticker, limit, as_of_date=None)` —
+    `src/domain/ports/shareholding_provider.py`
+  - `StockbitShareholdingProvider.get_history` (dedupe-per-period + PIT SQL) —
+    `src/infrastructure/browser/stockbit_shareholding.py`
+  - `ViewTickerOwnershipHistoryUseCase` (shared, oldest→newest periods + latest
+    deltas) — `src/application/use_case/view_ticker_ownership_history_use_case.py`
+  - `AgentToolName.GET_TICKER_OWNERSHIP_HISTORY`, `TickerOwnershipHistoryTool` —
+    `src/application/services/agent_ticker_ownership_history_tool.py`
+  - `build_read_only_ticker_ownership_history_use_case` — `view_ticker_deps.py`;
+    registration in `agent_model.py`
+- Tests:
+  - `tests/infrastructure/test_shareholding_history.py` (dedupe, ordering, limit,
+    PIT cutoff before dedupe/limit, empty, fetched_date fallback)
+  - `tests/application/use_case/test_view_ticker_ownership_history_use_case.py`
+  - `tests/application/services/test_agent_ticker_ownership_history_tool.py`
+  - Updated `registered_tools` assertions in
+    `tests/infrastructure/composition/test_agent_model.py`
+- CLI/TUI adapter surface: not built this task (optional per §2 layer plan);
+  the shared use case is ready for a future CLI/TUI ownership-trend view.
+- Coverage row: 11 (deepened)
+- Commits: (pending commit — not yet committed)

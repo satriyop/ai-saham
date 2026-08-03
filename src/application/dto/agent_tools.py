@@ -21,6 +21,7 @@ class AgentToolName(str, Enum):
     GET_TICKER_FOREIGN_FLOW = "get_ticker_foreign_flow"
     GET_TICKER_DESK_FLOW_HISTORY = "get_ticker_desk_flow_history"
     GET_TICKER_OWNERSHIP = "get_ticker_ownership"
+    GET_TICKER_OWNERSHIP_HISTORY = "get_ticker_ownership_history"
     # ADR-065 elevated / external (opt-in flags)
     WEB_RESEARCH = "web_research"
     RO_DATA_QUERY = "ro_data_query"

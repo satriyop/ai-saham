@@ -23,6 +23,9 @@ from src.application.services.agent_ticker_desk_flow_history_tool import (
     TickerDeskFlowHistoryTool,
 )
 from src.application.services.agent_ticker_foreign_flow_tool import TickerForeignFlowTool
+from src.application.services.agent_ticker_ownership_history_tool import (
+    TickerOwnershipHistoryTool,
+)
 from src.application.services.agent_ticker_ownership_tool import TickerOwnershipTool
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_visible_cockpit_tool import VisibleCockpitResultTool
@@ -48,6 +51,7 @@ from src.infrastructure.composition.view_ticker_deps import (
     build_read_only_ticker_dashboard_use_case,
     build_read_only_ticker_desk_flow_history_service,
     build_read_only_ticker_foreign_history_use_case,
+    build_read_only_ticker_ownership_history_use_case,
     build_read_only_ticker_ownership_source,
 )
 from src.infrastructure.config.local_env import read_local_env_value
@@ -163,6 +167,12 @@ def build_agent_composition(
                 ownership_source = None
             if ownership_source is not None:
                 tools.append(TickerOwnershipTool(ownership_source))
+            try:
+                ownership_history = build_read_only_ticker_ownership_history_use_case(db_path)
+            except (OSError, ValueError):
+                ownership_history = None
+            if ownership_history is not None:
+                tools.append(TickerOwnershipHistoryTool(ownership_history))
         if accumulation_judge_factory is not None:
             try:
                 judge_ticker = accumulation_judge_factory()

@@ -35,3 +35,26 @@ class ShareholdingProvider(ABC):
             Never raises.
         """
         ...
+
+    @abstractmethod
+    def get_history(
+        self,
+        ticker: str,
+        limit: int,
+        as_of_date: date | None = None,
+    ) -> tuple[ShareholdingComposition, ...]:
+        """Return up to `limit` distinct filing-period compositions, newest first.
+
+        Args:
+            ticker: Stock ticker symbol.
+            limit: Maximum number of distinct periods to return.
+            as_of_date: Same PIT semantics as get_composition — only periods on or
+                before this historical date are eligible. Applied before dedupe
+                and before limit. None means live mode.
+
+        Returns:
+            Tuple ordered newest period first, deduplicated to one row per
+            filing period (re-fetches of the same period collapse to the latest
+            fetch). Empty tuple if no eligible period exists. Never raises.
+        """
+        ...
