@@ -109,12 +109,11 @@ ruff format --check src/ tests/
 
 - Insider (row 7) and corporate action (row 8) — their data is also local but they
   are **separate sibling tasks** under ADR-061, not part of this one.
-- **Multi-day per-desk aggregation / streak (row 3 "how many days/months")** — the
-  backing reads are single-session and no multi-day top-desk ranker exists. Building
-  one is genuine new analysis (ranking across sessions, per-desk streak definition),
-  **not** a thin projection — carve it out as a **separate future task** (single
-  daily streak stays covered by `judge_accumulation_ticker.consecutive_streak`; the
-  snapshot's 5-day/top-N smoothed labels are surfaced here).
+- **Multi-day per-desk aggregation / streak (row 3 "how many days/months")** — this
+  is the **sibling** [`get_ticker_desk_flow_history` task](implement_ai_research_cockpit_ticker_desk_flow_history_tool.md)
+  (≤60-session window, facts-not-score), not part of this single-session tool.
+  This tool still surfaces the single-session 5-day/top-N smoothed labels;
+  `judge_accumulation_ticker.consecutive_streak` covers the daily streak.
 - Per-broker average price / monthly aggregation (revisit if asked).
 - External/network or elevated access; model-invented tools.
 - Any write/fetch/refresh.
