@@ -13,12 +13,14 @@ from textual import events
 from textual.message import Message
 from textual.widgets import Static
 
+from src.adapters.tui.theme import OC, bake_css
+
 # Design tokens — brass = nav keys · peach fill = is-on
-_BRASS = "#d4b06a"
-_LABEL = "#7a7a7a"
-_ON_INK = "#1a120c"
-_DIM_KEY = "#d4b06a"
-_DIM_LAB = "#555555"
+_BRASS = OC.brass
+_LABEL = OC.text_dim
+_ON_INK = OC.sel_text
+_DIM_KEY = OC.brass
+_DIM_LAB = OC.text_mute
 
 
 def format_chip_markup(
@@ -56,49 +58,49 @@ def format_chip_markup(
 class FlagChip(Static):
     """Mono pill chip: available · is-on · is-dim · warn · brass keycap."""
 
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     FlagChip {
         /* Uniform OpenCode pills: fixed row height so labels + borders align */
         width: auto;
         min-width: 9;
         height: 3;
-        color: #d8d8d8;
-        background: #141414;
-        border: solid #2a2a2a;
+        color: $oc_text;
+        background: $oc_bg_elevated;
+        border: solid $oc_hairline_strong;
         padding: 0 1;
         margin: 0 1 0 0;
         content-align: center middle;
         text-style: none;
     }
     FlagChip:hover {
-        color: #e8e8e8;
-        border: solid #555555;
-        background: #1a1a1a;
+        color: $oc_text_bright;
+        border: solid $oc_text_mute;
+        background: $oc_scalar_track;
     }
     FlagChip:focus {
-        border: solid #c9a68a;
-        color: #e8e8e8;
+        border: solid $oc_peach;
+        color: $oc_text_bright;
     }
     FlagChip.is-on {
-        color: #1a120c;
-        background: #c9a68a;
-        border: solid #c9a68a;
+        color: $oc_sel_text;
+        background: $oc_peach;
+        border: solid $oc_peach;
         text-style: none;
     }
     FlagChip.is-dim {
-        color: #6b6b6b;
-        background: #121212;
-        border: solid #2a2a2a;
+        color: $oc_dim;
+        background: $oc_track_inactive;
+        border: solid $oc_hairline_strong;
     }
     FlagChip.warn {
-        color: #d4b06a;
-        border: solid #1a1810;
-        background: #1a1810;
+        color: $oc_brass;
+        border: solid $oc_warn_bg;
+        background: $oc_warn_bg;
     }
     FlagChip.warn.is-on {
-        color: #1a120c;
-        background: #d4b06a;
-        border: solid #d4b06a;
+        color: $oc_sel_text;
+        background: $oc_brass;
+        border: solid $oc_brass;
         text-style: none;
     }
     /* Context sub-chips (e.g. fin [y] period): not painted outside parent job */
@@ -113,7 +115,7 @@ class FlagChip(Static):
         padding: 0 !important;
         border: none !important;
     }
-    """
+    """)
 
     can_focus = True
 

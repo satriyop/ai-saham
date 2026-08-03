@@ -18,6 +18,7 @@ from src.adapters.tui.broker_desk_matrix_model import (
     DEFAULT_MATRIX_WINDOWS,
     BrokerDeskMatrixModel,
 )
+from src.adapters.tui.theme import OC, bake_css
 
 
 class MatrixCell(Static):
@@ -51,34 +52,34 @@ class MatrixCell(Static):
 class BrokerMatrixDesk(Vertical):
     """Multi-window top-5 matrix mounted in stage-scroll."""
 
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     BrokerMatrixDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
 
     BrokerMatrixDesk .mx-title {
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
     }
 
     BrokerMatrixDesk .mx-sub {
-        color: #6b6b6b;
+        color: $oc_dim;
         margin-bottom: 0;
     }
 
     BrokerMatrixDesk .mx-scope {
-        color: #9b8fb8;
+        color: $oc_purple;
         margin-bottom: 1;
         height: auto;
     }
 
     BrokerMatrixDesk .mx-grid {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_peach;
         padding: 0 1 1 1;
         height: auto;
         margin-bottom: 1;
@@ -87,37 +88,37 @@ class BrokerMatrixDesk(Vertical):
     BrokerMatrixDesk .mx-head-row {
         height: auto;
         margin-bottom: 0;
-        border-bottom: solid #1c1c1c;
+        border-bottom: solid $oc_border;
         padding-bottom: 0;
     }
 
     BrokerMatrixDesk .mx-rank-h {
         width: 3;
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
     }
 
     BrokerMatrixDesk .mx-win-h {
         width: 1fr;
-        color: #6b6b6b;
+        color: $oc_dim;
         text-align: center;
         text-style: bold;
     }
 
     BrokerMatrixDesk .mx-win-h.def {
-        color: #c9a68a;
-        background: #1a1810;
+        color: $oc_peach;
+        background: $oc_warn_bg;
     }
 
     BrokerMatrixDesk .mx-row {
         height: auto;
-        border-top: solid #1c1c1c;
+        border-top: solid $oc_border;
         padding-top: 0;
     }
 
     BrokerMatrixDesk .mx-rank {
         width: 3;
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
     }
 
@@ -125,30 +126,30 @@ class BrokerMatrixDesk(Vertical):
         width: 1fr;
         height: auto;
         padding: 0 1;
-        color: #d8d8d8;
-        border-left: solid #1c1c1c;
+        color: $oc_text;
+        border-left: solid $oc_border;
     }
 
     BrokerMatrixDesk .mx-cell.def {
-        background: #1a1810;
-        border-left: solid #c9a68a;
+        background: $oc_warn_bg;
+        border-left: solid $oc_peach;
     }
 
     BrokerMatrixDesk .mx-empty {
-        color: #6b6b6b;
+        color: $oc_dim;
         height: auto;
         margin: 1 0;
     }
 
     BrokerMatrixDesk .mx-hub {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #2a2a2a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_hairline_strong;
         padding: 0 1;
         height: auto;
-        color: #9b8fb8;
+        color: $oc_purple;
     }
-    """
+    """)
 
     def compose(self) -> ComposeResult:
         yield Static("", id="mx-title", classes="mx-title")
@@ -204,11 +205,11 @@ class BrokerMatrixDesk(Vertical):
                     continue
                 slot.ticker = cell.ticker
                 # ticker + streak, net, avg — avg prominent
-                tk_color = "#c9a68a" if cell.is_default_window else "#e8e8e8"
+                tk_color = OC.peach if cell.is_default_window else OC.text_bright
                 slot.update(
-                    f"[bold {tk_color}]{cell.ticker}[/] [bold #c9a68a]{cell.streak_label}[/]\n"
-                    f"[#6fbf8a]{cell.net_display}[/]\n"
-                    f"[bold #e8e8e8]{cell.avg_buy_display}[/]"
+                    f"[bold {tk_color}]{cell.ticker}[/] [bold {OC.peach}]{cell.streak_label}[/]\n"
+                    f"[{OC.mint}]{cell.net_display}[/]\n"
+                    f"[bold {OC.text_bright}]{cell.avg_buy_display}[/]"
                 )
 
         empty = self.query_one("#mx-empty", Static)

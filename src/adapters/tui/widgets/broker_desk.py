@@ -13,6 +13,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
 from src.adapters.tui.broker_desk_home_model import BrokerDeskHomeModel
+from src.adapters.tui.theme import OC, bake_css
 from src.adapters.tui.widgets.chip_bar import BROKER_HOME_CHIPS, ChipBar
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
@@ -20,34 +21,34 @@ from src.adapters.tui.widgets.flag_chip import FlagChip
 class BrokerDesk(Vertical):
     """Structured desk home mounted inside stage-scroll."""
 
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     BrokerDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
 
     BrokerDesk .bd-title {
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
     }
 
     BrokerDesk .bd-sub {
-        color: #6b6b6b;
+        color: $oc_dim;
         margin-bottom: 1;
     }
 
     BrokerDesk .bd-scope {
-        color: #9b8fb8;
+        color: $oc_purple;
         margin-bottom: 1;
         height: auto;
     }
 
     BrokerDesk .bd-hero {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_peach;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
@@ -60,7 +61,7 @@ class BrokerDesk(Vertical):
     }
 
     BrokerDesk .bd-lab {
-        color: #c9a68a;
+        color: $oc_peach;
         text-style: bold;
     }
 
@@ -72,7 +73,7 @@ class BrokerDesk(Vertical):
     BrokerDesk .bd-sign {
         width: auto;
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
         padding-right: 1;
         content-align: left bottom;
     }
@@ -80,31 +81,31 @@ class BrokerDesk(Vertical):
     BrokerDesk .bd-amt {
         width: auto;
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
         padding-right: 1;
     }
 
     BrokerDesk .bd-unit {
         width: auto;
-        color: #6b6b6b;
+        color: $oc_dim;
         content-align: left bottom;
     }
 
     BrokerDesk .bd-net-row.pos .bd-sign,
     BrokerDesk .bd-net-row.pos .bd-amt {
-        color: #6fbf8a;
+        color: $oc_mint;
     }
 
     BrokerDesk .bd-net-row.neg .bd-sign,
     BrokerDesk .bd-net-row.neg .bd-amt {
-        color: #c97a72;
+        color: $oc_coral;
     }
 
     BrokerDesk .bd-subline {
-        color: #6b6b6b;
+        color: $oc_dim;
         margin-top: 1;
         height: auto;
-        border-top: solid #1c1c1c;
+        border-top: solid $oc_border;
         padding-top: 1;
     }
 
@@ -112,27 +113,27 @@ class BrokerDesk(Vertical):
         width: 2fr;
         height: auto;
         padding-left: 1;
-        border-left: solid #1c1c1c;
+        border-left: solid $oc_border;
     }
 
     BrokerDesk .bd-stat {
         height: auto;
-        color: #7a7a7a;
+        color: $oc_text_dim;
         margin-bottom: 0;
     }
 
     BrokerDesk .bd-stat .k {
-        color: #6b6b6b;
+        color: $oc_dim;
         width: 12;
     }
 
     BrokerDesk .bd-stat .v {
-        color: #e8e8e8;
+        color: $oc_text_bright;
         text-style: bold;
     }
 
-    BrokerDesk .bd-stat .v.pos { color: #6fbf8a; }
-    BrokerDesk .bd-stat .v.neg { color: #c97a72; }
+    BrokerDesk .bd-stat .v.pos { color: $oc_mint; }
+    BrokerDesk .bd-stat .v.neg { color: $oc_coral; }
 
     BrokerDesk .bd-cols {
         height: auto;
@@ -144,55 +145,55 @@ class BrokerDesk(Vertical):
         height: auto;
         padding: 0 1 1 1;
         margin-right: 1;
-        background: #141414;
-        border: solid #1c1c1c;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
     }
 
     BrokerDesk .bd-col.buy {
-        border-left: solid #6fbf8a;
+        border-left: solid $oc_mint;
     }
 
     BrokerDesk .bd-col.sell {
-        border-left: solid #c97a72;
+        border-left: solid $oc_coral;
         margin-right: 0;
     }
 
     BrokerDesk .bd-col-title {
-        color: #c9a68a;
+        color: $oc_peach;
         text-style: bold;
         margin-bottom: 0;
         height: auto;
-        border-bottom: solid #1c1c1c;
+        border-bottom: solid $oc_border;
         padding-bottom: 0;
     }
 
     BrokerDesk .bd-row {
         height: auto;
-        color: #d8d8d8;
-        border-top: solid #1c1c1c;
+        color: $oc_text;
+        border-top: solid $oc_border;
         padding: 0 0;
     }
 
     BrokerDesk .bd-row .tk {
         width: 8;
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
     }
 
-    BrokerDesk .bd-row .nv.pos { color: #6fbf8a; }
-    BrokerDesk .bd-row .nv.neg { color: #c97a72; }
+    BrokerDesk .bd-row .nv.pos { color: $oc_mint; }
+    BrokerDesk .bd-row .nv.neg { color: $oc_coral; }
 
     BrokerDesk .bd-hub {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #2a2a2a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_hairline_strong;
         padding: 0 1;
         height: auto;
-        color: #9b8fb8;
+        color: $oc_purple;
     }
 
     BrokerDesk .bd-empty {
-        color: #6b6b6b;
+        color: $oc_dim;
         height: auto;
         margin: 1 0;
     }
@@ -201,10 +202,10 @@ class BrokerDesk(Vertical):
         height: auto;
         margin: 0 0 1 0;
         padding: 0 0 1 0;
-        border-bottom: solid #1c1c1c;
+        border-bottom: solid $oc_border;
     }
 
-    """
+    """)
 
     def compose(self) -> ComposeResult:
         yield Static("", id="bd-title", classes="bd-title")
@@ -263,11 +264,11 @@ class BrokerDesk(Vertical):
             if i < len(model.side_stats):
                 s = model.side_stats[i]
                 if s.tone == "pos":
-                    color = "#6fbf8a"
+                    color = OC.mint
                 elif s.tone == "neg":
-                    color = "#c97a72"
+                    color = OC.coral
                 else:
-                    color = "#e8e8e8"
+                    color = OC.text_bright
                 slot.update(f"[dim]{s.key:<12}[/] [bold {color}]{s.value}[/]")
             else:
                 slot.update("")
@@ -276,8 +277,8 @@ class BrokerDesk(Vertical):
             buy = self.query_one(f"#bd-buy-{i}", Static)
             if i < len(model.top_buy):
                 r = model.top_buy[i]
-                col = "#6fbf8a" if r.tone == "pos" else "#c97a72"
-                buy.update(f"[bold #e8e8e8]{r.ticker:<6}[/]  [{col}]{r.net_display}[/]")
+                col = OC.mint if r.tone == "pos" else OC.coral
+                buy.update(f"[bold {OC.text_bright}]{r.ticker:<6}[/]  [{col}]{r.net_display}[/]")
             else:
                 buy.update("[dim]—[/]" if i == 0 and not model.top_buy else "")
 
@@ -285,8 +286,8 @@ class BrokerDesk(Vertical):
             sell = self.query_one(f"#bd-sell-{i}", Static)
             if i < len(model.top_sell):
                 r = model.top_sell[i]
-                col = "#6fbf8a" if r.tone == "pos" else "#c97a72"
-                sell.update(f"[bold #e8e8e8]{r.ticker:<6}[/]  [{col}]{r.net_display}[/]")
+                col = OC.mint if r.tone == "pos" else OC.coral
+                sell.update(f"[bold {OC.text_bright}]{r.ticker:<6}[/]  [{col}]{r.net_display}[/]")
             else:
                 sell.update("[dim]—[/]" if i == 0 and not model.top_sell else "")
 

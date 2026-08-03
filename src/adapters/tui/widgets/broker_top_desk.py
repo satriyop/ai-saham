@@ -17,7 +17,7 @@ from src.adapters.tui.broker_desk_top_model import (
     BrokerDeskTopModel,
     BrokerTopHeatRow,
 )
-from src.adapters.tui.theme import OC
+from src.adapters.tui.theme import OC, bake_css
 
 
 def _bar_glyphs(pct: int, *, width: int = 14) -> str:
@@ -46,26 +46,26 @@ def format_top_bar_cell(pct: int, *, width: int = 14, sell: bool = False) -> str
 class BrokerTopDesk(Vertical):
     """Dual-side latest-session heat for desk hub ``t``."""
 
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     BrokerTopDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
 
     BrokerTopDesk .tp-title {
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
     }
 
     BrokerTopDesk .tp-sub {
-        color: #6b6b6b;
+        color: $oc_dim;
         margin-bottom: 0;
     }
 
     BrokerTopDesk .tp-scope {
-        color: #9b8fb8;
+        color: $oc_purple;
         margin-bottom: 1;
         height: auto;
     }
@@ -78,96 +78,96 @@ class BrokerTopDesk(Vertical):
     BrokerTopDesk .tp-col {
         width: 1fr;
         height: auto;
-        background: #141414;
-        border: solid #1c1c1c;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
         padding: 0 1 1 1;
         margin-right: 1;
     }
 
     BrokerTopDesk .tp-col.buy {
-        border-left: solid #6fbf8a;
+        border-left: solid $oc_mint;
     }
 
     BrokerTopDesk .tp-col.sell {
-        border-left: solid #c97a72;
+        border-left: solid $oc_coral;
         margin-right: 0;
     }
 
     BrokerTopDesk .tp-col-title {
-        color: #6fbf8a;
+        color: $oc_mint;
         text-style: bold;
         margin-bottom: 0;
         height: auto;
-        border-bottom: solid #1c1c1c;
+        border-bottom: solid $oc_border;
         padding-bottom: 0;
     }
 
     BrokerTopDesk .tp-col-title.sell {
-        color: #c97a72;
+        color: $oc_coral;
     }
 
     BrokerTopDesk .tp-row {
         height: auto;
         width: 100%;
         padding: 0 0;
-        border-top: solid #1c1c1c;
-        color: #d8d8d8;
+        border-top: solid $oc_border;
+        color: $oc_text;
     }
 
     BrokerTopDesk .tp-rank {
         width: 3;
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
     }
 
     BrokerTopDesk .tp-t {
         width: 7;
-        color: #e8e8e8;
+        color: $oc_text_bright;
         text-style: bold;
     }
 
     BrokerTopDesk .tp-bar {
         width: 1fr;
-        color: #6fbf8a;
+        color: $oc_mint;
         height: auto;
     }
 
     BrokerTopDesk .tp-bar.sell {
-        color: #c97a72;
+        color: $oc_coral;
     }
 
     BrokerTopDesk .tp-n {
         width: 10;
         text-align: right;
         text-style: bold;
-        color: #6fbf8a;
+        color: $oc_mint;
     }
 
     BrokerTopDesk .tp-n.sell {
-        color: #c97a72;
+        color: $oc_coral;
     }
 
     BrokerTopDesk .tp-lot {
         width: 10;
-        color: #6b6b6b;
+        color: $oc_dim;
         text-align: right;
     }
 
     BrokerTopDesk .tp-empty {
-        color: #6b6b6b;
+        color: $oc_dim;
         height: auto;
         margin: 1 0;
     }
 
     BrokerTopDesk .tp-hub {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #2a2a2a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_hairline_strong;
         padding: 0 1;
         height: auto;
-        color: #9b8fb8;
+        color: $oc_purple;
     }
-    """
+    """)
 
     def compose(self) -> ComposeResult:
         yield Static("", id="tp-title", classes="tp-title")

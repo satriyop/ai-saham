@@ -7,6 +7,7 @@ from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static
 
+from src.adapters.tui.theme import bake_css
 from src.application.dto.accumulation_agent import AgentTurnResult, AgentTurnStatus
 from src.application.services.agent_data_honesty import (
     AgentDataHonestyView,
@@ -20,46 +21,46 @@ from src.application.services.agent_data_honesty import (
 class AgentCommentary(Vertical):
     """Model commentary — compact card under Judge, or full stage replace."""
 
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     AgentCommentary {
         display: none;
         height: auto;
         width: 100%;
         margin-bottom: 1;
         padding: 1 2;
-        background: #101010;
-        border: solid #1c1c1c;
-        border-left: solid #7a7a7a;
+        background: $oc_bg_panel;
+        border: solid $oc_border;
+        border-left: solid $oc_text_dim;
     }
     AgentCommentary.is-stage {
         height: 1fr;
         margin: 0;
         padding: 1 2 1 2;
-        border: solid #2a2a2a;
-        border-left: solid #9b8fb8;
-        background: #0e0e0e;
+        border: solid $oc_hairline_strong;
+        border-left: solid $oc_purple;
+        background: $oc_bg_sidebar;
     }
-    AgentCommentary .agent-title { color: #d8d8d8; text-style: bold; height: auto; }
+    AgentCommentary .agent-title { color: $oc_text; text-style: bold; height: auto; }
     AgentCommentary .agent-status {
-        color: #7a7a7a;
+        color: $oc_text_dim;
         height: auto;
         margin-top: 1;
         padding: 1 1;
-        background: #141414;
-        border-left: solid #555555;
+        background: $oc_bg_elevated;
+        border-left: solid $oc_text_mute;
     }
     AgentCommentary .agent-status.has-warn {
-        color: #d4b06a;
-        border-left: solid #d4b06a;
-        background: #1a1810;
+        color: $oc_brass;
+        border-left: solid $oc_brass;
+        background: $oc_warn_bg;
     }
     AgentCommentary .agent-status.is-fail {
-        color: #c97a72;
-        border-left: solid #c97a72;
-        background: #1a1212;
+        color: $oc_coral;
+        border-left: solid $oc_coral;
+        background: $oc_fail_bg;
     }
     AgentCommentary .agent-question {
-        color: #555555;
+        color: $oc_text_mute;
         height: auto;
         margin-top: 1;
     }
@@ -67,24 +68,24 @@ class AgentCommentary(Vertical):
         height: auto;
         max-height: 24;
         margin-top: 1;
-        scrollbar-color: #3a3a3a #121212;
+        scrollbar-color: $oc_scrollbar $oc_track_inactive;
         scrollbar-size-vertical: 1;
     }
     AgentCommentary.is-stage .agent-answer-scroll {
         height: 1fr;
         max-height: 100%;
     }
-    AgentCommentary .agent-answer { color: #d8d8d8; height: auto; }
-    AgentCommentary .agent-meta { color: #7a7a7a; height: auto; margin-top: 1; }
-    AgentCommentary .agent-tools { color: #555555; height: auto; margin-top: 1; }
+    AgentCommentary .agent-answer { color: $oc_text; height: auto; }
+    AgentCommentary .agent-meta { color: $oc_text_dim; height: auto; margin-top: 1; }
+    AgentCommentary .agent-tools { color: $oc_text_mute; height: auto; margin-top: 1; }
     AgentCommentary .agent-more {
-        color: #555555;
+        color: $oc_text_mute;
         height: auto;
         margin-top: 1;
     }
-    AgentCommentary .agent-error { color: #c97a72; height: auto; margin-top: 1; }
-    AgentCommentary .agent-hint { color: #555555; height: auto; margin-top: 1; }
-    """
+    AgentCommentary .agent-error { color: $oc_coral; height: auto; margin-top: 1; }
+    AgentCommentary .agent-hint { color: $oc_text_mute; height: auto; margin-top: 1; }
+    """)
 
     def compose(self) -> ComposeResult:
         yield Static("AI Research Cockpit", classes="agent-title")

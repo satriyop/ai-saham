@@ -13,6 +13,8 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from src.adapters.tui.theme import bake_css
+
 
 class PaperLogConfirmModal(ModalScreen[bool | None]):
     """Confirm paper journal write (CLI parity: trade accum log --from-plan)."""
@@ -22,7 +24,7 @@ class PaperLogConfirmModal(ModalScreen[bool | None]):
         Binding("enter", "confirm", "Confirm", show=False, priority=True),
     ]
 
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     PaperLogConfirmModal {
         align: center middle;
     }
@@ -31,19 +33,19 @@ class PaperLogConfirmModal(ModalScreen[bool | None]):
         width: 72;
         max-width: 90%;
         height: auto;
-        background: #141414;
-        border: solid #1a1810;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_warn_bg;
+        border-left: solid $oc_peach;
         padding: 1 2;
     }
 
     PaperLogConfirmModal #confirm-title {
         text-style: bold;
-        color: #c9a68a;
+        color: $oc_peach;
     }
 
     PaperLogConfirmModal #confirm-esc {
-        color: #555555;
+        color: $oc_text_mute;
         text-align: right;
         width: 1fr;
     }
@@ -51,14 +53,14 @@ class PaperLogConfirmModal(ModalScreen[bool | None]):
     PaperLogConfirmModal #confirm-body {
         height: auto;
         margin: 1 0;
-        color: #d8d8d8;
+        color: $oc_text;
     }
 
     PaperLogConfirmModal #confirm-foot {
-        color: #555555;
+        color: $oc_text_mute;
         height: auto;
     }
-    """
+    """)
 
     def __init__(self, *, plan_text: str, ticker: str = "") -> None:
         super().__init__()

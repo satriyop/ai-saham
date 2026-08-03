@@ -19,6 +19,7 @@ from src.adapters.tui.judge_desk_model import (
     action_css_class,
     gate_css_class,
 )
+from src.adapters.tui.theme import OC, bake_css
 from src.adapters.tui.widgets.chip_bar import ChipBar
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
@@ -33,44 +34,44 @@ _TONE_CLASSES = ("tone-open", "tone-block", "tone-watch", "tone-neutral")
 class JudgeDesk(Vertical):
     """Visual Judge instrument mounted inside stage-scroll."""
 
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     JudgeDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
 
     JudgeDesk .judge-title {
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
     }
 
     JudgeDesk .judge-sub {
-        color: #555555;
+        color: $oc_text_mute;
         margin-bottom: 1;
     }
 
     JudgeDesk .limited-banner {
-        background: #1a1810;
-        color: #d4b06a;
-        border: solid #1a1810;
+        background: $oc_warn_bg;
+        color: $oc_brass;
+        border: solid $oc_warn_bg;
         padding: 0 1;
         margin-bottom: 1;
         height: auto;
     }
 
     JudgeDesk .verdict-mast {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_peach;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
     }
 
     JudgeDesk .verdict-lab {
-        color: #c9a68a;
+        color: $oc_peach;
         text-style: bold;
         height: 1;
         margin-bottom: 0;
@@ -88,45 +89,45 @@ class JudgeDesk(Vertical):
         width: auto;
         height: 3;
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
         padding: 0 2 0 0;
         content-align: left middle;
     }
 
-    JudgeDesk .verdict-action.action-enter { color: #6fbf8a; }
-    JudgeDesk .verdict-action.action-watch { color: #d4b06a; }
-    JudgeDesk .verdict-action.action-avoid { color: #c97a72; }
-    JudgeDesk .verdict-action.action-other { color: #e8e8e8; }
+    JudgeDesk .verdict-action.action-enter { color: $oc_mint; }
+    JudgeDesk .verdict-action.action-watch { color: $oc_brass; }
+    JudgeDesk .verdict-action.action-avoid { color: $oc_coral; }
+    JudgeDesk .verdict-action.action-other { color: $oc_text_bright; }
 
     JudgeDesk .verdict-gate {
         width: auto;
         height: 3;
-        color: #d4b06a;
+        color: $oc_brass;
         padding: 0 1;
-        border: solid #2a2a2a;
-        background: #121212;
+        border: solid $oc_hairline_strong;
+        background: $oc_track_inactive;
         content-align: center middle;
     }
 
     JudgeDesk .verdict-gate.gate-open {
-        color: #6fbf8a;
-        background: #121a14;
-        border: solid #121a14;
+        color: $oc_mint;
+        background: $oc_ok_bg;
+        border: solid $oc_ok_bg;
     }
 
     JudgeDesk .verdict-gate.gate-block {
-        color: #c97a72;
-        background: #1a1212;
-        border: solid #1a1212;
+        color: $oc_coral;
+        background: $oc_fail_bg;
+        border: solid $oc_fail_bg;
     }
 
-    JudgeDesk .verdict-gate.gate-other { color: #d4b06a; }
+    JudgeDesk .verdict-gate.gate-other { color: $oc_brass; }
 
     JudgeDesk .score-strip {
         height: auto;
         margin-top: 1;
         padding-top: 1;
-        border-top: solid #1c1c1c;
+        border-top: solid $oc_border;
     }
 
     JudgeDesk .score-cell {
@@ -138,68 +139,68 @@ class JudgeDesk(Vertical):
     }
 
     JudgeDesk .score-k {
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
         height: 1;
     }
 
     JudgeDesk .score-v {
-        color: #e8e8e8;
+        color: $oc_text_bright;
         text-style: bold;
         height: auto;
     }
 
     JudgeDesk .verdict-why {
         margin-top: 1;
-        color: #7a7a7a;
+        color: $oc_text_dim;
         height: auto;
-        border-top: solid #1c1c1c;
+        border-top: solid $oc_border;
         padding-top: 1;
     }
 
     JudgeDesk .phase-block {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_peach;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
     }
 
     JudgeDesk .phase-title {
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
     }
 
     JudgeDesk .phase-arrow {
-        color: #e8e8e8;
+        color: $oc_text_bright;
         text-style: bold;
         margin-top: 1;
         height: auto;
     }
 
     JudgeDesk .phase-detail {
-        color: #6b6b6b;
+        color: $oc_dim;
         height: auto;
         margin-top: 1;
     }
 
     JudgeDesk .phase-foot {
-        color: #555555;
+        color: $oc_text_mute;
     }
 
     JudgeDesk .decision-block {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_peach;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
-        color: #d8d8d8;
+        color: $oc_text;
     }
 
     JudgeDesk .decision-title {
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
     }
 
@@ -217,13 +218,13 @@ class JudgeDesk(Vertical):
 
     JudgeDesk .judge-card {
         width: 1fr;
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #2a2a2a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_hairline_strong;
         padding: 1 2;
         margin-right: 1;
         height: auto;
-        color: #7a7a7a;
+        color: $oc_text_dim;
     }
 
     JudgeDesk .judge-card.card-solo {
@@ -232,27 +233,27 @@ class JudgeDesk(Vertical):
     }
 
     JudgeDesk .judge-card.tone-open {
-        border-left: solid #6fbf8a;
+        border-left: solid $oc_mint;
     }
 
     JudgeDesk .judge-card.tone-block {
-        border-left: solid #c97a72;
+        border-left: solid $oc_coral;
     }
 
     JudgeDesk .judge-card.tone-watch {
-        border-left: solid #d4b06a;
+        border-left: solid $oc_brass;
     }
 
     JudgeDesk .judge-card.tone-neutral {
-        border-left: solid #9b8fb8;
+        border-left: solid $oc_purple;
     }
 
     JudgeDesk .judge-footer {
-        color: #555555;
+        color: $oc_text_mute;
         margin-top: 1;
         height: auto;
     }
-    """
+    """)
 
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)
@@ -404,7 +405,11 @@ class JudgeDesk(Vertical):
 
         why = model.why if model.why and model.why != "—" else "—"
         self.query_one("#jd-why", Static).update(
-            f"[bold #c9a68a]Why[/] [bold #e8e8e8]{model.action or '—'}[/]  [#7a7a7a]{why}[/]"
+            (
+                f"[bold {OC.peach}]Why[/] "
+                f"[bold {OC.text_bright}]{model.action or '—'}[/]  "
+                f"[{OC.text_dim}]{why}[/]"
+            )
         )
 
         # Phase timeline: always on (primary). Extra detail when phase+ open.
@@ -534,14 +539,14 @@ def _paint_card_slot(el: Static, card: JudgeCard | None, *, solo: bool) -> None:
 def _format_card_markup(card: JudgeCard) -> str:
     """Title + headline + short body — design: uppercase label, bright value."""
     title = card.title.upper()
-    lines = [f"[bold #555555]{title}[/]"]
+    lines = [f"[bold {OC.text_mute}]{title}[/]"]
     if card.headline:
         head_color = {
-            "open": "#6fbf8a",
-            "block": "#c97a72",
-            "watch": "#d4b06a",
-            "neutral": "#e8e8e8",
-        }.get(card.tone, "#e8e8e8")
+            "open": OC.mint,
+            "block": OC.coral,
+            "watch": OC.brass,
+            "neutral": OC.text_bright,
+        }.get(card.tone, OC.text_bright)
         lines.append(f"[bold {head_color}]{card.headline}[/]")
     for ln in card.lines:
         if not ln:
@@ -558,23 +563,23 @@ def _colorize_body_line(ln: str) -> str:
         out: list[str] = []
         for p in parts:
             if p.startswith("✓"):
-                out.append(f"[#6fbf8a]{p}[/]")
+                out.append(f"[{OC.mint}]{p}[/]")
             elif p.startswith("✗"):
-                out.append(f"[#c97a72]{p}[/]")
+                out.append(f"[{OC.coral}]{p}[/]")
             else:
                 out.append(p)
         return " ".join(out)
-    return f"[#7a7a7a]{ln}[/]"
+    return f"[{OC.text_dim}]{ln}[/]"
 
 
 def _format_phase_arrow(arrow: str) -> str:
     """Timeline nodes: prior dim · arrows mute · current brass (mock timeline)."""
     if "→" not in arrow:
-        return f"[bold #d4b06a]{arrow}[/]"
+        return f"[bold {OC.brass}]{arrow}[/]"
     parts = [p.strip() for p in arrow.split("→") if p.strip()]
     if not parts:
         return arrow
     *head, last = parts
-    bits = [f"[#6b6b6b]{h}[/]" for h in head]
-    bits.append(f"[bold #d4b06a]{last}[/]")
-    return " [#2a2a2a]→[/] ".join(bits)
+    bits = [f"[{OC.dim}]{h}[/]" for h in head]
+    bits.append(f"[bold {OC.brass}]{last}[/]")
+    return f" [{OC.hairline_strong}]→[/] ".join(bits)

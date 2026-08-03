@@ -12,39 +12,40 @@ from textual.containers import Vertical
 from textual.widgets import Static
 
 from src.adapters.tui.paper_desk_model import PaperDeskModel
+from src.adapters.tui.theme import OC, bake_css
 
 _MAX_ROWS = 12
 
 
 class PaperDesk(Vertical):
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     PaperDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
-    PaperDesk .pp-title { text-style: bold; color: #e8e8e8; }
-    PaperDesk .pp-sub { color: #6b6b6b; margin-bottom: 1; height: auto; }
+    PaperDesk .pp-title { text-style: bold; color: $oc_text_bright; }
+    PaperDesk .pp-sub { color: $oc_dim; margin-bottom: 1; height: auto; }
     PaperDesk .pp-tape {
-        background: #141414;
-        border: solid #1c1c1c;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
         padding: 1 1;
         height: auto;
         margin-bottom: 1;
     }
     PaperDesk .pp-row {
         height: auto;
-        border-top: solid #1c1c1c;
+        border-top: solid $oc_border;
         padding: 0 0;
-        color: #d8d8d8;
+        color: $oc_text;
     }
-    PaperDesk .pp-row.ok { border-left: solid #6fbf8a; padding-left: 1; }
-    PaperDesk .pp-row.refuse { border-left: solid #c97a72; padding-left: 1; }
-    PaperDesk .pp-row.fail { border-left: solid #d4b06a; padding-left: 1; }
-    PaperDesk .pp-empty { color: #6b6b6b; height: auto; margin: 1 0; }
-    PaperDesk .pp-footer { color: #555555; height: auto; }
-    """
+    PaperDesk .pp-row.ok { border-left: solid $oc_mint; padding-left: 1; }
+    PaperDesk .pp-row.refuse { border-left: solid $oc_coral; padding-left: 1; }
+    PaperDesk .pp-row.fail { border-left: solid $oc_brass; padding-left: 1; }
+    PaperDesk .pp-empty { color: $oc_dim; height: auto; margin: 1 0; }
+    PaperDesk .pp-footer { color: $oc_text_mute; height: auto; }
+    """)
 
     def compose(self) -> ComposeResult:
         yield Static("", id="pp-title", classes="pp-title")
@@ -69,7 +70,7 @@ class PaperDesk(Vertical):
             if i < len(model.rows):
                 r = model.rows[i]
                 slot.add_class(r.kind if r.kind in {"ok", "refuse", "fail"} else "fail")
-                slot.update(f"[bold #e8e8e8]{r.headline}[/]\n[#6b6b6b]{r.sub}[/]")
+                slot.update(f"[bold {OC.text_bright}]{r.headline}[/]\n[{OC.dim}]{r.sub}[/]")
                 slot.display = True
             else:
                 slot.update("")

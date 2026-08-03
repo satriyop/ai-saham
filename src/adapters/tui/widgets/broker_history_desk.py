@@ -15,56 +15,57 @@ from src.adapters.tui.broker_desk_history_model import (
     DISPLAY_LIMIT,
     BrokerDeskHistoryModel,
 )
+from src.adapters.tui.theme import bake_css
 
 
 class BrokerHistoryDesk(Vertical):
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     BrokerHistoryDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
-    BrokerHistoryDesk .hi-title { text-style: bold; color: #e8e8e8; }
-    BrokerHistoryDesk .hi-sub { color: #6b6b6b; }
-    BrokerHistoryDesk .hi-scope { color: #9b8fb8; margin-bottom: 1; height: auto; }
+    BrokerHistoryDesk .hi-title { text-style: bold; color: $oc_text_bright; }
+    BrokerHistoryDesk .hi-sub { color: $oc_dim; }
+    BrokerHistoryDesk .hi-scope { color: $oc_purple; margin-bottom: 1; height: auto; }
     BrokerHistoryDesk .hi-panel {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_peach;
         padding: 0 1 1 1;
         height: auto;
         margin-bottom: 1;
     }
     BrokerHistoryDesk .hi-head-row {
         height: auto;
-        border-bottom: solid #1c1c1c;
-        color: #6b6b6b;
+        border-bottom: solid $oc_border;
+        color: $oc_dim;
         text-style: bold;
     }
     BrokerHistoryDesk .hi-row {
         height: auto;
         width: 100%;
-        border-top: solid #1c1c1c;
+        border-top: solid $oc_border;
     }
-    BrokerHistoryDesk .hi-date { width: 12; color: #7a7a7a; }
-    BrokerHistoryDesk .hi-t { width: 8; color: #e8e8e8; text-style: bold; }
+    BrokerHistoryDesk .hi-date { width: 12; color: $oc_text_dim; }
+    BrokerHistoryDesk .hi-t { width: 8; color: $oc_text_bright; text-style: bold; }
     BrokerHistoryDesk .hi-net { width: 12; text-align: right; text-style: bold; }
-    BrokerHistoryDesk .hi-net.pos { color: #6fbf8a; }
-    BrokerHistoryDesk .hi-net.neg { color: #c97a72; }
-    BrokerHistoryDesk .hi-lot { width: 10; color: #6b6b6b; text-align: right; }
-    BrokerHistoryDesk .hi-empty { color: #6b6b6b; height: auto; margin: 1 0; }
-    BrokerHistoryDesk .hi-trunc { color: #6b6b6b; height: auto; }
+    BrokerHistoryDesk .hi-net.pos { color: $oc_mint; }
+    BrokerHistoryDesk .hi-net.neg { color: $oc_coral; }
+    BrokerHistoryDesk .hi-lot { width: 10; color: $oc_dim; text-align: right; }
+    BrokerHistoryDesk .hi-empty { color: $oc_dim; height: auto; margin: 1 0; }
+    BrokerHistoryDesk .hi-trunc { color: $oc_dim; height: auto; }
     BrokerHistoryDesk .hi-hub {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #2a2a2a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_hairline_strong;
         padding: 0 1;
         height: auto;
-        color: #9b8fb8;
+        color: $oc_purple;
         margin-top: 0;
     }
-    """
+    """)
 
     def compose(self) -> ComposeResult:
         yield Static("", id="hi-title", classes="hi-title")

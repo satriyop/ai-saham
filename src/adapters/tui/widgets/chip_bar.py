@@ -15,6 +15,7 @@ from collections.abc import Iterable, Sequence
 from textual.app import ComposeResult
 from textual.containers import Horizontal
 
+from src.adapters.tui.theme import bake_css
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
 # Ticker show job chips · power b f o x n · density d last (bible §2).
@@ -74,14 +75,14 @@ class ChipBar(Horizontal):
     the same letters as brass ``[k]`` keycaps.
     """
 
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     ChipBar {
         height: 3;
         width: 100%;
         margin: 0 0 1 0;
         padding: 0;
         align: left middle;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
     ChipBar .chip-meta {
         /* Legacy hook — density status text is forbidden (display off) */
@@ -89,7 +90,7 @@ class ChipBar(Horizontal):
         width: 0;
         height: 0;
     }
-    """
+    """)
 
     def __init__(
         self,

@@ -18,6 +18,7 @@ from src.adapters.tui.broker_desk_calendar_model import (
     BrokerDeskCalendarModel,
     format_calendar_cell_markup,
 )
+from src.adapters.tui.theme import bake_css
 
 _WEEKS = MAX_GRID_CELLS // 7  # 6
 
@@ -25,30 +26,30 @@ _WEEKS = MAX_GRID_CELLS // 7  # 6
 class BrokerCalendarDesk(Vertical):
     """Month calendar density UI — not a monospaced row dump as primary paint."""
 
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     BrokerCalendarDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
     BrokerCalendarDesk .ca-title {
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
     }
     BrokerCalendarDesk .ca-sub {
-        color: #6b6b6b;
+        color: $oc_dim;
         height: auto;
     }
     BrokerCalendarDesk .ca-summary {
-        color: #9b8fb8;
+        color: $oc_purple;
         height: auto;
         margin-bottom: 1;
     }
     BrokerCalendarDesk .ca-panel {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_peach;
         padding: 1 1;
         height: auto;
         margin-bottom: 1;
@@ -56,12 +57,12 @@ class BrokerCalendarDesk(Vertical):
     BrokerCalendarDesk .ca-dow-row {
         height: 1;
         margin-bottom: 0;
-        border-bottom: solid #1c1c1c;
+        border-bottom: solid $oc_border;
         padding-bottom: 0;
     }
     BrokerCalendarDesk .ca-dow {
         width: 1fr;
-        color: #6b6b6b;
+        color: $oc_dim;
         text-align: center;
         text-style: bold;
     }
@@ -75,56 +76,56 @@ class BrokerCalendarDesk(Vertical):
         min-height: 5;
         padding: 0 1;
         margin: 0 0;
-        border: solid #1c1c1c;
-        background: #1a1a1a;
-        color: #d8d8d8;
+        border: solid $oc_border;
+        background: $oc_scalar_track;
+        color: $oc_text;
     }
     BrokerCalendarDesk .ca-day.pad {
-        background: #0b0b0b;
-        border: solid #0b0b0b;
+        background: $oc_bg;
+        border: solid $oc_bg;
     }
     BrokerCalendarDesk .ca-day.blank {
-        background: #121212;
-        border: solid #161616;
+        background: $oc_track_inactive;
+        border: solid $oc_bg_row_hover;
     }
     BrokerCalendarDesk .ca-day.session {
-        background: #1a1a1a;
-        border: solid #1a1810;
+        background: $oc_scalar_track;
+        border: solid $oc_warn_bg;
     }
     BrokerCalendarDesk .ca-day.session.pos {
-        border: solid #121a14;
-        background: #121a14;
+        border: solid $oc_ok_bg;
+        background: $oc_ok_bg;
     }
     BrokerCalendarDesk .ca-day.session.neg {
-        border: solid #1a1212;
-        background: #1a1212;
+        border: solid $oc_fail_bg;
+        background: $oc_fail_bg;
     }
     BrokerCalendarDesk .ca-day.session.asof {
-        border: solid #c9a68a;
+        border: solid $oc_peach;
     }
     BrokerCalendarDesk .ca-day.session.asof.pos,
     BrokerCalendarDesk .ca-day.session.asof.neg {
-        border: solid #c9a68a;
+        border: solid $oc_peach;
     }
     BrokerCalendarDesk .ca-legend {
-        color: #6b6b6b;
+        color: $oc_dim;
         height: auto;
         margin: 0 0 1 0;
     }
     BrokerCalendarDesk .ca-empty {
-        color: #6b6b6b;
+        color: $oc_dim;
         height: auto;
         margin: 1 0;
     }
     BrokerCalendarDesk .ca-hub {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #2a2a2a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_hairline_strong;
         padding: 0 1;
         height: auto;
-        color: #9b8fb8;
+        color: $oc_purple;
     }
-    """
+    """)
 
     def compose(self) -> ComposeResult:
         yield Static("", id="ca-title", classes="ca-title")

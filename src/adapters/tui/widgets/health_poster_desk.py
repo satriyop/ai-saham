@@ -10,66 +10,67 @@ from textual.containers import Vertical
 from textual.widgets import Static
 
 from src.adapters.tui.health_poster_model import HealthPosterModel
+from src.adapters.tui.theme import bake_css
 
 
 class HealthPosterDesk(Vertical):
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     HealthPosterDesk {
         height: auto;
         width: 100%;
         padding: 1 2;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
     HealthPosterDesk .hp-card {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_peach;
         padding: 1 2;
         height: auto;
         margin-bottom: 0;
     }
     HealthPosterDesk .hp-kicker {
-        color: #c9a68a;
+        color: $oc_peach;
         text-style: bold;
     }
     HealthPosterDesk .hp-title {
-        color: #e8e8e8;
+        color: $oc_text_bright;
         text-style: bold;
         margin: 1 0;
         height: auto;
-        border-top: solid #1c1c1c;
+        border-top: solid $oc_border;
         padding-top: 1;
     }
     HealthPosterDesk .hp-body {
-        color: #7a7a7a;
+        color: $oc_text_dim;
         height: auto;
         margin-bottom: 1;
     }
     HealthPosterDesk .hp-next {
-        color: #d4b06a;
+        color: $oc_brass;
         height: auto;
         margin-bottom: 1;
-        border-top: solid #1c1c1c;
+        border-top: solid $oc_border;
         padding-top: 1;
     }
     HealthPosterDesk .hp-why {
-        color: #6b6b6b;
+        color: $oc_dim;
         height: auto;
     }
     HealthPosterDesk .hp-footer {
-        color: #555555;
+        color: $oc_text_mute;
         margin-top: 1;
         height: auto;
-        border-top: solid #1c1c1c;
+        border-top: solid $oc_border;
         padding-top: 1;
     }
-    HealthPosterDesk.kind-empty .hp-card { border-left: solid #c97a72; }
-    HealthPosterDesk.kind-lag .hp-card { border-left: solid #d4b06a; }
-    HealthPosterDesk.kind-ready .hp-card { border-left: solid #6fbf8a; }
-    HealthPosterDesk.kind-zero .hp-card { border-left: solid #7aa2c4; }
-    HealthPosterDesk.kind-preopen .hp-card { border-left: solid #7aa2c4; }
-    HealthPosterDesk.kind-broker .hp-card { border-left: solid #9b8fb8; }
-    """
+    HealthPosterDesk.kind-empty .hp-card { border-left: solid $oc_coral; }
+    HealthPosterDesk.kind-lag .hp-card { border-left: solid $oc_brass; }
+    HealthPosterDesk.kind-ready .hp-card { border-left: solid $oc_mint; }
+    HealthPosterDesk.kind-zero .hp-card { border-left: solid $oc_blue; }
+    HealthPosterDesk.kind-preopen .hp-card { border-left: solid $oc_blue; }
+    HealthPosterDesk.kind-broker .hp-card { border-left: solid $oc_purple; }
+    """)
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="hp-card", id="hp-card"):

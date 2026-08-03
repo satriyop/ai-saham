@@ -12,7 +12,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
 from src.adapters.tui.broker_desk_flow_model import DISPLAY_LIMIT, BrokerDeskFlowModel
-from src.adapters.tui.theme import OC
+from src.adapters.tui.theme import OC, bake_css
 
 
 def _bar(pct: int, *, width: int = 16) -> str:
@@ -44,54 +44,54 @@ def format_flow_bar_cell(pct: int, *, width: int = 16, neg: bool = False) -> str
 
 
 class BrokerFlowDesk(Vertical):
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     BrokerFlowDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
-    BrokerFlowDesk .fl-title { text-style: bold; color: #e8e8e8; }
-    BrokerFlowDesk .fl-sub { color: #6b6b6b; }
-    BrokerFlowDesk .fl-scope { color: #9b8fb8; margin-bottom: 1; height: auto; }
+    BrokerFlowDesk .fl-title { text-style: bold; color: $oc_text_bright; }
+    BrokerFlowDesk .fl-sub { color: $oc_dim; }
+    BrokerFlowDesk .fl-scope { color: $oc_purple; margin-bottom: 1; height: auto; }
     BrokerFlowDesk .fl-panel {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_peach;
         padding: 0 1 1 1;
         height: auto;
         margin-bottom: 1;
     }
     BrokerFlowDesk .fl-head-row {
         height: auto;
-        border-bottom: solid #1c1c1c;
-        color: #6b6b6b;
+        border-bottom: solid $oc_border;
+        color: $oc_dim;
         text-style: bold;
     }
     BrokerFlowDesk .fl-row {
         height: auto;
         width: 100%;
-        border-top: solid #1c1c1c;
+        border-top: solid $oc_border;
     }
-    BrokerFlowDesk .fl-date { width: 12; color: #7a7a7a; }
+    BrokerFlowDesk .fl-date { width: 12; color: $oc_text_dim; }
     BrokerFlowDesk .fl-net { width: 12; text-align: right; text-style: bold; }
-    BrokerFlowDesk .fl-net.pos { color: #6fbf8a; }
-    BrokerFlowDesk .fl-net.neg { color: #c97a72; }
-    BrokerFlowDesk .fl-lot { width: 10; color: #6b6b6b; text-align: right; }
-    BrokerFlowDesk .fl-n { width: 4; color: #6b6b6b; text-align: right; }
-    BrokerFlowDesk .fl-bar { width: 1fr; color: #6fbf8a; }
-    BrokerFlowDesk .fl-bar.neg { color: #c97a72; }
-    BrokerFlowDesk .fl-empty { color: #6b6b6b; height: auto; margin: 1 0; }
+    BrokerFlowDesk .fl-net.pos { color: $oc_mint; }
+    BrokerFlowDesk .fl-net.neg { color: $oc_coral; }
+    BrokerFlowDesk .fl-lot { width: 10; color: $oc_dim; text-align: right; }
+    BrokerFlowDesk .fl-n { width: 4; color: $oc_dim; text-align: right; }
+    BrokerFlowDesk .fl-bar { width: 1fr; color: $oc_mint; }
+    BrokerFlowDesk .fl-bar.neg { color: $oc_coral; }
+    BrokerFlowDesk .fl-empty { color: $oc_dim; height: auto; margin: 1 0; }
     BrokerFlowDesk .fl-hub {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #2a2a2a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_hairline_strong;
         padding: 0 1;
         height: auto;
-        color: #9b8fb8;
+        color: $oc_purple;
         margin-top: 0;
     }
-    """
+    """)
 
     def compose(self) -> ComposeResult:
         yield Static("", id="fl-title", classes="fl-title")

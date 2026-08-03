@@ -150,6 +150,63 @@ def test_tui_sources_have_no_off_palette_hexes():
     assert hits == [], f"off-palette hexes: {hits[:20]}"
 
 
+def test_widget_default_css_uses_bake_css_and_oc_placeholders():
+    """Token seam: product DEFAULT_CSS is bake_css($oc_*), not dual-source hex."""
+    import re
+
+    root = Path("src/adapters/tui")
+    css_files = []
+    for path in root.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if re.search(r"DEFAULT_CSS\s*=", text):
+            css_files.append(path)
+            assert re.search(r"DEFAULT_CSS\s*=\s*bake_css\(", text), (
+                f"{path} DEFAULT_CSS must use bake_css(...)"
+            )
+            assert "$oc_" in text, f"{path} must reference $oc_* placeholders"
+    assert len(css_files) >= 15, f"expected many widget CSS files, got {len(css_files)}"
+    # COCKPIT_CSS also baked from $oc_*
+    theme = (root / "theme.py").read_text(encoding="utf-8")
+    assert re.search(r"COCKPIT_CSS\s*=\s*bake_css\(", theme)
+    assert "$oc_bg" in theme
+    # Runtime DEFAULT_CSS resolves to real hex (consumption path works)
+    from src.adapters.tui.widgets.agent_commentary import AgentCommentary
+    from src.adapters.tui.widgets.broker_flow_desk import BrokerFlowDesk
+
+    assert "#0b0b0b" in BrokerFlowDesk.DEFAULT_CSS or "$oc_" not in BrokerFlowDesk.DEFAULT_CSS
+    assert "#6fbf8a" in BrokerFlowDesk.DEFAULT_CSS  # mint bar tone baked
+    assert "$oc_" not in BrokerFlowDesk.DEFAULT_CSS
+    assert "$oc_" not in AgentCommentary.DEFAULT_CSS
+
+
+def test_inline_rich_markup_uses_oc_not_raw_hex():
+    """Rich markup consumes OC.* — no leftover [#rrggbb] outside theme maps."""
+    import re
+
+    root = Path("src/adapters/tui")
+    raw_hits: list[str] = []
+    for path in root.rglob("*.py"):
+        if path.name == "theme.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        # ignore bake_css template bodies (use $oc_, not Rich)
+        stripped = re.sub(
+            r"bake_css\(\s*(\"\"\"|\'\'\')(.*?)\1\s*\)",
+            "",
+            text,
+            flags=re.S,
+        )
+        for m in re.finditer(r"\[(?:[^\]]*?)#[0-9a-fA-F]{6}[^\]]*\]", stripped):
+            raw_hits.append(f"{path}:{m.group(0)}")
+    assert raw_hits == [], f"raw Rich hex tags remain: {raw_hits[:15]}"
+    # OC is actually used for markup
+    from src.adapters.tui.board_cell_markup import format_of_max_pct_markup
+    from src.adapters.tui.theme import OC
+
+    assert OC.mint.startswith("#")
+    assert format_of_max_pct_markup(42, width=4) == f"[{OC.text_dim}] 42%[/]"
+
+
 def test_off_palette_hex_scanner_detects_drift():
     """Scanner fails closed: a deliberate off-allowlist hex is reported."""
     import tempfile

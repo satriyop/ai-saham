@@ -13,6 +13,7 @@ from textual.widgets import Static
 
 from src.adapters.tui.judge_desk_model import action_css_class
 from src.adapters.tui.plan_desk_model import PlanCard, PlanDeskModel
+from src.adapters.tui.theme import OC, bake_css
 
 _CARD_KEYS: tuple[str, ...] = ("board", "sizing", "status")
 _TONE_CLASSES = ("tone-open", "tone-block", "tone-watch", "tone-neutral")
@@ -21,28 +22,28 @@ _TONE_CLASSES = ("tone-open", "tone-block", "tone-watch", "tone-neutral")
 class PlanDesk(Vertical):
     """Visual Plan instrument mounted inside stage-scroll."""
 
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     PlanDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
 
     PlanDesk .plan-title {
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
     }
 
     PlanDesk .plan-sub {
-        color: #555555;
+        color: $oc_text_mute;
         margin-bottom: 1;
     }
 
     PlanDesk .inherit-strip {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_peach;
         padding: 1 1;
         margin-bottom: 1;
         height: auto;
@@ -52,32 +53,32 @@ class PlanDesk(Vertical):
         width: auto;
         text-style: bold;
         padding-right: 2;
-        color: #d4b06a;
+        color: $oc_brass;
         content-align: left middle;
     }
 
-    PlanDesk .inherit-action.action-enter { color: #6fbf8a; }
-    PlanDesk .inherit-action.action-watch { color: #d4b06a; }
-    PlanDesk .inherit-action.action-avoid { color: #c97a72; }
-    PlanDesk .inherit-action.action-other { color: #e8e8e8; }
+    PlanDesk .inherit-action.action-enter { color: $oc_mint; }
+    PlanDesk .inherit-action.action-watch { color: $oc_brass; }
+    PlanDesk .inherit-action.action-avoid { color: $oc_coral; }
+    PlanDesk .inherit-action.action-other { color: $oc_text_bright; }
 
     PlanDesk .inherit-note {
-        color: #6b6b6b;
+        color: $oc_dim;
         height: auto;
         content-align: left middle;
     }
 
     PlanDesk .geo-mast {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #6fbf8a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_mint;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
     }
 
     PlanDesk .geo-lab {
-        color: #6fbf8a;
+        color: $oc_mint;
         text-style: bold;
     }
 
@@ -85,8 +86,8 @@ class PlanDesk(Vertical):
         height: auto;
         margin: 1 0;
         padding: 1 0;
-        border-top: solid #1c1c1c;
-        border-bottom: solid #1c1c1c;
+        border-top: solid $oc_border;
+        border-bottom: solid $oc_border;
     }
 
     PlanDesk .geo-pt {
@@ -96,23 +97,23 @@ class PlanDesk(Vertical):
     }
 
     PlanDesk .geo-k {
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
     }
 
     PlanDesk .geo-v {
-        color: #e8e8e8;
+        color: $oc_text_bright;
         text-style: bold;
         margin-top: 0;
     }
 
-    PlanDesk .geo-v.entry { color: #c9a68a; }
-    PlanDesk .geo-v.stop { color: #c97a72; }
-    PlanDesk .geo-v.target { color: #6fbf8a; }
+    PlanDesk .geo-v.entry { color: $oc_peach; }
+    PlanDesk .geo-v.stop { color: $oc_coral; }
+    PlanDesk .geo-v.target { color: $oc_mint; }
 
     PlanDesk .geo-arr {
         width: auto;
-        color: #555555;
+        color: $oc_text_mute;
         padding: 1 1 0 0;
         content-align: center middle;
     }
@@ -130,28 +131,28 @@ class PlanDesk(Vertical):
     }
 
     PlanDesk .lots-k {
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
     }
 
     PlanDesk .lots-v {
-        color: #e8e8e8;
+        color: $oc_text_bright;
         text-style: bold;
     }
 
     PlanDesk .no-order {
         margin-top: 1;
-        background: #1a1810;
-        color: #c9a68a;
-        border: solid #1a1810;
+        background: $oc_warn_bg;
+        color: $oc_peach;
+        border: solid $oc_warn_bg;
         padding: 0 1;
         height: auto;
     }
 
     PlanDesk .running-banner {
-        background: #1a1810;
-        color: #d4b06a;
-        border: solid #1a1810;
+        background: $oc_warn_bg;
+        color: $oc_brass;
+        border: solid $oc_warn_bg;
         padding: 0 1;
         margin-bottom: 1;
         height: auto;
@@ -170,40 +171,40 @@ class PlanDesk(Vertical):
 
     PlanDesk .plan-card {
         width: 1fr;
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #2a2a2a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_hairline_strong;
         padding: 1 2;
         margin-right: 1;
         height: auto;
-        color: #7a7a7a;
+        color: $oc_text_dim;
     }
 
     PlanDesk .plan-card.card-solo {
         margin-right: 0;
     }
 
-    PlanDesk .plan-card.tone-open { border-left: solid #6fbf8a; }
-    PlanDesk .plan-card.tone-block { border-left: solid #c97a72; }
-    PlanDesk .plan-card.tone-watch { border-left: solid #d4b06a; }
-    PlanDesk .plan-card.tone-neutral { border-left: solid #9b8fb8; }
+    PlanDesk .plan-card.tone-open { border-left: solid $oc_mint; }
+    PlanDesk .plan-card.tone-block { border-left: solid $oc_coral; }
+    PlanDesk .plan-card.tone-watch { border-left: solid $oc_brass; }
+    PlanDesk .plan-card.tone-neutral { border-left: solid $oc_purple; }
 
     PlanDesk .paper-tape {
-        background: #1a1810;
-        border: solid #1a1810;
-        border-left: solid #c9a68a;
+        background: $oc_warn_bg;
+        border: solid $oc_warn_bg;
+        border-left: solid $oc_peach;
         padding: 1 1;
         margin-bottom: 1;
         height: auto;
-        color: #d8d8d8;
+        color: $oc_text;
     }
 
     PlanDesk .plan-footer {
-        color: #555555;
+        color: $oc_text_mute;
         margin-top: 0;
         height: auto;
     }
-    """
+    """)
 
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)
@@ -333,16 +334,16 @@ def _paint_card(el: Static, card: PlanCard | None) -> None:
 
 
 def _format_card(card: PlanCard) -> str:
-    lines = [f"[bold #555555]{card.title.upper()}[/]"]
+    lines = [f"[bold {OC.text_mute}]{card.title.upper()}[/]"]
     if card.headline:
         head_color = {
-            "open": "#6fbf8a",
-            "block": "#c97a72",
-            "watch": "#d4b06a",
-            "neutral": "#e8e8e8",
-        }.get(card.tone, "#e8e8e8")
+            "open": OC.mint,
+            "block": OC.coral,
+            "watch": OC.brass,
+            "neutral": OC.text_bright,
+        }.get(card.tone, OC.text_bright)
         lines.append(f"[bold {head_color}]{card.headline}[/]")
     for ln in card.lines:
         if ln:
-            lines.append(f"[#7a7a7a]{ln}[/]")
+            lines.append(f"[{OC.text_dim}]{ln}[/]")
     return "\n".join(lines)

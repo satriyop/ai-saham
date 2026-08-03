@@ -22,97 +22,98 @@ from src.adapters.shared.trade_action_labels import (
     WATCH_LIKE,
 )
 from src.adapters.tui.preopen_inspect_model import PreOpenInspectModel
+from src.adapters.tui.theme import OC, bake_css
 from src.adapters.tui.widgets.chip_bar import ChipBar
 from src.adapters.tui.widgets.flag_chip import FlagChip
 
 
 class PreopenInspectDesk(Vertical):
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     PreopenInspectDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
     PreopenInspectDesk .poi-title {
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
     }
     PreopenInspectDesk .poi-sub {
-        color: #555555;
+        color: $oc_text_mute;
         margin-bottom: 1;
         height: auto;
     }
     PreopenInspectDesk .poi-hero {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #d4b06a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_brass;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
     }
     PreopenInspectDesk .poi-lab {
-        color: #c9a68a;
+        color: $oc_peach;
         text-style: bold;
     }
     PreopenInspectDesk .poi-action {
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
         width: auto;
         padding-right: 2;
     }
-    PreopenInspectDesk .poi-action.action-enter { color: #6fbf8a; }
-    PreopenInspectDesk .poi-action.action-watch { color: #d4b06a; }
-    PreopenInspectDesk .poi-action.action-avoid { color: #c97a72; }
+    PreopenInspectDesk .poi-action.action-enter { color: $oc_mint; }
+    PreopenInspectDesk .poi-action.action-watch { color: $oc_brass; }
+    PreopenInspectDesk .poi-action.action-avoid { color: $oc_coral; }
     PreopenInspectDesk .poi-risk {
-        color: #6fbf8a;
+        color: $oc_mint;
         width: auto;
         padding: 0 1;
-        background: #121a14;
+        background: $oc_ok_bg;
     }
     PreopenInspectDesk .poi-risk.block {
-        color: #c97a72;
-        background: #1a1212;
+        color: $oc_coral;
+        background: $oc_fail_bg;
     }
     PreopenInspectDesk .poi-levels {
-        background: #141414;
-        border: solid #1c1c1c;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
-        color: #d8d8d8;
+        color: $oc_text;
     }
     PreopenInspectDesk .poi-sec-title {
-        color: #555555;
+        color: $oc_text_mute;
         text-style: bold;
     }
     PreopenInspectDesk .poi-why {
-        color: #7a7a7a;
+        color: $oc_text_dim;
         height: auto;
         margin-bottom: 1;
     }
     PreopenInspectDesk .poi-panel {
-        background: #141414;
-        border: solid #1c1c1c;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
-        color: #7a7a7a;
+        color: $oc_text_dim;
     }
     PreopenInspectDesk .poi-warn {
-        background: #1a1810;
-        border: solid #1a1810;
-        color: #d4b06a;
+        background: $oc_warn_bg;
+        border: solid $oc_warn_bg;
+        color: $oc_brass;
         padding: 0 1;
         margin-bottom: 1;
         height: auto;
     }
     PreopenInspectDesk .poi-footer {
-        color: #555555;
+        color: $oc_text_mute;
         height: auto;
         margin-top: 0;
     }
-    """
+    """)
 
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)
@@ -212,7 +213,7 @@ class PreopenInspectDesk(Vertical):
         )
 
         # Why always visible — never a chip
-        self.query_one("#poi-why-line", Static).update(f"[#d4b06a]← Why:[/] {model.why}")
+        self.query_one("#poi-why-line", Static).update(f"[{OC.brass}]← Why:[/] {model.why}")
 
         # AUCTION always on
         auction_panel = self.query_one("#poi-panel-auction", Vertical)

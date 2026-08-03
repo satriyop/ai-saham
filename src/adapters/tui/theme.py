@@ -159,10 +159,10 @@ def off_palette_hexes_in_tree(
     return hits
 
 
-COCKPIT_CSS = """
+COCKPIT_CSS = bake_css("""
 Screen {
-    background: #0b0b0b;
-    color: #d8d8d8;
+    background: $oc_bg;
+    color: $oc_text;
 }
 
 #workspace {
@@ -173,32 +173,32 @@ Screen {
 #main {
     width: 1fr;
     height: 100%;
-    border-right: solid #1c1c1c;
+    border-right: solid $oc_border;
     padding: 0 1;
-    background: #0b0b0b;
+    background: $oc_bg;
 }
 
 /* Layout B: header · stage · footer · prompt · (status outside main) */
 #main-header {
     height: 3;
     padding: 1 1 0 1;
-    border-bottom: solid #181818;
-    background: #0b0b0b;
+    border-bottom: solid $oc_border_soft;
+    background: $oc_bg;
 }
 
 #view-title {
     text-style: bold;
-    color: #e8e8e8;
+    color: $oc_text_bright;
     height: 1;
 }
 
 #view-meta {
-    color: #555555;
+    color: $oc_text_mute;
     height: 1;
 }
 
 #mode-pill {
-    color: #c9a68a;
+    color: $oc_peach;
     text-align: right;
     height: 1;
 }
@@ -206,21 +206,21 @@ Screen {
 #stage {
     height: 1fr;
     padding: 1 1;
-    background: #0b0b0b;
+    background: $oc_bg;
 }
 
 #stage-scroll {
     height: 1fr;
-    scrollbar-color: #3a3a3a #121212;
+    scrollbar-color: $oc_scrollbar $oc_track_inactive;
     scrollbar-size-vertical: 1;
-    background: #0b0b0b;
+    background: $oc_bg;
 }
 
 #stage-body {
     height: auto;
     width: 100%;
-    color: #7a7a7a;
-    background: #0b0b0b;
+    color: $oc_text_dim;
+    background: $oc_bg;
 }
 
 /* Boards: OpenCode radar, peach selection wash */
@@ -235,10 +235,10 @@ Screen {
     max-width: 100%;
     margin: 0 0 1 0;
     padding: 0 1;
-    color: #6b6b6b;
-    background: #141414;
+    color: $oc_dim;
+    background: $oc_bg_elevated;
     border: none;
-    border-left: solid #555555;
+    border-left: solid $oc_text_mute;
 }
 
 #board-source-badge.hide {
@@ -257,57 +257,57 @@ Screen {
     width: 100%;
     margin: 0 0 1 0;
     padding: 0 1;
-    color: #6b6b6b;
-    background: #0b0b0b;
+    color: $oc_dim;
+    background: $oc_bg;
 }
 #board-flag-lab {
     width: auto;
-    color: #6b6b6b;
+    color: $oc_dim;
     text-style: bold;
     padding-right: 1;
 }
 
 #board-source-badge.snap {
-    color: #d4b06a;
-    background: #1a1810;
+    color: $oc_brass;
+    background: $oc_warn_bg;
     border: none;
-    border-left: solid #d4b06a;
+    border-left: solid $oc_brass;
 }
 
 #board-source-badge.live {
-    color: #6fbf8a;
-    background: #121a14;
+    color: $oc_mint;
+    background: $oc_ok_bg;
     border: none;
-    border-left: solid #6fbf8a;
+    border-left: solid $oc_mint;
 }
 
 #board-table {
     height: 1fr;
-    background: #0b0b0b;
-    color: #d8d8d8;
+    background: $oc_bg;
+    color: $oc_text;
 }
 
 #board-table > .datatable--cursor {
-    background: #c9a68a;
-    color: #1a120c;
+    background: $oc_peach;
+    color: $oc_sel_text;
     text-style: bold;
 }
 
 #board-table > .datatable--hover {
-    background: #161616;
+    background: $oc_bg_row_hover;
 }
 
 #board-table > .datatable--header {
-    color: #555555;
+    color: $oc_text_mute;
     text-style: bold;
-    background: #101010;
+    background: $oc_bg_panel;
 }
 
 #board-footer {
     height: auto;
-    color: #555555;
+    color: $oc_text_mute;
     padding-top: 1;
-    background: #0b0b0b;
+    background: $oc_bg;
 }
 
 /* Prompt rail · OpenCode 2-row composer (prominent · non-Action)
@@ -322,19 +322,19 @@ Screen {
     width: 100%;
     margin: 0 0 0 0;
     padding: 1 1;
-    background: #121212;
-    border-top: solid #2a2a2a;
-    border-bottom: solid #2a2a2a;
-    border-left: solid #c9a68a;
-    border-right: solid #2a2a2a;
+    background: $oc_track_inactive;
+    border-top: solid $oc_hairline_strong;
+    border-bottom: solid $oc_hairline_strong;
+    border-left: solid $oc_peach;
+    border-right: solid $oc_hairline_strong;
 }
 
 #prompt-rail.is-focus {
-    background: #1a1810;
-    border-top: solid #1a1810;
-    border-bottom: solid #1a1810;
-    border-left: solid #c9a68a;
-    border-right: solid #1a1810;
+    background: $oc_warn_bg;
+    border-top: solid $oc_warn_bg;
+    border-bottom: solid $oc_warn_bg;
+    border-left: solid $oc_peach;
+    border-right: solid $oc_warn_bg;
 }
 
 #prompt-row-input {
@@ -357,72 +357,72 @@ Screen {
     width: 100%;
     align: left middle;
     padding: 0 0 0 2;
-    color: #555555;
+    color: $oc_text_mute;
 }
 
 #prompt-affordance {
     width: 2;
-    color: #c9a68a;
+    color: $oc_peach;
     text-style: bold;
 }
 
 #prompt-input {
     width: 1fr;
-    background: #121212;
+    background: $oc_track_inactive;
     /* Kill Textual Input tall border (empty green box on stage) */
     border: none !important;
-    color: #e8e8e8;
+    color: $oc_text_bright;
     padding: 0 1;
     height: 1;
 }
 
 #prompt-input:focus {
-    background: #1a1810;
+    background: $oc_warn_bg;
     border: none !important;
 }
 
 #prompt-rail.is-focus #prompt-input {
-    background: #1a1810;
+    background: $oc_warn_bg;
 }
 
 #prompt-mode {
     width: auto;
     min-width: 6;
-    color: #a8896f;
+    color: $oc_sel_dim;
     text-style: bold;
     text-align: left;
     padding: 0 0 0 0;
 }
 
 #prompt-mode.is-agent {
-    color: #c9a68a;
+    color: $oc_peach;
 }
 
 #prompt-mode.is-cli {
-    color: #6fbf8a;
+    color: $oc_mint;
 }
 
 #prompt-sub {
     width: 1fr;
-    color: #7a7a7a;
+    color: $oc_text_dim;
     padding: 0 0 0 1;
 }
 
 #evidence-strip {
     height: auto;
     max-height: 14;
-    border-top: solid #181818;
+    border-top: solid $oc_border_soft;
     padding-top: 1;
-    color: #7a7a7a;
-    background: #0b0b0b;
+    color: $oc_text_dim;
+    background: $oc_bg;
 }
 
 #sidebar {
     width: 28;
     height: 100%;
-    background: #0e0e0e;
+    background: $oc_bg_sidebar;
     padding: 1 1;
-    border-left: solid #181818;
+    border-left: solid $oc_border_soft;
 }
 
 #sidebar.hidden {
@@ -433,7 +433,7 @@ Screen {
 
 .side-title {
     text-style: bold;
-    color: #d8d8d8;
+    color: $oc_text;
     margin-top: 1;
 }
 
@@ -442,20 +442,20 @@ Screen {
 }
 
 .side-line {
-    color: #555555;
+    color: $oc_text_mute;
 }
 
 .section-label {
-    color: #9b8fb8;
+    color: $oc_purple;
     text-style: bold;
 }
 
 #status {
     height: 1;
-    background: #090909;
-    color: #555555;
+    background: $oc_status_bg;
+    color: $oc_text_mute;
     padding: 0 1;
-    border-top: solid #1c1c1c;
+    border-top: solid $oc_border;
 }
 
 /* Overlays share OpenCode dialog language */
@@ -469,8 +469,8 @@ CommandPalette, PlanConfirmModal, HelpModal, FetchConfirmModal, PaperLogConfirmM
     max-width: 92%;
     height: auto;
     max-height: 85%;
-    background: #141414;
-    border: solid #1c1c1c;
+    background: $oc_bg_elevated;
+    border: solid $oc_border;
     padding: 1 1;
 }
 
@@ -485,45 +485,45 @@ CommandPalette, PlanConfirmModal, HelpModal, FetchConfirmModal, PaperLogConfirmM
 
 #palette-title, #confirm-title, #help-title {
     width: 1fr;
-    color: #7a7a7a;
+    color: $oc_text_dim;
     text-style: bold;
 }
 
 #palette-esc, #confirm-esc, #help-esc {
     width: auto;
-    color: #555555;
+    color: $oc_text_mute;
     text-align: right;
 }
 
 #palette-input {
     margin-bottom: 1;
-    background: #101010;
-    border: solid #1c1c1c;
-    color: #d8d8d8;
+    background: $oc_bg_panel;
+    border: solid $oc_border;
+    color: $oc_text;
 }
 
 #palette-list, #help-body, #confirm-body {
     height: auto;
     max-height: 22;
     margin-bottom: 1;
-    color: #d8d8d8;
+    color: $oc_text;
 }
 
 #palette-foot, #confirm-foot, #help-foot {
     height: auto;
-    border-top: solid #1c1c1c;
+    border-top: solid $oc_border;
     padding-top: 1;
-    color: #555555;
+    color: $oc_text_mute;
 }
 
 .warn-line {
-    color: #d4b06a;
-    background: #1a1810;
+    color: $oc_brass;
+    background: $oc_warn_bg;
     padding: 0 1;
 }
 
-.pass { color: #6fbf8a; }
-.watch { color: #d4b06a; }
-.block { color: #c97a72; }
-.dim { color: #555555; }
-"""
+.pass { color: $oc_mint; }
+.watch { color: $oc_brass; }
+.block { color: $oc_coral; }
+.dim { color: $oc_text_mute; }
+""")

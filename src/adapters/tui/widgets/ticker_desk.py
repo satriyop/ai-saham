@@ -17,6 +17,7 @@ from src.adapters.shared.ticker_dist_desk_model import DistSideRow, TickerDistDe
 from src.adapters.shared.ticker_fin_desk_model import TickerFinDeskModel
 from src.adapters.shared.ticker_flow_desk_model import TickerFlowDeskModel
 from src.adapters.shared.ticker_foreign_desk_model import TickerForeignDeskModel
+from src.adapters.tui.theme import OC, bake_css
 from src.adapters.tui.ticker_desk_model import (
     FRESH_GRID_SLOTS,
     TickerDeskModel,
@@ -85,7 +86,7 @@ def _paint_depth_fact_line(ln: str) -> str:
     if s.startswith("Date ") and any(
         h in s for h in ("Type", "Name", "Open", "IEP", "IEV", "Detail", "Action")
     ):
-        return f"[#555555]{s}[/]"
+        return f"[{OC.text_mute}]{s}[/]"
 
     # Table / mono data rows (candles, IEV, insider, corp)
     looks_table = s[:10].count("-") >= 2 or (len(s) > 12 and s[0].isdigit() and "  " in s)
@@ -96,10 +97,10 @@ def _paint_depth_fact_line(ln: str) -> str:
         and "→" not in s
     ):
         if " BUY" in f" {s}" or s.endswith(" BUY") or " BUY " in s:
-            return f"[#6fbf8a]{s}[/]"
+            return f"[{OC.mint}]{s}[/]"
         if " SELL" in f" {s}" or s.endswith(" SELL") or " SELL " in s:
-            return f"[#c97a72]{s}[/]"
-        return f"[#d8d8d8]{s}[/]"
+            return f"[{OC.coral}]{s}[/]"
+        return f"[{OC.text}]{s}[/]"
 
     lab = None
     rest = s
@@ -112,46 +113,46 @@ def _paint_depth_fact_line(ln: str) -> str:
         lab, _, rest = s.partition("  ")
         lab, rest = lab.strip(), rest.strip()
 
-    tone = "#e8e8e8"
+    tone = OC.text_bright
     u = (rest or s).upper()
     if "→ BUY" in s.upper() or s.rstrip().upper().endswith("BUY"):
-        tone = "#6fbf8a"
+        tone = OC.mint
     elif "→ SELL" in s.upper() or (s.rstrip().upper().endswith("SELL") and "BUY" not in u):
-        tone = "#c97a72"
+        tone = OC.coral
     elif rest.startswith("+") or " +" in rest or ("(+" in rest):
         if "SELL" not in u:
-            tone = "#6fbf8a"
+            tone = OC.mint
     elif rest.startswith(("-", "−")) or " −" in rest:
         if "BUY" not in u:
-            tone = "#c97a72"
+            tone = OC.coral
     if lab:
-        return f"[#555555]{lab:14}[/] [{tone}]{rest}[/]"
+        return f"[{OC.text_mute}]{lab:14}[/] [{tone}]{rest}[/]"
     # Consensus e.g. "35B · 2H · 0S → BUY"
     if "→" in s:
         left, _, right = s.partition("→")
         right = right.strip()
         r_tone = (
-            "#6fbf8a"
+            OC.mint
             if "BUY" in right.upper()
-            else ("#c97a72" if "SELL" in right.upper() else "#e8e8e8")
+            else (OC.coral if "SELL" in right.upper() else OC.text_bright)
         )
-        return f"[#d8d8d8]{left.strip()}[/] → [{r_tone}]{right}[/]"
+        return f"[{OC.text}]{left.strip()}[/] → [{r_tone}]{right}[/]"
     return f"[{tone}]{s}[/]"
 
 
 class TickerDesk(Vertical):
     """Visual ticker instrument — OpenCode price mast."""
 
-    DEFAULT_CSS = """
+    DEFAULT_CSS = bake_css("""
     TickerDesk {
         height: auto;
         width: 100%;
         padding: 0 0 1 0;
-        background: #0b0b0b;
+        background: $oc_bg;
     }
 
     TickerDesk .td-crumb {
-        color: #555555;
+        color: $oc_text_mute;
         margin-bottom: 1;
         height: auto;
     }
@@ -161,12 +162,12 @@ class TickerDesk(Vertical):
         height: auto;
         margin-bottom: 1;
         padding: 0 0 1 0;
-        border-bottom: solid #1c1c1c;
+        border-bottom: solid $oc_border;
     }
 
     TickerDesk .td-mark {
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
         width: auto;
         padding-right: 2;
     }
@@ -174,13 +175,13 @@ class TickerDesk(Vertical):
     TickerDesk .td-id-sub {
         width: 1fr;
         height: auto;
-        color: #d8d8d8;
+        color: $oc_text;
     }
 
     TickerDesk .td-fresh-col {
         width: auto;
         height: auto;
-        color: #555555;
+        color: $oc_text_mute;
         text-align: right;
     }
 
@@ -191,7 +192,7 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-fresh-head {
-        color: #555555;
+        color: $oc_text_mute;
         text-style: bold;
         height: 1;
         margin-bottom: 0;
@@ -214,36 +215,36 @@ class TickerDesk(Vertical):
         padding: 0 1;
         margin-right: 1;
         margin-bottom: 0;
-        background: #141414;
-        border: solid #1c1c1c;
-        color: #6b6b6b;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        color: $oc_dim;
     }
 
     TickerDesk .td-fp.ok {
-        border: solid #121a14;
-        color: #6fbf8a;
+        border: solid $oc_ok_bg;
+        color: $oc_mint;
     }
 
     TickerDesk .td-fp.stale {
-        border: solid #1a1810;
-        color: #d4b06a;
+        border: solid $oc_warn_bg;
+        color: $oc_brass;
     }
 
     TickerDesk .td-fp.miss {
-        border: solid #1c1c1c;
-        color: #3a3a3a;
+        border: solid $oc_border;
+        color: $oc_scrollbar;
     }
 
     TickerDesk .td-fp.unknown {
-        border: solid #1c1c1c;
-        color: #6b6b6b;
+        border: solid $oc_border;
+        color: $oc_dim;
     }
 
     /* Mast — price is landscape (mock price-hero) */
     TickerDesk .td-mast {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #c9a68a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_peach;
         padding: 1 2;
         margin-bottom: 1;
         height: auto;
@@ -256,7 +257,7 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-mast-lab {
-        color: #c9a68a;
+        color: $oc_peach;
         text-style: bold;
     }
 
@@ -270,7 +271,7 @@ class TickerDesk(Vertical):
     TickerDesk .td-currency {
         width: auto;
         height: 3;
-        color: #6b6b6b;
+        color: $oc_dim;
         padding-right: 1;
         content-align: left middle;
     }
@@ -279,7 +280,7 @@ class TickerDesk(Vertical):
         width: auto;
         height: 3;
         text-style: bold;
-        color: #e8e8e8;
+        color: $oc_text_bright;
         padding-right: 2;
         content-align: left middle;
     }
@@ -288,35 +289,35 @@ class TickerDesk(Vertical):
         width: auto;
         height: 3;
         text-style: bold;
-        color: #7a7a7a;
-        background: #121212;
-        border: solid #2a2a2a;
+        color: $oc_text_dim;
+        background: $oc_track_inactive;
+        border: solid $oc_hairline_strong;
         padding: 0 1;
         content-align: center middle;
     }
 
     TickerDesk .td-chg.pos {
-        color: #6fbf8a;
-        background: #121a14;
-        border: solid #121a14;
+        color: $oc_mint;
+        background: $oc_ok_bg;
+        border: solid $oc_ok_bg;
     }
 
     TickerDesk .td-chg.neg {
-        color: #c97a72;
-        background: #1a1212;
-        border: solid #1a1212;
+        color: $oc_coral;
+        background: $oc_fail_bg;
+        border: solid $oc_fail_bg;
     }
 
     TickerDesk .td-mast-right {
         width: 2fr;
         height: auto;
-        border-left: solid #1c1c1c;
+        border-left: solid $oc_border;
         padding-left: 1;
     }
 
     TickerDesk .td-hz-line {
         height: auto;
-        color: #7a7a7a;
+        color: $oc_text_dim;
         margin-bottom: 0;
     }
 
@@ -328,25 +329,25 @@ class TickerDesk(Vertical):
 
     TickerDesk .td-metric {
         width: 1fr;
-        background: #141414;
-        border: solid #1c1c1c;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
         padding: 0 1 1 1;
         margin-right: 1;
         height: auto;
     }
 
     TickerDesk .td-metric-k {
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
     }
 
     TickerDesk .td-metric-v {
-        color: #e8e8e8;
+        color: $oc_text_bright;
         text-style: bold;
     }
 
     TickerDesk .td-metric-u {
-        color: #555555;
+        color: $oc_text_mute;
     }
 
     /* Pulse trio */
@@ -357,40 +358,40 @@ class TickerDesk(Vertical):
 
     TickerDesk .td-pulse {
         width: 1fr;
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #7aa2c4;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_blue;
         padding: 1 1;
         margin-right: 1;
         height: auto;
-        color: #7a7a7a;
+        color: $oc_text_dim;
     }
 
-    TickerDesk .td-pulse.tone-pos { border-left: solid #6fbf8a; }
-    TickerDesk .td-pulse.tone-neg { border-left: solid #c97a72; }
-    TickerDesk .td-pulse.tone-neutral { border-left: solid #9b8fb8; }
+    TickerDesk .td-pulse.tone-pos { border-left: solid $oc_mint; }
+    TickerDesk .td-pulse.tone-neg { border-left: solid $oc_coral; }
+    TickerDesk .td-pulse.tone-neutral { border-left: solid $oc_purple; }
 
     TickerDesk .td-pulse-title {
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
     }
 
     TickerDesk .td-pulse-head {
-        color: #e8e8e8;
+        color: $oc_text_bright;
         text-style: bold;
         height: auto;
     }
 
-    TickerDesk .td-pulse-head.pos { color: #6fbf8a; }
-    TickerDesk .td-pulse-head.neg { color: #c97a72; }
+    TickerDesk .td-pulse-head.pos { color: $oc_mint; }
+    TickerDesk .td-pulse-head.neg { color: $oc_coral; }
 
     TickerDesk .td-pulse-sub {
-        color: #6b6b6b;
+        color: $oc_dim;
         height: auto;
     }
 
     TickerDesk .td-pulse-body {
-        color: #7a7a7a;
+        color: $oc_text_dim;
         height: auto;
         margin-top: 0;
     }
@@ -402,9 +403,9 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-section {
-        background: #141414;
-        border: solid #1c1c1c;
-        border-left: solid #2a2a2a;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
+        border-left: solid $oc_hairline_strong;
         padding: 1 1;
         margin-bottom: 1;
         height: auto;
@@ -424,30 +425,30 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-sec-head {
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
         height: auto;
     }
 
     TickerDesk .td-earn {
-        color: #7a7a7a;
+        color: $oc_text_dim;
         height: auto;
     }
 
     TickerDesk .td-secondary {
-        color: #7a7a7a;
+        color: $oc_text_dim;
         height: auto;
     }
 
     TickerDesk .td-sec-body {
-        color: #d8d8d8;
+        color: $oc_text;
         height: auto;
     }
 
     TickerDesk .td-footer {
-        color: #555555;
+        color: $oc_text_mute;
         height: auto;
-        border-top: solid #1c1c1c;
+        border-top: solid $oc_border;
         padding-top: 1;
     }
 
@@ -467,24 +468,24 @@ class TickerDesk(Vertical):
 
     /* .cli-panel — elevated card · brass title bar · no dump wall */
     TickerDesk .td-depth-panel {
-        background: #141414;
-        border: solid #1c1c1c;
+        background: $oc_bg_elevated;
+        border: solid $oc_border;
         padding: 0;
         margin: 0 0 1 0;
         height: auto;
     }
 
     TickerDesk .td-depth-title {
-        color: #c9a68a;
+        color: $oc_peach;
         text-style: bold;
-        background: #121212;
-        border-bottom: solid #1c1c1c;
+        background: $oc_track_inactive;
+        border-bottom: solid $oc_border;
         padding: 0 1;
         height: auto;
     }
 
     TickerDesk .td-depth-body {
-        color: #d8d8d8;
+        color: $oc_text;
         padding: 0 1 1 1;
         height: auto;
     }
@@ -497,7 +498,7 @@ class TickerDesk(Vertical):
 
     /* Flow job desk (design hero · pulses · sessions) */
     TickerDesk .td-job-shell {
-        border-left: solid #c9a68a;
+        border-left: solid $oc_peach;
     }
 
     TickerDesk .td-flow-desk {
@@ -506,23 +507,23 @@ class TickerDesk(Vertical):
     }
 
     TickerDesk .td-flow-lab {
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
         height: auto;
     }
 
     TickerDesk .td-flow-big {
-        color: #e8e8e8;
+        color: $oc_text_bright;
         text-style: bold;
         height: auto;
         margin: 0 0 0 0;
     }
 
-    TickerDesk .td-flow-big.pos { color: #6fbf8a; }
-    TickerDesk .td-flow-big.neg { color: #c97a72; }
+    TickerDesk .td-flow-big.pos { color: $oc_mint; }
+    TickerDesk .td-flow-big.neg { color: $oc_coral; }
 
     TickerDesk .td-flow-sub {
-        color: #555555;
+        color: $oc_text_mute;
         height: auto;
         margin-bottom: 1;
     }
@@ -534,34 +535,34 @@ class TickerDesk(Vertical):
 
     TickerDesk .td-flow-pulse {
         width: 1fr;
-        background: #101010;
-        border: solid #1c1c1c;
+        background: $oc_bg_panel;
+        border: solid $oc_border;
         padding: 0 1;
         margin-right: 1;
         height: auto;
     }
 
     TickerDesk .td-flow-pk {
-        color: #555555;
+        color: $oc_text_mute;
         height: auto;
     }
 
     TickerDesk .td-flow-pv {
-        color: #e8e8e8;
+        color: $oc_text_bright;
         text-style: bold;
         height: auto;
     }
 
-    TickerDesk .td-flow-pv.pos { color: #6fbf8a; }
-    TickerDesk .td-flow-pv.neg { color: #c97a72; }
+    TickerDesk .td-flow-pv.pos { color: $oc_mint; }
+    TickerDesk .td-flow-pv.neg { color: $oc_coral; }
 
     TickerDesk .td-flow-days {
-        color: #7a7a7a;
+        color: $oc_text_dim;
         height: auto;
     }
 
     TickerDesk .td-flow-story {
-        color: #555555;
+        color: $oc_text_mute;
         height: auto;
         margin-top: 1;
     }
@@ -580,30 +581,30 @@ class TickerDesk(Vertical):
     TickerDesk .td-dist-col {
         width: 1fr;
         height: auto;
-        background: #101010;
-        border: solid #1c1c1c;
+        background: $oc_bg_panel;
+        border: solid $oc_border;
         padding: 0 1 1 1;
         margin-right: 1;
     }
 
     TickerDesk .td-dist-col.buy {
-        border-left: solid #6fbf8a;
+        border-left: solid $oc_mint;
     }
 
     TickerDesk .td-dist-col.sell {
-        border-left: solid #c97a72;
+        border-left: solid $oc_coral;
         margin-right: 0;
     }
 
     TickerDesk .td-dist-col-head {
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
         height: auto;
         margin-bottom: 0;
     }
 
     TickerDesk .td-dist-col-body {
-        color: #7a7a7a;
+        color: $oc_text_dim;
         height: auto;
     }
 
@@ -620,34 +621,34 @@ class TickerDesk(Vertical):
     TickerDesk .td-fin-card {
         width: 1fr;
         height: auto;
-        background: #101010;
-        border: solid #1c1c1c;
-        border-left: solid #7aa2c4;
+        background: $oc_bg_panel;
+        border: solid $oc_border;
+        border-left: solid $oc_blue;
         padding: 0 1 1 1;
         margin-right: 1;
     }
 
     TickerDesk .td-fin-card.balance {
-        border-left: solid #9b8fb8;
+        border-left: solid $oc_purple;
     }
 
     TickerDesk .td-fin-card.cashflow {
-        border-left: solid #6fbf8a;
+        border-left: solid $oc_mint;
         margin-right: 0;
     }
 
     TickerDesk .td-fin-card-head {
-        color: #6b6b6b;
+        color: $oc_dim;
         text-style: bold;
         height: auto;
     }
 
     TickerDesk .td-fin-card-body {
-        color: #7a7a7a;
+        color: $oc_text_dim;
         height: auto;
     }
 
-    """
+    """)
 
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)
@@ -914,7 +915,7 @@ class TickerDesk(Vertical):
                         for kind in ("ok", "stale", "miss", "unknown"):
                             el.remove_class(kind)
                         el.add_class("miss")
-                        el.update("[#555555]freshness[/]  [#3a3a3a]not cached[/]")
+                        el.update(f"[{OC.text_mute}]freshness[/]  [{OC.scrollbar}]not cached[/]")
                 except Exception:
                     pass
             return
@@ -933,12 +934,12 @@ class TickerDesk(Vertical):
                 el.display = True
                 el.add_class(kind)
                 val_col = {
-                    "ok": "#6fbf8a",
-                    "stale": "#d4b06a",
-                    "miss": "#3a3a3a",
-                    "unknown": "#6b6b6b",
-                }.get(kind, "#6b6b6b")
-                el.update(f"[#555555]{pill.label}[/]  [{val_col}]{pill.value}[/]")
+                    "ok": OC.mint,
+                    "stale": OC.brass,
+                    "miss": OC.scrollbar,
+                    "unknown": OC.dim,
+                }.get(kind, OC.dim)
+                el.update(f"[{OC.text_mute}]{pill.label}[/]  [{val_col}]{pill.value}[/]")
             else:
                 el.display = False
                 el.update("")
@@ -966,13 +967,13 @@ class TickerDesk(Vertical):
         if self._active_job:
             load_bit = "" if job_ready else " · loading"
             self.query_one("#td-crumb", Static).update(
-                f"View · ticker · [bold #e8e8e8]{model.ticker}[/]   "
-                f"[#555555]{self._active_job}{load_bit} · local cache · browse[/]"
+                f"View · ticker · [bold {OC.text_bright}]{model.ticker}[/]   "
+                f"[{OC.text_mute}]{self._active_job}{load_bit} · local cache · browse[/]"
             )
         else:
             self.query_one("#td-crumb", Static).update(
-                f"View · ticker · [bold #e8e8e8]{model.ticker}[/]   "
-                f"[#555555]local cache · browse[/]"
+                f"View · ticker · [bold {OC.text_bright}]{model.ticker}[/]   "
+                f"[{OC.text_mute}]local cache · browse[/]"
             )
         # Pending job (chip is-on, no payload yet): hold show · no plain-text dump
         job_mode = bool(self._active_job and job_ready)
@@ -993,7 +994,7 @@ class TickerDesk(Vertical):
                 foot.replace(" · d detail", "").replace("d detail · ", "").replace("d detail", "")
             )
             self.query_one("#td-footer", Static).update(
-                f"[#555555]{foot}[/]\n[#d4b06a]{model.authority}[/]"
+                f"[{OC.text_mute}]{foot}[/]\n[{OC.brass}]{model.authority}[/]"
             )
             return
         try:
@@ -1002,7 +1003,7 @@ class TickerDesk(Vertical):
             pass
         self.query_one("#td-mark", Static).update(model.ticker)
         self.query_one("#td-name", Static).update(
-            f"[bold #d8d8d8]{model.name}[/]" if model.name != "—" else ""
+            f"[bold {OC.text}]{model.name}[/]" if model.name != "—" else ""
         )
         chips: list[str] = []
         if model.board and model.board != "—":
@@ -1010,9 +1011,9 @@ class TickerDesk(Vertical):
         if model.sector and model.sector != "—":
             chips.append(model.sector)
         if model.tradeable and model.tradeable != "—":
-            chips.append(f"[#6fbf8a]{model.tradeable}[/]")
+            chips.append(f"[{OC.mint}]{model.tradeable}[/]")
         self.query_one("#td-chips", Static).update(
-            "  ".join(f"[#555555]{c}[/]" if "[#" not in c else c for c in chips) or "—"
+            "  ".join(f"[{OC.text_mute}]{c}[/]" if "[#" not in c else c for c in chips) or "—"
         )
         self.query_one("#td-asof", Static).update(f"as of {model.as_of}")
         # Compact summary still on identity column
@@ -1044,21 +1045,23 @@ class TickerDesk(Vertical):
             if i < len(model.horizons):
                 hz = model.horizons[i]
                 color = {
-                    "pos": "#6fbf8a",
-                    "neg": "#c97a72",
-                    "neutral": "#7a7a7a",
-                }.get(hz.tone, "#7a7a7a")
+                    "pos": OC.mint,
+                    "neg": OC.coral,
+                    "neutral": OC.text_dim,
+                }.get(hz.tone, OC.text_dim)
                 val = (hz.value or "—").strip() or "—"
                 if val in {"—", "-", "–"}:
                     # Honest empty horizon — no grey wallpaper bar
-                    el.update(f"[#555555]{hz.label:3}[/]  [#555555]—[/]")
+                    el.update(f"[{OC.text_mute}]{hz.label:3}[/]  [{OC.text_mute}]—[/]")
                 else:
                     # Filled bar only (tone-colored); no hollow ░ fake fill
                     bar = bar_glyphs(hz.bar_pct, width=8, hollow=False)
                     if bar:
-                        el.update(f"[#555555]{hz.label:3}[/] [{color}]{bar}[/]  [{color}]{val}[/]")
+                        el.update(
+                            f"[{OC.text_mute}]{hz.label:3}[/] [{color}]{bar}[/]  [{color}]{val}[/]"
+                        )
                     else:
-                        el.update(f"[#555555]{hz.label:3}[/]  [{color}]{val}[/]")
+                        el.update(f"[{OC.text_mute}]{hz.label:3}[/]  [{color}]{val}[/]")
                 el.display = True
             else:
                 el.update("")
@@ -1100,7 +1103,7 @@ class TickerDesk(Vertical):
                 head.add_class(card.tone)
             head.update(card.headline)
             self.query_one(f"#td-pulse-s-{key}", Static).update(card.sub)
-            body_lines = [f"[#555555]{k:8}[/] {v}" for k, v in card.rows[:4]]
+            body_lines = [f"[{OC.text_mute}]{k:8}[/] {v}" for k, v in card.rows[:4]]
             self.query_one(f"#td-pulse-b-{key}", Static).update("\n".join(body_lines))
 
         # Earnings — real EPS · YoY%; solid bar = relative |EPS| (no hollow ░)
@@ -1108,8 +1111,8 @@ class TickerDesk(Vertical):
         earn_sec.display = True
         if model.earnings:
             head = (
-                f"[#555555]{'Period':8}[/]  {'':12}  [#555555]{'EPS':>7}[/]  "
-                f"[#555555]{'YoY':>10}[/]"
+                f"[{OC.text_mute}]{'Period':8}[/]  {'':12}  [{OC.text_mute}]{'EPS':>7}[/]  "
+                f"[{OC.text_mute}]{'YoY':>10}[/]"
             )
             earn_lines = [head]
             any_extreme = False
@@ -1117,29 +1120,29 @@ class TickerDesk(Vertical):
                 bar = bar_glyphs(e.bar_pct, width=12, hollow=False)
                 # Tone bar by YoY; warn = amber (extreme / non-comparable base)
                 if e.yoy_tone == "pos":
-                    bc = "#6fbf8a"
+                    bc = OC.mint
                 elif e.yoy_tone == "neg":
-                    bc = "#c97a72"
+                    bc = OC.coral
                 elif e.yoy_tone == "warn":
-                    bc = "#d4b06a"
+                    bc = OC.brass
                 else:
-                    bc = "#6b6b6b"
+                    bc = OC.dim
                 pad = max(0, 12 - len(bar))
                 bar_s = f"[{bc}]{bar}[/]{' ' * pad}" if bar else f"{'':12}"
                 yc = {
-                    "pos": "#6fbf8a",
-                    "neg": "#c97a72",
-                    "warn": "#d4b06a",
-                }.get(e.yoy_tone, "#7a7a7a")
+                    "pos": OC.mint,
+                    "neg": OC.coral,
+                    "warn": OC.brass,
+                }.get(e.yoy_tone, OC.text_dim)
                 if getattr(e, "yoy_extreme", False):
                     any_extreme = True
                 earn_lines.append(
-                    f"[#d8d8d8]{e.period:8}[/]  {bar_s}  [#e8e8e8]{e.eps:>7}[/]  "
+                    f"[{OC.text}]{e.period:8}[/]  {bar_s}  [{OC.text_bright}]{e.eps:>7}[/]  "
                     f"[{yc}]{e.yoy:>10}[/]"
                 )
             if any_extreme:
                 earn_lines.append(
-                    "[#555555]* YoY uses reported prior-year EPS — extreme % often "
+                    f"[{OC.text_mute}]* YoY uses reported prior-year EPS — extreme % often "
                     "split / restatement, not pure growth[/]"
                 )
             self.query_one("#td-earn-head", Static).update("EARNINGS · LAST 4Q · EPS · YOY")
@@ -1147,7 +1150,7 @@ class TickerDesk(Vertical):
         else:
             self.query_one("#td-earn-head", Static).update("EARNINGS · LAST 4Q")
             self.query_one("#td-earn-body", Static).update(
-                "[#555555]no earnings rows in local cache[/]"
+                f"[{OC.text_mute}]no earnings rows in local cache[/]"
             )
 
         # Secondary presence inventory is design-rejected (thin stubs). Never paint.
@@ -1193,7 +1196,7 @@ class TickerDesk(Vertical):
                         else "not cached"
                     )
                     # Honest empty-slot (cockpit .empty-slot) — never invent facts
-                    body_el.update(f"[#555555]{hint}[/]")
+                    body_el.update(f"[{OC.text_mute}]{hint}[/]")
                     continue
                 body_el.update(
                     "\n".join(line for ln in p.lines if ln and (line := _paint_depth_fact_line(ln)))
@@ -1221,7 +1224,7 @@ class TickerDesk(Vertical):
             else:
                 foot = f"b f o x n jobs · d detail · {foot}".strip(" ·")
         self.query_one("#td-footer", Static).update(
-            f"[#555555]{foot}[/]\n[#d4b06a]{model.authority}[/]"
+            f"[{OC.text_mute}]{foot}[/]\n[{OC.brass}]{model.authority}[/]"
         )
 
     def _fin_period_grain(self) -> str:
@@ -1412,7 +1415,9 @@ class TickerDesk(Vertical):
                 pv.update("")
 
         story = (desk.story or "").replace("\n", " · ")
-        self.query_one("#td-flow-story", Static).update(f"[#555555]{story}[/]" if story else "")
+        self.query_one("#td-flow-story", Static).update(
+            f"[{OC.text_mute}]{story}[/]" if story else ""
+        )
 
     def _set_job_body_mode(self, mode: str) -> None:
         """Toggle job body chrome: days | dist | fin (mutually exclusive)."""
@@ -1454,7 +1459,7 @@ class TickerDesk(Vertical):
         if desk.empty or not desk.days:
             self.query_one("#td-flow-days-head", Static).update("SESSIONS")
             self.query_one("#td-flow-days", Static).update(
-                f"[#555555]no sessions · {desk.fetch_hint}[/]"
+                f"[{OC.text_mute}]no sessions · {desk.fetch_hint}[/]"
             )
             return
 
@@ -1462,7 +1467,7 @@ class TickerDesk(Vertical):
         self.query_one("#td-flow-days-head", Static).update(
             f"SESSIONS · {n} · of max |net| in window · NEWEST FIRST"
         )
-        mute = "#555555"
+        mute = OC.text_mute
         bar_w = 10
         head = (
             f"[{mute}]{'Date':10}[/]  "
@@ -1475,16 +1480,16 @@ class TickerDesk(Vertical):
         )
         lines = [head]
         for d in desk.days:
-            tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#7a7a7a")
+            tone = {"pos": OC.mint, "neg": OC.coral}.get(d.net_tone, OC.text_dim)
             bar_s = format_scalar_bar_markup(d.bar_pct, width=bar_w, tone=tone)
             pct_s = format_of_max_pct_markup(d.bar_pct, width=4)
             lines.append(
-                f"[#d8d8d8]{d.date_s:10}[/]  "
+                f"[{OC.text}]{d.date_s:10}[/]  "
                 f"{bar_s} {pct_s}  "
                 f"[{tone}]{d.net_s:>10}[/]  "
-                f"[#7a7a7a]{d.ratio_s:>7}[/]  "
-                f"[#d8d8d8]{d.buyer:>6}[/]  "
-                f"[#d8d8d8]{d.seller:>6}[/]"
+                f"[{OC.text_dim}]{d.ratio_s:>7}[/]  "
+                f"[{OC.text}]{d.buyer:>6}[/]  "
+                f"[{OC.text}]{d.seller:>6}[/]"
             )
         self.query_one("#td-flow-days", Static).update("\n".join(lines))
 
@@ -1504,7 +1509,7 @@ class TickerDesk(Vertical):
         if desk.empty or not desk.days:
             self.query_one("#td-flow-days-head", Static).update("DAILY POINTS")
             self.query_one("#td-flow-days", Static).update(
-                f"[#555555]no points · {desk.fetch_hint}[/]"
+                f"[{OC.text_mute}]no points · {desk.fetch_hint}[/]"
             )
             return
 
@@ -1512,7 +1517,7 @@ class TickerDesk(Vertical):
         self.query_one("#td-flow-days-head", Static).update(
             f"DAILY POINTS · {n} · of max |net| in window · NEWEST FIRST"
         )
-        mute = "#555555"
+        mute = OC.text_mute
         bar_w = 8
         head = (
             f"[{mute}]{'Date':10}[/]  "
@@ -1525,16 +1530,16 @@ class TickerDesk(Vertical):
         )
         lines = [head]
         for d in desk.days:
-            tone = {"pos": "#6fbf8a", "neg": "#c97a72"}.get(d.net_tone, "#7a7a7a")
+            tone = {"pos": OC.mint, "neg": OC.coral}.get(d.net_tone, OC.text_dim)
             bar_s = format_scalar_bar_markup(d.bar_pct, width=bar_w, tone=tone)
             pct_s = format_of_max_pct_markup(d.bar_pct, width=4)
             lines.append(
-                f"[#d8d8d8]{d.date_s:10}[/]  "
+                f"[{OC.text}]{d.date_s:10}[/]  "
                 f"{bar_s} {pct_s}  "
-                f"[#7a7a7a]{d.source:10}[/]  "
+                f"[{OC.text_dim}]{d.source:10}[/]  "
                 f"[{tone}]{d.net_s:>10}[/]  "
-                f"[#d8d8d8]{d.lot_s:>10}[/]  "
-                f"[#d8d8d8]{d.avg_s:>8}[/]"
+                f"[{OC.text}]{d.lot_s:>10}[/]  "
+                f"[{OC.text}]{d.avg_s:>8}[/]"
             )
         self.query_one("#td-flow-days", Static).update("\n".join(lines))
 
@@ -1543,13 +1548,13 @@ class TickerDesk(Vertical):
         self._set_job_body_mode("dist")
         self._paint_job_hero_pulses(desk)
 
-        mint = "#6fbf8a"
-        coral = "#c97a72"
+        mint = OC.mint
+        coral = OC.coral
         track_w = 14
 
         def _pill(tag: str) -> str:
             # Round-ish type badge · F Foreign · L Local · G gov — never A
-            c = {"F": "#7aa2c4", "L": "#6b6b6b", "G": "#d4b06a"}.get(tag, "#6b6b6b")
+            c = {"F": OC.blue, "L": OC.dim, "G": OC.brass}.get(tag, OC.dim)
             return f"([{c}]{tag}[/])"
 
         def _side_text(
@@ -1560,26 +1565,28 @@ class TickerDesk(Vertical):
             empty_hint: str,
         ) -> str:
             if not sides:
-                return f"[#555555]{empty_hint}[/]"
+                return f"[{OC.text_mute}]{empty_hint}[/]"
             lines: list[str] = []
             for s in sides:
                 # Side header: rank · code · pill · amount (right-ish)
                 lines.append(
-                    f"[#6b6b6b]{s.rank}[/] [bold #e8e8e8]{s.code}[/] {_pill(s.type_tag)}  "
+                    f"[{OC.dim}]{s.rank}[/] "
+                    f"[bold {OC.text_bright}]{s.code}[/] {_pill(s.type_tag)}  "
                     f"[{head_color}]{s.amount_s}[/]"
                 )
                 for cp in s.cps:
                     # CP row: arrow · code · pill · amount · %
                     lines.append(
-                        f"  [#555555]{arrow}[/] [#d8d8d8]{cp.code}[/] {_pill(cp.type_tag)}  "
-                        f"[#7a7a7a]{cp.amount_s}[/]  [#6b6b6b]{cp.pct}%[/]"
+                        f"  [{OC.text_mute}]{arrow}[/] "
+                        f"[{OC.text}]{cp.code}[/] {_pill(cp.type_tag)}  "
+                        f"[{OC.text_dim}]{cp.amount_s}[/]  [{OC.dim}]{cp.pct}%[/]"
                     )
                     # Horizontal share track under CP (design heat bar — not a side tower)
                     bar = bar_glyphs(cp.bar_pct, width=track_w, hollow=True)
                     if bar:
                         lines.append(f"    [{head_color}]{bar}[/]")
                     else:
-                        lines.append(f"    [#2a2a2a]{'░' * track_w}[/]")
+                        lines.append(f"    [{OC.hairline_strong}]{'░' * track_w}[/]")
                 lines.append("")  # space between sides
             return "\n".join(lines).rstrip()
 
@@ -1591,7 +1598,7 @@ class TickerDesk(Vertical):
                 f"[{coral}]TOP SELLERS · SOLD TO →[/]"
             )
             if desk.empty and not desk.buyers and not desk.sellers:
-                hint = f"[#555555]no distribution · {desk.fetch_hint}[/]"
+                hint = f"[{OC.text_mute}]no distribution · {desk.fetch_hint}[/]"
                 self.query_one("#td-dist-buy-body", Static).update(hint)
                 self.query_one("#td-dist-sell-body", Static).update(hint)
             else:
@@ -1629,7 +1636,7 @@ class TickerDesk(Vertical):
         if desk.empty or not desk.rows:
             self.query_one("#td-flow-days-head", Static).update("STOCK DESKS")
             self.query_one("#td-flow-days", Static).update(
-                f"[#555555]no top desks · {desk.fetch_hint}[/]"
+                f"[{OC.text_mute}]no top desks · {desk.fetch_hint}[/]"
             )
             return
 
@@ -1638,7 +1645,7 @@ class TickerDesk(Vertical):
             f"RADAR · {n} · DayNet · Net3/5/7/10/20"
         )
         # Design cockpit headers (not compact Day/N3/R/St)
-        mute = "#555555"
+        mute = OC.text_mute
         head = (
             f"[{mute}]{'':1}{'Code':4}[/] "
             f"[{mute}]{'Type':7}[/] "
@@ -1651,20 +1658,20 @@ class TickerDesk(Vertical):
         lines = [head]
         sel = int(desk.selected_index or 0)
         for i, r in enumerate(desk.rows):
-            mark = "[#c9a68a]›[/]" if i == sel else " "
+            mark = f"[{OC.peach}]›[/]" if i == sel else " "
             # Type: dim words (Foreign/Local) — design .dim, not F/L cryptic
             type_s = (r.type_label or "—")[:7]
-            type_c = "#7a7a7a"
+            type_c = OC.text_dim
             role_raw = (r.role or "—").strip().lower()
             if role_raw.startswith("buy"):
-                role_s, role_c = "buy", "#6fbf8a"
+                role_s, role_c = "buy", OC.mint
             elif role_raw.startswith("sell"):
-                role_s, role_c = "sell", "#c97a72"
+                role_s, role_c = "sell", OC.coral
             else:
-                role_s, role_c = (r.role or "—")[:4], "#7a7a7a"
-            partial = "[#d4b06a]*[/]" if r.has_partial else ""
+                role_s, role_c = (r.role or "—")[:4], OC.text_dim
+            partial = f"[{OC.brass}]*[/]" if r.has_partial else ""
             lines.append(
-                f"{mark}[bold #e8e8e8]{r.code:4}[/] "
+                f"{mark}[bold {OC.text_bright}]{r.code:4}[/] "
                 f"[{type_c}]{type_s:7}[/] "
                 f"[{role_c}]{role_s:4}[/] "
                 f"{format_signed_flow_markup(r.day_net, width=8)} "
@@ -1673,7 +1680,7 @@ class TickerDesk(Vertical):
                 f"{format_signed_flow_markup(r.net7, width=8)} "
                 f"{format_signed_flow_markup(r.net10, width=8)} "
                 f"{format_signed_flow_markup(r.net20, width=8)} "
-                f"[#7a7a7a]{r.streak:>3}[/] "
+                f"[{OC.text_dim}]{r.streak:>3}[/] "
                 f"{format_signed_flow_markup(r.delta1, width=8)}{partial}"
             )
         self.query_one("#td-flow-days", Static).update("\n".join(lines))
@@ -1688,14 +1695,17 @@ class TickerDesk(Vertical):
             head = self.query_one(f"#td-fin-{kind}-head", Static)
             body = self.query_one(f"#td-fin-{kind}-body", Static)
             if card.status == "ok":
-                head.update(f"[#d8d8d8]{card.title}[/]  [#555555]{card.period_label}[/]")
-                lines = [f"[#555555]{m.label:8}[/] [#e8e8e8]{m.value}[/]" for m in card.rows]
+                head.update(f"[{OC.text}]{card.title}[/]  [{OC.text_mute}]{card.period_label}[/]")
+                lines = [
+                    f"[{OC.text_mute}]{m.label:8}[/] [{OC.text_bright}]{m.value}[/]"
+                    for m in card.rows
+                ]
                 for h in card.history:
-                    lines.append(f"[#6b6b6b]{h}[/]")
-                body.update("\n".join(lines) if lines else "[#555555]—[/]")
+                    lines.append(f"[{OC.dim}]{h}[/]")
+                body.update("\n".join(lines) if lines else f"[{OC.text_mute}]—[/]")
             else:
-                head.update(f"[#555555]{card.title}[/]")
-                body.update(f"[#555555]{card.empty_hint or 'not cached'}[/]")
+                head.update(f"[{OC.text_mute}]{card.title}[/]")
+                body.update(f"[{OC.text_mute}]{card.empty_hint or 'not cached'}[/]")
 
     def _paint_job_and_chips_only(self) -> None:
         """When model not yet painted, still show ready job body + chips.
