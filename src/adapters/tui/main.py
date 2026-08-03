@@ -88,9 +88,9 @@ class CockpitApp(App[None]):
         # Fin period grain · binary toggle · armed only while fin job front
         Binding("y", "toggle_fin_period", "Fin period", show=False),
         Binding("d", "toggle_detail", "Detail", show=False),
-        # Prompt rail focus (OpenCode chrome · non-Action)
+        # Prompt rail: : = generic focus; / = agent stage (OpenCode-style)
         Binding("colon", "focus_prompt", "Prompt", show=False),
-        Binding("slash", "focus_prompt", "Prompt", show=False),
+        Binding("slash", "focus_agent", "Agent", show=False),
         # ``j`` is Judge re-judge only (on_key) — never board list navigation.
         Binding("q", "quit", "Quit", show=True),
     ]
@@ -233,6 +233,8 @@ class CockpitApp(App[None]):
         self._judge_generation = 0
         self._agent_generation = 0
         self._agent_loading = False
+        self._agent_stage_open = False
+        self._agent_last_question = ""
         self._judge_ticker = ""
         self._judge_limited = False
         self._cache_health: Any | None = None
@@ -555,10 +557,80 @@ class CockpitApp(App[None]):
     def _invalidate_agent_turn(self) -> None:
         self._agent_generation += 1
         self._agent_loading = False
+        self._agent_last_question = ""
+        if self._agent_stage_open:
+            self._exit_agent_stage(refresh=False)
         try:
             self.query_one("#agent-commentary").clear()
         except Exception:
             pass
+
+    def _hide_agent_commentary(self) -> None:
+        try:
+            desk = self.query_one("#agent-commentary")
+            desk.display = False
+            desk.set_stage_mode(False)
+        except Exception:
+            pass
+
+    def _enter_agent_stage(self, *, ready: bool = True) -> None:
+        """Replace main stage with agent surface (OpenCode-style)."""
+        from src.adapters.tui.widgets.agent_commentary import AgentCommentary
+
+        self._agent_stage_open = True
+        self._set_prompt_mode_chip("agent")
+        try:
+            body = self.query_one("#stage-body", Static)
+            scroll = self.query_one("#stage-scroll", VerticalScroll)
+            table = self.query_one("#board-table", DataTable)
+            evidence = self.query_one("#evidence-strip", Static)
+            body.display = False
+            table.display = False
+            evidence.display = False
+            scroll.display = True
+            self._hide_instrument_desks()
+            commentary = self.query_one("#agent-commentary", AgentCommentary)
+            commentary.set_stage_mode(True)
+            if ready:
+                ticker = str(self._focus_ticker or "—").upper()
+                action = "—"
+                row = self._rows[self._row_index] if self._rows else None
+                source = getattr(row, "source", None) if row is not None else None
+                setup = getattr(source, "trade_setup", None) if source is not None else None
+                if setup is not None:
+                    raw = getattr(setup, "action", None)
+                    action = getattr(raw, "value", None) or str(raw or "—")
+                commentary.show_stage_ready(
+                    ticker=ticker,
+                    action=str(action),
+                    provider=self._agent_provider,
+                )
+            try:
+                self.query_one("#view-title", Static).update(
+                    f"Agent · {str(self._focus_ticker or '—').upper()}"
+                )
+                self.query_one("#view-meta", Static).update(
+                    "· non-authoritative · Esc leave · Enter send"
+                )
+                self.query_one("#board-footer", Static).update(
+                    "Agent stage · deterministic Judge unchanged · Esc back · / re-focus"
+                )
+            except Exception:
+                pass
+        except Exception:
+            self._agent_stage_open = False
+
+    def _exit_agent_stage(self, *, refresh: bool = True) -> None:
+        """Leave agent stage and restore prior board/judge chrome."""
+        was_open = self._agent_stage_open
+        self._agent_stage_open = False
+        self._agent_last_question = ""
+        self._hide_agent_commentary()
+        if was_open and refresh:
+            try:
+                self._refresh_chrome()
+            except Exception:
+                pass
 
     def _hide_plan_desk(self) -> None:
         try:
@@ -648,6 +720,8 @@ class CockpitApp(App[None]):
         self._hide_preopen_inspect_desk()
         self._hide_paper_desk()
         self._hide_health_poster_desk()
+        if not self._agent_stage_open:
+            self._hide_agent_commentary()
 
     def _paint_detail_stage(self, *, body: Static, scroll: VerticalScroll) -> None:
         """Detail stage: Judge / ticker / broker visual desks; text body otherwise."""
@@ -1015,6 +1089,32 @@ class CockpitApp(App[None]):
         table = self.query_one("#board-table", DataTable)
         evidence = self.query_one("#evidence-strip", Static)
 
+        if self._agent_stage_open:
+            # Preserve OpenCode-style agent surface over normal stage paint.
+            body.display = False
+            table.display = False
+            evidence.display = False
+            scroll.display = True
+            self._hide_instrument_desks()
+            try:
+                from src.adapters.tui.widgets.agent_commentary import AgentCommentary
+
+                commentary = self.query_one("#agent-commentary", AgentCommentary)
+                commentary.display = True
+                commentary.set_stage_mode(True)
+                self.query_one("#view-title", Static).update(
+                    f"Agent · {str(self._focus_ticker or '—').upper()}"
+                )
+                self.query_one("#view-meta", Static).update(
+                    "· non-authoritative · Esc leave · Enter send"
+                )
+                self.query_one("#board-footer", Static).update(
+                    "Agent stage · deterministic Judge unchanged · Esc back · / re-focus"
+                )
+            except Exception:
+                pass
+            return
+
         if self._stage == "shell":
             scroll.display = True
             body.display = True
@@ -1270,6 +1370,11 @@ class CockpitApp(App[None]):
 
     def action_go_back(self) -> None:
         if self._modal_blocks_board_keys():
+            return
+        if self._agent_stage_open:
+            self._agent_generation += 1
+            self._agent_loading = False
+            self._exit_agent_stage(refresh=True)
             return
         self._invalidate_agent_turn()
         if self._stage == "ticker-desks":
@@ -1704,13 +1809,39 @@ class CockpitApp(App[None]):
         self.notify(f"Fin · {grain} · CLI --period {grain}", timeout=1.2)
 
     def action_focus_prompt(self) -> None:
-        """Focus OpenCode prompt rail (: or /). Non-Action chrome only."""
+        """Focus prompt rail without forcing agent stage (:)."""
         if self._modal_blocks_board_keys():
             return
         try:
             rail = self.query_one("#prompt-rail", Vertical)
             rail.add_class("is-focus")
             inp = self.query_one("#prompt-input", Input)
+            inp.placeholder = "ask agent · Enter sends · mode cli for CLI (not wired)"
+            inp.focus()
+        except Exception:
+            return
+
+    def action_focus_agent(self) -> None:
+        """/ — enter agent mode and OpenCode-style stage replace when Judge is open."""
+        if self._modal_blocks_board_keys():
+            return
+        self._set_prompt_mode_chip("agent")
+        on_judge = self._stage == "detail" and self._status_note in {
+            "judge",
+            "re-judging",
+        }
+        if on_judge:
+            self._enter_agent_stage(ready=True)
+        else:
+            self.notify(
+                "Open accumulation Judge (Enter on a row) then / to ask",
+                timeout=2.2,
+            )
+        try:
+            rail = self.query_one("#prompt-rail", Vertical)
+            rail.add_class("is-focus")
+            inp = self.query_one("#prompt-input", Input)
+            inp.placeholder = "ask about this Judge · Enter send · Esc leave agent"
             inp.focus()
         except Exception:
             return
@@ -1729,47 +1860,56 @@ class CockpitApp(App[None]):
             elif mode == "cli":
                 chip.add_class("is-cli")
             sub = self.query_one("#prompt-sub", Static)
+            remote = "remote" if self._agent_provider_available else "unavailable"
             if mode == "agent":
-                sub.update("· agent path · design only · not wired")
+                sub.update(f"· {remote} · {self._agent_provider}")
             elif mode == "cli":
-                sub.update("· cli path · design only · not wired")
+                sub.update("· cli path · not wired yet")
             else:
-                sub.update("· local · design only · not wired")
+                sub.update("· local · / agent · : prompt")
         except Exception:
             pass
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Submit optional agent commentary; idle and CLI remain non-executing."""
+        """Submit agent turn; free text auto-enters agent mode (not silent idle)."""
         if event.input.id != "prompt-input":
             return
         text = (event.value or "").strip()
         event.input.value = ""
-        # Mode switchers for chrome demo only
         low = text.lower()
         if low in {"mode idle", "idle"}:
+            self._exit_agent_stage(refresh=True)
             self._set_prompt_mode_chip("idle")
             self.notify("prompt · mode idle", timeout=1.2)
             return
         if low in {"mode agent", "agent"}:
-            self._set_prompt_mode_chip("agent")
+            self.action_focus_agent()
             return
         if low in {"mode cli", "cli"}:
+            self._exit_agent_stage(refresh=True)
             self._set_prompt_mode_chip("cli")
             self.notify("prompt · cli · not wired yet", timeout=1.5)
             return
         if low in {"/reset", "session reset", "reset session"}:
             self._reset_agent_session()
             return
-        if text and self._prompt_mode == "agent":
-            self._submit_agent_turn(text)
-        elif text and self._prompt_mode == "cli":
+        if text and self._prompt_mode == "cli":
             self.notify("prompt · cli · not wired yet", timeout=1.5)
+            return
+        if text:
+            # Auto-enter agent mode for any real question (no silent drop).
+            self._set_prompt_mode_chip("agent")
+            self._submit_agent_turn(text)
+            return
         try:
             rail = self.query_one("#prompt-rail", Vertical)
             rail.remove_class("is-focus")
-            table = self.query_one("#board-table", DataTable)
-            if table.display:
-                table.focus()
+            if not self._agent_stage_open:
+                table = self.query_one("#board-table", DataTable)
+                if table.display:
+                    table.focus()
+            else:
+                self.query_one("#prompt-input", Input).focus()
         except Exception:
             pass
 
@@ -1792,7 +1932,10 @@ class CockpitApp(App[None]):
         from src.application.dto.accumulation_agent import AgentTurnRequest
 
         if self._stage != "detail" or self._status_note not in {"judge", "re-judging"}:
-            self.notify("Agent is available only in accumulation Judge", timeout=2.0)
+            self.notify(
+                "Agent is available only in accumulation Judge · Enter a row first",
+                timeout=2.2,
+            )
             return
         row = self._rows[self._row_index] if self._rows else None
         source = getattr(row, "source", None)
@@ -1800,21 +1943,41 @@ class CockpitApp(App[None]):
             self._show_agent_unavailable("Full Judge context required · press j to re-judge")
             return
         if self._agent_turn_runner is None:
-            self._show_agent_unavailable("Agent commentary is unavailable")
+            self._show_agent_unavailable(
+                "Agent commentary is unavailable · check ai.enabled and API key"
+            )
             return
-        self._invalidate_agent_turn()
+        # Cancel in-flight without collapsing stage if we are already in agent stage.
+        keep_stage = self._agent_stage_open
         self._agent_generation += 1
+        self._agent_loading = False
+        if not keep_stage:
+            try:
+                self.query_one("#agent-commentary").clear()
+            except Exception:
+                pass
         generation = self._agent_generation
         ticker = str(self._focus_ticker).upper()
         stage_id = (self._stage, self._status_note)
         self._agent_loading = True
-        commentary = self.query_one("#agent-commentary")
-        commentary.show_loading(provider=self._agent_provider, ticker=ticker)
+        self._agent_last_question = user_text
         self._set_prompt_mode_chip("agent")
+        if not self._agent_stage_open:
+            self._enter_agent_stage(ready=False)
+        commentary = self.query_one("#agent-commentary")
+        commentary.set_stage_mode(True)
+        commentary.show_loading(
+            provider=self._agent_provider,
+            ticker=ticker,
+            question=user_text,
+        )
         try:
             sub = self.query_one("#prompt-sub", Static)
             remote = "remote" if self._agent_provider_available else "unavailable"
             sub.update(f"· {remote} · {self._agent_provider}")
+            rail = self.query_one("#prompt-rail", Vertical)
+            rail.add_class("is-focus")
+            self.query_one("#prompt-input", Input).focus()
         except Exception:
             pass
         self._execute_agent_turn(
@@ -1831,13 +1994,19 @@ class CockpitApp(App[None]):
             AgentTurnStatus,
         )
 
-        self._invalidate_agent_turn()
+        self._agent_generation += 1
+        self._agent_loading = False
+        if not self._agent_stage_open:
+            self._enter_agent_stage(ready=False)
         row = self._rows[self._row_index] if self._rows else None
         source = getattr(row, "source", None)
         as_of = str(getattr(getattr(source, "trade_setup", None), "snapshot_date", "—"))
-        self.query_one("#agent-commentary").show_result(
+        commentary = self.query_one("#agent-commentary")
+        commentary.set_stage_mode(True)
+        commentary.show_result(
             AgentTurnResult(status=AgentTurnStatus.UNAVAILABLE, error_message=message),
             as_of=as_of,
+            question=self._agent_last_question,
         )
 
     @work(thread=True, group="agent")
@@ -1891,7 +2060,15 @@ class CockpitApp(App[None]):
             return
         self._agent_loading = False
         as_of = str(getattr(source.trade_setup, "snapshot_date", "—"))
-        self.query_one("#agent-commentary").show_result(result, as_of=as_of)
+        if not self._agent_stage_open:
+            self._enter_agent_stage(ready=False)
+        commentary = self.query_one("#agent-commentary")
+        commentary.set_stage_mode(True)
+        commentary.show_result(
+            result,
+            as_of=as_of,
+            question=self._agent_last_question,
+        )
 
     def on_input_blurred(self, event: Input.Blurred) -> None:
         if getattr(event.input, "id", None) != "prompt-input":

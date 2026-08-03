@@ -146,8 +146,10 @@ def test_cockpit_dispatches_exact_judge_source_and_rejects_stale_result(size) ->
             assert seen == [source]
             commentary = app.query_one("#agent-commentary", AgentCommentary)
             assert commentary.display is True
-            assert app.query_one("#judge-desk").display is True
-            commentary.show_loading(provider="deepseek", ticker="BBCA")
+            # OpenCode-style stage replace: Judge is hidden while agent is open.
+            assert app.query_one("#judge-desk").display is False
+            assert app._agent_stage_open is True
+            commentary.show_loading(provider="deepseek", ticker="BBCA", question="q")
             commentary.show_result(
                 AgentTurnResult(
                     status=AgentTurnStatus.SUCCESS,
@@ -158,6 +160,7 @@ def test_cockpit_dispatches_exact_judge_source_and_rejects_stale_result(size) ->
                     warnings=("Source warning",),
                 ),
                 as_of="2026-08-01",
+                question="q",
             )
             commentary.show_result(
                 AgentTurnResult(
@@ -181,5 +184,61 @@ def test_cockpit_dispatches_exact_judge_source_and_rejects_stale_result(size) ->
             app._invalidate_agent_turn()
             await pilot.pause()
             assert commentary.display is False
+            assert app._agent_stage_open is False
+
+    asyncio.run(scenario())
+
+
+def test_free_text_auto_enters_agent_mode_and_slash_opens_stage() -> None:
+    async def scenario() -> None:
+        seen = []
+
+        def runner(request):
+            seen.append(request.user_text)
+            return AgentTurnResult(
+                status=AgentTurnStatus.SUCCESS,
+                answer="ok",
+                context_reference="sha256:abc",
+                provider="deepseek",
+                model="deepseek-v4-flash",
+            )
+
+        app = CockpitApp(
+            accum_loader=_accum_payload,
+            accum_controller=BoardController(_accum_payload),
+            accum_presenter=AccumPresenter(),
+            agent_turn_runner=runner,
+            agent_provider_available=True,
+        )
+        async with app.run_test(size=(100, 36)) as pilot:
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if app._stage == "accum" and app._rows:
+                    break
+            app._open_detail()
+            assert app._prompt_mode == "idle"
+            app.action_focus_agent()
+            assert app._prompt_mode == "agent"
+            assert app._agent_stage_open is True
+            assert app.query_one("#judge-desk").display is False
+            commentary = app.query_one("#agent-commentary", AgentCommentary)
+            assert commentary.display is True
+            # Free text from idle still auto-routes to agent (without mode agent first).
+            app._prompt_mode = "idle"
+            app._agent_stage_open = False
+            app._submit_agent_turn = app._submit_agent_turn  # keep real
+            # Simulate Input.Submitted path via on_input_submitted contract:
+            from textual.widgets import Input
+
+            inp = app.query_one("#prompt-input", Input)
+            inp.value = "Why is this ENTER?"
+            app.on_input_submitted(Input.Submitted(inp, inp.value))
+            for _ in range(20):
+                await pilot.pause(0.05)
+                if seen:
+                    break
+            assert app._prompt_mode == "agent"
+            assert seen == ["Why is this ENTER?"]
+            assert app._agent_stage_open is True
 
     asyncio.run(scenario())

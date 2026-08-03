@@ -233,19 +233,20 @@ Known baseline data warnings (if any):
 
 | Action | How |
 |---|---|
-| Focus prompt | `:` or `/` |
-| Agent mode | `mode agent` |
+| Open agent stage (OpenCode-style) | `/` while on accumulation Judge |
+| Focus prompt (generic) | `:` |
+| Agent mode | **Auto** on any real question · or `mode agent` · or `/` |
+| Leave agent stage | `Esc` (Judge restored) |
 | Idle / CLI chrome | `mode idle` / `mode cli` (CLI not wired) |
-| Reset session | `/reset` · `session reset` · `reset session` |
+| Reset session | `session reset` · `reset session` |
 | Full Judge context | Enter on accum row · `j` re-judge if limited |
 | Cancel / invalidate | Escape, navigate, refresh, newer submit (generation) |
 
-**Commentary card fields**
+**Agent stage fields** (full stage replace, not under-board only)
 
-- Answer (model prose, non-authoritative)  
-- Meta: provider · model · as-of · context reference · optional session/turn  
-- Tool lines: name · status · result_reference  
-- Warnings / errors  
+- Question echo · Answer · Meta (provider / model / context / session)  
+- Tool lines · Warnings / errors  
+- Judge remains authoritative; Esc returns to Judge
 
 ---
 
@@ -307,6 +308,7 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | ADR-063 | Session architecture accepted |
 | 2026-08-03 | `afb9d677` | Ephemeral sessions + `/reset` + `ai.session_enabled` |
 | 2026-08-03 | `agent-live-call` suite | Automated live smoke package `tests/agent_live/` for A–D + N |
+| 2026-08-03 | Agent stage UX | Auto agent mode on free-text; `/` opens OpenCode-style full stage replace; Esc leaves |
 | _next_ | Phase 4/5 | Update this table + §1 + smoke sections |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
