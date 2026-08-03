@@ -416,7 +416,7 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-03 | Vocabulary | Coined **AI Research Cockpit** for `/`; multi-stage destination; L3/L4 journey |
 | 2026-08-03 | ADR-064 | L3 multi-round OUR tools authorized; implement task activated |
 | 2026-08-03 | ADR-065 | L4 web_research + RO data ask + confirm/gap clues authorized |
-| _next_ | Implement L3 then L4 runtime | Research Cockpit journey continues |
+| _next_ | Implement L3 then L4 runtime | Goal brief: `tasks/backlog/GOAL_implement_ai_research_cockpit_l3_l4.md` |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same
