@@ -155,11 +155,7 @@ def test_tools_offered_but_unused_adds_honesty_note() -> None:
 
 def test_planning_only_answer_with_tools_offered_fails_with_tool_gap_clue() -> None:
     model = _Model(
-        [
-            _answer(
-                "I'll check the broker desk data to identify which brokers are buying INCO."
-            )
-        ]
+        [_answer("I'll check the broker desk data to identify which brokers are buying INCO.")]
     )
     result = _orchestrator(model, _Tool()).execute(
         AgentTurnRequest("siapa broker beli?", make_candidate())
