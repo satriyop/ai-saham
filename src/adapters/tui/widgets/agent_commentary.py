@@ -151,7 +151,7 @@ class AgentCommentary(Vertical):
 
     def show_loading(self, *, provider: str, ticker: str, question: str = "") -> None:
         self.display = True
-        self.query_one(".agent-title", Static).update("Agent")
+        self.query_one(".agent-title", Static).update("AI Research Cockpit")
         self._paint_status(
             turn_ok=True,
             ticker=ticker,
@@ -169,6 +169,17 @@ class AgentCommentary(Vertical):
         self.query_one(".agent-more", Static).update("")
         self.query_one(".agent-error", Static).update("")
         self.query_one(".agent-hint", Static).update("")
+
+    def show_progress(self, message: str, *, provider: str = "", ticker: str = "") -> None:
+        """Multi-round progress (ADR-064) — not Turn OK answer content."""
+        self.display = True
+        line = (message or "").strip() or "Working…"
+        self.query_one(".agent-title", Static).update("AI Research Cockpit")
+        self.query_one(".agent-answer", Static).update(Text(line))
+        if provider or ticker:
+            self.query_one(".agent-meta", Static).update(
+                Text(f"remote · {provider or '—'} · {ticker or '—'}")
+            )
 
     def show_result(
         self,

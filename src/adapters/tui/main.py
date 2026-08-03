@@ -2020,8 +2020,23 @@ class CockpitApp(App[None]):
         request: Any,
     ) -> None:
         assert self._agent_turn_runner is not None
+
+        def _progress(message: str) -> None:
+            dispatch_if_active(
+                self,
+                self._on_agent_progress,
+                generation,
+                stage_id,
+                ticker,
+                message,
+            )
+
         try:
-            result = self._agent_turn_runner(request)
+            runner = self._agent_turn_runner
+            try:
+                result = runner(request, on_progress=_progress)
+            except TypeError:
+                result = runner(request)
         except Exception:
             from src.application.dto.accumulation_agent import (
                 AgentTurnResult,
@@ -2041,6 +2056,30 @@ class CockpitApp(App[None]):
             source,
             result,
         )
+
+    def _on_agent_progress(
+        self,
+        generation: int,
+        stage_id: tuple[str, str],
+        ticker: str,
+        message: str,
+    ) -> None:
+        """Paint multi-round progress only for the active Research Cockpit turn."""
+        if generation != self._agent_generation:
+            return
+        if (self._stage, self._status_note) != stage_id:
+            return
+        if str(self._focus_ticker).upper() != ticker:
+            return
+        try:
+            commentary = self.query_one("#agent-commentary")
+            commentary.show_progress(
+                message,
+                provider=self._agent_provider,
+                ticker=ticker,
+            )
+        except Exception:
+            pass
 
     def _on_agent_turn_done(
         self,
