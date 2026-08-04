@@ -40,4 +40,4 @@ Per-section meta + thin facts:
 - Implemented date: 2026-08-04
 - Code: `build_ticker_research_brief_use_case.py`, `agent_ticker_research_brief_tool.py`, composition wiring
 - Tests: `test_build_ticker_research_brief_use_case.py`, `test_agent_ticker_research_brief_tool.py`
-- Commits: (fill on commit)
+- Commits: `e0b87f84`
