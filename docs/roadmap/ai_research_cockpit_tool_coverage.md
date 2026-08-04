@@ -55,16 +55,9 @@ What still binds (these are governance, not style):
 | `get_preopen_iev` | OUR / NONE | `iev`/`iep`/`rank`/`is_ncp_locked` (canonical current reading), `locked_baseline_iev` (08:56 NCP lock), `iev_move_since_lock` (`None`+`NO_POST_LOCK_MOVE` INFO when no lock exists); future `session_date` → typed `SESSION_DATE_IN_FUTURE` UNAVAILABLE |
 | `get_ticker_corporate_actions` | OUR / NONE | `upcoming[]`/`recent[]` calendar events (relative to today) each with **role-keyed** `dates[]` (`role`/`event_date`/`event_time`, incl. `rups_date`/`pubex_date` — not the lossy 5-field flatten), `event_type`, `amount_value`/`amount_currency`, `ratio_old`/`ratio_new`, `price`, `event_note`, `active`, `company_name`; `event_count`; dateless events → `NO_DATED_MILESTONES` INFO |
 | `get_ticker_sector_context` | OUR / NONE | L2a peer_context + L2b macro_context (labels/values; no composite score) |
+| `get_ticker_insider_activity` | OUR / NONE | recent cached `transactions[]` (`name`, `action_type`, `shares`, `price`, `transaction_date`; newest first, bounded window/limit) + `buy_count`/`sell_count`/`net_shares`/`net_buy_ratio`; empty-in-window vs never-cached distinguished (`NO_INSIDER_ACTIVITY_IN_WINDOW` INFO vs `UNAVAILABLE`) |
 | `web_research` | External / NETWORK_READ | external snippets (confirm) |
 | `ro_data_query` | Elevated / LOCAL_READ_ELEVATED | 3 allowlisted shapes: ticker close, ticker volume, broker day net (confirm) |
-
-Domain data that exists locally but is **not** exposed to the agent today (all
-🟡 projection gaps — the data is in the DB / domain, just not projected):
-
-- **`insider_cache`** table + `InsiderTransaction` VO + `InsiderActivityProvider`
-  port (`name`, `action_type`, `shares`, `price`, `transaction_date`); already
-  read via `ticker_dashboard_source`.
-
 
 **Correction (2026-08-03):** rows 5, 7, 8 were first mis-graded 🔴 capability gaps
 by auditing only agent-facing DTOs. The underlying data is **local** — they are
@@ -81,13 +74,14 @@ currently **no true capability gaps** in this list.
 | 4 | All of 1–3 for **distribution/selling** | ticker→named sellers; `Dis` labels; `total_seller` | ✅ `get_ticker_broker_flow.top_distributing`; `bandar.broker_accdist` / `total_sellers` | 🟢 covered |
 | 5 | All of 1–4 on **volume / qty / price avg** | per-ticker volume; per-broker net; per-broker avg price | volume ✅ dashboard; per-broker net ✅ desk/RO + `get_ticker_broker_flow` net fields; avg price ✅ `top_*.avg_buy_price` / `avg_sell_price` | 🟢 covered |
 | 6 | Phase **compression / breakout** | setup phase; BB width percentile | ✅ `AgentSetupPhaseFacts.current_phase`; ✅ `AgentAccumulationFacts.bb_width_pctile` | 🟢 covered |
-| 7 | Recent **insider activity** | insider transactions | **exists** — `insider_cache` + `InsiderTransaction` + `InsiderActivityProvider` (via `ticker_dashboard_source`); no agent tool/projection | 🟡 projection |
+| 7 | Recent **insider activity** | insider transactions | ✅ `get_ticker_insider_activity` — `transactions[]` (name/action_type/shares/price/transaction_date, newest first) + `buy_count`/`sell_count`/`net_shares`/`net_buy_ratio` over `InsiderActivityProvider` (cache-only, `api_client=None` composition + explicit `as_of_date`) | 🟢 covered |
 | 8 | Upcoming **corporate action** | corp-action calendar (div/split/RUPS) | ✅ `get_ticker_corporate_actions` — `upcoming[]`/`recent[]` events with role-keyed `dates[]` (incl. `rups_date`/`pubex_date`) over `SQLiteCorporateActionCalendarRepository` / `CorporateActionCalendarEvent` | 🟢 covered |
 
 **Headline:** Q1/Q2/Q4/Q5 (avg-price) are closed by **`get_ticker_broker_flow`**
-(single-session stock-centric ticker→desks + bandar). Remaining open projection
-work: insider (7); corp-action (8) closed by `get_ticker_corporate_actions`;
-multi-day desk history (row 3) closed.
+(single-session stock-centric ticker→desks + bandar). Insider (7) closed by
+`get_ticker_insider_activity`; corp-action (8) closed by
+`get_ticker_corporate_actions`; multi-day desk history (row 3) closed. No open
+projection gaps remain in this matrix.
 
 ## Matrix — broader accum/preopen research context
 
