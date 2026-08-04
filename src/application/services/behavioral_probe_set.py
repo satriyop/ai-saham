@@ -18,9 +18,11 @@ Two probe sets exist (ADR-068 §3):
   cohort boundary.
 - **extended**: coverage/mutation material only. Never enters identity.
 
-Slice 1 of the implementation task ships the core set only; the extended set is
-declared empty so later slices have a named place to grow without touching
-identity.
+Slice 1 shipped the core set with an empty extended set. Slice 2 populates the
+extended set to raise measured branch coverage over the accum decision path.
+Extended probes are deliberately *not* identity material: a mutation that only
+an extended probe reaches is measured and named, but it does not fork the
+cohort. Promoting one to core is a separate, deliberate cohort boundary.
 """
 
 from __future__ import annotations
@@ -202,6 +204,13 @@ class BehavioralProbe:
     # the ENTER branch is reachable. When False, availability is unresolved —
     # the zero-coverage branch production also has.
     source_availability_enabled: bool = True
+    # When True the runner attaches its frozen swing setup catalog, so a
+    # primary setup family resolves and the setup-readiness evaluator, the
+    # setup-family branches of DecisionPolicy, and the named-setup gate
+    # evaluator all become reachable. Production attaches a catalog built from
+    # `config/swing_setups.yaml`; no core probe sets this flag, so enabling it
+    # on an extended probe cannot move cohort identity (ADR-068 §3).
+    swing_setup_families_enabled: bool = False
     rsi_period: int | None = None
     sma_period: int | None = None
     extra_notes: tuple[str, ...] = field(default_factory=tuple)
@@ -711,7 +720,45 @@ _CORE_PROBES: tuple[BehavioralProbe, ...] = (
     ),
 )
 
-_EXTENDED_PROBES: tuple[BehavioralProbe, ...] = ()
+# ── Extended probes (coverage / mutation material only) ─────────────────────
+# ADR-068 §3: these must never enter identity. They exist to reach branches the
+# frozen core set cannot, so a mutation there is *measured and named* instead of
+# invisible. Every extended probe below mirrors a core probe's universe and only
+# adds the swing setup catalog, keeping the delta attributable to one input.
+
+_EXTENDED_PROBES: tuple[BehavioralProbe, ...] = (
+    BehavioralProbe(
+        probe_id="ext_setup_family_neutral_mixed_gates",
+        surface="NEUTRAL with setup families attached — readiness and family branches",
+        tickers=_MIXED_GATE_UNIVERSE,
+        regime="NEUTRAL",
+        swing_setup_families_enabled=True,
+    ),
+    BehavioralProbe(
+        probe_id="ext_setup_family_risk_off_tightened_gates",
+        surface="RISK_OFF tightened with setup families — setup/regime action branches",
+        tickers=_MIXED_GATE_UNIVERSE,
+        regime="RISK_OFF",
+        regime_conviction=0.25,
+        regime_signal_multiplier=0.4,
+        regime_gate_tightening=True,
+        swing_setup_families_enabled=True,
+    ),
+    BehavioralProbe(
+        probe_id="ext_setup_family_regime_absent",
+        surface="No MarketContext with setup families — default-regime family branch",
+        tickers=_MIXED_GATE_UNIVERSE,
+        regime=None,
+        swing_setup_families_enabled=True,
+    ),
+    BehavioralProbe(
+        probe_id="ext_setup_family_single_ticker_deep",
+        surface="Single-ticker screen with setup families attached",
+        tickers=(_STRONG_ACCUM,),
+        regime="NEUTRAL",
+        swing_setup_families_enabled=True,
+    ),
+)
 
 
 def core_probe_set() -> tuple[BehavioralProbe, ...]:

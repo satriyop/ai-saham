@@ -19,7 +19,13 @@
     "single_ticker_deep_judgment"
   ],
   "core_probe_set_id": "accum_core.v1",
-  "extended_probe_count": 0,
+  "extended_probe_count": 4,
+  "extended_probe_ids": [
+    "ext_setup_family_neutral_mixed_gates",
+    "ext_setup_family_risk_off_tightened_gates",
+    "ext_setup_family_regime_absent",
+    "ext_setup_family_single_ticker_deep"
+  ],
   "extended_probe_set_id": "accum_extended.v1",
   "probe_input_digest": "5be656d19d36c9369a6f08cd8d453288b74c6c36ddaee694f125fca0be6aa8f9",
   "projection_contract": "accum_behavioral_projection.v1"

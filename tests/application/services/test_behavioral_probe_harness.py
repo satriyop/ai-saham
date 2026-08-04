@@ -85,6 +85,7 @@ def test_fixture_records_the_current_probe_set_contract() -> None:
     assert fixture["core_probe_count"] == len(core_probe_set())
     assert fixture["extended_probe_count"] == len(extended_probe_set())
     assert fixture["core_probe_ids"] == [p.probe_id for p in core_probe_set()]
+    assert fixture["extended_probe_ids"] == [p.probe_id for p in extended_probe_set()]
 
 
 def test_core_probe_ids_are_unique() -> None:
@@ -281,8 +282,15 @@ def test_core_probe_set_covers_the_accum_decision_surface() -> None:
 
 
 def test_extended_probes_do_not_change_core_identity() -> None:
-    assert extended_probe_set() == ()
-    assert run_probe_set(extended_probe_set()) == {}
+    extended = extended_probe_set()
+    assert extended, "slice 2 populates the extended set; an empty set measures nothing"
+    core_ids = {probe.probe_id for probe in core_probe_set()}
+    assert not (core_ids & {probe.probe_id for probe in extended})
+
+    # The extended set runs, produces its own projections, and none of that
+    # reaches the identity digest, which is computed over the core set alone.
+    extended_projections = run_probe_set(extended)
+    assert set(extended_projections) == {probe.probe_id for probe in extended}
 
     extra = dataclasses.replace(core_probe_set()[0], probe_id="extended_smoke")
     augmented = core_probe_set() + (extra,)

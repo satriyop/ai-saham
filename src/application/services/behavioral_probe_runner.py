@@ -94,6 +94,13 @@ from src.application.use_case.assess_risk_use_case import AssessRiskUseCase
 from src.application.use_case.assess_source_availability_use_case import (
     AssessSourceAvailabilityUseCase,
 )
+from src.application.use_case.evaluate_swing_setup_use_case import (
+    CoiledSpringSetupConfig,
+    ForeignBounceSetupConfig,
+    PullbackContinuationSetupConfig,
+    SmartMoneyConfirmedSetupConfig,
+    SwingSetupCatalogConfig,
+)
 from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
 from src.domain.entities.candle import Candle
 from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
@@ -119,6 +126,40 @@ _FLOAT_PRECISION = 6
 # Frozen session envelope. Supplied so no resolver ever consults a clock.
 _PROBE_RUN_AT = datetime(2026, 6, 19, 16, 30)
 _PROBE_DECISION_AT = datetime(2026, 6, 19, 16, 30)
+
+# Frozen swing setup catalog for probes that declare
+# ``swing_setup_families_enabled``. Every gate threshold stays at its in-code
+# default; only the entry-authority metadata is stated explicitly, because the
+# in-code default for ``family`` is the sentinel ``"unknown"`` which the family
+# resolver discards, leaving setup readiness structurally unreachable.
+#
+# The values mirror what ``config/swing_setups.yaml`` declares today. They are
+# frozen **probe input**, not a config read: this module performs no IO, and the
+# declared-policy axis of identity belongs to the ADR-059 snapshot digest, not
+# to the probe digest (ADR-068 §1). No core probe enables the catalog, so this
+# constant cannot move cohort identity.
+_PROBE_SWING_SETUP_CATALOG = SwingSetupCatalogConfig(
+    foreign_bounce=ForeignBounceSetupConfig(
+        family="accumulation",
+        entry_authority=True,
+        can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
+    ),
+    coiled_spring=CoiledSpringSetupConfig(
+        family="breakout",
+        entry_authority=True,
+        can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
+    ),
+    smart_money_confirmed=SmartMoneyConfirmedSetupConfig(
+        family="confirmation",
+        entry_authority=False,
+        can_enter_from_phases=(),
+    ),
+    pullback_continuation=PullbackContinuationSetupConfig(
+        family="pullback",
+        entry_authority=True,
+        can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
+    ),
+)
 
 
 class ProbeIOForbiddenError(RuntimeError):
@@ -476,6 +517,9 @@ def build_probe_screen_use_case(probe: BehavioralProbe) -> AccumulationScreenUse
         signal_engine=SignalEngine(config=SignalEngineConfig()),
         indicator_registry=IndicatorRegistry(),
         rules_loader=ProbeRulesLoader(),
+        swing_setup_catalog=(
+            _PROBE_SWING_SETUP_CATALOG if probe.swing_setup_families_enabled else None
+        ),
     )
 
 
