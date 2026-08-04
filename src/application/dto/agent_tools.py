@@ -28,6 +28,7 @@ class AgentToolName(str, Enum):
     GET_TICKER_SECTOR_CONTEXT = "get_ticker_sector_context"
     GET_TICKER_FUNDAMENTALS_TREND = "get_ticker_fundamentals_trend"
     GET_MARKET_REGIME = "get_market_regime"
+    GET_TICKER_RESEARCH_BRIEF = "get_ticker_research_brief"
     # ADR-065 elevated / external (opt-in flags)
     WEB_RESEARCH = "web_research"
     RO_DATA_QUERY = "ro_data_query"

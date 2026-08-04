@@ -451,6 +451,7 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-04 | `get_ticker_fundamentals_trend` | Multi-quarter EPS + latest ratios + forward (ADR-061); Depth menu D |
 | 2026-08-04 | `get_ticker_insider_activity` | Recent cached insider buy/sell filings + bounded net summary over the domain `InsiderActivityProvider` port (not the live-capable `TickerDashboardSource` wrapper) — new narrow `api_client=None` composition + explicit `action_type="ALL"`/`as_of_date=today()` on every call, provably cache-only independent of composition wiring elsewhere (ADR-061); never-cached vs genuinely-quiet-window distinguished via a 10y `ever_fetched` fallback lookback, mirroring `get_ticker_dashboard_use_case`'s `classify_sequence` pattern; coverage row 7 |
 | 2026-08-04 | `get_market_regime` | Market-wide regime snapshot tool (ADR-061); cohort-scoped `market_context_snapshots` read via canonical MCE identity; dual confidence (`conviction` + nullable `regime_confidence`); factors without scores; coverage row 10 |
+| 2026-08-04 | `get_ticker_research_brief` | Composed one-shot ticker brief (Depth menu E / ADR-061+042); shared `BuildTickerResearchBriefUseCase` + agent tool; surfaces deterministic Judge Action; per-section honesty; no minted verdict; CLI/TUI adapters deferred |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same

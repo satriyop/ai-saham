@@ -35,6 +35,7 @@ from src.application.services.agent_ticker_ownership_history_tool import (
     TickerOwnershipHistoryTool,
 )
 from src.application.services.agent_ticker_ownership_tool import TickerOwnershipTool
+from src.application.services.agent_ticker_research_brief_tool import TickerResearchBriefTool
 from src.application.services.agent_ticker_sector_context_tool import TickerSectorContextTool
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_visible_cockpit_tool import VisibleCockpitResultTool
@@ -67,6 +68,7 @@ from src.infrastructure.composition.view_ticker_deps import (
     build_read_only_ticker_insider_source,
     build_read_only_ticker_ownership_history_use_case,
     build_read_only_ticker_ownership_source,
+    build_read_only_ticker_research_brief_use_case,
     build_read_only_ticker_sector_context_use_case,
 )
 from src.infrastructure.config.local_env import read_local_env_value
@@ -140,6 +142,12 @@ def build_agent_composition(
     registered_tools: tuple[AgentToolName, ...] = ()
     if tools_enabled:
         tools = [VisibleCockpitResultTool()]
+        judge_ticker = None
+        if accumulation_judge_factory is not None:
+            try:
+                judge_ticker = accumulation_judge_factory()
+            except (OSError, ValueError):
+                judge_ticker = None
         if db_path is not None:
             try:
                 dashboard = build_read_only_ticker_dashboard_use_case(db_path)
@@ -224,13 +232,17 @@ def build_agent_composition(
                 market_regime = None
             if market_regime is not None:
                 tools.append(market_regime)
-        if accumulation_judge_factory is not None:
             try:
-                judge_ticker = accumulation_judge_factory()
+                brief_uc = build_read_only_ticker_research_brief_use_case(
+                    db_path,
+                    judge_ticker=judge_ticker,
+                )
             except (OSError, ValueError):
-                judge_ticker = None
-            if judge_ticker is not None:
-                tools.append(AccumulationJudgeTool(judge_ticker))
+                brief_uc = None
+            if brief_uc is not None:
+                tools.append(TickerResearchBriefTool(brief_uc))
+        if judge_ticker is not None:
+            tools.append(AccumulationJudgeTool(judge_ticker))
         if web_research_on:
             # Default null client is offline-safe; live composition may inject HTTP later.
             tools.append(WebResearchTool(NullWebResearchClient()))

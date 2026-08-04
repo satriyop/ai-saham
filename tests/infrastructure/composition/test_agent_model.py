@@ -192,6 +192,11 @@ def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
         "build_read_only_market_regime_tool",
         _market_regime_tool_stub,
     )
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_ticker_research_brief_use_case",
+        lambda path, judge_ticker=None: object(),
+    )
 
     result = build_agent_composition(
         AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
@@ -213,6 +218,7 @@ def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
         AgentToolName.GET_TICKER_INSIDER_ACTIVITY,
         AgentToolName.GET_TICKER_FUNDAMENTALS_TREND,
         AgentToolName.GET_MARKET_REGIME,
+        AgentToolName.GET_TICKER_RESEARCH_BRIEF,
     )
 
 
@@ -295,6 +301,11 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
         "build_read_only_market_regime_tool",
         _market_regime_tool_stub,
     )
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_ticker_research_brief_use_case",
+        lambda path, judge_ticker=None: object(),
+    )
 
     result = build_agent_composition(
         AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
@@ -317,6 +328,7 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
         AgentToolName.GET_TICKER_INSIDER_ACTIVITY,
         AgentToolName.GET_TICKER_FUNDAMENTALS_TREND,
         AgentToolName.GET_MARKET_REGIME,
+        AgentToolName.GET_TICKER_RESEARCH_BRIEF,
         AgentToolName.JUDGE_ACCUMULATION_TICKER,
     )
 

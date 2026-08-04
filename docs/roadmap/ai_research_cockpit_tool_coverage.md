@@ -58,6 +58,7 @@ What still binds (these are governance, not style):
 | `get_ticker_insider_activity` | OUR / NONE | recent cached `transactions[]` (`name`, `action_type`, `shares`, `price`, `transaction_date`; newest first, bounded window/limit) + `buy_count`/`sell_count`/`net_shares`/`net_buy_ratio`; empty-in-window vs never-cached distinguished (`NO_INSIDER_ACTIVITY_IN_WINDOW` INFO vs `UNAVAILABLE`) |
 | `get_ticker_fundamentals_trend` | OUR / NONE | multi-quarter EPS series + latest ratios + forward; `eps_trend_direction` |
 | `get_market_regime` | OUR / NONE | market-wide tape: `regime`, `conviction`, `regime_confidence` (nullable), factor value/label/rationale (no factor scores), `signal_multiplier`/`gate_tightening` as stored readings, optional stability/days, `cohort_id` |
+| `get_ticker_research_brief` | OUR / NONE | composed one-shot: judge Action (surfaced) + broker/foreign/ownership/corp/regime sections; per-section status; **no minted verdict** (ADR-042) |
 | `web_research` | External / NETWORK_READ | external snippets (confirm) |
 | `ro_data_query` | Elevated / LOCAL_READ_ELEVATED | 3 allowlisted shapes: ticker close, ticker volume, broker day net (confirm) |
 
@@ -112,7 +113,7 @@ descriptive (no authority/score):
 | B | Sector context as a **shared use case** (`BuildTickerSectorContextUseCase`) | ✅ `get_ticker_sector_context` (IMPLEMENTED) |
 | C | Desk flow **rotation + foreign/local split + weekly trajectory** | ✅ `get_ticker_desk_flow_history` (IMPLEMENTED; see `tasks/done/…desk_flow_history…`) |
 | D | Fundamentals / **earnings trend** over quarters | ✅ `get_ticker_fundamentals_trend` (IMPLEMENTED) |
-| E | **Ticker research brief** — one composed, PIT-aligned bundle (surfaces Judge Action; **no minted verdict**, ADR-042) | [`get_ticker_research_brief`](../../tasks/backlog/implement_ai_research_cockpit_ticker_research_brief_tool.md) |
+| E | **Ticker research brief** — one composed, PIT-aligned bundle (surfaces Judge Action; **no minted verdict**, ADR-042) | ✅ `get_ticker_research_brief` (IMPLEMENTED; shared `BuildTickerResearchBriefUseCase`; agent tool this slice; CLI/TUI thin adapters deferred) |
 
 ## Partial-data honesty policy (all read tools)
 

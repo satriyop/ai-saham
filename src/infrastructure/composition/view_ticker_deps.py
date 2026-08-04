@@ -432,6 +432,26 @@ def build_read_only_ticker_insider_source(db_path: Path | str):
     )
 
 
+def _resolve_canonical_mce_identity():
+    """Derive the production-matching MCE cohort identity (no engine evaluate)."""
+    from src.application.services.mce_observation_identity import build_mce_observation_identity
+    from src.infrastructure.config.app_config import load_app_config
+    from src.infrastructure.config.market_context_config import (
+        default_market_context_config_path,
+    )
+
+    app_cfg = load_app_config()
+    config_path = default_market_context_config_path()
+    raw_yaml = config_path.read_text(encoding="utf-8")
+    universe = str(getattr(app_cfg.analysis, "regime_universe", "") or "")
+    benchmark = str(getattr(app_cfg.analysis, "benchmark", "") or "IHSG")
+    return build_mce_observation_identity(
+        resolved_mce_config_canonical=raw_yaml,
+        universe_name=universe,
+        benchmark_ticker=benchmark,
+    )
+
+
 def build_read_only_market_regime_tool(db_path: Path | str):
     """Construct MarketRegimeTool with the canonical MCE cohort (cache-only).
 
@@ -444,28 +464,53 @@ def build_read_only_market_regime_tool(db_path: Path | str):
         raise FileNotFoundError(f"market context database is unavailable: {resolved}")
 
     from src.application.services.agent_market_regime_tool import MarketRegimeTool
-    from src.application.services.mce_observation_identity import build_mce_observation_identity
-    from src.infrastructure.config.app_config import load_app_config
-    from src.infrastructure.config.market_context_config import (
-        default_market_context_config_path,
-    )
     from src.infrastructure.persistence.sqlite_market_context_repository import (
         SQLiteMarketContextRepository,
     )
 
-    app_cfg = load_app_config()
-    config_path = default_market_context_config_path()
-    raw_yaml = config_path.read_text(encoding="utf-8")
-    universe = str(getattr(app_cfg.analysis, "regime_universe", "") or "")
-    benchmark = str(getattr(app_cfg.analysis, "benchmark", "") or "IHSG")
-    identity = build_mce_observation_identity(
-        resolved_mce_config_canonical=raw_yaml,
-        universe_name=universe,
-        benchmark_ticker=benchmark,
-    )
+    identity = _resolve_canonical_mce_identity()
     return MarketRegimeTool(
         SQLiteMarketContextRepository(resolved),
         cohort_id=identity.cohort_id,
         universe_name=identity.universe_name,
         benchmark_ticker=identity.benchmark_ticker,
+    )
+
+
+def build_read_only_ticker_research_brief_use_case(
+    db_path: Path | str,
+    *,
+    judge_ticker=None,
+):
+    """Construct the shared research-brief use case (cache-only sub-readers).
+
+    ``judge_ticker`` is the same optional single-ticker accumulation runner used
+    by ``AccumulationJudgeTool``. When omitted, the judge section degrades to
+    UNAVAILABLE without failing the whole brief.
+    """
+    from src.application.use_case.build_ticker_research_brief_use_case import (
+        BuildTickerResearchBriefUseCase,
+    )
+    from src.infrastructure.persistence.sqlite_market_context_repository import (
+        SQLiteMarketContextRepository,
+    )
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"ticker research-brief database is unavailable: {resolved}")
+
+    flow = build_read_only_ticker_broker_flow_deps(resolved)
+    foreign = build_read_only_ticker_foreign_history_use_case(resolved)
+    ownership = build_read_only_ticker_ownership_source(resolved)
+    corp = build_read_only_ticker_corp_action_source(resolved)
+    identity = _resolve_canonical_mce_identity()
+    return BuildTickerResearchBriefUseCase(
+        top_brokers=flow.top_brokers,
+        bandar_source=flow.bandar_source,
+        foreign_history=foreign,
+        ownership_source=ownership,
+        corp_actions_source=corp,
+        market_context_repository=SQLiteMarketContextRepository(resolved),
+        regime_cohort_id=identity.cohort_id,
+        judge_ticker=judge_ticker,
     )
