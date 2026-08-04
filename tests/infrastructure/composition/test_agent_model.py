@@ -1,6 +1,7 @@
 import pytest
 
 from src.application.dto.agent_tools import AgentToolName
+from src.application.services.agent_market_regime_tool import MarketRegimeTool
 from src.application.use_case.orchestrate_agent_turn_use_case import AgentTurnOrchestrator
 from src.application.use_case.session_aware_agent_turn_use_case import (
     SessionAwareAgentTurnUseCase,
@@ -11,6 +12,18 @@ from src.infrastructure.config.app_config import AiConfig
 from src.infrastructure.config.local_env import read_local_env_value
 
 pytestmark = pytest.mark.agent
+
+
+class _EmptyMarketContextRepo:
+    def get(self, as_of_date, *, semantic_compatibility_id=None):
+        return None
+
+    def get_recent(self, limit=30, *, semantic_compatibility_id=None):
+        return []
+
+
+def _market_regime_tool_stub(_path):
+    return MarketRegimeTool(_EmptyMarketContextRepo(), cohort_id="sha256:test-cohort")
 
 
 def test_disabled_composition_does_not_construct_provider(monkeypatch) -> None:
@@ -174,6 +187,11 @@ def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
         "build_read_only_ticker_insider_source",
         lambda path: object(),
     )
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_market_regime_tool",
+        _market_regime_tool_stub,
+    )
 
     result = build_agent_composition(
         AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
@@ -194,6 +212,7 @@ def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
         AgentToolName.GET_TICKER_SECTOR_CONTEXT,
         AgentToolName.GET_TICKER_INSIDER_ACTIVITY,
         AgentToolName.GET_TICKER_FUNDAMENTALS_TREND,
+        AgentToolName.GET_MARKET_REGIME,
     )
 
 
@@ -271,6 +290,11 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
         "build_read_only_ticker_insider_source",
         lambda path: object(),
     )
+    monkeypatch.setattr(
+        agent_model,
+        "build_read_only_market_regime_tool",
+        _market_regime_tool_stub,
+    )
 
     result = build_agent_composition(
         AiConfig(enabled=True, provider="deepseek", tools_enabled=True),
@@ -292,6 +316,7 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
         AgentToolName.GET_TICKER_SECTOR_CONTEXT,
         AgentToolName.GET_TICKER_INSIDER_ACTIVITY,
         AgentToolName.GET_TICKER_FUNDAMENTALS_TREND,
+        AgentToolName.GET_MARKET_REGIME,
         AgentToolName.JUDGE_ACCUMULATION_TICKER,
     )
 

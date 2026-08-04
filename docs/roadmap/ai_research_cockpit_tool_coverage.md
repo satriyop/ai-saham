@@ -57,6 +57,7 @@ What still binds (these are governance, not style):
 | `get_ticker_sector_context` | OUR / NONE | L2a peer_context + L2b macro_context (labels/values; no composite score) |
 | `get_ticker_insider_activity` | OUR / NONE | recent cached `transactions[]` (`name`, `action_type`, `shares`, `price`, `transaction_date`; newest first, bounded window/limit) + `buy_count`/`sell_count`/`net_shares`/`net_buy_ratio`; empty-in-window vs never-cached distinguished (`NO_INSIDER_ACTIVITY_IN_WINDOW` INFO vs `UNAVAILABLE`) |
 | `get_ticker_fundamentals_trend` | OUR / NONE | multi-quarter EPS series + latest ratios + forward; `eps_trend_direction` |
+| `get_market_regime` | OUR / NONE | market-wide tape: `regime`, `conviction`, `regime_confidence` (nullable), factor value/label/rationale (no factor scores), `signal_multiplier`/`gate_tightening` as stored readings, optional stability/days, `cohort_id` |
 | `web_research` | External / NETWORK_READ | external snippets (confirm) |
 | `ro_data_query` | Elevated / LOCAL_READ_ELEVATED | 3 allowlisted shapes: ticker close, ticker volume, broker day net (confirm) |
 
@@ -93,7 +94,7 @@ All data is **local** (🟡 projection gaps) → each an implement task under AD
 | # | Canonical question | Required datum | Carrier (exists) → tool | State |
 |---|---|---|---|---|
 | 9 | Is **foreign/smart money** accumulating (net trend over weeks)? | `foreign_flow_points` series | ✅ `get_ticker_foreign_flow` (`cumulative_net_idr`, `latest_net_idr`, `trend_direction`, `net_buy_sessions`, point tail) — complements dashboard window summaries | 🟢 covered |
-| 10 | What's the current **market regime / breadth**? | `market_context_snapshots` + `regime_observations` | `BuildMarketContextUseCase` (stored snapshot) → [`get_market_regime` task](../../tasks/backlog/implement_ai_research_cockpit_market_regime_tool.md) | 🟡→ task |
+| 10 | What's the current **market regime / breadth**? | `market_context_snapshots` + `regime_observations` | ✅ `get_market_regime` — cohort-scoped cache snapshot (`regime`, `conviction`, `regime_confidence`, factor value/label/rationale, `signal_multiplier`/`gate_tightening`, optional stability/days, `cohort_id`); never recomputes MCE | 🟢 covered |
 | 11 | Is the **float tightening** / who owns it? | `shareholding_composition` (`institution_pct`, `individual_pct`, `top_holder_*`, `total_shares`) | ✅ `get_ticker_ownership` (single latest); history via `get_ticker_ownership_history` (`periods[]`, `institution_pct_change`, `float_change`, `top_holder_pct_change`) | 🟢 covered |
 | 12 | **Pre-open IEV** / NCP snapshot / IEV delta? | `iev_snapshots` | ✅ `get_preopen_iev` (`iev`/`iep`/`rank`/`is_ncp_locked` from `get_snapshot`, `locked_baseline_iev` via `ncp_baseline_iev`, `iev_move_since_lock`) | 🟢 covered |
 | 13 | **Sector** strength / rotation / peers? | L2a peers + L2b sector-macro | ✅ `get_ticker_sector_context` (`peer_context` returns/breadth/RS/regime; `macro_context` factors value/label/rationale, `macro_regime`) — no composite/factor scores | 🟢 covered |

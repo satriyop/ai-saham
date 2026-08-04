@@ -56,6 +56,7 @@ from src.infrastructure.composition.view_broker_deps import (
     build_read_only_broker_desk_use_cases,
 )
 from src.infrastructure.composition.view_ticker_deps import (
+    build_read_only_market_regime_tool,
     build_read_only_preopen_iev_source,
     build_read_only_ticker_broker_flow_deps,
     build_read_only_ticker_corp_action_source,
@@ -217,6 +218,12 @@ def build_agent_composition(
                 fund_trend = None
             if fund_trend is not None:
                 tools.append(TickerFundamentalsTrendTool(fund_trend))
+            try:
+                market_regime = build_read_only_market_regime_tool(db_path)
+            except (OSError, ValueError):
+                market_regime = None
+            if market_regime is not None:
+                tools.append(market_regime)
         if accumulation_judge_factory is not None:
             try:
                 judge_ticker = accumulation_judge_factory()

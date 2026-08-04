@@ -323,9 +323,7 @@ def build_read_only_ticker_fundamentals_trend_use_case(
 
     resolved = Path(db_path)
     if not resolved.is_file():
-        raise FileNotFoundError(
-            f"ticker fundamentals-trend database is unavailable: {resolved}"
-        )
+        raise FileNotFoundError(f"ticker fundamentals-trend database is unavailable: {resolved}")
     return ViewTickerFundamentalsTrendUseCase(
         SQLiteTickerDashboardSource(resolved, initialize_schema=False)
     )
@@ -431,4 +429,43 @@ def build_read_only_ticker_insider_source(db_path: Path | str):
         db_path=resolved,
         connection_provider=StockbitSQLiteConnectionProvider(initialize_schema=False),
         stockbit_config=load_stockbit_provider_config(),
+    )
+
+
+def build_read_only_market_regime_tool(db_path: Path | str):
+    """Construct MarketRegimeTool with the canonical MCE cohort (cache-only).
+
+    Cohort id is derived the same way production MCE writes use
+    (``build_mce_observation_identity`` + regime universe/benchmark + MCE YAML).
+    Never evaluates or recomputes MarketContextEngine.
+    """
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"market context database is unavailable: {resolved}")
+
+    from src.application.services.agent_market_regime_tool import MarketRegimeTool
+    from src.application.services.mce_observation_identity import build_mce_observation_identity
+    from src.infrastructure.config.app_config import load_app_config
+    from src.infrastructure.config.market_context_config import (
+        default_market_context_config_path,
+    )
+    from src.infrastructure.persistence.sqlite_market_context_repository import (
+        SQLiteMarketContextRepository,
+    )
+
+    app_cfg = load_app_config()
+    config_path = default_market_context_config_path()
+    raw_yaml = config_path.read_text(encoding="utf-8")
+    universe = str(getattr(app_cfg.analysis, "regime_universe", "") or "")
+    benchmark = str(getattr(app_cfg.analysis, "benchmark", "") or "IHSG")
+    identity = build_mce_observation_identity(
+        resolved_mce_config_canonical=raw_yaml,
+        universe_name=universe,
+        benchmark_ticker=benchmark,
+    )
+    return MarketRegimeTool(
+        SQLiteMarketContextRepository(resolved),
+        cohort_id=identity.cohort_id,
+        universe_name=identity.universe_name,
+        benchmark_ticker=identity.benchmark_ticker,
     )
