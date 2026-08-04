@@ -1,0 +1,26 @@
+{
+  "behavioral_probe_digest": "04ce202b41b30d8f1e7e9bcd36a853664c907668fbff8f8f1bb68aee3fd5398b",
+  "core_probe_count": 15,
+  "core_probe_ids": [
+    "regime_risk_on_mixed_gates",
+    "regime_neutral_mixed_gates",
+    "regime_volatile_mixed_gates",
+    "regime_risk_off_mixed_gates",
+    "regime_absent_default_policy",
+    "regime_risk_off_tightened_gates",
+    "accum_score_threshold_rejection",
+    "signal_score_threshold_rejection",
+    "structural_filter_market_cap_and_piotroski",
+    "missing_enrichment_evidence",
+    "unresolved_source_availability",
+    "insufficient_history_skips",
+    "short_window_three_sessions",
+    "long_window_ten_sessions",
+    "single_ticker_deep_judgment"
+  ],
+  "core_probe_set_id": "accum_core.v1",
+  "extended_probe_count": 0,
+  "extended_probe_set_id": "accum_extended.v1",
+  "probe_input_digest": "5be656d19d36c9369a6f08cd8d453288b74c6c36ddaee694f125fca0be6aa8f9",
+  "projection_contract": "accum_behavioral_projection.v1"
+}
