@@ -56,6 +56,7 @@ What still binds (these are governance, not style):
 | `get_ticker_corporate_actions` | OUR / NONE | `upcoming[]`/`recent[]` calendar events (relative to today) each with **role-keyed** `dates[]` (`role`/`event_date`/`event_time`, incl. `rups_date`/`pubex_date` — not the lossy 5-field flatten), `event_type`, `amount_value`/`amount_currency`, `ratio_old`/`ratio_new`, `price`, `event_note`, `active`, `company_name`; `event_count`; dateless events → `NO_DATED_MILESTONES` INFO |
 | `get_ticker_sector_context` | OUR / NONE | L2a peer_context + L2b macro_context (labels/values; no composite score) |
 | `get_ticker_insider_activity` | OUR / NONE | recent cached `transactions[]` (`name`, `action_type`, `shares`, `price`, `transaction_date`; newest first, bounded window/limit) + `buy_count`/`sell_count`/`net_shares`/`net_buy_ratio`; empty-in-window vs never-cached distinguished (`NO_INSIDER_ACTIVITY_IN_WINDOW` INFO vs `UNAVAILABLE`) |
+| `get_ticker_fundamentals_trend` | OUR / NONE | multi-quarter EPS series + latest ratios + forward; `eps_trend_direction` |
 | `web_research` | External / NETWORK_READ | external snippets (confirm) |
 | `ro_data_query` | Elevated / LOCAL_READ_ELEVATED | 3 allowlisted shapes: ticker close, ticker volume, broker day net (confirm) |
 
@@ -109,7 +110,7 @@ descriptive (no authority/score):
 | A | Ownership **history / float trend** (new port `get_ownership_history` + dedupe per `report_date`) | ✅ `get_ticker_ownership_history` (IMPLEMENTED; see `tasks/done/…ownership_history…`) |
 | B | Sector context as a **shared use case** (`BuildTickerSectorContextUseCase`) | ✅ `get_ticker_sector_context` (IMPLEMENTED) |
 | C | Desk flow **rotation + foreign/local split + weekly trajectory** | ✅ `get_ticker_desk_flow_history` (IMPLEMENTED; see `tasks/done/…desk_flow_history…`) |
-| D | Fundamentals / **earnings trend** over quarters | [`get_ticker_fundamentals_trend`](../../tasks/backlog/implement_ai_research_cockpit_ticker_fundamentals_trend_tool.md) |
+| D | Fundamentals / **earnings trend** over quarters | ✅ `get_ticker_fundamentals_trend` (IMPLEMENTED) |
 | E | **Ticker research brief** — one composed, PIT-aligned bundle (surfaces Judge Action; **no minted verdict**, ADR-042) | [`get_ticker_research_brief`](../../tasks/backlog/implement_ai_research_cockpit_ticker_research_brief_tool.md) |
 
 ## Partial-data honesty policy (all read tools)

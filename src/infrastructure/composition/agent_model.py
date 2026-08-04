@@ -27,6 +27,9 @@ from src.application.services.agent_ticker_desk_flow_history_tool import (
     TickerDeskFlowHistoryTool,
 )
 from src.application.services.agent_ticker_foreign_flow_tool import TickerForeignFlowTool
+from src.application.services.agent_ticker_fundamentals_trend_tool import (
+    TickerFundamentalsTrendTool,
+)
 from src.application.services.agent_ticker_insider_tool import TickerInsiderActivityTool
 from src.application.services.agent_ticker_ownership_history_tool import (
     TickerOwnershipHistoryTool,
@@ -59,6 +62,7 @@ from src.infrastructure.composition.view_ticker_deps import (
     build_read_only_ticker_dashboard_use_case,
     build_read_only_ticker_desk_flow_history_service,
     build_read_only_ticker_foreign_history_use_case,
+    build_read_only_ticker_fundamentals_trend_use_case,
     build_read_only_ticker_insider_source,
     build_read_only_ticker_ownership_history_use_case,
     build_read_only_ticker_ownership_source,
@@ -207,6 +211,12 @@ def build_agent_composition(
                 insider_source = None
             if insider_source is not None:
                 tools.append(TickerInsiderActivityTool(insider_source))
+            try:
+                fund_trend = build_read_only_ticker_fundamentals_trend_use_case(db_path)
+            except (OSError, ValueError):
+                fund_trend = None
+            if fund_trend is not None:
+                tools.append(TickerFundamentalsTrendTool(fund_trend))
         if accumulation_judge_factory is not None:
             try:
                 judge_ticker = accumulation_judge_factory()

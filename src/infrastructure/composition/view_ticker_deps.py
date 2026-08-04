@@ -310,6 +310,27 @@ def build_read_only_ticker_ownership_history_use_case(
     return ViewTickerOwnershipHistoryUseCase(provider)
 
 
+def build_read_only_ticker_fundamentals_trend_use_case(
+    db_path: Path | str,
+):
+    """Construct fundamentals-trend use case without schema initialization."""
+    from src.application.use_case.view_ticker_fundamentals_trend_use_case import (
+        ViewTickerFundamentalsTrendUseCase,
+    )
+    from src.infrastructure.persistence.sqlite_ticker_dashboard_source import (
+        SQLiteTickerDashboardSource,
+    )
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(
+            f"ticker fundamentals-trend database is unavailable: {resolved}"
+        )
+    return ViewTickerFundamentalsTrendUseCase(
+        SQLiteTickerDashboardSource(resolved, initialize_schema=False)
+    )
+
+
 def build_read_only_ticker_sector_context_use_case(
     db_path: Path | str,
 ):

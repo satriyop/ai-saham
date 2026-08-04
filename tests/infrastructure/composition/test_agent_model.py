@@ -166,6 +166,11 @@ def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
     )
     monkeypatch.setattr(
         agent_model,
+        "build_read_only_ticker_fundamentals_trend_use_case",
+        lambda path: object(),
+    )
+    monkeypatch.setattr(
+        agent_model,
         "build_read_only_ticker_insider_source",
         lambda path: object(),
     )
@@ -188,6 +193,7 @@ def test_existing_db_registers_visible_ticker_dashboard_and_broker_desk_tools(
         AgentToolName.GET_TICKER_CORPORATE_ACTIONS,
         AgentToolName.GET_TICKER_SECTOR_CONTEXT,
         AgentToolName.GET_TICKER_INSIDER_ACTIVITY,
+        AgentToolName.GET_TICKER_FUNDAMENTALS_TREND,
     )
 
 
@@ -257,6 +263,11 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
     )
     monkeypatch.setattr(
         agent_model,
+        "build_read_only_ticker_fundamentals_trend_use_case",
+        lambda path: object(),
+    )
+    monkeypatch.setattr(
+        agent_model,
         "build_read_only_ticker_insider_source",
         lambda path: object(),
     )
@@ -280,6 +291,7 @@ def test_approved_judge_factory_registers_accumulation_tool(monkeypatch, tmp_pat
         AgentToolName.GET_TICKER_CORPORATE_ACTIONS,
         AgentToolName.GET_TICKER_SECTOR_CONTEXT,
         AgentToolName.GET_TICKER_INSIDER_ACTIVITY,
+        AgentToolName.GET_TICKER_FUNDAMENTALS_TREND,
         AgentToolName.JUDGE_ACCUMULATION_TICKER,
     )
 
