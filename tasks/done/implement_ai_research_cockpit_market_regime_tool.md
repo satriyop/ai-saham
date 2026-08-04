@@ -41,4 +41,4 @@
 - Code: `agent_market_regime_tool.py`, `AgentToolName.GET_MARKET_REGIME`, `build_read_only_market_regime_tool`, agent_model registration, gap clues
 - Tests: `test_agent_market_regime_tool.py`, composition registration
 - Coverage row: 10 → 🟢
-- Commits: (fill on commit)
+- Commits: `325a626d`
