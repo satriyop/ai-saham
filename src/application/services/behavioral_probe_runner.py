@@ -27,7 +27,15 @@ Substituted at the port boundary only, and only with frozen in-memory data:
 
 - ``MarketDataRepository`` / ``BrokerDataRepository``
 - ``FundamentalsProvider`` / ``ShareholdingProvider`` / ``BandarDetectorProvider``
+- ``ForwardEstimatesProvider``
 - ``RulesLoader`` (never invoked — probes set no ``strategy_name``)
+
+Note on the input digest: ``compute_probe_input_digest`` hashes candles, broker
+summaries, broker daily flows and the request knobs. Enrichment stubs
+(fundamentals, shareholding, bandar, forward estimates) are outside it, so an
+enrichment-only probe change moves the behavioural digest without moving the
+input digest. That is the contract as shipped in slice 1; widening it is its own
+deliberate change, not a side effect of adding a probe.
 
 Why config values are not read from disk
 ----------------------------------------
@@ -105,12 +113,14 @@ from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
 from src.domain.entities.candle import Candle
 from src.domain.ports.bandar_detector_provider import BandarDetectorProvider
 from src.domain.ports.broker_data_repository import BrokerDataRepository
+from src.domain.ports.forward_estimates_provider import ForwardEstimatesProvider
 from src.domain.ports.fundamentals_provider import FundamentalsProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.ports.shareholding_provider import ShareholdingProvider
 from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+from src.domain.value_objects.forward_estimates import ForwardEstimates
 from src.domain.value_objects.market_context import MarketContext, MarketRegime
 from src.domain.value_objects.shareholding_composition import ShareholdingComposition
 
@@ -323,6 +333,23 @@ class FrozenProbeShareholdingProvider(ShareholdingProvider):
         return (row,) if row is not None and limit > 0 else ()
 
 
+class FrozenProbeForwardEstimatesProvider(ForwardEstimatesProvider):
+    """Returns frozen forward estimates, or ``None`` when none is declared.
+
+    Forward estimates are the only input from which ``SignalContext.forward_pe``
+    is derived, and that is the single value the ``valuation_stretched`` signal
+    flag compares — so without this port the flag penalty is unreachable.
+    """
+
+    def __init__(self, by_ticker: dict[str, ForwardEstimates]) -> None:
+        self._by_ticker = dict(by_ticker)
+
+    def get_forward_estimates(
+        self, ticker: str, as_of_date: date | None = None
+    ) -> ForwardEstimates | None:
+        return self._by_ticker.get(ticker.upper())
+
+
 class FrozenProbeBandarProvider(BandarDetectorProvider):
     """Returns a frozen bandar snapshot, or ``None`` when none is declared."""
 
@@ -442,6 +469,7 @@ def _expand_universe(
     dict[str, CompanyFundamentals],
     dict[str, ShareholdingComposition],
     dict[str, BandarDetectorSnapshot],
+    dict[str, ForwardEstimates],
 ]:
     candles: list[Candle] = []
     summaries: list[BrokerSummary] = []
@@ -449,6 +477,7 @@ def _expand_universe(
     fundamentals: dict[str, CompanyFundamentals] = {}
     shareholding: dict[str, ShareholdingComposition] = {}
     bandar: dict[str, BandarDetectorSnapshot] = {}
+    forward_estimates: dict[str, ForwardEstimates] = {}
 
     spec: ProbeTicker
     for spec in probe.tickers:
@@ -463,6 +492,8 @@ def _expand_universe(
             shareholding[spec.ticker] = spec.shareholding.to_value_object(spec.ticker)
         if spec.bandar is not None:
             bandar[spec.ticker] = spec.bandar.to_value_object(spec.ticker, probe.as_of_date)
+        if spec.forward_estimates is not None:
+            forward_estimates[spec.ticker] = spec.forward_estimates.to_value_object(spec.ticker)
 
     return (
         tuple(candles),
@@ -471,6 +502,7 @@ def _expand_universe(
         fundamentals,
         shareholding,
         bandar,
+        forward_estimates,
     )
 
 
@@ -481,7 +513,9 @@ def build_probe_screen_use_case(probe: BehavioralProbe) -> AccumulationScreenUse
     gate, setup-phase, signal, risk, and action component is the production
     class with its in-code default policy.
     """
-    candles, summaries, flows, fundamentals, shareholding, bandar = _expand_universe(probe)
+    candles, summaries, flows, fundamentals, shareholding, bandar, forward_estimates = (
+        _expand_universe(probe)
+    )
 
     market_repository = FrozenProbeMarketRepository(candles)
     broker_repository = FrozenProbeBrokerRepository(summaries, flows)
@@ -510,6 +544,11 @@ def build_probe_screen_use_case(probe: BehavioralProbe) -> AccumulationScreenUse
         ),
         bandar_detector_provider=(
             FrozenProbeBandarProvider(bandar) if probe.enrichment_providers_enabled else None
+        ),
+        forward_estimates_provider=(
+            FrozenProbeForwardEstimatesProvider(forward_estimates)
+            if probe.enrichment_providers_enabled
+            else None
         ),
         risk_use_case=risk_use_case,
         candidate_observations_repository=None,

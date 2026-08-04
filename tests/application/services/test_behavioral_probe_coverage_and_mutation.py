@@ -14,20 +14,20 @@ ADR-068 §5 requires:
 Coverage is a floor over a finite frozen input set. It is **not** a proof of
 behavioural equivalence (ADR-068 "Do Not Interpret This As").
 
-Measured result recorded on 2026-08-05, CPython 3.12.10, coverage 7.14.1
+Measured result re-recorded on 2026-08-05, CPython 3.12.10, coverage 7.14.1
 --------------------------------------------------------------------------
 
-Probe sets used for coverage: core (15 probes) + extended (4 probes).
+Probe sets used for coverage: core (19 probes) + extended (4 probes).
 
-    Aggregate branch coverage over the accum decision path: 59.44% (428/720)
-    Aggregate statement coverage over the same scope:       81.89% (1718/2098)
+    Aggregate branch coverage over the accum decision path: 60.69% (437/720)
+    Aggregate statement coverage over the same scope:       82.46% (1730/2098)
 
-Core-set-only branch coverage was 55.69% (401/720) before slice 2; the four
-extended probes added in this slice raised it to 59.44% by attaching a swing
-setup catalog, which is what makes setup-family resolution, setup readiness,
-and the setup-family branches of DecisionPolicy reachable at all.
+History of the number: core-set-only branch coverage was 55.69% (401/720)
+before slice 2; slice 2's four extended probes raised it to 59.44% (428/720) by
+attaching a swing setup catalog; the four **core** probes added after slice 2 to
+close measured mutation gaps raised it to 60.69% (437/720).
 
-Mutants: **45 planted / 31 caught by the core (identity) digest / 14 surviving.**
+Mutants: **45 planted / 36 caught by the core (identity) digest / 9 surviving.**
 
     GATE_THRESHOLD   14   risk gate thresholds, enablement, confidence
     SIGNAL_CONSTANT  14   SignalEngineConfig scoring/classification/policy
@@ -39,13 +39,30 @@ Every survivor is named in ``_SURVIVING_MUTANTS`` below with a rationale, and
 each survivor is asserted to *still survive*, so closing a hole fails this
 suite and forces the record to be updated deliberately.
 
-**Read the survivor list before making the probe digest authoritative.** All 14
-survivors are holes in the *frozen core probe inputs*, not defects in
-production code: the constant is simply never compared because no core probe
-supplies data that reaches it. Every one of them is closable only by adding or
-changing a **core** probe, which ADR-068 §3 defines as a deliberate cohort
-boundary — out of scope for this slice and a decision that belongs to a human
-before slice 3 begins.
+Slice-2 recorded 14 survivors. Four core probes were then added specifically to
+close named holes, and they closed five (the fifth, ``accum.vwap_discount``
+``.saturate_at``, fell out of the same new price series). Adding those core
+probes deliberately moved both frozen core digests — under ADR-068 §3 a core
+addition *is* a cohort boundary, taken while it is still free because no cohort
+holds value and the digest is not yet wired into production identity.
+
+**Read the survivor list before making the probe digest authoritative.** The 9
+remaining survivors are of two different kinds, and the distinction matters:
+
+- **Probe-input holes** (3): the constant is genuinely compared on the accum
+  decision path, but no probe supplies data that reaches the comparison. These
+  are closable by a future core probe.
+- **Equivalent mutants** (6): the constant cannot change any field of the
+  canonical projection no matter what a probe supplies, because the value it
+  feeds is diagnostic-only on this surface. Adding probes cannot close these;
+  only changing what production treats as authoritative, or widening the
+  projection contract to carry diagnostic output, would — and neither is a
+  probe-set decision.
+
+Two of the six were recorded by slice 2 as probe-input holes and are corrected
+here after tracing the call graph: the RISK_OFF ``weak_setup_discount`` and the
+VOLATILE ``flow_discount`` both terminate in ``legacy_conditioned_score``, which
+the canonical projection deliberately excludes.
 
 Why the floor lives here and not in CI config
 ---------------------------------------------
@@ -102,10 +119,12 @@ from src.domain.rules.liquidity_gate import LiquidityGate
 
 _ROOT = Path(__file__).resolve().parents[3]
 
-# The frozen core digests, asserted here as literals so the slice-2 diff itself
-# proves the extended probes did not move identity (ADR-068 §3).
-_FROZEN_CORE_BEHAVIORAL_DIGEST = "04ce202b41b30d8f1e7e9bcd36a853664c907668fbff8f8f1bb68aee3fd5398b"
-_FROZEN_CORE_INPUT_DIGEST = "5be656d19d36c9369a6f08cd8d453288b74c6c36ddaee694f125fca0be6aa8f9"
+# The frozen core digests, asserted here as literals so any diff that moves them
+# is visible in review rather than absorbed by a regenerated fixture. Both moved
+# once, deliberately, when the four gap-closing core probes were added — a
+# recorded cohort boundary under ADR-068 §3, not drift.
+_FROZEN_CORE_BEHAVIORAL_DIGEST = "85ce36cc91adcb23a0afbdb22e01843b760c28000cc01064055877005efcf4b1"
+_FROZEN_CORE_INPUT_DIGEST = "330cfade2bf77952844461b90b3f30de578546647550c78e491937deac60481d"
 
 
 # ── Coverage scope and floors ───────────────────────────────────────────────
@@ -121,28 +140,28 @@ _FROZEN_CORE_INPUT_DIGEST = "5be656d19d36c9369a6f08cd8d453288b74c6c36ddaee694f12
 #   - taken must not fall      -> no coverage regression
 #   - uncovered must not rise  -> new uncovered branches fail the build
 _BRANCH_COVERAGE_FLOOR: dict[str, tuple[int, int]] = {
-    "src/application/services/accumulation_candidate_enricher.py": (14, 32),
+    "src/application/services/accumulation_candidate_enricher.py": (17, 32),
     "src/application/services/accumulation_candidate_evaluator.py": (23, 28),
     "src/application/services/accumulation_candidate_signal_assessor.py": (8, 12),
     "src/application/services/accumulation_candidate_structural_filter.py": (8, 10),
     "src/application/services/accumulation_risk_funnel.py": (0, 0),
     "src/application/services/accumulation_technical_features.py": (26, 34),
-    "src/application/services/alpha_trigger_aggregator.py": (23, 40),
+    "src/application/services/alpha_trigger_aggregator.py": (24, 40),
     "src/application/services/decision_policy.py": (32, 46),
     "src/application/services/flow_confirmation_evidence_builder.py": (33, 50),
     "src/application/services/primary_setup_family_resolver.py": (26, 48),
     "src/application/services/screen_assessment_pipeline.py": (18, 42),
-    "src/application/services/setup_phase_detector.py": (25, 38),
+    "src/application/services/setup_phase_detector.py": (27, 38),
     "src/application/services/setup_phase_readiness_evaluator.py": (7, 26),
-    "src/application/services/setup_phase_volume_trigger.py": (13, 26),
+    "src/application/services/setup_phase_volume_trigger.py": (14, 26),
     "src/application/services/signal_engine.py": (3, 30),
-    "src/application/services/signal_evidence_group_scorer.py": (47, 66),
+    "src/application/services/signal_evidence_group_scorer.py": (48, 66),
     "src/application/services/signal_legacy_regime_conditioning.py": (11, 16),
     "src/application/use_case/accumulation_screen_use_case.py": (15, 30),
     "src/application/use_case/assess_risk_gate_evaluator.py": (23, 30),
     "src/application/use_case/assess_risk_use_case.py": (1, 4),
     "src/application/use_case/assess_trade_setup_use_case.py": (12, 16),
-    "src/application/use_case/score_accum_use_case.py": (19, 34),
+    "src/application/use_case/score_accum_use_case.py": (20, 34),
     "src/domain/rules/bandar_gate.py": (4, 4),
     "src/domain/rules/free_float_gate.py": (4, 4),
     "src/domain/rules/fundamental_gate.py": (5, 6),
@@ -150,8 +169,8 @@ _BRANCH_COVERAGE_FLOOR: dict[str, tuple[int, int]] = {
     "src/domain/value_objects/accum_score_breakdown.py": (20, 36),
 }
 
-# Headline aggregate floor, in whole percent. Measured 59.44%.
-_AGGREGATE_BRANCH_COVERAGE_FLOOR_PCT = 59
+# Headline aggregate floor, in whole percent. Measured 60.69%.
+_AGGREGATE_BRANCH_COVERAGE_FLOOR_PCT = 60
 
 _COVERAGE_SUBPROCESS = """
 import json
@@ -568,93 +587,103 @@ _MUTANTS: tuple[Mutant, ...] = (
 
 
 # Mutants proven (by this suite) not to move the **core** identity digest.
-# ADR-068 §5: a surviving mutant is a named, fixable hole, not something to
-# wave through. Each entry states why it survives and what would close it.
+# ADR-068 §5: a surviving mutant is a named hole, not something to wave through.
+# Each entry states why it survives and what — if anything — would close it.
 #
-# Every survivor below is a *hole in the frozen core probe inputs*, not a
-# defect in production code and not a licence to change one. Closing any of
-# them requires a new or changed **core** probe, which is a deliberate cohort
-# boundary under ADR-068 §3 and therefore out of scope for slice 2. Adding an
-# extended probe would make the constant measurable but would still not fork
-# identity, so it does not close the hole.
+# Two kinds live here, and conflating them is how a coverage record rots:
+#
+#   PROBE-INPUT HOLE — the constant IS compared on the accum decision path, but
+#   no probe supplies data that reaches the comparison. Closable by a new or
+#   changed **core** probe, which is a deliberate cohort boundary (ADR-068 §3).
+#   An extended probe would make it measurable without forking identity, so an
+#   extended probe alone does not close it.
+#
+#   EQUIVALENT MUTANT — the constant cannot change any field of the canonical
+#   projection for any probe input, because the value it feeds is diagnostic on
+#   the screen-accum surface. No probe closes these. Each entry names the exact
+#   code path that terminates the value, so the claim is checkable rather than
+#   asserted.
 _SURVIVING_MUTANTS: dict[str, str] = {
+    # ── Probe-input holes ───────────────────────────────────────────────────
     "gate.liquidity.lookback_days:20->3": (
-        "Every probe ticker uses a constant per-session volume, so the median "
-        "20-day transaction value is identical for any lookback window. Closing "
-        "this needs a core probe with a varying volume series."
+        "PROBE-INPUT HOLE. Every probe ticker whose candles reach LiquidityGate "
+        "uses a constant per-session volume, so the median 20-day transaction "
+        "value is identical for any lookback window. The dry-up/expansion probe "
+        "does vary volume, but its market cap clears the third-liner check and "
+        "its median transaction value clears the floor under both windows. "
+        "Closing this needs a core probe whose median transaction value crosses "
+        "the floor between a 20-session and a 3-session window."
     ),
     "gate.liquidity.missing_data_action:skip->trigger": (
-        "No core probe reaches LiquidityGate's missing-market-cap branch: the "
-        "enrichment-free probe still supplies candles, so the gate resolves on "
-        "median transaction value before the missing-data action applies. "
-        "Closing this needs a core probe with candles but no market cap."
-    ),
-    "signal.evidence_groups.setup_quality.weight:->0": (
-        "The setup_quality evidence group carries no evidence on the "
-        "screen-accum surface, so its weight cannot change a score. This is the "
-        "same emptiness ADR-067 retires; expect this mutant to be deleted with "
-        "the group rather than closed by a probe."
+        "PROBE-INPUT HOLE. No core probe reaches LiquidityGate's "
+        "missing-market-cap branch: the enrichment-free probe still supplies "
+        "candles, so the gate resolves on median transaction value before the "
+        "missing-data action applies. Closing this needs a core probe with "
+        "candles but no market cap."
     ),
     "signal.decision_policy.regime_confidence_min_enter:0.35->0.99": (
-        "The ENTER-confidence cap reads MarketContext regime *stability*, which "
-        "no core probe supplies (probes set regime and conviction only). "
-        "Closing this needs a core probe carrying a stability value."
+        "PROBE-INPUT HOLE. The ENTER cap compares MarketContext."
+        "regime_confidence (decision_policy.py A2), a field BehavioralProbe "
+        "does not model — probes set regime, conviction, signal multiplier and "
+        "gate tightening only, so regime_confidence is always None and the "
+        "comparison is skipped. Closing this needs BehavioralProbe to carry a "
+        "regime_confidence value and a core probe that sets it."
+    ),
+    # ── Equivalent mutants (no probe input can close these) ─────────────────
+    "signal.evidence_groups.setup_quality.weight:->0": (
+        "EQUIVALENT MUTANT. Screen accum constructs CanonicalSignalEvidenceInput "
+        "with setup=None unconditionally "
+        "(accumulation_candidate_signal_assessor.py), and "
+        "AssessSignalEvidenceRequest.setup_evidence is derived from that field, "
+        "so setup_present is always False here. SignalEvidenceGroupScorer."
+        "renormalize only sums weights of present groups, and the authority "
+        "denominator uses ATTACHED_REQUIRED scope which skips absent groups — "
+        "the setup weight is never read. ADR-067 retires this group; expect the "
+        "mutant to be deleted with it rather than closed by a probe."
     ),
     "signal.regime_conditioning.volatile.flow_discount:0.80->0.10": (
-        "The VOLATILE flow discount only applies to flow evidence classified "
-        "weak by weak_flow_threshold; no core probe lands a candidate in that "
-        "band under VOLATILE. Closing this needs a core probe tuned into it."
+        "EQUIVALENT MUTANT. SignalLegacyRegimeConditioning is diagnostic: the "
+        "canonical final_score is computed by SignalEvidenceGroupScorer.score "
+        "*before* conditioning runs, and the conditioned group scores terminate "
+        "in legacy_conditioned_score, which the canonical projection deliberately "
+        "excludes (ADR-057 — diagnostic output carries no Action authority). The "
+        "only projected trace is the boolean breakdown entry "
+        "('regime_conditioning', 1.0), emitted whenever flow is present under "
+        "VOLATILE regardless of the discount's value. Note the slice-2 rationale "
+        "here was wrong: the VOLATILE branch has no weak-flow band at all, it "
+        "discounts any present flow unconditionally. Closing this is not a probe "
+        "decision — it would require widening the projection contract to carry "
+        "diagnostic output, or giving conditioning real authority."
     ),
     "signal.regime_conditioning.risk_off.weak_setup_discount:0.50->0.05": (
-        "The RISK_OFF setup discount applies only to PARTIAL/NO_MATCH setup "
-        "evidence, and no core probe attaches a setup family at all — see the "
-        "setup-family hole below. Closing this needs a core probe with a "
-        "resolved, partially-matched setup family."
+        "EQUIVALENT MUTANT, doubly so. First, screen accum never attaches setup "
+        "evidence (setup=None, as above), so setup_present is False and the "
+        "RISK_OFF branch is skipped entirely — attaching a swing setup catalog "
+        "resolves a setup *family*, not setup *evidence*, so no probe input "
+        "reaches it. Second, even when the branch does run, only "
+        "weak_setup_threshold decides whether a note is emitted; the discount "
+        "value itself terminates in the same unprojected "
+        "legacy_conditioned_score. Slice-2 recorded this as closable by a "
+        "partially-matched setup family; that is not achievable from probe input."
     ),
     "signal.alpha_trigger.low_weight_cap:0.10->0.90": (
-        "Alpha-trigger aggregation runs on the screen-accum path but its output "
-        "is not part of the projected Accum/Signal/Risk/Action decision surface "
-        "(ADR-068 §2). Before treating this as a hole, confirm whether alpha "
-        "trigger has any Action authority on this surface; if it has none, this "
-        "is an equivalent mutant rather than an identity gap."
+        "EQUIVALENT MUTANT. alpha_trigger_score is computed in "
+        "AssessSignalEvidenceUseCase step 4, strictly after entry_quality and "
+        "decision_constraints are resolved by DecisionPolicyService in step 3, "
+        "and is attached to the response for diagnostic display only. It never "
+        "feeds back into the decision, so it holds no Action authority on this "
+        "surface and no probe input can make it move a projected field."
     ),
     "signal.alpha_trigger.enabled:true->false": (
-        "Same as low_weight_cap: disabling alpha triggers changes no projected "
-        "decision field. Needs the same authority confirmation."
-    ),
-    "signal.flags.valuation_stretched.score_penalty:10->60": (
-        "Signal flags require forward-estimate/analyst/insider evidence that no "
-        "core probe supplies, so no flag ever fires and no penalty applies. "
-        "Closing this needs a core probe carrying that evidence."
+        "EQUIVALENT MUTANT. Same path and same conclusion as low_weight_cap: "
+        "disabling alpha triggers changes no projected decision field."
     ),
     "signal.input_mapping.accum_score.max_score:100->50": (
-        "The accum-score input mapping is not consumed by the screen-accum "
-        "signal path; the assessor passes the already-scored breakdown. Confirm "
-        "whether this config is live on any surface before treating it as a gap."
-    ),
-    "accum.vwap_discount.saturate_at:10->1": (
-        "Every core probe's VWAP discount already sits at or beyond the "
-        "saturation point, so lowering the saturation ceiling cannot change the "
-        "awarded points. Closing this needs a core probe in the linear band. "
-        "(The paired vwap_discount.weight mutant IS caught, so the component "
-        "itself is measured.)"
-    ),
-    "phase.thresholds.compression_max_bb_width_pctile:0.20->0.90": (
-        "Bollinger band-width percentile is unavailable for every core probe "
-        "(bb_squeeze is disabled in the default AccumScorePolicy), so the "
-        "compression threshold is never compared. Closing this needs a core "
-        "probe supplying a band-width percentile."
-    ),
-    "phase.thresholds.exhaustion_rsi_min:72->30": (
-        "No core probe's RSI reaches the exhaustion band; the EXHAUSTION phase "
-        "is instead reached through price extension, whose threshold mutant IS "
-        "caught. Closing this needs a core probe with an overbought RSI."
-    ),
-    "phase.volume_trigger.min_valid_20d_sessions:18->200": (
-        "Volume-trigger validity requires trusted benchmark volume provenance "
-        "that the frozen in-memory candles do not carry, so the session-count "
-        "requirement is never evaluated. Closing this needs a core probe with "
-        "provenance-bearing volume."
+        "EQUIVALENT MUTANT. This mapping scales SignalContext."
+        "foreign_flow_quality via SignalEngine.foreign_flow_quality_from_accum_"
+        "score. The only repo-wide consumer of foreign_flow_quality is "
+        "signal_presence.py, which tests presence (is not None) and never reads "
+        "the scaled value, so no probe input can make the scale observable."
     ),
 }
 
@@ -676,6 +705,55 @@ def test_mutant_names_are_unique() -> None:
     assert set(_SURVIVING_MUTANTS) <= set(names), (
         "a recorded survivor no longer exists as a planted mutant; remove the "
         "record deliberately rather than leaving a stale rationale"
+    )
+
+
+def test_gap_closing_core_probes_are_present_and_identity_material() -> None:
+    """The four probes added to close named holes must live in the CORE set.
+
+    An extended probe would measure the same branches without forking identity,
+    which is exactly the state these four exist to leave behind.
+    """
+    core_ids = {probe.probe_id for probe in core_probe_set()}
+    expected = {
+        "phase_exhaustion_via_rsi_band",
+        "phase_compression_bb_width_band",
+        "phase_breakout_volume_dry_up_expansion",
+        "signal_flag_valuation_stretched",
+    }
+    assert expected <= core_ids, f"missing gap-closing core probes: {expected - core_ids}"
+    assert not (expected & {probe.probe_id for probe in extended_probe_set()})
+
+
+def test_setup_evidence_is_structurally_absent_on_the_screen_accum_surface() -> None:
+    """Backs two EQUIVALENT MUTANT records with a measurement, not a claim.
+
+    ``signal.evidence_groups.setup_quality.weight`` and
+    ``signal.regime_conditioning.risk_off.weak_setup_discount`` both require a
+    present setup evidence group. Screen accum builds
+    ``CanonicalSignalEvidenceInput(setup=None, ...)`` unconditionally, so the
+    group is absent for every probe — including the extended probes that attach
+    a swing setup catalog, which resolves a setup *family*, not setup
+    *evidence*. If this ever stops holding, those two records must be revisited
+    rather than left as equivalent mutants.
+    """
+    from src.application.services.behavioral_probe_runner import run_probe_set
+
+    projections = run_probe_set(core_probe_set() + extended_probe_set())
+    seen_setup_family = False
+    for projection in projections.values():
+        for candidate in projection["candidates"].values():
+            breakdown = candidate["signal_breakdown"] or {}
+            assert "setup_quality_group" not in breakdown, (
+                "a probe attached setup evidence to the signal group; the "
+                "setup-weight and RISK_OFF setup-discount survivors are no "
+                "longer equivalent mutants and must be re-classified"
+            )
+            if candidate["setup_family"] is not None:
+                seen_setup_family = True
+    assert seen_setup_family, (
+        "expected at least one probe to resolve a setup family, so the "
+        "assertion above is proven against the family-resolving path too"
     )
 
 
@@ -715,7 +793,7 @@ def test_adding_extended_probes_left_the_frozen_core_digests_unchanged() -> None
     """ADR-068 §3: an extended probe must never move identity."""
     from src.application.services.behavioral_probe_runner import compute_probe_input_digest
 
-    assert extended_probe_set(), "slice 2 must actually add extended probes"
+    assert extended_probe_set(), "the extended set must not be empty; it measures nothing empty"
     assert compute_behavioral_probe_digest() == _FROZEN_CORE_BEHAVIORAL_DIGEST
     assert compute_probe_input_digest() == _FROZEN_CORE_INPUT_DIGEST
 

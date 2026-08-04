@@ -1,4 +1,4 @@
-"""ADR-068 slice-1 behavioural probe harness gate.
+"""ADR-068 behavioural probe harness gate.
 
 Frozen synthetic probe set under tests/fixtures/ with a SHA-256 sidecar.
 Proves: the fixture is unmodified, the probe-set contract (ids/counts/
@@ -11,8 +11,14 @@ supplies its own ``as_of_date`` (so the ``date.today()`` fallback is
 structurally unreachable), that the frozen probe ports fail closed on any
 write, that the core probe set actually exercises the accum decision
 surface named in ADR-068 Section 2, that the extended probe set stays
-empty and additive-only, and that deliberately mutating a frozen
-threshold moves the digest.
+disjoint from core and never enters identity, and that deliberately
+mutating a frozen threshold moves the digest.
+
+The digests here are read from the fixture, never hardcoded, so a
+deliberate core-set change is a one-file fixture regeneration reviewed
+alongside the probe diff. The literal digests live in
+``test_behavioral_probe_coverage_and_mutation`` so a moved identity is
+visible in review.
 """
 
 from __future__ import annotations
@@ -283,7 +289,7 @@ def test_core_probe_set_covers_the_accum_decision_surface() -> None:
 
 def test_extended_probes_do_not_change_core_identity() -> None:
     extended = extended_probe_set()
-    assert extended, "slice 2 populates the extended set; an empty set measures nothing"
+    assert extended, "an empty extended set measures nothing"
     core_ids = {probe.probe_id for probe in core_probe_set()}
     assert not (core_ids & {probe.probe_id for probe in extended})
 

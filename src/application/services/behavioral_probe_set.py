@@ -18,11 +18,16 @@ Two probe sets exist (ADR-068 §3):
   cohort boundary.
 - **extended**: coverage/mutation material only. Never enters identity.
 
-Slice 1 shipped the core set with an empty extended set. Slice 2 populates the
-extended set to raise measured branch coverage over the accum decision path.
 Extended probes are deliberately *not* identity material: a mutation that only
 an extended probe reaches is measured and named, but it does not fork the
-cohort. Promoting one to core is a separate, deliberate cohort boundary.
+cohort. Adding one to core is a separate, deliberate cohort boundary.
+
+History of the core set: slice 1 shipped 15 core probes with an empty extended
+set; slice 2 added 4 extended probes (swing setup catalog) without touching
+identity; four further **core** probes were then added to close named surviving
+mutants recorded by the slice-2 mutation suite. That last step deliberately
+moved both frozen digests — see ADR-068 §3 and the record in
+``tests/application/services/test_behavioral_probe_coverage_and_mutation.py``.
 """
 
 from __future__ import annotations
@@ -35,6 +40,7 @@ from src.domain.entities.broker_flow import BrokerDailyFlow, BrokerSummary
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.bandar_detector_snapshot import BandarDetectorSnapshot
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+from src.domain.value_objects.forward_estimates import ForwardEstimates
 from src.domain.value_objects.shareholding_composition import ShareholdingComposition
 
 # Identity of the frozen core set. Bumping this is a cohort boundary.
@@ -132,6 +138,60 @@ class ProbeBandar:
 
 
 @dataclass(frozen=True)
+class ProbeForwardEstimates:
+    """Frozen forward-estimate stub input for one probe ticker.
+
+    Only the fields the accum decision path can read are modelled.
+    ``forward_eps_1y`` combined with the probe's own closing price is what
+    ``SignalContext.forward_pe`` is derived from, which is the single input
+    the ``valuation_stretched`` signal flag compares.
+    """
+
+    forward_eps_1y: float
+    revenue_forward_1y: float | None = None
+
+    def to_value_object(self, ticker: str) -> ForwardEstimates:
+        return ForwardEstimates(
+            ticker=ticker,
+            forward_eps_1y=self.forward_eps_1y,
+            revenue_forward_1y=self.revenue_forward_1y,
+            # Left unset so the production enricher derives forward_pe from the
+            # probe's own frozen close price rather than a second stated price.
+            current_price=None,
+            forward_pe=None,
+            fetched_at=None,
+        )
+
+
+@dataclass(frozen=True)
+class ProbeCandleTail:
+    """Frozen deterministic override for the final sessions of a price series.
+
+    The two-segment ``price_step`` / ``pullback_step`` builder can only draw
+    monotone runs, which pins RSI at 100, pins Bollinger band-width percentile
+    at 1.0, and makes every session's volume identical. Three regions of the
+    accum decision surface are unreachable under those constraints: the RSI
+    branch of EXHAUSTION, the band-width branch of COMPRESSION, and the
+    dry-up/expansion volume trigger.
+
+    A tail states the last ``sessions`` closes as a cycled delta pattern plus a
+    cycled volume pattern, so a probe can place RSI, band-width percentile, and
+    volume shape deliberately. Everything here is frozen literal data expanded
+    by pure arithmetic — no clock, file, or provider is involved.
+
+    ``body`` is ``close - open``: a positive body makes every tail session a
+    bullish candle, which is what the volume-trigger expansion rule and the
+    breakout price gate both read.
+    """
+
+    sessions: int
+    close_deltas: tuple[str, ...]
+    volumes: tuple[int, ...] = ()
+    body: str = "0"
+    wick: str = "2"
+
+
+@dataclass(frozen=True)
 class ProbeTicker:
     """One frozen synthetic ticker: price series, foreign flow, enrichment.
 
@@ -160,11 +220,15 @@ class ProbeTicker:
     fundamentals: ProbeFundamentals | None = None
     shareholding: ProbeShareholding | None = None
     bandar: ProbeBandar | None = None
+    forward_estimates: ProbeForwardEstimates | None = None
     # Trailing price drift applied to the last ``pullback_sessions`` candles.
     # Lets a probe place RSI in a chosen band without abandoning the primary
     # trend, so the RSI-headroom scoring branch is reachable.
     pullback_sessions: int = 0
     pullback_step: str = "0"
+    # Optional explicit override of the final sessions. Applied last, so it
+    # wins over both the primary step and the pullback drift.
+    tail: ProbeCandleTail | None = None
 
 
 @dataclass(frozen=True)
@@ -233,31 +297,80 @@ def probe_sessions(*, end_date: date, count: int) -> tuple[date, ...]:
     return tuple(reversed(days))
 
 
+def _base_close(spec: ProbeTicker, index: int, *, session_count: int) -> Decimal:
+    step = Decimal(spec.price_step)
+    base = Decimal(spec.base_price)
+    pullback_start = session_count - max(spec.pullback_sessions, 0)
+    if spec.pullback_sessions > 0 and index >= pullback_start:
+        peak = base + step * (pullback_start - 1)
+        close = peak + Decimal(spec.pullback_step) * (index - pullback_start + 1)
+    else:
+        close = base + step * index
+    return close if close > Decimal("0") else Decimal("1")
+
+
+def _tail_closes_and_volumes(
+    spec: ProbeTicker, *, session_count: int
+) -> tuple[dict[int, Decimal], dict[int, int]]:
+    """Expand a frozen tail into ``{index -> close}`` and ``{index -> volume}``.
+
+    Deltas and volumes are cycled oldest-first over the tail, anchored on the
+    close the base series would have produced immediately before the tail.
+    """
+    tail = spec.tail
+    if tail is None or tail.sessions <= 0 or not tail.close_deltas:
+        return {}, {}
+    start = max(session_count - tail.sessions, 0)
+    anchor = (
+        _base_close(spec, start - 1, session_count=session_count)
+        if start > 0
+        else Decimal(spec.base_price)
+    )
+    closes: dict[int, Decimal] = {}
+    volumes: dict[int, int] = {}
+    close = anchor
+    for offset, index in enumerate(range(start, session_count)):
+        close = close + Decimal(tail.close_deltas[offset % len(tail.close_deltas)])
+        if close <= Decimal("0"):
+            close = Decimal("1")
+        closes[index] = close
+        if tail.volumes:
+            volumes[index] = tail.volumes[offset % len(tail.volumes)]
+    return closes, volumes
+
+
 def build_probe_candles(spec: ProbeTicker, *, as_of_date: date) -> tuple[Candle, ...]:
     """Expand a ticker spec into its frozen OHLCV series."""
     sessions = probe_sessions(end_date=as_of_date, count=spec.candle_sessions)
-    step = Decimal(spec.price_step)
-    base = Decimal(spec.base_price)
-    pullback_start = len(sessions) - max(spec.pullback_sessions, 0)
-    pullback_step = Decimal(spec.pullback_step)
+    session_count = len(sessions)
+    tail_closes, tail_volumes = _tail_closes_and_volumes(spec, session_count=session_count)
+    body = Decimal(spec.tail.body) if spec.tail is not None else Decimal("0")
+    wick = Decimal(spec.tail.wick) if spec.tail is not None else Decimal("2")
     candles: list[Candle] = []
     for index, session in enumerate(sessions):
-        if spec.pullback_sessions > 0 and index >= pullback_start:
-            peak = base + step * (pullback_start - 1)
-            close = peak + pullback_step * (index - pullback_start + 1)
+        if index in tail_closes:
+            close = tail_closes[index]
+            open_price = close - body
+            if open_price <= Decimal("0"):
+                open_price = Decimal("1")
+            high = max(close, open_price) + wick
+            low = min(close, open_price) - wick
+            volume = tail_volumes.get(index, spec.daily_volume)
         else:
-            close = base + step * index
-        if close <= Decimal("0"):
-            close = Decimal("1")
+            close = _base_close(spec, index, session_count=session_count)
+            open_price = close
+            high = close + Decimal("2")
+            low = close - Decimal("2")
+            volume = spec.daily_volume
         candles.append(
             Candle(
                 ticker=spec.ticker,
                 date=session,
-                open=close,
-                high=close + Decimal("2"),
-                low=close - Decimal("2"),
+                open=open_price,
+                high=high,
+                low=low,
                 close=close,
-                volume=spec.daily_volume,
+                volume=volume,
             )
         )
     return tuple(candles)
@@ -596,6 +709,155 @@ _NO_CANDLES = ProbeTicker(
     bandar=ProbeBandar(five_day_accdist="Small Accum"),
 )
 
+# ── Gap-closing archetypes: one per measured mutation gap ───────────────────
+# Each of the four tickers below was added to close exactly one named surviving
+# mutant recorded by the slice-2 mutation suite. Their numbers are tuned so the
+# targeted constant is actually *compared* on the accum decision path; changing
+# any of them is a deliberate cohort boundary (ADR-068 §3).
+
+_RSI_EXTENDED = ProbeTicker(
+    # Closes phase.thresholds.exhaustion_rsi_min. EXHAUSTION is a conjunction of
+    # RSI and price extension; every earlier probe reached it through the price
+    # leg with RSI pinned at 100 by a monotone series, so the RSI comparison was
+    # never decisive. This tail oscillates: RSI settles at ~67.9 (inside the
+    # mutated 30 band, outside the frozen 72 band) while 20-session extension
+    # stays above the 8% price leg, so only the RSI threshold decides.
+    ticker="PRBK",
+    candle_sessions=260,
+    base_price=900,
+    price_step="0",
+    daily_volume=7_000_000,
+    broker_sessions=10,
+    net_buy_pattern=(True, True, False, True),
+    accumulating_buy_value_idr=8_000_000_000,
+    accumulating_sell_value_idr=2_000_000_000,
+    distributing_buy_value_idr=1_600_000_000,
+    distributing_sell_value_idr=6_000_000_000,
+    foreign_buy_lot=44_000,
+    foreign_sell_lot=15_000,
+    session_turnover_idr=26_000_000_000,
+    tier1_net_buyers=2,
+    retail_net_buyers=1,
+    tier1_net_lot=650,
+    retail_net_lot=-120,
+    fundamentals=ProbeFundamentals(piotroski_f_score=7, market_cap_idr=29_000_000_000_000),
+    shareholding=ProbeShareholding(institution_pct=49.0, individual_pct=51.0, top_holder_pct=44.0),
+    bandar=ProbeBandar(five_day_accdist="Small Accum"),
+    tail=ProbeCandleTail(sessions=80, close_deltas=("34", "30", "-27", "0"), body="1"),
+)
+
+_BB_MID_BAND = ProbeTicker(
+    # Closes phase.thresholds.compression_max_bb_width_pctile. A monotone series
+    # produces a constant band width, so its percentile rank is always 1.0 and
+    # the compression threshold is never decisive. This tail steps volatility
+    # down in three regimes, leaving the current width at ~0.73 of the trailing
+    # 60-session distribution: above the frozen 0.20 (not COMPRESSION today),
+    # below the mutated 0.90 (COMPRESSION once mutated).
+    ticker="PRBL",
+    candle_sessions=260,
+    base_price=1_200,
+    price_step="0.5",
+    daily_volume=6_500_000,
+    broker_sessions=10,
+    net_buy_pattern=(True, False, True, True),
+    accumulating_buy_value_idr=7_500_000_000,
+    accumulating_sell_value_idr=2_300_000_000,
+    distributing_buy_value_idr=1_800_000_000,
+    distributing_sell_value_idr=5_800_000_000,
+    foreign_buy_lot=39_000,
+    foreign_sell_lot=18_000,
+    session_turnover_idr=25_000_000_000,
+    tier1_net_buyers=1,
+    retail_net_buyers=2,
+    tier1_net_lot=420,
+    retail_net_lot=180,
+    fundamentals=ProbeFundamentals(piotroski_f_score=6, market_cap_idr=24_000_000_000_000),
+    shareholding=ProbeShareholding(institution_pct=46.0, individual_pct=54.0, top_holder_pct=43.0),
+    bandar=ProbeBandar(five_day_accdist="Small Accum"),
+    tail=ProbeCandleTail(
+        # Three volatility regimes, widest first, so the trailing 60-session
+        # width distribution has real spread and the current width lands in its
+        # upper-middle rather than at either extreme.
+        sessions=180,
+        close_deltas=(
+            *(("14", "-14") * 4),
+            *(("6", "-6") * 4),
+            *(("3", "-3") * 4),
+        ),
+        body="0",
+    ),
+)
+
+_VOLUME_DRY_UP_EXPANSION = ProbeTicker(
+    # Closes phase.volume_trigger.min_valid_20d_sessions. Every earlier probe
+    # used one constant volume for every session, so dry-up and expansion ratios
+    # were both exactly 1.0, the trigger never confirmed, and the valid-session
+    # count could not change any phase. This six-session volume cycle (five quiet
+    # sessions then one 8x expansion, landing on the latest session with a
+    # positive body) confirms the trigger, so BREAKOUT_CONFIRMATION depends on
+    # the volume-validity rule the mutant perturbs.
+    ticker="PRBM",
+    candle_sessions=260,
+    base_price=1_200,
+    price_step="0.5",
+    daily_volume=5_000_000,
+    broker_sessions=10,
+    net_buy_pattern=(True, True, True, False),
+    accumulating_buy_value_idr=8_800_000_000,
+    accumulating_sell_value_idr=2_100_000_000,
+    distributing_buy_value_idr=1_500_000_000,
+    distributing_sell_value_idr=6_400_000_000,
+    foreign_buy_lot=47_000,
+    foreign_sell_lot=16_000,
+    session_turnover_idr=27_000_000_000,
+    tier1_net_buyers=2,
+    retail_net_buyers=1,
+    tier1_net_lot=680,
+    retail_net_lot=-140,
+    fundamentals=ProbeFundamentals(piotroski_f_score=7, market_cap_idr=31_000_000_000_000),
+    shareholding=ProbeShareholding(institution_pct=52.0, individual_pct=48.0, top_holder_pct=45.0),
+    bandar=ProbeBandar(five_day_accdist="Small Accum"),
+    tail=ProbeCandleTail(
+        sessions=120,
+        close_deltas=("3", "-2", "3", "-2", "2", "1"),
+        volumes=(5_000_000, 5_000_000, 5_000_000, 5_000_000, 5_000_000, 40_000_000),
+        body="1",
+    ),
+)
+
+_VALUATION_STRETCHED = ProbeTicker(
+    # Closes signal.flags.valuation_stretched.score_penalty. Signal flags read
+    # SignalContext, whose forward P/E is derived from provider-supplied forward
+    # estimates; no earlier probe wired that provider, so no flag ever fired and
+    # the penalty was never subtracted. forward_eps_1y is chosen so the derived
+    # forward P/E clears the frozen 50.0 threshold against this ticker's own
+    # closing price.
+    ticker="PRBN",
+    candle_sessions=260,
+    base_price=1_300,
+    price_step="0.4",
+    daily_volume=6_800_000,
+    broker_sessions=10,
+    net_buy_pattern=(True, True, False, True),
+    accumulating_buy_value_idr=9_200_000_000,
+    accumulating_sell_value_idr=1_900_000_000,
+    distributing_buy_value_idr=1_500_000_000,
+    distributing_sell_value_idr=6_600_000_000,
+    foreign_buy_lot=51_000,
+    foreign_sell_lot=15_000,
+    session_turnover_idr=29_000_000_000,
+    tier1_net_buyers=3,
+    retail_net_buyers=1,
+    tier1_net_lot=760,
+    retail_net_lot=-160,
+    fundamentals=ProbeFundamentals(piotroski_f_score=8, market_cap_idr=41_000_000_000_000),
+    shareholding=ProbeShareholding(institution_pct=55.0, individual_pct=45.0, top_holder_pct=47.0),
+    bandar=ProbeBandar(five_day_accdist="Big Accum"),
+    forward_estimates=ProbeForwardEstimates(forward_eps_1y=20.0, revenue_forward_1y=9_000.0),
+    pullback_sessions=8,
+    pullback_step="-4",
+)
+
 _MIXED_GATE_UNIVERSE = (
     _STRONG_ACCUM,
     _MODERATE_ACCUM,
@@ -716,6 +978,34 @@ _CORE_PROBES: tuple[BehavioralProbe, ...] = (
         probe_id="single_ticker_deep_judgment",
         surface="Single-ticker screen path (sector-macro attachment branch)",
         tickers=(_STRONG_ACCUM,),
+        regime="NEUTRAL",
+    ),
+    # ── Gap-closing core probes (deliberate cohort boundary) ────────────────
+    # Each runs its dedicated archetype beside _STRONG_ACCUM so the probe still
+    # exercises ordering/inclusion, and each closes exactly one named surviving
+    # mutant from the slice-2 record.
+    BehavioralProbe(
+        probe_id="phase_exhaustion_via_rsi_band",
+        surface="EXHAUSTION reached through the RSI leg, not the price-extension leg",
+        tickers=(_STRONG_ACCUM, _RSI_EXTENDED),
+        regime="NEUTRAL",
+    ),
+    BehavioralProbe(
+        probe_id="phase_compression_bb_width_band",
+        surface="Band-width percentile inside the COMPRESSION comparison band",
+        tickers=(_STRONG_ACCUM, _BB_MID_BAND),
+        regime="NEUTRAL",
+    ),
+    BehavioralProbe(
+        probe_id="phase_breakout_volume_dry_up_expansion",
+        surface="Confirmed volume dry-up then expansion — volume-validity branch",
+        tickers=(_STRONG_ACCUM, _VOLUME_DRY_UP_EXPANSION),
+        regime="NEUTRAL",
+    ),
+    BehavioralProbe(
+        probe_id="signal_flag_valuation_stretched",
+        surface="Forward-estimate evidence firing the valuation_stretched flag penalty",
+        tickers=(_STRONG_ACCUM, _VALUATION_STRETCHED),
         regime="NEUTRAL",
     ),
 )
