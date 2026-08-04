@@ -68,7 +68,7 @@ plans. CLI remount: `tasks/done/improvement_cli_restructure.md`.
 | [`parked_dq_009_sentiment_outcome_audit.md`](parked_dq_009_sentiment_outcome_audit.md) | Parked | Sentiment calibration / sentiment CLI migration |
 | [`parked_idx_execution_labels.md`](parked_idx_execution_labels.md) | Parked | Net-of-cost / tradeable outcomes required |
 | [`parked_artifact_identity_apparatus.md`](parked_artifact_identity_apparatus.md) | Parked | Named identity-apparatus trigger |
-| [`parked_screen_filter_replay_contract.md`](../backlog/parked_screen_filter_replay_contract.md) | Ready / Medium (audit slice) | `ml-saham` hard-filter replay contract; threshold grid still gated |
+| [`parked_screen_filter_replay_contract.md`](parked_screen_filter_replay_contract.md) | COMPLETED (archived) | `ml-saham` hard-filter replay contract; threshold grid still gated |
 | [`parked_historical_eligible_universe_membership.md`](../backlog/parked_historical_eligible_universe_membership.md) | Parked | Historical index/eligible membership claim required |
 | [`parked_named_swing_setup_capture.md`](parked_named_swing_setup_capture.md) | Parked | Named swing-setup labels/readiness/tuning requested |
 | [`parked_output_contract_ownership.md`](parked_output_contract_ownership.md) | Parked / non-blocking | Docs hygiene pass |

@@ -82,9 +82,10 @@ saham analyze signal inspect TICKER --contract swing-setup --setup NAME --sessio
 - `AGENT_QUICKSTART.md`, `AGENTS.md`, `TASK_TEMPLATE.md`
 - `tasks/done/deterministic_signal_engine.md` (archived named-setup notes)
 - `tasks/done/audit_data_quality.md` → DQ-003 contract reservation
-- `parked_screen_filter_replay_contract.md` if recall/filter replay is needed
-- `parked_historical_eligible_universe_membership.md` if historical membership
-  is required
+- `tasks/done/parked_screen_filter_replay_contract.md` if recall/filter replay
+  is needed (archived COMPLETED)
+- `tasks/backlog/parked_historical_eligible_universe_membership.md` if historical
+  membership is required
 - Current `RecordAccumulationObservationsUseCase` and contract rejection tests
 
 ## Architecture Impact

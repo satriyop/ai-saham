@@ -6,7 +6,8 @@ Priority: **High** — required before `ml-saham` can run a verified
 `baseline=production` screen hard-filter tournament.
 
 Source: code-first follow-up to the completed
-[`parked_screen_filter_replay_contract.md`](parked_screen_filter_replay_contract.md),
+[`parked_screen_filter_replay_contract.md`](parked_screen_filter_replay_contract.md)
+(archived COMPLETED in `tasks/done/`),
 ADR-056, and ADR-059 on 2026-07-31. Locked clarifications incorporated 2026-07-31
 after pre-implementation vet.
 

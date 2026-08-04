@@ -3,7 +3,7 @@
 Status: `PARKED`
 
 Source: supersedes the historical-universe half of
-`parked_screen_rejected_controls_and_universe.md`.
+`tasks/done/parked_screen_rejected_controls_and_universe.md` (archived SUPERSEDED).
 
 ## Task Metadata
 
@@ -96,7 +96,7 @@ Do not begin an infrastructure implementation until these are resolved.
   or today's cache.
 - No generic multi-index warehouse without a named consumer.
 - No screen-filter replay or `screen_result` changes; see
-  `parked_screen_filter_replay_contract.md`.
+  `tasks/done/parked_screen_filter_replay_contract.md` (archived COMPLETED).
 - No interactive `screen` / `analyze` writes.
 - No AI-derived membership authority.
 

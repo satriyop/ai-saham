@@ -112,7 +112,7 @@ are not sufficient.
 | Net-executable labels | [`parked_idx_execution_labels.md`](parked_idx_execution_labels.md) |
 | Full artifact-identity apparatus | [`parked_artifact_identity_apparatus.md`](parked_artifact_identity_apparatus.md) |
 | Named swing-setup population | [`parked_named_swing_setup_capture.md`](parked_named_swing_setup_capture.md) |
-| Hard-filter replay contract | [`parked_screen_filter_replay_contract.md`](../backlog/parked_screen_filter_replay_contract.md) |
+| Hard-filter replay contract | [`parked_screen_filter_replay_contract.md`](parked_screen_filter_replay_contract.md) (archived COMPLETED) |
 | Historical eligible-universe membership | [`parked_historical_eligible_universe_membership.md`](../backlog/parked_historical_eligible_universe_membership.md) |
 
 ## Solo-Project Proportionality

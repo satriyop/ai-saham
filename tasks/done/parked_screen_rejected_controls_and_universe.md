@@ -27,7 +27,7 @@ longer describe the current corpus accurately:
 
 ## Replacement Tasks
 
-- [`parked_screen_filter_replay_contract.md`](parked_screen_filter_replay_contract.md)
+- [`parked_screen_filter_replay_contract.md`](parked_screen_filter_replay_contract.md) (same `tasks/done/`; COMPLETED)
   — READY audit of corpus sufficiency for deterministic hard-filter replay.
   Accum policy evaluation remains owned by `ml-saham`; its threshold grid is a
   separate decision checkpoint.
@@ -51,5 +51,5 @@ longer describe the current corpus accurately:
 - Superseded date: 2026-07-31
 - PIT tradable-universe implementation: `380afd87`
 - Replacement tasks:
-  - `tasks/backlog/parked_screen_filter_replay_contract.md`
+  - `tasks/done/parked_screen_filter_replay_contract.md`
   - `tasks/backlog/parked_historical_eligible_universe_membership.md`
