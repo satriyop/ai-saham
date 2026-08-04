@@ -1,6 +1,6 @@
 # Goal Instruction — Implement `get_ticker_corporate_actions` (closed read tool)
 
-**Status:** `READY FOR AGENT`
+**Status:** `IMPLEMENTED`
 **Audience:** Implementation agent (any coding agent in this repo)
 **Product term:** **AI Research Cockpit** (`/`)
 
@@ -97,7 +97,28 @@ Read first:
 
 ## 5. Completion record (fill when done)
 
-- Authorizing ADR: ADR-061 (routine closed read tool)
-- Implemented date:
-- Commits:
+- Authorizing ADR: ADR-061 (routine closed read tool; `side_effect=NONE`, no new ADR)
+- Implemented date: 2026-08-04
+- Code:
+  - `AgentToolName.GET_TICKER_CORPORATE_ACTIONS` — `src/application/dto/agent_tools.py`
+  - `TickerCorporateActionsTool` + result DTOs (`CorpActionDateData`,
+    `CorpActionEventData`, `TickerCorporateActionsResultData`) with role-keyed,
+    lossless `dates[]` projection (NOT the 5-field dashboard flatten) —
+    `src/application/services/agent_ticker_corporate_actions_tool.py`
+  - `build_read_only_ticker_corp_action_source` (cache-only, `initialize_schema=False`,
+    `FileNotFoundError` when db absent) — `src/infrastructure/composition/view_ticker_deps.py`
+  - Registration block (fail-soft, after `preopen_iev`) —
+    `src/infrastructure/composition/agent_model.py`
+- Tests:
+  - `tests/application/services/test_agent_ticker_corporate_actions_tool.py`
+    (happy path upcoming/recent split; RUPS-only carries `rups_date` regression;
+    dividend ex/cum/record/payment sorted; window/limit caps enforced not rejected;
+    empty repo → UNAVAILABLE; zero-dates → SUCCESS+`NO_DATED_MILESTONES`;
+    repo exception → FAILED; byte cap; frozen-result/no-score)
+  - Updated `registered_tools` assertions in
+    `tests/infrastructure/composition/test_agent_model.py`
+- Docs: coverage matrix row 8 flipped 🟡→🟢; catalog carrier row added; stale
+  `corp_action_cache` projection-gap bullet removed —
+  `docs/roadmap/ai_research_cockpit_tool_coverage.md`
+- Commits: (pending commit — not yet committed)
 - Coverage row flipped: 8
