@@ -1,6 +1,6 @@
 # Goal Instruction — Implement `get_preopen_iev` (pre-open indicative value)
 
-**Status:** `READY FOR AGENT`
+**Status:** `IMPLEMENTED`
 **Audience:** Implementation agent · **Product term:** AI Research Cockpit (`/`)
 **Priority:** 4 of 5 (coverage row 12) — the core pre-open signal; pairs with the
 `preopen_screen` cockpit stage (ADR-066).
@@ -102,14 +102,20 @@ request from a real absent past date). Non-fatal; the model can correct.
 
 ## 4. Acceptance
 
-- [ ] Returns locked NCP IEV (with `is_ncp_locked=1`), `locked_baseline_iev`, and
-  `iev_move_since_lock` (or `None`+INFO) for a ticker/session — **not** `get_iev_delta`.
-- [ ] F2 repo fix: `get_ncp_snapshot` locked rows report `is_ncp_locked=1`; fallback unchanged.
-- [ ] F3: future `session_date` → `UNAVAILABLE`+`SESSION_DATE_IN_FUTURE`.
-- [ ] Cache-only via `SQLiteIEVRepository`; PIT respected; no fetch; no directive.
-- [ ] Ticker absent → `UNAVAILABLE`; partial → PARTIAL.
-- [ ] Offline agent suite + golden UX pilot green; Ruff green.
-- [ ] Coverage row 12 → 🟢; completion record filled.
+- [x] Returns current IEV/IEP/rank/`is_ncp_locked` (canonical `get_snapshot`),
+  `locked_baseline_iev` (`ncp_baseline_iev`), and `iev_move_since_lock` (or
+  `None`+`NO_POST_LOCK_MOVE` INFO) for a ticker/session — **not** `get_iev_delta`.
+- [x] F2 repo fix: `get_ncp_snapshot` locked rows report `is_ncp_locked=1`; fallback
+  unchanged (already landed in `d6a7b2df`, verified via `git blame` + existing repo
+  test `test_get_ncp_snapshot_returns_locked_batch`; no further repo change needed).
+- [x] F3: future `session_date` → `UNAVAILABLE`+`SESSION_DATE_IN_FUTURE` (typed,
+  non-turn-failing).
+- [x] Cache-only via `SQLiteIEVRepository`; PIT respected; no fetch; no directive.
+- [x] Ticker absent → `UNAVAILABLE`; no locked baseline → SUCCESS+INFO (a missing
+  lock is a genuine finding, not partial data, per honesty policy).
+- [x] Offline agent suite (`pytest -m agent`) + full suite (`not tui` and `tui`)
+  green; Ruff (`check` + `format --check`) green whole-repo.
+- [x] Coverage row 12 → 🟢; completion record filled.
 
 ## 5. Non-goals
 
@@ -119,4 +125,25 @@ request from a real absent past date). Non-fatal; the model can correct.
 
 ## 6. Completion record (fill when done)
 
-- Authorizing ADR: ADR-061 · Implemented date: · Commits: · Coverage row: 12
+- Authorizing ADR: ADR-061 · Implemented date: 2026-08-04 · Coverage row: 12
+- Files:
+  - `AgentToolName.GET_PREOPEN_IEV` — `src/application/dto/agent_tools.py`
+  - `PreopenIevTool`, `PreopenIevArguments`, `PreopenIevResultData` —
+    `src/application/services/agent_preopen_iev_tool.py`
+  - `build_read_only_preopen_iev_source` — `view_ticker_deps.py`; registration in
+    `agent_model.py`
+- Tests:
+  - `tests/application/services/test_agent_preopen_iev_tool.py` (happy path with
+    move, zero-move-is-success, no-baseline INFO, ticker/session absent, no
+    snapshot dates at all, F3 future-date UNAVAILABLE, read failures on both
+    reads, argument parsing/validation)
+  - Updated `registered_tools` assertions in
+    `tests/infrastructure/composition/test_agent_model.py`
+  - F2 (`is_ncp_locked` on `get_ncp_snapshot`) was already fixed and tested in a
+    prior commit (`d6a7b2df`); verified via `git blame` — no new repo change
+    needed this task.
+- Verification: `pytest -m agent`, whole-repo `pytest -m "not tui"` (6303 passed)
+  and `pytest -m tui` (73 passed) both green; `ruff check`/`ruff format --check`
+  whole-repo green.
+- CLI/TUI adapter surface: not built this task (optional per §1 layer plan).
+- Commits: (pending commit — not yet committed)
