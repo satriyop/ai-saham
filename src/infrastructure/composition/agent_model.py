@@ -15,18 +15,24 @@ from src.application.dto.agent_session import AgentSessionPolicy
 from src.application.dto.agent_tools import AgentToolName, AgentToolTurnPolicy
 from src.application.services.agent_accumulation_judge_tool import AccumulationJudgeTool
 from src.application.services.agent_broker_desk_tool import BrokerDeskTool
+from src.application.services.agent_preopen_iev_tool import PreopenIevTool
 from src.application.services.agent_ro_data_query_tool import RoDataQueryTool
 from src.application.services.agent_session_store import InMemoryAgentSessionStore
 from src.application.services.agent_ticker_broker_flow_tool import TickerBrokerFlowTool
+from src.application.services.agent_ticker_corporate_actions_tool import (
+    TickerCorporateActionsTool,
+)
 from src.application.services.agent_ticker_dashboard_tool import TickerDashboardTool
 from src.application.services.agent_ticker_desk_flow_history_tool import (
     TickerDeskFlowHistoryTool,
 )
 from src.application.services.agent_ticker_foreign_flow_tool import TickerForeignFlowTool
+from src.application.services.agent_ticker_insider_tool import TickerInsiderActivityTool
 from src.application.services.agent_ticker_ownership_history_tool import (
     TickerOwnershipHistoryTool,
 )
 from src.application.services.agent_ticker_ownership_tool import TickerOwnershipTool
+from src.application.services.agent_ticker_sector_context_tool import TickerSectorContextTool
 from src.application.services.agent_tool_registry import AgentToolRegistry
 from src.application.services.agent_visible_cockpit_tool import VisibleCockpitResultTool
 from src.application.services.agent_web_research_tool import (
@@ -47,12 +53,16 @@ from src.infrastructure.composition.view_broker_deps import (
     build_read_only_broker_desk_use_cases,
 )
 from src.infrastructure.composition.view_ticker_deps import (
+    build_read_only_preopen_iev_source,
     build_read_only_ticker_broker_flow_deps,
+    build_read_only_ticker_corp_action_source,
     build_read_only_ticker_dashboard_use_case,
     build_read_only_ticker_desk_flow_history_service,
     build_read_only_ticker_foreign_history_use_case,
+    build_read_only_ticker_insider_source,
     build_read_only_ticker_ownership_history_use_case,
     build_read_only_ticker_ownership_source,
+    build_read_only_ticker_sector_context_use_case,
 )
 from src.infrastructure.config.local_env import read_local_env_value
 from src.infrastructure.persistence.sqlite_allowlisted_ro_query import (
@@ -173,6 +183,30 @@ def build_agent_composition(
                 ownership_history = None
             if ownership_history is not None:
                 tools.append(TickerOwnershipHistoryTool(ownership_history))
+            try:
+                preopen_iev = build_read_only_preopen_iev_source(db_path)
+            except (OSError, ValueError):
+                preopen_iev = None
+            if preopen_iev is not None:
+                tools.append(PreopenIevTool(preopen_iev))
+            try:
+                corp_actions_source = build_read_only_ticker_corp_action_source(db_path)
+            except (OSError, ValueError):
+                corp_actions_source = None
+            if corp_actions_source is not None:
+                tools.append(TickerCorporateActionsTool(corp_actions_source))
+            try:
+                sector_uc = build_read_only_ticker_sector_context_use_case(db_path)
+            except (OSError, ValueError):
+                sector_uc = None
+            if sector_uc is not None:
+                tools.append(TickerSectorContextTool(sector_uc))
+            try:
+                insider_source = build_read_only_ticker_insider_source(db_path)
+            except (OSError, ValueError):
+                insider_source = None
+            if insider_source is not None:
+                tools.append(TickerInsiderActivityTool(insider_source))
         if accumulation_judge_factory is not None:
             try:
                 judge_ticker = accumulation_judge_factory()

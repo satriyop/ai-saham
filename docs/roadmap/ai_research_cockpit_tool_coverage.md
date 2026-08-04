@@ -52,6 +52,9 @@ What still binds (these are governance, not style):
 | `get_ticker_desk_flow_history` | OUR / NONE | multi-session desks: `top_accumulating`/`top_distributing` (cumulative_net, active/net_buy sessions, longest_streak, avg prices, weekly_net), rotation, foreign/local split |
 | `get_ticker_ownership` | OUR / NONE | `institution_pct`, `individual_pct`, `top_holder_name`/`top_holder_pct`, `total_shares`(+formatted), `report_date` |
 | `get_ticker_ownership_history` | OUR / NONE | deduped `periods[]` (`report_date`, `institution_pct`, `individual_pct`, `free_float_pct`, `top_holder_name`/`top_holder_pct`, `total_shares`), latest-vs-previous `institution_pct_change`/`float_change`/`top_holder_pct_change`; PIT via `as_of_date` |
+| `get_preopen_iev` | OUR / NONE | `iev`/`iep`/`rank`/`is_ncp_locked` (canonical current reading), `locked_baseline_iev` (08:56 NCP lock), `iev_move_since_lock` (`None`+`NO_POST_LOCK_MOVE` INFO when no lock exists); future `session_date` → typed `SESSION_DATE_IN_FUTURE` UNAVAILABLE |
+| `get_ticker_corporate_actions` | OUR / NONE | `upcoming[]`/`recent[]` calendar events (relative to today) each with **role-keyed** `dates[]` (`role`/`event_date`/`event_time`, incl. `rups_date`/`pubex_date` — not the lossy 5-field flatten), `event_type`, `amount_value`/`amount_currency`, `ratio_old`/`ratio_new`, `price`, `event_note`, `active`, `company_name`; `event_count`; dateless events → `NO_DATED_MILESTONES` INFO |
+| `get_ticker_sector_context` | OUR / NONE | L2a peer_context + L2b macro_context (labels/values; no composite score) |
 | `web_research` | External / NETWORK_READ | external snippets (confirm) |
 | `ro_data_query` | Elevated / LOCAL_READ_ELEVATED | 3 allowlisted shapes: ticker close, ticker volume, broker day net (confirm) |
 
@@ -61,9 +64,6 @@ Domain data that exists locally but is **not** exposed to the agent today (all
 - **`insider_cache`** table + `InsiderTransaction` VO + `InsiderActivityProvider`
   port (`name`, `action_type`, `shares`, `price`, `transaction_date`); already
   read via `ticker_dashboard_source`.
-- **`corp_action_cache`** table + `SQLiteCorporateActionCalendarRepository` +
-  `CorporateActionCalendarEvent` (`event_type`, `ex_date`, `cum_date`,
-  `record_date`, `payment_date`, `announcement_date`).
 
 
 **Correction (2026-08-03):** rows 5, 7, 8 were first mis-graded 🔴 capability gaps
@@ -82,11 +82,12 @@ currently **no true capability gaps** in this list.
 | 5 | All of 1–4 on **volume / qty / price avg** | per-ticker volume; per-broker net; per-broker avg price | volume ✅ dashboard; per-broker net ✅ desk/RO + `get_ticker_broker_flow` net fields; avg price ✅ `top_*.avg_buy_price` / `avg_sell_price` | 🟢 covered |
 | 6 | Phase **compression / breakout** | setup phase; BB width percentile | ✅ `AgentSetupPhaseFacts.current_phase`; ✅ `AgentAccumulationFacts.bb_width_pctile` | 🟢 covered |
 | 7 | Recent **insider activity** | insider transactions | **exists** — `insider_cache` + `InsiderTransaction` + `InsiderActivityProvider` (via `ticker_dashboard_source`); no agent tool/projection | 🟡 projection |
-| 8 | Upcoming **corporate action** | corp-action calendar (div/split/RUPS) | **exists** — `corp_action_cache` + `SQLiteCorporateActionCalendarRepository` + `CorporateActionCalendarEvent`; no agent tool/projection | 🟡 projection |
+| 8 | Upcoming **corporate action** | corp-action calendar (div/split/RUPS) | ✅ `get_ticker_corporate_actions` — `upcoming[]`/`recent[]` events with role-keyed `dates[]` (incl. `rups_date`/`pubex_date`) over `SQLiteCorporateActionCalendarRepository` / `CorporateActionCalendarEvent` | 🟢 covered |
 
 **Headline:** Q1/Q2/Q4/Q5 (avg-price) are closed by **`get_ticker_broker_flow`**
 (single-session stock-centric ticker→desks + bandar). Remaining open projection
-work: insider (7), corp-action (8); multi-day desk history (row 3) closed.
+work: insider (7); corp-action (8) closed by `get_ticker_corporate_actions`;
+multi-day desk history (row 3) closed.
 
 ## Matrix — broader accum/preopen research context
 
@@ -99,8 +100,8 @@ All data is **local** (🟡 projection gaps) → each an implement task under AD
 | 9 | Is **foreign/smart money** accumulating (net trend over weeks)? | `foreign_flow_points` series | ✅ `get_ticker_foreign_flow` (`cumulative_net_idr`, `latest_net_idr`, `trend_direction`, `net_buy_sessions`, point tail) — complements dashboard window summaries | 🟢 covered |
 | 10 | What's the current **market regime / breadth**? | `market_context_snapshots` + `regime_observations` | `BuildMarketContextUseCase` (stored snapshot) → [`get_market_regime` task](../../tasks/backlog/implement_ai_research_cockpit_market_regime_tool.md) | 🟡→ task |
 | 11 | Is the **float tightening** / who owns it? | `shareholding_composition` (`institution_pct`, `individual_pct`, `top_holder_*`, `total_shares`) | ✅ `get_ticker_ownership` (single latest); history via `get_ticker_ownership_history` (`periods[]`, `institution_pct_change`, `float_change`, `top_holder_pct_change`) | 🟢 covered |
-| 12 | **Pre-open IEV** / NCP snapshot / IEV delta? | `iev_snapshots` | `SQLiteIEVRepository` (`get_ncp_snapshot`, `get_iev_delta`, `get_locked_iev_baseline`) → [`get_preopen_iev` task](../../tasks/backlog/implement_ai_research_cockpit_preopen_iev_tool.md) | 🟡→ task |
-| 13 | **Sector** strength / rotation / peers? | sector macro context evidence (ADR-053) | rescoped deeper → **`BuildTickerSectorContextUseCase`** (shared CLI/TUI/agent; descriptive, not scored) via [`get_ticker_sector_context` task](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) | 🟡→ task (rescoped) |
+| 12 | **Pre-open IEV** / NCP snapshot / IEV delta? | `iev_snapshots` | ✅ `get_preopen_iev` (`iev`/`iep`/`rank`/`is_ncp_locked` from `get_snapshot`, `locked_baseline_iev` via `ncp_baseline_iev`, `iev_move_since_lock`) | 🟢 covered |
+| 13 | **Sector** strength / rotation / peers? | L2a peers + L2b sector-macro | ✅ `get_ticker_sector_context` (`peer_context` returns/breadth/RS/regime; `macro_context` factors value/label/rationale, `macro_regime`) — no composite/factor scores | 🟢 covered |
 
 **Honorable mentions (not yet tasked):** `get_macro_calendar` (`macro_calendar_events`).
 
@@ -112,7 +113,7 @@ descriptive (no authority/score):
 | Menu | Deepening | Task |
 |---|---|---|
 | A | Ownership **history / float trend** (new port `get_ownership_history` + dedupe per `report_date`) | ✅ `get_ticker_ownership_history` (IMPLEMENTED; see `tasks/done/…ownership_history…`) |
-| B | Sector context as a **shared use case** (`BuildTickerSectorContextUseCase`) | [`get_ticker_sector_context`](../../tasks/backlog/implement_ai_research_cockpit_ticker_sector_context_tool.md) |
+| B | Sector context as a **shared use case** (`BuildTickerSectorContextUseCase`) | ✅ `get_ticker_sector_context` (IMPLEMENTED) |
 | C | Desk flow **rotation + foreign/local split + weekly trajectory** | ✅ `get_ticker_desk_flow_history` (IMPLEMENTED; see `tasks/done/…desk_flow_history…`) |
 | D | Fundamentals / **earnings trend** over quarters | [`get_ticker_fundamentals_trend`](../../tasks/backlog/implement_ai_research_cockpit_ticker_fundamentals_trend_tool.md) |
 | E | **Ticker research brief** — one composed, PIT-aligned bundle (surfaces Judge Action; **no minted verdict**, ADR-042) | [`get_ticker_research_brief`](../../tasks/backlog/implement_ai_research_cockpit_ticker_research_brief_tool.md) |
@@ -179,7 +180,7 @@ or use-case method, verified in source. Specifically:
   — IEV repo is date-keyed.)*
 - Confirm the reuse target is **descriptive**, not a **scored/evidence** VO
   (facts-not-score). *(Caught: `get_ticker_foreign_flow` must use `ForeignFlowPoint`,
-  not `ForeignFlowEvidence`; `get_ticker_sector_context` returns a scored VO → rescope.)*
+  not `ForeignFlowEvidence`; `get_ticker_sector_context` ships descriptive L2a+L2b projection — rescoped and closed.)*
 - Confirm the read is **cache-only** (not a fetch/browser provider) and the
   named factory actually exposes it. *(Caught: bandar via dashboard source, not
   the browser `BandarDetectorProvider`.)*

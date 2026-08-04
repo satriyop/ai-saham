@@ -10,6 +10,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
+        SQLiteCorporateActionCalendarRepository,
+    )
 
 from src.application.ports.ticker_dashboard_source import TickerDashboardSource
 from src.application.use_case.get_ticker_dashboard_use_case import GetTickerDashboardUseCase
@@ -302,3 +308,106 @@ def build_read_only_ticker_ownership_history_use_case(
         stockbit_config=load_stockbit_provider_config(),
     )
     return ViewTickerOwnershipHistoryUseCase(provider)
+
+
+def build_read_only_ticker_sector_context_use_case(
+    db_path: Path | str,
+):
+    """Construct BuildTickerSectorContextUseCase without schema initialization."""
+    from src.application.services.candidate_evidence_data_loader import (
+        CandidateEvidenceDataLoader,
+    )
+    from src.application.use_case.build_ticker_sector_context_use_case import (
+        BuildTickerSectorContextUseCase,
+    )
+    from src.infrastructure.config.sector_context_config_loader import (
+        create_sector_context_evidence_builder,
+    )
+    from src.infrastructure.config.sector_macro_context_config_loader import (
+        create_sector_macro_context_evidence_builder,
+    )
+    from src.infrastructure.persistence.sqlite_broker_repository import (
+        SQLiteBrokerRepository,
+    )
+    from src.infrastructure.persistence.sqlite_macro_calendar_repository import (
+        SQLiteMacroCalendarRepository,
+    )
+    from src.infrastructure.persistence.sqlite_market_repository import (
+        SQLiteMarketRepository,
+    )
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"ticker sector-context database is unavailable: {resolved}")
+    market_repo = SQLiteMarketRepository(resolved, initialize_schema=False)
+    broker_repo = SQLiteBrokerRepository(resolved, initialize_schema=False)
+    data_loader = CandidateEvidenceDataLoader(
+        market_repo,
+        broker_repo,
+        macro_calendar_repository=SQLiteMacroCalendarRepository(
+            resolved,
+            initialize_schema=False,
+        ),
+    )
+    return BuildTickerSectorContextUseCase(
+        data_loader,
+        sector_context_builder_factory=create_sector_context_evidence_builder,
+        sector_macro_context_builder_factory=create_sector_macro_context_evidence_builder,
+        market_repository=market_repo,
+    )
+
+
+def build_read_only_ticker_corp_action_source(
+    db_path: Path | str,
+) -> SQLiteCorporateActionCalendarRepository:
+    """Construct the corporate-action calendar reader without schema initialization.
+
+    Reserved for side-effect-free agent tool registration. Requires an existing
+    DB file; never creates or migrates tables.
+    """
+    from src.infrastructure.persistence.sqlite_corporate_action_calendar_repository import (
+        SQLiteCorporateActionCalendarRepository,
+    )
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"corporate action calendar database is unavailable: {resolved}")
+    return SQLiteCorporateActionCalendarRepository(resolved, initialize_schema=False)
+
+
+def build_read_only_preopen_iev_source(db_path: Path | str):
+    """Construct the pre-open IEV/NCP cache reader without schema initialization.
+
+    Reserved for side-effect-free agent tool registration. Requires an existing
+    DB file; never creates or migrates tables.
+    """
+    from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"pre-open IEV database is unavailable: {resolved}")
+    return SQLiteIEVRepository(resolved, initialize_schema=False)
+
+
+def build_read_only_ticker_insider_source(db_path: Path | str):
+    """Construct the insider-activity cache reader without schema initialization.
+
+    Reserved for side-effect-free agent tool registration. Requires an existing
+    DB file; never creates or migrates tables; never opens a live API client
+    (``api_client=None`` makes every read cache-only regardless of ``as_of_date``).
+    """
+    from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
+    from src.infrastructure.browser.stockbit_insider import StockbitInsiderActivityProvider
+    from src.infrastructure.browser.stockbit_sqlite_connection_provider import (
+        StockbitSQLiteConnectionProvider,
+    )
+
+    resolved = Path(db_path)
+    if not resolved.is_file():
+        raise FileNotFoundError(f"ticker insider-activity database is unavailable: {resolved}")
+    return StockbitInsiderActivityProvider(
+        api_client=None,
+        db_path=resolved,
+        connection_provider=StockbitSQLiteConnectionProvider(initialize_schema=False),
+        stockbit_config=load_stockbit_provider_config(),
+    )

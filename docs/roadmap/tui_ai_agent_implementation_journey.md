@@ -446,6 +446,8 @@ Do **not** fork a second manual smoke checklist; use §4 for operator UI and thi
 | 2026-08-04 | `get_ticker_desk_flow_history` | Multi-session desk persistence + rotation/split (ADR-061); coverage row 3 multi-day |
 | 2026-08-04 | `get_ticker_ownership` | Ownership composition / float facts tool (ADR-061); coverage row 11 |
 | 2026-08-04 | `get_ticker_ownership_history` | Ownership period history + latest deltas, new `ShareholdingProvider.get_history` port + PIT `as_of_date` (ADR-061, Depth policy Menu A); coverage row 11 deepened |
+| 2026-08-04 | `get_preopen_iev` | Pre-open IEV/IEP + rank from canonical `get_snapshot()`, `locked_baseline_iev` via `ncp_baseline_iev()`, and `iev_move_since_lock` (current − locked baseline; `None`+`NO_POST_LOCK_MOVE` INFO when no lock exists) — never the diagnostic all-session `get_iev_delta` (ADR-061); future `session_date` is a typed `SESSION_DATE_IN_FUTURE` UNAVAILABLE, not a turn-failing validation error; coverage row 12 |
+| 2026-08-04 | `get_ticker_sector_context` | L2a peer + L2b macro descriptive sector context (ADR-061); coverage row 13; no composite/factor scores |
 
 **Maintenance rule:** When a phase is implemented or parked status changes,
 update §1, §2 flags (if any), §4 smoke steps, and this changelog **in the same
