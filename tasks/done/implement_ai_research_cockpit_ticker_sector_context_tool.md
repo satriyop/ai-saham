@@ -27,4 +27,4 @@ Descriptive sector context (peer strength/rotation + routed macros). Closes row 
   `build_read_only_ticker_sector_context_use_case`
 - Tests: `test_build_ticker_sector_context_use_case.py`, `test_agent_ticker_sector_context_tool.py`
 - Coverage row: 13
-- Commits: (fill after commit)
+- Commits: `cbf1637c`
