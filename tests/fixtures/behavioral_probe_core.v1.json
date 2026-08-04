@@ -31,6 +31,6 @@
     "ext_setup_family_single_ticker_deep"
   ],
   "extended_probe_set_id": "accum_extended.v1",
-  "probe_input_digest": "330cfade2bf77952844461b90b3f30de578546647550c78e491937deac60481d",
+  "probe_input_digest": "9c0380c430cbd581f083a1fc5182e6603d661f60fd4a6a90f79d7c89695f753b",
   "projection_contract": "accum_behavioral_projection.v1"
 }

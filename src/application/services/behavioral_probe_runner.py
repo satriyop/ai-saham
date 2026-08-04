@@ -31,11 +31,15 @@ Substituted at the port boundary only, and only with frozen in-memory data:
 - ``RulesLoader`` (never invoked — probes set no ``strategy_name``)
 
 Note on the input digest: ``compute_probe_input_digest`` hashes candles, broker
-summaries, broker daily flows and the request knobs. Enrichment stubs
-(fundamentals, shareholding, bandar, forward estimates) are outside it, so an
-enrichment-only probe change moves the behavioural digest without moving the
-input digest. That is the contract as shipped in slice 1; widening it is its own
-deliberate change, not a side effect of adding a probe.
+summaries, broker daily flows, the request knobs, and every enrichment stub a
+probe ticker declares (fundamentals, shareholding, bandar, forward estimates,
+and any future stub — they are discovered structurally via
+``probe_enrichment_stubs``, not by name). Enrichment stubs were outside it as
+shipped in slice 1, which broke the attribution the two digests exist for: an
+enrichment-only probe edit moved the behavioural digest while the input digest
+stayed still, reading exactly like "the engine changed". Stubs are hashed
+whether or not the probe wires the providers, because the digest describes the
+probe set **as authored**, not the subset a given probe happens to consume.
 
 Why config values are not read from disk
 ----------------------------------------
@@ -61,7 +65,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -84,6 +88,7 @@ from src.application.services.behavioral_probe_set import (
     build_probe_candles,
     build_probe_daily_flows,
     core_probe_set,
+    probe_enrichment_stubs,
     probe_sessions,
 )
 from src.application.services.effective_market_session_resolver import (
@@ -738,14 +743,38 @@ def _sha256(payload: Any) -> str:
     return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()
 
 
+def _canonical_input_value(value: Any) -> Any:
+    """Coerce one frozen stub value into a JSON-canonical, hashable form.
+
+    Fails closed on an unmodelled type rather than falling back to ``str``: a
+    value the digest cannot represent faithfully is a probe-authoring error, not
+    missing data.
+    """
+    if value is None or isinstance(value, bool | int | float | str):
+        return value
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, date | datetime):
+        return value.isoformat()
+    if isinstance(value, list | tuple):
+        return [_canonical_input_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _canonical_input_value(item) for key, item in value.items()}
+    raise TypeError(f"probe enrichment stub carries an unhashable input value: {type(value)!r}")
+
+
 def compute_probe_input_digest(
     probes: tuple[BehavioralProbe, ...] | None = None,
 ) -> str:
     """Digest the frozen probe **inputs**.
 
-    Recorded separately from the output digest so a moved behavioural digest
-    can be attributed: inputs unchanged means the engine changed, which is the
-    signal ADR-068 relies on.
+    Recorded separately from the output digest so a moved behavioural digest can
+    be attributed. Input digest stable + behavioural digest moved means the
+    *engine* changed, which is the signal ADR-068 §2 relies on; both moved means
+    the probe's own test data changed. That attribution only holds while every
+    real input is folded in here — enrichment stubs included, discovered
+    structurally through ``probe_enrichment_stubs`` so a future stub field
+    cannot silently fall outside the digest.
     """
     selected = core_probe_set() if probes is None else probes
     payload: dict[str, Any] = {}
@@ -753,7 +782,17 @@ def compute_probe_input_digest(
         candles: list[dict[str, Any]] = []
         summaries: list[dict[str, Any]] = []
         flows: list[dict[str, Any]] = []
+        enrichment: list[dict[str, Any]] = []
         for spec in probe.tickers:
+            enrichment.append(
+                {
+                    "ticker": spec.ticker,
+                    "stubs": {
+                        name: _canonical_input_value(asdict(stub))
+                        for name, stub in probe_enrichment_stubs(spec)
+                    },
+                }
+            )
             candles.extend(
                 c.to_dict() for c in build_probe_candles(spec, as_of_date=probe.as_of_date)
             )
@@ -802,6 +841,7 @@ def compute_probe_input_digest(
             "candles": candles,
             "broker_summaries": summaries,
             "broker_daily_flows": flows,
+            "enrichment_stubs": enrichment,
         }
     return _sha256({"probe_set_id": CORE_PROBE_SET_ID, "probes": payload})
 

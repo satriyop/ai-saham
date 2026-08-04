@@ -32,7 +32,7 @@ moved both frozen digests — see ADR-068 §3 and the record in
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -57,8 +57,25 @@ _TIER1_CODES = ("AK", "BK", "ZP")
 _RETAIL_CODES = ("YP", "PD", "CC")
 
 
+class ProbeEnrichmentStub:
+    """Marker base for every frozen enrichment-provider stub a probe carries.
+
+    Enrichment stubs are real probe **inputs**: the accum decision path reads
+    them through the fundamentals/shareholding/bandar/forward-estimates ports,
+    so changing one can move the behavioural output. Tagging them with a shared
+    base makes the set discoverable *structurally* — ``probe_enrichment_stubs``
+    walks ``ProbeTicker``'s fields and picks up anything that is one of these,
+    so a future stub field is folded into the input digest automatically rather
+    than waiting for someone to remember to extend a hand-written name list.
+
+    Subclass this for every new enrichment stub. A dataclass field on
+    ``ProbeTicker`` whose type is a dataclass but *not* a stub (``tail``, which
+    only shapes candles that are already hashed) is guarded by an explicit test.
+    """
+
+
 @dataclass(frozen=True)
-class ProbeFundamentals:
+class ProbeFundamentals(ProbeEnrichmentStub):
     """Frozen fundamentals stub input for one probe ticker."""
 
     piotroski_f_score: int | None
@@ -89,7 +106,7 @@ class ProbeFundamentals:
 
 
 @dataclass(frozen=True)
-class ProbeShareholding:
+class ProbeShareholding(ProbeEnrichmentStub):
     """Frozen shareholding stub input for one probe ticker."""
 
     institution_pct: float
@@ -110,7 +127,7 @@ class ProbeShareholding:
 
 
 @dataclass(frozen=True)
-class ProbeBandar:
+class ProbeBandar(ProbeEnrichmentStub):
     """Frozen bandar-detector stub input for one probe ticker."""
 
     five_day_accdist: str
@@ -138,7 +155,7 @@ class ProbeBandar:
 
 
 @dataclass(frozen=True)
-class ProbeForwardEstimates:
+class ProbeForwardEstimates(ProbeEnrichmentStub):
     """Frozen forward-estimate stub input for one probe ticker.
 
     Only the fields the accum decision path can read are modelled.
@@ -278,6 +295,22 @@ class BehavioralProbe:
     rsi_period: int | None = None
     sma_period: int | None = None
     extra_notes: tuple[str, ...] = field(default_factory=tuple)
+
+
+def probe_enrichment_stubs(spec: ProbeTicker) -> tuple[tuple[str, ProbeEnrichmentStub], ...]:
+    """Return ``(field_name, stub)`` for every enrichment stub a ticker declares.
+
+    Structural rather than itemised: any ``ProbeTicker`` field currently holding
+    a ``ProbeEnrichmentStub`` is returned, in declared field order. A field left
+    ``None`` is omitted — its absence is itself deterministic input, and the
+    digest records presence by the key being present.
+    """
+    declared: list[tuple[str, ProbeEnrichmentStub]] = []
+    for spec_field in fields(spec):
+        value = getattr(spec, spec_field.name)
+        if isinstance(value, ProbeEnrichmentStub):
+            declared.append((spec_field.name, value))
+    return tuple(declared)
 
 
 def probe_sessions(*, end_date: date, count: int) -> tuple[date, ...]:

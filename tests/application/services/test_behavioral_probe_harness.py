@@ -34,7 +34,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, get_args, get_type_hints
 
 import pytest
 
@@ -53,6 +53,10 @@ from src.application.services.behavioral_probe_runner import (
 from src.application.services.behavioral_probe_set import (
     CORE_PROBE_SET_ID,
     EXTENDED_PROBE_SET_ID,
+    BehavioralProbe,
+    ProbeEnrichmentStub,
+    ProbeForwardEstimates,
+    ProbeTicker,
     core_probe_set,
     extended_probe_set,
 )
@@ -371,3 +375,128 @@ def test_probe_digest_is_not_wired_into_cohort_identity_yet() -> None:
     ).read_text(encoding="utf-8")
     assert "behavioral_probe" not in identity_source
     assert "probe_digest" not in identity_source
+
+
+def _valuation_probe() -> BehavioralProbe:
+    return next(p for p in core_probe_set() if p.probe_id == "signal_flag_valuation_stretched")
+
+
+def _mutated_probe_set(index: int, **changes: object) -> tuple[BehavioralProbe, ...]:
+    """One-probe set with a single ProbeTicker field replaced."""
+    probe = _valuation_probe()
+    tickers = list(probe.tickers)
+    tickers[index] = dataclasses.replace(tickers[index], **changes)
+    return (dataclasses.replace(probe, tickers=tuple(tickers)),)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "changes"),
+    [
+        pytest.param("fundamentals", {"piotroski_f_score": 3}, id="fundamentals"),
+        pytest.param("shareholding", {"institution_pct": 57.0}, id="shareholding"),
+        pytest.param("bandar", {"five_day_accdist": "Big Dist"}, id="bandar"),
+        pytest.param("forward_estimates", {"forward_eps_1y": 21.0}, id="forward_estimates"),
+    ],
+)
+def test_input_digest_covers_every_enrichment_stub_field(
+    field_name: str, changes: dict[str, object]
+) -> None:
+    """Every enrichment stub field must move the input digest on its own.
+
+    Before ADR-068's enrichment-stub fold-in, editing fundamentals,
+    shareholding, bandar, or forward_estimates left
+    ``compute_probe_input_digest`` untouched — an enrichment-only probe edit
+    was indistinguishable from an engine change.
+    """
+    baseline = compute_probe_input_digest((_valuation_probe(),))
+    original_stub = getattr(_valuation_probe().tickers[1], field_name)
+    mutated_stub = dataclasses.replace(original_stub, **changes)
+    mutated = _mutated_probe_set(1, **{field_name: mutated_stub})
+    assert compute_probe_input_digest(mutated) != baseline
+
+
+def test_declaring_a_previously_absent_stub_moves_the_input_digest() -> None:
+    """Presence/absence of a stub is itself input.
+
+    PRBA (index 0) carries no ``forward_estimates`` stub. Wiring one for the
+    first time must move the input digest exactly as changing a value on an
+    already-declared stub does — a field appearing is as much a probe-input
+    change as a field's value changing.
+    """
+    baseline = compute_probe_input_digest((_valuation_probe(),))
+    mutated = _mutated_probe_set(0, forward_estimates=ProbeForwardEstimates(forward_eps_1y=25.0))
+    assert compute_probe_input_digest(mutated) != baseline
+
+
+def test_enrichment_only_change_that_moves_output_also_moves_the_input_digest() -> None:
+    """ADR-068 Section 2 attribution contract.
+
+    Both digests moving reads as "the probe's own test data changed"; before
+    the fix, an enrichment edit that also changed the OUTPUT moved only the
+    behavioural digest, which read as "the engine changed" — a false
+    attribution. forward_eps_1y=100.0 pushes PRBN's derived forward P/E back
+    under the frozen valuation_stretched threshold, so the flag genuinely
+    un-fires and the output changes too.
+    """
+    baseline = (_valuation_probe(),)
+    original_forward = _valuation_probe().tickers[1].forward_estimates
+    assert original_forward is not None
+    mutated = _mutated_probe_set(
+        1, forward_estimates=dataclasses.replace(original_forward, forward_eps_1y=100.0)
+    )
+    assert compute_probe_input_digest(mutated) != compute_probe_input_digest(baseline)
+    assert compute_behavioral_probe_digest(mutated) != compute_behavioral_probe_digest(baseline)
+
+
+def test_input_digest_still_moves_for_already_covered_inputs() -> None:
+    """Sanity: widening the hash to cover stubs must not regress prior coverage."""
+    baseline = compute_probe_input_digest((_valuation_probe(),))
+    original_prbn = _valuation_probe().tickers[1]
+
+    candle_mutated = _mutated_probe_set(1, base_price=original_prbn.base_price + 1)
+    assert compute_probe_input_digest(candle_mutated) != baseline
+
+    broker_mutated = _mutated_probe_set(1, foreign_buy_lot=original_prbn.foreign_buy_lot + 1)
+    assert compute_probe_input_digest(broker_mutated) != baseline
+
+    knob_mutated = (dataclasses.replace(_valuation_probe(), window_days=5),)
+    assert compute_probe_input_digest(knob_mutated) != baseline
+
+
+# tail only shapes candles, which are already hashed via build_probe_candles —
+# it is the one deliberate exception to "every dataclass field is a stub".
+_NON_ENRICHMENT_DATACLASS_FIELDS = frozenset({"tail"})
+
+
+def test_every_dataclass_field_on_probe_ticker_is_a_tagged_enrichment_stub() -> None:
+    """Structural guard so this bug class cannot recur.
+
+    Any future dataclass-typed field added to ``ProbeTicker`` that is not a
+    ``ProbeEnrichmentStub`` subclass would silently fall outside
+    ``compute_probe_input_digest``, reproducing the exact gap the tests above
+    close.
+    """
+    type_hints = get_type_hints(ProbeTicker)
+    inspected_fields: set[str] = set()
+    for probe_field in dataclasses.fields(ProbeTicker):
+        annotation = type_hints[probe_field.name]
+        candidates = get_args(annotation) or (annotation,)
+        for candidate in candidates:
+            if not (isinstance(candidate, type) and dataclasses.is_dataclass(candidate)):
+                continue
+            inspected_fields.add(probe_field.name)
+            if probe_field.name in _NON_ENRICHMENT_DATACLASS_FIELDS:
+                continue
+            assert issubclass(candidate, ProbeEnrichmentStub), (
+                f"ProbeTicker.{probe_field.name} is a dataclass field "
+                f"({candidate.__name__}) that is not a ProbeEnrichmentStub subclass. "
+                "Subclass ProbeEnrichmentStub so probe_enrichment_stubs — and "
+                "therefore the input digest — picks up the new field "
+                "automatically."
+            )
+
+    known_stub_fields = {"fundamentals", "shareholding", "bandar", "forward_estimates"}
+    assert known_stub_fields <= inspected_fields, (
+        f"expected to inspect at least {known_stub_fields}, got {inspected_fields} — "
+        "this test would otherwise pass vacuously"
+    )

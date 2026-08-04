@@ -123,8 +123,14 @@ _ROOT = Path(__file__).resolve().parents[3]
 # is visible in review rather than absorbed by a regenerated fixture. Both moved
 # once, deliberately, when the four gap-closing core probes were added — a
 # recorded cohort boundary under ADR-068 §3, not drift.
+#
+# The input digest moved a second time, alone, when enrichment stubs were folded
+# into it (they were real probe inputs sitting outside the hash, which broke the
+# attribution the two digests exist for). That change hashed more of the same
+# frozen inputs; it changed no probe data and no engine behaviour, which is why
+# the behavioural digest below is untouched by it.
 _FROZEN_CORE_BEHAVIORAL_DIGEST = "85ce36cc91adcb23a0afbdb22e01843b760c28000cc01064055877005efcf4b1"
-_FROZEN_CORE_INPUT_DIGEST = "330cfade2bf77952844461b90b3f30de578546647550c78e491937deac60481d"
+_FROZEN_CORE_INPUT_DIGEST = "9c0380c430cbd581f083a1fc5182e6603d661f60fd4a6a90f79d7c89695f753b"
 
 
 # ── Coverage scope and floors ───────────────────────────────────────────────
