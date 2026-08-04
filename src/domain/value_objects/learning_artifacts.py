@@ -905,6 +905,67 @@ def validate_label_identity(label: LearningOutcomeLabel) -> None:
         )
 
 
+def modern_label_digest(label: LearningOutcomeLabel) -> str:
+    """Digest under the current contract (``labeled_at`` excluded)."""
+
+    return artifact_digest(
+        _artifact_payload(label, id_field="label_id", digest_field="artifact_digest")
+    )
+
+
+def legacy_labeled_at_label_digest(label: LearningOutcomeLabel) -> str:
+    """Digest under the pre-11bfca95 rule that hashed wall-clock ``labeled_at``.
+
+    Used only to classify rows written before label digests excluded
+    ``labeled_at`` so they can be rehashed without guessing other corruption.
+    """
+
+    payload = asdict(label)
+    payload.pop("label_id")
+    payload.pop("artifact_digest")
+    return artifact_digest(payload)
+
+
+def label_has_legacy_labeled_at_digest(label: LearningOutcomeLabel) -> bool:
+    """True when stored digest matches the legacy-with-labeled_at formula only."""
+
+    stored = label.artifact_digest
+    if stored == modern_label_digest(label):
+        return False
+    return stored == legacy_labeled_at_label_digest(label)
+
+
+def rehash_label_excluding_labeled_at(label: LearningOutcomeLabel) -> LearningOutcomeLabel:
+    """Return the same label content with a modern digest (``labeled_at`` out).
+
+    - Already modern → returned unchanged.
+    - Legacy (digest included ``labeled_at``) → new digest, same outcomes/metrics.
+    - Any other mismatch → contract error (do not silently rewrite unknown corruption).
+    """
+
+    modern = modern_label_digest(label)
+    if label.artifact_digest == modern:
+        return label
+    if label.artifact_digest != legacy_labeled_at_label_digest(label):
+        raise LearningContractError(
+            "label digest matches neither modern nor legacy labeled_at rules; "
+            f"refusing rehash for label_id={label.label_id!r}"
+        )
+    return LearningOutcomeLabel(
+        label_id=label.label_id,
+        artifact_digest=modern,
+        schema_version=label.schema_version,
+        contract_id=label.contract_id,
+        observation_id=label.observation_id,
+        outcome_basis=label.outcome_basis,
+        availability=label.availability,
+        outcome=label.outcome,
+        metrics=dict(label.metrics),
+        fingerprint=label.fingerprint,
+        labeled_at=label.labeled_at,
+    )
+
+
 @dataclass(frozen=True)
 class LearningEvaluation:
     DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset()
