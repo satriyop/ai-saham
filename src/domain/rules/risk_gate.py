@@ -96,6 +96,50 @@ class GateResult:
         return self.outcome is GateOutcome.UNEVALUABLE
 
 
+class UnevaluableGateAction(str, Enum):
+    """What an UNEVALUABLE gate means for the *aggregate* risk assessment.
+
+    Orthogonal to each gate's own ``missing_data_action``, which decides
+    whether that one gate blocks on its own missing input.
+    """
+
+    SURFACE = "surface"  # record it and keep going; an unknown is not a reject
+    BLOCK = "block"  # any gate that could not check anything blocks the candidate
+
+
+@dataclass(frozen=True)
+class UnevaluableGatePolicy:
+    """Aggregate policy for gates that ran without usable input.
+
+    Default is ``SURFACE``: exactly the behaviour before the policy existed.
+    An unknown is surfaced, never laundered into a pass, and never a reject.
+    """
+
+    action: UnevaluableGateAction = UnevaluableGateAction.SURFACE
+    block_confidence: int = 0
+
+    @property
+    def blocks(self) -> bool:
+        return self.action is UnevaluableGateAction.BLOCK
+
+    @classmethod
+    def from_config(cls, action: object, *, block_confidence: object = 0) -> UnevaluableGatePolicy:
+        """Build from raw config values, failing closed on anything unknown."""
+        try:
+            resolved = UnevaluableGateAction(action)
+        except ValueError:
+            supported = ", ".join(sorted(a.value for a in UnevaluableGateAction))
+            raise ValueError(
+                f"risk_engine.gates.unevaluable_policy must be one of: {supported}; got {action!r}"
+            ) from None
+        if not isinstance(block_confidence, int) or isinstance(block_confidence, bool):
+            raise ValueError(
+                "risk_engine.gates.unevaluable_block_confidence must be an int; "
+                f"got {block_confidence!r}"
+            )
+        return cls(action=resolved, block_confidence=block_confidence)
+
+
 @dataclass(frozen=True)
 class GateContext:
     """

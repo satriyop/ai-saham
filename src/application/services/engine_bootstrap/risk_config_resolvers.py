@@ -98,6 +98,21 @@ def resolve_risk_gates(cfg: dict) -> tuple[list, list]:
     return _resolve_risk_gates(cfg)
 
 
+def resolve_unevaluable_gate_policy(cfg: dict):
+    """Resolve `risk_engine.gates.unevaluable_policy` (fails closed on unknowns).
+
+    Absent config means `surface`: an unevaluable gate is recorded but never
+    blocks, which is the behaviour that predates the key.
+    """
+    from src.domain.rules.risk_gate import UnevaluableGatePolicy
+
+    gates = cfg.get("risk_engine", {}).get("gates", {})
+    return UnevaluableGatePolicy.from_config(
+        gates.get("unevaluable_policy", "surface"),
+        block_confidence=gates.get("unevaluable_block_confidence", 0),
+    )
+
+
 def _resolve_risk_indicator_defaults(cfg: dict):
     from src.application.services.risk_engine import RiskIndicatorDefaults
 

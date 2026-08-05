@@ -19,7 +19,7 @@ from src.application.use_case.assess_risk_custom_rules_evaluator import (
 from src.application.use_case.assess_risk_gate_evaluator import AssessRiskGateEvaluator
 from src.application.use_case.assess_risk_trend_use_case import AssessRiskTrendUseCase
 from src.domain.ports.market_data_repository import MarketDataRepository
-from src.domain.rules.risk_gate import RiskGate
+from src.domain.rules.risk_gate import RiskGate, UnevaluableGatePolicy
 
 if TYPE_CHECKING:
     from src.application.services.indicator_evaluator import IndicatorEvaluator
@@ -56,6 +56,7 @@ class AssessRiskUseCase:
         indicator_evaluator: "IndicatorEvaluator | None" = None,
         indicator_history_days: int = 365,
         gate_recent_candle_lookback: int = 20,
+        unevaluable_gate_policy: UnevaluableGatePolicy | None = None,
     ) -> None:
         """
         Initialize with repository, optional registry, optional rules loader,
@@ -76,6 +77,9 @@ class AssessRiskUseCase:
                             Requires gate_context on the request.
             indicator_evaluator: Optional IndicatorEvaluator for computing
                             indicator readings (trend history, TechnicalGate).
+            unevaluable_gate_policy: What a gate that ran without usable input
+                            means for the aggregate assessment. Defaults to
+                            SURFACE (record it, do not block).
         """
         self._repository = repository
         self._registry = registry if registry is not None else IndicatorRegistry()
@@ -92,6 +96,7 @@ class AssessRiskUseCase:
             execution_gates=self._execution_gates,
             indicator_history_days=indicator_history_days,
             gate_recent_candle_lookback=gate_recent_candle_lookback,
+            unevaluable_gate_policy=unevaluable_gate_policy,
         )
         self._trend_use_case = AssessRiskTrendUseCase(
             repository=repository,
@@ -108,6 +113,11 @@ class AssessRiskUseCase:
     def execution_gates(self) -> list[RiskGate]:
         """Exact execution gates injected at construction (ADR-059 identity)."""
         return self._execution_gates
+
+    @property
+    def unevaluable_gate_policy(self) -> UnevaluableGatePolicy:
+        """Resolved aggregate policy for gates that ran without usable input."""
+        return self._gate_evaluator.unevaluable_gate_policy
 
     def execute(self, request: AssessRiskRequest) -> AssessRiskResponse:
         """

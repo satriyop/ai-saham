@@ -167,7 +167,14 @@ _BRANCH_COVERAGE_FLOOR: dict[str, tuple[int, int]] = {
     "src/application/services/signal_evidence_group_scorer.py": (48, 66),
     "src/application/services/signal_legacy_regime_conditioning.py": (11, 16),
     "src/application/use_case/accumulation_screen_use_case.py": (15, 30),
-    "src/application/use_case/assess_risk_gate_evaluator.py": (23, 30),
+    # 26/34: raised from 23/30 by the unevaluable-gate work. One of the eight
+    # uncovered arcs is the `risk_engine.gates.unevaluable_policy=block` path.
+    # The probe set is frozen at the shipped default (`surface`), so that arc is
+    # unreachable by construction rather than by under-forking; it is covered by
+    # tests/application/use_case/test_unevaluable_gate_policy.py instead. If the
+    # shipped default ever becomes `block`, this entry must be re-measured and
+    # the policy added to the production policy snapshot identity.
+    "src/application/use_case/assess_risk_gate_evaluator.py": (26, 34),
     "src/application/use_case/assess_risk_use_case.py": (1, 4),
     "src/application/use_case/assess_trade_setup_use_case.py": (12, 16),
     "src/application/use_case/score_accum_use_case.py": (20, 34),

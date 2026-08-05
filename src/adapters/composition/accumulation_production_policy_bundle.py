@@ -17,6 +17,7 @@ from src.application.services.accumulation_screen_hard_filter_policy import (
 )
 from src.application.services.engine_bootstrap.risk_config_resolvers import (
     resolve_risk_gates,
+    resolve_unevaluable_gate_policy,
 )
 from src.application.services.engine_bootstrap.signal_scoring_config_resolver import (
     resolve_signal_engine_config,
@@ -49,7 +50,9 @@ def resolve_accumulation_production_policy_bundle(
     cfg = load_app_config()
     signal_engine_config = resolve_signal_engine_config(load_signal_engine_config_raw())
     path = risk_config_path or Path(cfg.config_paths.risk_engine)
-    structural, execution = resolve_risk_gates(load_engine_config(path))
+    risk_engine_config = load_engine_config(path)
+    structural, execution = resolve_risk_gates(risk_engine_config)
+    unevaluable_gate_policy = resolve_unevaluable_gate_policy(risk_engine_config)
     hard_filter_policy = resolve_accumulation_screen_hard_filter_policy(
         swing_policy=swing_policy,
         accumulation_screener_config=accumulation_screener_config,
@@ -60,4 +63,5 @@ def resolve_accumulation_production_policy_bundle(
         structural_gates=tuple(structural),
         execution_gates=tuple(execution),
         hard_filter_policy=hard_filter_policy,
+        unevaluable_gate_policy=unevaluable_gate_policy,
     )

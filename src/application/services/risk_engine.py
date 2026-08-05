@@ -26,7 +26,7 @@ from src.application.use_case.assess_risk_use_case import (
     AssessRiskUseCase,
 )
 from src.domain.ports.market_data_repository import MarketDataRepository
-from src.domain.rules.risk_gate import GateContext, RiskGate
+from src.domain.rules.risk_gate import GateContext, RiskGate, UnevaluableGatePolicy
 
 if TYPE_CHECKING:
     from src.application.ports.rules_loader import RulesLoader
@@ -81,6 +81,7 @@ class RiskEngine:
         market_context_gate: MarketContextGateConfig | None = None,
         technical_gate_config: "TechnicalGateConfig | None" = None,
         rules_loader: "RulesLoader | None" = None,
+        unevaluable_gate_policy: UnevaluableGatePolicy | None = None,
     ) -> None:
         self._indicator_defaults = indicator_defaults or RiskIndicatorDefaults()
         self._market_context_gate = market_context_gate or MarketContextGateConfig()
@@ -95,6 +96,7 @@ class RiskEngine:
             indicator_evaluator=self._indicator_evaluator,
             indicator_history_days=self._indicator_defaults.history_days,
             gate_recent_candle_lookback=self._indicator_defaults.gate_recent_candle_lookback,
+            unevaluable_gate_policy=unevaluable_gate_policy,
         )
         self._fundamentals_provider = fundamentals_provider
         self._bandar_provider = bandar_provider

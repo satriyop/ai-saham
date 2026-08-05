@@ -20,6 +20,7 @@ from src.application.services.engine_bootstrap.risk_config_resolvers import (
     _resolve_risk_indicator_defaults,
     _resolve_technical_gate_config,
     resolve_risk_gates,
+    resolve_unevaluable_gate_policy,
 )
 from src.application.services.indicator_evaluator import IndicatorEvaluator
 from src.application.services.risk_engine import RiskEngine
@@ -75,6 +76,7 @@ def create_risk_engine(
     market_context_gate = _resolve_market_context_gate(cfg)
     indicator_evaluator_config = _resolve_indicator_evaluator_config(cfg)
     technical_gate_config = _resolve_technical_gate_config(cfg)
+    unevaluable_gate_policy = resolve_unevaluable_gate_policy(cfg)
 
     fund_prov = None
     bandar_prov = None
@@ -114,4 +116,5 @@ def create_risk_engine(
         market_context_gate=market_context_gate,
         technical_gate_config=technical_gate_config,
         rules_loader=rules_loader,
+        unevaluable_gate_policy=unevaluable_gate_policy,
     )

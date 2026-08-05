@@ -176,6 +176,7 @@ def create_accumulation_screen_workflow_bundle(
                 market_repository=deps.market_repository,
                 structural_gates=production_policy_bundle.structural_gates,
                 execution_gates=production_policy_bundle.execution_gates,
+                unevaluable_gate_policy=production_policy_bundle.unevaluable_gate_policy,
             )
             if with_risk
             else None

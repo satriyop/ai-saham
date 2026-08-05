@@ -17,7 +17,7 @@ from src.application.services.accumulation_screen_hard_filter_policy import (
 )
 from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
-from src.domain.rules.risk_gate import RiskGate
+from src.domain.rules.risk_gate import RiskGate, UnevaluableGatePolicy
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,7 @@ class AccumulationProductionPolicyBundle:
     structural_gates: tuple[RiskGate, ...]
     execution_gates: tuple[RiskGate, ...]
     hard_filter_policy: AccumulationScreenHardFilterPolicy
+    unevaluable_gate_policy: UnevaluableGatePolicy = UnevaluableGatePolicy()
 
     def __post_init__(self) -> None:
         if not isinstance(self.accum_score_policy, AccumScorePolicy):
@@ -49,4 +50,9 @@ class AccumulationProductionPolicyBundle:
             raise TypeError(
                 "hard_filter_policy must be AccumulationScreenHardFilterPolicy, got "
                 f"{type(self.hard_filter_policy).__name__}"
+            )
+        if not isinstance(self.unevaluable_gate_policy, UnevaluableGatePolicy):
+            raise TypeError(
+                "unevaluable_gate_policy must be UnevaluableGatePolicy, got "
+                f"{type(self.unevaluable_gate_policy).__name__}"
             )

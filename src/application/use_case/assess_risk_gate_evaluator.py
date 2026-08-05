@@ -13,7 +13,7 @@ from src.application.use_case.aggregate_indicators_use_case import (
     AggregateIndicatorsUseCase,
 )
 from src.domain.ports.market_data_repository import MarketDataRepository
-from src.domain.rules.risk_gate import GateContext, RiskGate
+from src.domain.rules.risk_gate import GateContext, RiskGate, UnevaluableGatePolicy
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_assessment import RiskAssessment
 from src.domain.value_objects.risk_gate_audit import (
@@ -22,11 +22,20 @@ from src.domain.value_objects.risk_gate_audit import (
 )
 
 
-def _unevaluable_gate_names(
+def _unevaluable_records(
     evaluations: list[GateEvaluationRecord],
-) -> tuple[str, ...]:
-    """Names of gates that ran but had no usable input, in evaluation order."""
-    return tuple(row.gate for row in evaluations if row.is_unevaluable)
+) -> tuple[GateEvaluationRecord, ...]:
+    """Gates that ran but had no usable input, in evaluation order."""
+    return tuple(row for row in evaluations if row.is_unevaluable)
+
+
+def _unevaluable_block_rationale(rows: tuple[GateEvaluationRecord, ...]) -> str:
+    names = ", ".join(row.gate for row in rows)
+    noun = "gate" if len(rows) == 1 else "gates"
+    return (
+        f"{len(rows)} {noun} unevaluable ({names}); blocked by "
+        "risk_engine.gates.unevaluable_policy=block"
+    )
 
 
 def _no_gate_fired_rationale(unevaluable_gates: tuple[str, ...]) -> str:
@@ -48,12 +57,19 @@ class AssessRiskGateEvaluator:
         execution_gates: list[RiskGate],
         indicator_history_days: int,
         gate_recent_candle_lookback: int,
+        unevaluable_gate_policy: UnevaluableGatePolicy | None = None,
     ) -> None:
         self._repository = repository
         self._structural_gates = structural_gates
         self._execution_gates = execution_gates
         self._indicator_history_days = indicator_history_days
         self._gate_recent_candle_lookback = gate_recent_candle_lookback
+        self._unevaluable_gate_policy = unevaluable_gate_policy or UnevaluableGatePolicy()
+
+    @property
+    def unevaluable_gate_policy(self) -> UnevaluableGatePolicy:
+        """Resolved aggregate policy for gates that ran without usable input."""
+        return self._unevaluable_gate_policy
 
     def evaluate(self, request: AssessRiskRequest) -> AssessRiskResponse:
         """
@@ -183,7 +199,8 @@ class AssessRiskGateEvaluator:
                     firing_structural = False
                     short_circuited = True
 
-        unevaluable = _unevaluable_gate_names(evaluations)
+        unevaluable_rows = _unevaluable_records(evaluations)
+        unevaluable = tuple(row.gate for row in unevaluable_rows)
 
         if firing_gate is not None and firing_result is not None:
             return self._gate_response(
@@ -196,6 +213,31 @@ class AssessRiskGateEvaluator:
                 gate_evaluations=tuple(evaluations),
                 gate_context_completeness=completeness,
                 unevaluable_gates=unevaluable,
+            )
+
+        # No gate fired. The configured aggregate policy decides whether the
+        # unknowns themselves block. Default (`surface`) never does, so the
+        # action distribution is unchanged from before the policy existed.
+        if unevaluable_rows and self._unevaluable_gate_policy.blocks:
+            first = unevaluable_rows[0]
+            assessment = RiskAssessment(
+                rationale=(_unevaluable_block_rationale(unevaluable_rows),),
+                snapshot_date=latest_snapshot.date,
+                indicators=latest_snapshot,
+                gate_triggered=first.gate,
+                gate_is_structural=first.tier == "structural",
+                gate_confidence=self._unevaluable_gate_policy.block_confidence,
+                unevaluable_gates=unevaluable,
+            )
+            return AssessRiskResponse(
+                ticker=agg_response.ticker,
+                assessment=assessment,
+                sma_period=request.sma_period,
+                ema_period=request.ema_period,
+                rsi_period=request.rsi_period,
+                coverage_warning=agg_response.coverage_warning,
+                gate_evaluations=tuple(evaluations),
+                gate_context_completeness=completeness,
             )
 
         assessment = RiskAssessment(

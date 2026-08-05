@@ -30,6 +30,28 @@ risk_engine:
     label_prefix: "regime"
 
   gates:
+    # What a gate that RAN but had no usable input (GateOutcome.UNEVALUABLE)
+    # means for the aggregate risk assessment. Orthogonal to each gate's own
+    # missing_data_action, which decides whether that one gate blocks alone.
+    #
+    #   surface — record the unknown, do not block. An unknown is not a reason
+    #             to reject, but it is never laundered into a pass: the gate
+    #             names appear in RiskAssessment.unevaluable_gates and in the
+    #             rationale. This is the pre-existing behaviour and the default.
+    #   block   — any unevaluable gate blocks the candidate. Currently this
+    #             would reject roughly half the IDX universe (fundamentals
+    #             coverage starts 2026-07-08); do not switch without review.
+    #
+    # Anything else fails closed at config resolve time.
+    #
+    # NOTE: `surface` leaves canonical output identical to before this key
+    # existed, so it is deliberately NOT part of the accumulation production
+    # policy snapshot identity. Switching to `block` changes what can produce
+    # ENTER/WATCH/AVOID and MUST add this policy to that snapshot first,
+    # otherwise two different cohorts would share one compatibility identity.
+    unevaluable_policy: surface
+    unevaluable_block_confidence: 0
+
     fundamental:
       enabled: true
       piotroski_min: 3          # F-score <= this → HIGH_RISK (FundamentalGate.distress_threshold)
