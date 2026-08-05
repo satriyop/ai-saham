@@ -15,6 +15,9 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from src.adapters.composition.producer_source_revision import (
+    resolve_producer_source_revision,
+)
 from src.adapters.composition.risk_engine_helper import create_configured_risk_engine
 from src.application.services.pre_open_observation_persister import (
     PreOpenObservationPersister,
@@ -271,6 +274,7 @@ def create_pre_open_cli_workflow(
             observations_repo,
             signal_config=signal_config,
             classification_config=signal_engine.signal_classification_config,
+            producer_source_revision=resolve_producer_source_revision(),
         ),
     )
 

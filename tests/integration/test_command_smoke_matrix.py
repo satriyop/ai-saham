@@ -223,6 +223,7 @@ def _retired_pre_open_file_sidecar_contract(temp_workspace, monkeypatch):
             "trade_setup": {"action": "ENTER"},
         },
         captured_at=datetime(2026, 6, 12, 8, 57, tzinfo=wib),
+        producer_source_revision="ai-saham@test",
     )
     assert learn.add_observation(obs)
     assert learn.add_track_snapshot(

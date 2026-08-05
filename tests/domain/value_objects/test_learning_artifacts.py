@@ -31,6 +31,7 @@ def _observation(*, captured_at: datetime = NOW) -> LearningObservation:
         window_id="BBCA:2026-07-27",
         decision_payload={"funnel": "PASS", "score": 72.0},
         captured_at=captured_at,
+        producer_source_revision="ai-saham@test",
     )
 
 
@@ -38,6 +39,27 @@ def test_observation_id_is_deterministic_and_excludes_captured_at() -> None:
     later = datetime(2026, 7, 27, 2, 0, tzinfo=timezone.utc)
 
     assert _observation().observation_id == _observation(captured_at=later).observation_id
+
+
+def test_producer_source_revision_is_provenance_beside_identity() -> None:
+    """ADR-068 §6: different builds keep the same observation_id and digest."""
+    base = _observation()
+    other_build = LearningObservation.create(
+        purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+        policy_contract="accumulation.policy.v1",
+        horizon_contract="accum_10d",
+        compatibility_id="compat-1",
+        cutoff_at=NOW,
+        universe_id="idx30",
+        window_id="BBCA:2026-07-27",
+        decision_payload={"funnel": "PASS", "score": 72.0},
+        captured_at=NOW,
+        producer_source_revision="ai-saham@other-build",
+    )
+    assert base.observation_id == other_build.observation_id
+    assert base.artifact_digest == other_build.artifact_digest
+    assert base.producer_source_revision != other_build.producer_source_revision
+    assert "producer_source_revision" in LearningObservation.DIGEST_EXCLUDED_FIELDS
 
 
 def test_identity_rejects_captured_at() -> None:

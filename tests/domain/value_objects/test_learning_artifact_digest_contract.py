@@ -60,6 +60,7 @@ def _observation() -> LearningObservation:
         window_id="BBCA:2026-07-27",
         decision_payload={"funnel": "PASS", "score": 72.0},
         captured_at=FROZEN_AT,
+        producer_source_revision="ai-saham@test",
     )
 
 
@@ -280,7 +281,7 @@ FROZEN_DIGEST_FIELDS = {
 # Operational fields each artifact keeps out of its digest. Only the label has
 # one: a cron re-run must not turn an unchanged outcome into a conflict.
 FROZEN_DIGEST_EXCLUSIONS = {
-    "observation": (LearningObservation, frozenset()),
+    "observation": (LearningObservation, frozenset({"producer_source_revision"})),
     "track": (LearningTrackSnapshot, frozenset()),
     "label": (LearningOutcomeLabel, frozenset({"labeled_at"})),
     "evaluation": (LearningEvaluation, frozenset()),

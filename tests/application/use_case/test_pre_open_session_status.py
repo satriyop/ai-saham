@@ -31,6 +31,7 @@ def _add_obs(repo, ticker="BBCA", *, compatibility_id="compat-a"):
         window_id=f"{ticker}:2026-06-18",
         decision_payload={"ticker": ticker, "screen_result": "pass"},
         captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
+        producer_source_revision="ai-saham@test",
     )
     assert repo.add_observation(obs)
     return obs

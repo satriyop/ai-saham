@@ -643,8 +643,13 @@ def validate_artifact_integrity(
 
 @dataclass(frozen=True)
 class LearningObservation:
-    # Nothing excluded: captured_at does participate in this artifact's digest.
-    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset()
+    # ADR-068 §6: producer_source_revision is provenance beside identity.
+    # It must not participate in observation_id or artifact_digest so a
+    # re-capture under a different build of the same measured behaviour is
+    # still the same immutable content. captured_at still participates in the
+    # digest (deliberate; see repository tests for the production first-write
+    # pre-existence guard that protects re-backfill).
+    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset({"producer_source_revision"})
 
     observation_id: str
     artifact_digest: str
@@ -659,6 +664,7 @@ class LearningObservation:
     window_id: str
     decision_payload: Mapping[str, Any]
     captured_at: datetime
+    producer_source_revision: str
 
     @classmethod
     def create(
@@ -673,6 +679,7 @@ class LearningObservation:
         window_id: str,
         decision_payload: Mapping[str, Any],
         captured_at: datetime,
+        producer_source_revision: str,
     ) -> LearningObservation:
         contract_id = _OBSERVATION_CONTRACT_BY_PURPOSE.get(purpose)
         if contract_id is None:
@@ -683,6 +690,7 @@ class LearningObservation:
             ("compatibility_id", compatibility_id),
             ("universe_id", universe_id),
             ("window_id", window_id),
+            ("producer_source_revision", producer_source_revision),
         ):
             _require_non_empty(name, value)
         identity = {
@@ -709,6 +717,7 @@ class LearningObservation:
             window_id=window_id,
             decision_payload=dict(decision_payload),
             captured_at=captured_at,
+            producer_source_revision=producer_source_revision.strip(),
         )
         return cls(
             **{

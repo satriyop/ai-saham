@@ -42,6 +42,7 @@ def _observation() -> LearningObservation:
         window_id="BBCA:2026-07-27",
         decision_payload={"funnel": "PASS"},
         captured_at=NOW,
+        producer_source_revision="ai-saham@test",
     )
 
 
@@ -119,20 +120,53 @@ def test_identical_insert_is_idempotent_and_conflict_fails(tmp_path: Path) -> No
         repository.add_observation(conflict)
 
 
+def test_observation_reuse_tolerates_different_producer_source_revision(
+    tmp_path: Path,
+) -> None:
+    """ADR-068 slice 5: producer_source_revision is provenance in artifact_json.
+
+    Same identity + same digest under a different build reuses the first row
+    (artifact_json is already in _OBS_PROVENANCE_COLUMNS).
+    """
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    first = _observation()
+    second = LearningObservation.create(
+        purpose=first.purpose,
+        policy_contract=first.policy_contract,
+        horizon_contract=first.horizon_contract,
+        compatibility_id=first.compatibility_id,
+        cutoff_at=first.cutoff_at,
+        universe_id=first.universe_id,
+        window_id=first.window_id,
+        decision_payload=first.decision_payload,
+        captured_at=first.captured_at,
+        producer_source_revision="ai-saham@a-different-build",
+    )
+    assert first.observation_id == second.observation_id
+    assert first.artifact_digest == second.artifact_digest
+    assert first.producer_source_revision != second.producer_source_revision
+
+    assert repository.add_observation(first) is True
+    assert repository.add_observation(second) is False
+    stored = repository.get_observation(first.observation_id)
+    assert stored is not None
+    assert stored.producer_source_revision == first.producer_source_revision
+
+
 def test_observation_digest_still_varies_with_captured_at(tmp_path: Path) -> None:
     """Pins current, deliberately-unchanged behaviour: unlike labels and policy
-    snapshots, LearningObservation.DIGEST_EXCLUDED_FIELDS is empty, so
-    captured_at participates in artifact_digest. A second add_observation for
-    the same content at a different wall-clock time is therefore a genuine
-    digest conflict, not the shadow-column mismatch this module's other new
-    tests guard against. Production safety for the real capture path comes
-    from AccumulationCandidateObservationPersister's own pre-existence check
-    (get_observation(...) is not None -> skip) before it ever calls
-    add_observation twice for one observation_id — not from this repository
-    method being safe to call twice with a drifting captured_at. If a future
-    change adds captured_at to DIGEST_EXCLUDED_FIELDS, this test's second
-    assertion will start failing and should be updated deliberately, not
-    silently.
+    snapshots, LearningObservation still digests captured_at (only
+    producer_source_revision is excluded per ADR-068 §6). A second
+    add_observation for the same content at a different wall-clock time is
+    therefore a genuine digest conflict, not the shadow-column mismatch this
+    module's other new tests guard against. Production safety for the real
+    capture path comes from AccumulationCandidateObservationPersister's own
+    pre-existence check (get_observation(...) is not None -> skip) before it
+    ever calls add_observation twice for one observation_id — not from this
+    repository method being safe to call twice with a drifting captured_at.
+    If a future change adds captured_at to DIGEST_EXCLUDED_FIELDS, this test's
+    second assertion will start failing and should be updated deliberately,
+    not silently.
     """
     repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
     first = _observation()
@@ -146,6 +180,7 @@ def test_observation_digest_still_varies_with_captured_at(tmp_path: Path) -> Non
         window_id=first.window_id,
         decision_payload=first.decision_payload,
         captured_at=NOW.replace(hour=2),
+        producer_source_revision="ai-saham@test",
     )
     # observation_id is identity-derived (purpose/contracts/compatibility_id/
     # cutoff_at/universe_id/window_id) and does not include captured_at.

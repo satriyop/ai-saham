@@ -253,6 +253,7 @@ def _observation(
             window_id=f"{ticker_u}:2026-07-{day:02d}",
             decision_payload={"ticker": ticker_u, "session_date": sd},
             captured_at=at,
+            producer_source_revision="ai-saham@test",
         )
         # Adversarial: re-purpose without changing contract.
         return replace(obs, purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY)
@@ -277,6 +278,7 @@ def _observation(
             decision_at=decision_at,
         ),
         captured_at=at,
+        producer_source_revision="ai-saham@test",
     )
 
 
@@ -760,6 +762,7 @@ def test_invented_universe_labels_cannot_be_challenge_input_ready() -> None:
                 window_id=f"{ticker_u}:{sd}",
                 decision_payload=_payload(session_date=sd, ticker=ticker_u, action="WATCH"),
                 captured_at=at,
+                producer_source_revision="ai-saham@test",
             )
         )
     # Prove inventable labels are self-consistent with observation identity.
@@ -801,6 +804,7 @@ def test_free_form_lq45_pit_label_is_not_population_authority() -> None:
         window_id="BBCA:2026-07-01",
         decision_payload=_payload(session_date="2026-07-01", ticker="BBCA"),
         captured_at=at,
+        producer_source_revision="ai-saham@test",
     )
     o2 = LearningObservation.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
@@ -812,6 +816,7 @@ def test_free_form_lq45_pit_label_is_not_population_authority() -> None:
         window_id="BBRI:2026-07-02",
         decision_payload=_payload(session_date="2026-07-02", ticker="BBRI"),
         captured_at=at2,
+        producer_source_revision="ai-saham@test",
     )
     labels = [_label(o1)]
     cohort = project_cohort_readiness(
@@ -1128,6 +1133,7 @@ def test_wrong_policy_contract_blocks_ready() -> None:
         window_id=o1.window_id,
         decision_payload=dict(o1.decision_payload),
         captured_at=o1.captured_at,
+        producer_source_revision="ai-saham@test",
     )
     bad2 = LearningObservation.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
@@ -1139,6 +1145,7 @@ def test_wrong_policy_contract_blocks_ready() -> None:
         window_id=o2.window_id,
         decision_payload=dict(o2.decision_payload),
         captured_at=o2.captured_at,
+        producer_source_revision="ai-saham@test",
     )
     labels = [_label(bad1), _label(bad2)]
     cohort = project_cohort_readiness(
@@ -1163,6 +1170,7 @@ def test_wrong_horizon_contract_blocks_ready() -> None:
         window_id="BBCA:2026-07-01",
         decision_payload=_payload(session_date="2026-07-01"),
         captured_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+        producer_source_revision="ai-saham@test",
     )
     o2 = LearningObservation.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
@@ -1174,6 +1182,7 @@ def test_wrong_horizon_contract_blocks_ready() -> None:
         window_id="BBRI:2026-07-02",
         decision_payload=_payload(session_date="2026-07-02"),
         captured_at=datetime(2026, 7, 2, 12, 0, tzinfo=timezone.utc),
+        producer_source_revision="ai-saham@test",
     )
     labels = [_label(o1)]
     cohort = project_cohort_readiness(
@@ -1282,6 +1291,7 @@ def test_unbound_payload_session_dates_do_not_manufacture_depth() -> None:
         window_id="BBCA:2026-07-01",
         decision_payload=_payload(session_date="2026-07-02", ticker="BBCA"),
         captured_at=day1,
+        producer_source_revision="ai-saham@test",
     )
     o2 = LearningObservation.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
@@ -1293,6 +1303,7 @@ def test_unbound_payload_session_dates_do_not_manufacture_depth() -> None:
         window_id="BBRI:2026-07-01",
         decision_payload=_payload(session_date="2026-07-03", ticker="BBRI"),
         captured_at=day1,
+        producer_source_revision="ai-saham@test",
     )
     labels = [_label(o1), _label(o2)]
     cohort = project_cohort_readiness(
@@ -1321,6 +1332,7 @@ def test_ticker_window_mismatch_blocks_session() -> None:
         window_id="BBCA:2026-07-01",
         decision_payload=_payload(session_date="2026-07-01", ticker="BBRI"),
         captured_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+        producer_source_revision="ai-saham@test",
     )
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
@@ -1450,6 +1462,7 @@ def test_provenance_latest_session_mismatch_blocks() -> None:
         window_id="BBCA:2026-07-01",
         decision_payload=payload,
         captured_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+        producer_source_revision="ai-saham@test",
     )
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
@@ -1513,6 +1526,7 @@ def test_payload_schema_version_999_blocks_ready() -> None:
         window_id=o1.window_id,
         decision_payload=p1,
         captured_at=o1.captured_at,
+        producer_source_revision="ai-saham@test",
     )
     bad2 = LearningObservation.create(
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
@@ -1524,6 +1538,7 @@ def test_payload_schema_version_999_blocks_ready() -> None:
         window_id=o2.window_id,
         decision_payload=p2,
         captured_at=o2.captured_at,
+        producer_source_revision="ai-saham@test",
     )
     from src.domain.value_objects.learning_artifacts import validate_artifact_integrity
 
@@ -1553,6 +1568,7 @@ def test_wrong_workflow_blocks_ready() -> None:
             session_date="2026-07-01", ticker="BBCA", workflow="screen_accum"
         ),
         captured_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+        producer_source_revision="ai-saham@test",
     )
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
@@ -1588,6 +1604,7 @@ def test_invalid_observation_contributes_zero_labels_actions_and_readiness() -> 
             readiness="INCOMPLETE",
         ),
         captured_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+        producer_source_revision="ai-saham@test",
     )
     assert extract_action_from_payload(invalid.decision_payload) == "ENTER"
     assert extract_setup_readiness_status_from_payload(invalid.decision_payload) == "INCOMPLETE"
@@ -1649,6 +1666,7 @@ def test_wrong_horizon_primary_blocks_ready() -> None:
             session_date="2026-07-01", ticker="BBCA", horizon_primary="open_30m"
         ),
         captured_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+        producer_source_revision="ai-saham@test",
     )
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
@@ -1672,6 +1690,7 @@ def test_missing_provenance_blocks_ready() -> None:
         window_id="BBCA:2026-07-01",
         decision_payload=_payload(session_date="2026-07-01", ticker="BBCA", with_provenance=False),
         captured_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+        producer_source_revision="ai-saham@test",
     )
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
@@ -1699,6 +1718,7 @@ def test_missing_features_window_blocks_ready() -> None:
         window_id="BBCA:2026-07-01",
         decision_payload=payload,
         captured_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+        producer_source_revision="ai-saham@test",
     )
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
@@ -1765,6 +1785,7 @@ def test_tampered_membership_count_and_named_digest_block_ready() -> None:
             window_id=obs.window_id,
             decision_payload=payload,
             captured_at=obs.captured_at,
+            producer_source_revision="ai-saham@test",
         )
         validate_artifact_integrity(out, id_field="observation_id")
         return out
@@ -1891,6 +1912,7 @@ def test_incomplete_schema10_without_attested_tickers_is_non_current_not_redefin
             window_id=obs.window_id,
             decision_payload=payload,
             captured_at=obs.captured_at,
+            producer_source_revision="ai-saham@test",
         )
         return out
 
@@ -1966,6 +1988,7 @@ def test_captured_at_mismatch_blocks_ready() -> None:
         window_id="BBCA:2026-07-01",
         decision_payload=payload,
         captured_at=at,
+        producer_source_revision="ai-saham@test",
     )
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
@@ -1991,6 +2014,7 @@ def test_analysis_as_of_mismatch_blocks_ready() -> None:
         window_id="BBCA:2026-07-01",
         decision_payload=payload,
         captured_at=datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc),
+        producer_source_revision="ai-saham@test",
     )
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,

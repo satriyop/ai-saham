@@ -233,6 +233,9 @@ def _echo_producer_readiness_table(payload: dict) -> None:
             "setup_readiness_present",
             "setup_readiness_missing",
             "setup_readiness_state_distribution",
+            "producing_build_count",
+            "producing_builds",
+            "producing_builds_note",
         ):
             typer.echo(f"{key}: {cohort.get(key)}")
         typer.echo("")

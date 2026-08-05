@@ -241,6 +241,89 @@ class CohortProducerReadiness:
     setup_readiness_missing: int
     setup_readiness_state_distribution: Mapping[str, int]
     producer_status: ProducerReadinessStatus
+    # ADR-068 §6: multi-build cohorts are expected and reassuring under
+    # behavioural identity. Informational audit only — not a readiness block.
+    producing_build_count: int = 0
+    producing_builds: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CohortForkWarning:
+    """Informational warning before a capture that would start a new cohort.
+
+    Not a hard block. Names how many existing observations sit under other
+    compatibility_ids and would remain on superseded cohorts after the write.
+    """
+
+    next_compatibility_id: str
+    orphan_observation_count: int
+    existing_cohort_count: int
+    existing_compatibility_ids: tuple[str, ...]
+    message: str
+
+
+def observation_producer_build(observation: LearningObservation) -> str:
+    """Best-effort producing-build stamp for an observation.
+
+    Prefers the ADR-068 top-level provenance field; falls back to the Option A
+    population-binding stamp for pre-slice rows.
+    """
+    top = (observation.producer_source_revision or "").strip()
+    if top:
+        return top
+    payload = observation.decision_payload
+    if isinstance(payload, Mapping):
+        binding = payload.get("population_binding")
+        if isinstance(binding, Mapping):
+            nested = binding.get("producer_source_revision")
+            if isinstance(nested, str) and nested.strip():
+                return nested.strip()
+    return ""
+
+
+def collect_producing_builds(
+    observations: Sequence[LearningObservation],
+) -> tuple[int, tuple[str, ...]]:
+    """Distinct producing builds in a cohort (sorted for stable JSON)."""
+    builds = sorted({b for o in observations if (b := observation_producer_build(o))})
+    return len(builds), tuple(builds)
+
+
+def assess_cohort_fork_warning(
+    *,
+    next_compatibility_id: str,
+    observation_counts_by_compat: Mapping[str, int],
+) -> CohortForkWarning | None:
+    """Return an informational fork warning when capture would leave orphans.
+
+    Empty corpus or writing into the only existing cohort → no warning.
+    """
+    next_id = (next_compatibility_id or "").strip()
+    if not next_id:
+        raise ValueError("next_compatibility_id must be non-empty")
+    existing = {
+        cid: count for cid, count in observation_counts_by_compat.items() if cid and count > 0
+    }
+    if not existing:
+        return None
+    if set(existing) == {next_id}:
+        return None
+    orphan_count = sum(count for cid, count in existing.items() if cid != next_id)
+    if orphan_count <= 0:
+        return None
+    other_ids = tuple(sorted(cid for cid in existing if cid != next_id))
+    message = (
+        f"cohort fork: capture under {next_id} leaves "
+        f"{orphan_count} observation(s) on {len(other_ids)} prior cohort(s) "
+        f"({', '.join(other_ids)}). Informational only — not a hard block."
+    )
+    return CohortForkWarning(
+        next_compatibility_id=next_id,
+        orphan_observation_count=orphan_count,
+        existing_cohort_count=len(existing),
+        existing_compatibility_ids=tuple(sorted(existing)),
+        message=message,
+    )
 
 
 def classify_producer_status(
@@ -1620,6 +1703,7 @@ def project_cohort_readiness(
         session_count=session_count,
         available_h10_labels=0 if blocked else h10.available,
     )
+    build_count, builds = collect_producing_builds(observations)
     return CohortProducerReadiness(
         compatibility_id=compatibility_id,
         observation_contract=observation_contract,
@@ -1636,6 +1720,8 @@ def project_cohort_readiness(
         setup_readiness_missing=readiness_missing,
         setup_readiness_state_distribution=dict(sorted(readiness_states.items())),
         producer_status=status,
+        producing_build_count=build_count,
+        producing_builds=builds,
     )
 
 
@@ -1682,4 +1768,11 @@ def cohort_to_dict(cohort: CohortProducerReadiness) -> dict[str, Any]:
         "setup_readiness_missing": cohort.setup_readiness_missing,
         "setup_readiness_state_distribution": dict(cohort.setup_readiness_state_distribution),
         "producer_status": cohort.producer_status.value,
+        "producing_build_count": cohort.producing_build_count,
+        "producing_builds": list(cohort.producing_builds),
+        "producing_builds_note": (
+            f"this cohort was produced by {cohort.producing_build_count} build(s)"
+            if cohort.producing_build_count
+            else "no producing-build provenance recorded on observations"
+        ),
     }

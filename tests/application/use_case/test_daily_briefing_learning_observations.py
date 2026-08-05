@@ -34,6 +34,7 @@ def test_daily_briefing_reads_pre_open_snapshot_from_learning_repository(
             "trade_setup": {"action": "ENTER"},
         },
         captured_at=datetime(2026, 6, 19, 8, 57, tzinfo=IDX_TIMEZONE),
+        producer_source_revision="ai-saham@test",
     )
     learning_repository = MagicMock()
     learning_repository.list_observations.return_value = [observation]
@@ -105,6 +106,7 @@ def test_daily_briefing_enriches_pre_open_candidate_and_computes_delta_iev(
             },
         },
         captured_at=datetime(2026, 6, 19, 8, 57, tzinfo=IDX_TIMEZONE),
+        producer_source_revision="ai-saham@test",
     )
     learning_repository = MagicMock()
     learning_repository.list_observations.return_value = [observation]
@@ -170,6 +172,7 @@ def test_daily_briefing_delta_iev_none_when_no_baseline(monkeypatch) -> None:
             "trade_setup": {"action": "WATCH"},
         },
         captured_at=datetime(2026, 6, 19, 8, 57, tzinfo=IDX_TIMEZONE),
+        producer_source_revision="ai-saham@test",
     )
     learning_repository = MagicMock()
     learning_repository.list_observations.return_value = [observation]
@@ -215,6 +218,7 @@ def _preopen_observation(day, iep=172):
             "trade_setup": {"action": "WATCH"},
         },
         captured_at=datetime(day.year, day.month, day.day, 8, 57, tzinfo=IDX_TIMEZONE),
+        producer_source_revision="ai-saham@test",
     )
 
 

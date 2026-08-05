@@ -28,6 +28,7 @@ def _obs(payload: dict) -> LearningObservation:
         window_id="BBCA:2026-06-18",
         decision_payload=payload,
         captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
+        producer_source_revision="ai-saham@test",
     )
 
 

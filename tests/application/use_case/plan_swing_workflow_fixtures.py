@@ -70,6 +70,7 @@ class FakeLearningObservationsRepository:
                             "setup_phase_current": phase,
                         },
                     },
+                    producer_source_revision="ai-saham@test",
                 )
             )
         return rows

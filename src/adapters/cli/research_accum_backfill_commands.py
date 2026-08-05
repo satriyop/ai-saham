@@ -20,6 +20,9 @@ from src.adapters.composition.producer_source_revision import (
 from src.adapters.composition.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow_bundle,
 )
+from src.application.services.accumulation_producer_readiness import (
+    assess_cohort_fork_warning,
+)
 from src.application.services.behavioral_cohort_identity import (
     AccumulationCohortIdentity,
     resolve_accumulation_cohort_identity,
@@ -52,7 +55,10 @@ from src.application.use_case.ensure_accumulation_policy_snapshots_use_case impo
     EnsureAccumulationPolicySnapshotsRequest,
     EnsureAccumulationPolicySnapshotsUseCase,
 )
-from src.domain.value_objects.learning_artifacts import LearningContractError
+from src.domain.value_objects.learning_artifacts import (
+    AssessmentPurpose,
+    LearningContractError,
+)
 from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY_CONTRACT,
@@ -68,6 +74,7 @@ from src.infrastructure.persistence.ihsg_trading_session_calendar_provider impor
     IHSGTradingSessionCalendarProvider,
 )
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+    LearningArtifactReadIntegrityError,
     SQLiteLearningArtifactRepository,
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
@@ -205,6 +212,31 @@ def run_signal_observation_corpus_write(
     _echo_cohort_identity(cohort_identity)
 
     learning_repo = SQLiteLearningArtifactRepository(resolved_db)
+    # ADR-068 slice 5: informational fork warning only (not a hard block).
+    # Cron re-enable is owned by a later task; capture still proceeds.
+    try:
+        existing_obs = learning_repo.list_observations(AssessmentPurpose.ACCUMULATION_DISCOVERY)
+        counts: dict[str, int] = {}
+        for obs in existing_obs:
+            key = (obs.compatibility_id or "").strip()
+            if key:
+                counts[key] = counts.get(key, 0) + 1
+        warning = assess_cohort_fork_warning(
+            next_compatibility_id=str(cohort_identity.semantic_compatibility_id),
+            observation_counts_by_compat=counts,
+        )
+        if warning is not None:
+            typer.echo(f"[cohort-fork] {warning.message}", err=True)
+            typer.echo(
+                f"[cohort-fork] orphan_observation_count={warning.orphan_observation_count} "
+                f"existing_cohort_count={warning.existing_cohort_count}",
+                err=True,
+            )
+    except (LearningContractError, LearningArtifactReadIntegrityError, OSError) as exc:
+        typer.echo(
+            f"[cohort-fork] warning unavailable ({type(exc).__name__}: {exc})",
+            err=True,
+        )
     try:
         EnsureAccumulationPolicySnapshotsUseCase(learning_repo).execute(
             EnsureAccumulationPolicySnapshotsRequest(

@@ -250,6 +250,10 @@ class AccumulationCandidateObservationPersister:
                 window_id=window_id,
                 decision_payload=decision_payload,
                 captured_at=captured_at,
+                # ADR-068 §6: provenance beside identity. Same value as the
+                # population-binding stamp so one build produces both layers;
+                # excluded from observation_id and artifact_digest.
+                producer_source_revision=binding_obj.producer_source_revision,
             )
             if self._candidate_observations_repo.add_observation(observation):
                 saved += 1

@@ -81,6 +81,7 @@ def _add_observation(
         window_id=f"{ticker}:{SESSION.isoformat()}",
         decision_payload=_plan_payload(ticker, market_regime=market_regime),
         captured_at=datetime(2026, 6, 18, 8, 57, tzinfo=WIB),
+        producer_source_revision="ai-saham@test",
     )
     assert repo.add_observation(obs)
     return obs

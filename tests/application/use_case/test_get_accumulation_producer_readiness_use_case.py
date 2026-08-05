@@ -163,6 +163,7 @@ def _observation(
             captured_at=at,
         ),
         captured_at=at,
+        producer_source_revision="ai-saham@test",
     )
 
 
@@ -531,6 +532,7 @@ def test_invalid_pre_open_label_does_not_block_accum_status(tmp_path) -> None:
         window_id="BBCA:2026-07-05",
         decision_payload={"ticker": "BBCA", "session_date": "2026-07-05"},
         captured_at=pre_at,
+        producer_source_revision="ai-saham@test",
     )
     repo.add_observation(pre_obs)
     pre_label = LearningOutcomeLabel.create(

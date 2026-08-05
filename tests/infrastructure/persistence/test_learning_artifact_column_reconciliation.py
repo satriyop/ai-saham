@@ -39,6 +39,7 @@ def _observation(*, compatibility_id: str = "compat-1") -> LearningObservation:
         window_id="BBCA:2026-07-27",
         decision_payload={"funnel": "PASS"},
         captured_at=NOW,
+        producer_source_revision="ai-saham@test",
     )
 
 
@@ -371,6 +372,7 @@ def test_list_observations_compat_filter_does_not_cross_cohorts(
         window_id="BBRI:2026-07-27",
         decision_payload={"funnel": "PASS"},
         captured_at=NOW,
+        producer_source_revision="ai-saham@test",
     )
     write.add_observation(a)
     write.add_observation(b)

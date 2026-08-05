@@ -495,10 +495,12 @@ _OBS_SELECT = ", ".join(_OBS_COLUMNS)
 # Provenance, not content: a re-capture of an already-persisted, content-
 # identical (matching artifact_digest) observation legitimately has a
 # different capture wall-clock time. artifact_json is excluded too because
-# it serializes captured_at. If a future producer-provenance field (e.g.
-# producer_source_revision, ADR-068 slice 5) is added to _OBS_COLUMNS, add it
-# here too — it is provenance beside identity, by the same ADR-068 §6 rule
-# already applied to policy snapshots.
+# it serializes captured_at and ADR-068 producer_source_revision (provenance
+# beside identity, stored on the LearningObservation dataclass and excluded
+# from artifact_digest; no SQL column / no migration). If a future
+# producer-provenance field is added as its own shadow column in
+# _OBS_COLUMNS, add that column name here too — same rule as policy
+# snapshots' source_revision.
 _OBS_PROVENANCE_COLUMNS: frozenset[str] = frozenset({"captured_at", "artifact_json"})
 
 _LABEL_COLUMNS: tuple[str, ...] = (
@@ -712,6 +714,22 @@ def _load_json(row: sqlite3.Row, loader: Callable[[dict[str, Any]], Artifact]) -
 
 
 def _observation_from_dict(data: dict[str, Any]) -> LearningObservation:
+    # ADR-068 slice 5: producer_source_revision is required on new writes.
+    # Pre-slice rows lack the top-level field; recover from population_binding
+    # when present, else empty (readiness treats empty as unknown build).
+    revision = data.get("producer_source_revision")
+    if not isinstance(revision, str) or not revision.strip():
+        payload = data.get("decision_payload")
+        if isinstance(payload, Mapping):
+            binding = payload.get("population_binding")
+            if isinstance(binding, Mapping):
+                nested = binding.get("producer_source_revision")
+                if isinstance(nested, str) and nested.strip():
+                    revision = nested.strip()
+        if not isinstance(revision, str) or not revision.strip():
+            revision = ""
+    else:
+        revision = revision.strip()
     return LearningObservation(
         **{
             **data,
@@ -719,6 +737,7 @@ def _observation_from_dict(data: dict[str, Any]) -> LearningObservation:
             "purpose": AssessmentPurpose(data["purpose"]),
             "cutoff_at": datetime.fromisoformat(data["cutoff_at"]),
             "captured_at": datetime.fromisoformat(data["captured_at"]),
+            "producer_source_revision": revision,
         }
     )
 

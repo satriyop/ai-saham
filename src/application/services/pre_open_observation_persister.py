@@ -65,10 +65,16 @@ class PreOpenObservationPersister:
         repository: "LearningObservationRepository | None",
         signal_config: PreOpenDirectionalBaselineConfig | None = None,
         classification_config: SignalClassificationConfig | None = None,
+        *,
+        producer_source_revision: str = "ai-saham@pre-open",
     ) -> None:
         self._repo = repository
         self._signal_config = signal_config or PreOpenDirectionalBaselineConfig()
         self._classification_config = classification_config or SignalClassificationConfig()
+        revision = str(producer_source_revision or "").strip()
+        if not revision:
+            raise ValueError("producer_source_revision must be non-empty")
+        self._producer_source_revision = revision
 
     def persist(
         self,
@@ -171,6 +177,7 @@ class PreOpenObservationPersister:
                 window_id=f"{ticker}:{response.result.screened_date.isoformat()}",
                 decision_payload=payload,
                 captured_at=now,
+                producer_source_revision=self._producer_source_revision,
             )
 
         for candidate in candidates:

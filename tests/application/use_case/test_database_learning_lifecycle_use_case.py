@@ -71,6 +71,7 @@ def _observation(*, day: int, compatibility_id: str = "compat-1") -> LearningObs
         window_id=f"BBCA:2026-07-{day:02d}",
         decision_payload={"ticker": "BBCA", "screen_result": "PASS"},
         captured_at=at,
+        producer_source_revision="ai-saham@test",
     )
 
 
@@ -427,6 +428,7 @@ def _accum_observation(
             "screen_result": "pass",
         },
         captured_at=at,
+        producer_source_revision="ai-saham@test",
     )
 
 
@@ -638,6 +640,7 @@ def test_accumulation_price_path_ignores_legacy_entry_price_alias(
                 "screen_result": "pass",
             },
             captured_at=at,
+            producer_source_revision="ai-saham@test",
         )
     )
 

@@ -54,6 +54,7 @@ def _obs(repository, ticker="BBCA"):
         window_id=f"{ticker}:2026-07-27",
         decision_payload={"ticker": ticker},
         captured_at=at,
+        producer_source_revision="ai-saham@test",
     )
     repository.add_observation(observation)
     return observation

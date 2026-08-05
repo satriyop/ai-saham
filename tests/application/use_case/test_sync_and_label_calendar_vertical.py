@@ -162,6 +162,7 @@ def _observation(*, day: int, ticker: str = "BBCA") -> LearningObservation:
             "population_binding": binding.to_dict(),
         },
         captured_at=at,
+        producer_source_revision="ai-saham@test",
     )
 
 

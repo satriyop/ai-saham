@@ -39,6 +39,7 @@ def _seed_legacy_label(db: Path) -> LearningOutcomeLabel:
         window_id="PADI:2026-07-29",
         decision_payload={"ticker": "PADI"},
         captured_at=NOW,
+        producer_source_revision="ai-saham@test",
     )
     assert repo.add_observation(obs) is True
     modern = LearningOutcomeLabel.create(
