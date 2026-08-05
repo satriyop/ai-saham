@@ -18,9 +18,11 @@ from src.application.services.accumulation_production_policy_descriptors import 
 from src.application.services.accumulation_screen_hard_filter_policy import (
     AccumulationScreenHardFilterPolicy,
 )
+from src.application.services.behavioral_cohort_identity import (
+    resolve_accumulation_cohort_identity_from_payloads,
+)
 from src.application.services.lean_observation_identity import (
     LeanObservationIdentity,
-    resolve_lean_semantic_compatibility_id,
 )
 from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
@@ -34,7 +36,6 @@ from src.domain.value_objects.learning_artifacts import (
     LearningContractError,
     LearningContractId,
     ProductionPolicySnapshot,
-    material_config_hash_from_canonical,
 )
 from src.domain.value_objects.signal_observation_contracts import (
     ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
@@ -43,8 +44,6 @@ from src.domain.value_objects.signal_observation_contracts import (
 
 @dataclass(frozen=True)
 class EnsureAccumulationPolicySnapshotsRequest:
-    resolved_config_canonical: str
-    verified_config_canonical: str
     observation_identity: LeanObservationIdentity
     accum_score_policy: AccumScorePolicy
     signal_engine_config: SignalEngineConfig
@@ -67,10 +66,17 @@ class EnsureAccumulationPolicySnapshotsResponse:
 class EnsureAccumulationPolicySnapshotsUseCase:
     """Materialize the closed v2 set of production policy snapshots for a cohort.
 
-    Must run before any accumulation observation write. Recomputes lean
-    compatibility from the supplied config bytes and fails closed on mismatch
-    or under-forked same-key digest conflict. Writes only
-    ``production_policy_snapshot.v2`` (seven rows). No dual-write of v1.
+    Must run before any accumulation observation write. Recomputes the ADR-068
+    behavioural cohort identity from the payloads it is about to write and fails
+    closed on mismatch with the identity the caller already stamped on its
+    observations. Writes only ``production_policy_snapshot.v2`` (seven rows). No
+    dual-write of v1.
+
+    ADR-068 removed the config-byte double-read this use case used to perform.
+    The guarantee it bought is now structural rather than checked: identity is
+    derived from the same resolved typed policy objects the engines received and
+    the snapshot rows serialize, so a config file edited mid-run cannot produce
+    an identity that disagrees with the policies actually used.
     """
 
     def __init__(self, repository: LearningPolicySnapshotRepository) -> None:
@@ -79,11 +85,6 @@ class EnsureAccumulationPolicySnapshotsUseCase:
     def execute(
         self, request: EnsureAccumulationPolicySnapshotsRequest
     ) -> EnsureAccumulationPolicySnapshotsResponse:
-        if request.resolved_config_canonical != request.verified_config_canonical:
-            raise LearningContractError(
-                "material configuration changed while production policies were "
-                "being resolved; retry capture/backfill"
-            )
         if (
             request.observation_identity.observation_contract
             != ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT
@@ -94,16 +95,6 @@ class EnsureAccumulationPolicySnapshotsUseCase:
                 f"{request.observation_identity.observation_contract!r}"
             )
 
-        recomputed = resolve_lean_semantic_compatibility_id(request.resolved_config_canonical)
-        supplied = request.observation_identity.semantic_compatibility_id
-        if str(recomputed) != str(supplied):
-            raise LearningContractError(
-                "lean compatibility_id mismatch: recomputed "
-                f"{recomputed!s} != supplied {supplied!s}"
-            )
-
-        compatibility_id = str(supplied)
-        material_hash = material_config_hash_from_canonical(request.resolved_config_canonical)
         payloads = build_all_accumulation_policy_payloads(
             accum_score_policy=request.accum_score_policy,
             signal_engine_config=request.signal_engine_config,
@@ -115,6 +106,22 @@ class EnsureAccumulationPolicySnapshotsUseCase:
             raise LearningContractError(
                 "payload builder must emit exactly the closed v2 policy set"
             )
+
+        identity = resolve_accumulation_cohort_identity_from_payloads(
+            policy_snapshot_payloads=payloads
+        )
+        supplied = request.observation_identity.semantic_compatibility_id
+        if str(identity.semantic_compatibility_id) != str(supplied):
+            raise LearningContractError(
+                "behavioural compatibility_id mismatch: recomputed "
+                f"{identity.semantic_compatibility_id!s} != supplied {supplied!s}"
+            )
+
+        compatibility_id = str(supplied)
+        # Hash of the resolved material policy set, not of raw config bytes.
+        # Same fold that feeds the declared-policy axis of the cohort id, so the
+        # row column and the cohort can never describe different policy.
+        material_hash = "sha256:" + identity.policy_snapshot_payload_digest
 
         if not request.source_revision.strip():
             raise LearningContractError("source_revision must be non-empty producer provenance")

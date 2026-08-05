@@ -19,9 +19,6 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
 )
-from src.application.services.accumulation_observation_fingerprint import (
-    compute_accumulation_config_hash,
-)
 from src.domain.value_objects.signal_artifact_schema import (
     ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION,
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
@@ -44,9 +41,15 @@ def test_offline_golden_sha256_matches_sidecar() -> None:
     assert digest == recorded
 
 
-def test_schema_12_is_current_and_schema_11_is_historical_breadth_era() -> None:
-    assert ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION == 12
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 12
+def test_schema_13_is_current_and_the_fixture_records_the_adr062_era() -> None:
+    """The fixture is a frozen record of the ADR-062 era, not of "current".
+
+    It froze while schema 12 was current. ADR-068 moved current to 13 (the
+    write-only ``config_hash`` payload field was removed), so the fixture's own
+    version stays 12 and is asserted as history, byte-identical to its sidecar.
+    """
+    assert ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION == 13
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 13
     assert HISTORICAL_GROUP_BREADTH_ERA_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 11
     fixture = _load_fixture()
     assert fixture["candidate_observation_schema_version"] == 12
@@ -126,7 +129,14 @@ def test_offline_golden_signal_risk_setup_projection_frozen() -> None:
     assert setup == fixture["setup_projection"]
 
 
-def test_offline_golden_config_hash_and_retired_attrs() -> None:
+def test_offline_golden_retired_request_attrs_stay_absent() -> None:
+    """The retired-attribute half of the old config-hash gate.
+
+    The ``compute_accumulation_config_hash(request) == fixture["config_hash"]``
+    assertion is deliberately gone: ADR-068 deleted that function and the
+    write-only payload field it fed. The fixture keeps its recorded
+    ``config_hash`` as an immutable historical value, unread.
+    """
     fixture = _load_fixture()
     request = AccumulationScreenRequest(
         tickers=list(fixture["tickers_ordered"]),
@@ -134,7 +144,6 @@ def test_offline_golden_config_hash_and_retired_attrs() -> None:
         as_of_date=date.fromisoformat(fixture["as_of_date"]),
         min_accum_score=float(fixture["min_accum_score"]),
     )
-    assert compute_accumulation_config_hash(request) == fixture["config_hash"]
     for attr in fixture["forbidden_request_attrs"]:
         assert not hasattr(request, attr)
 

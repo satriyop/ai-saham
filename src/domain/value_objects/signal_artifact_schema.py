@@ -34,6 +34,12 @@ carries typed AccumPopulationBinding (population.accum.lq45_current_roster_
 pit_tradable.v1). Schema-9 rows without binding remain immutable historical
 corpus (LEGACY_RAW_ONLY); current authority requires schema 10 + complete
 binding. Lean compatibility ID forks with this payload schema bump.
+v12 -> v13 (ADR-068 behavioural cohort identity): the write-only `config_hash`
+field is removed from both the shared decision payload and every per-window
+engine pack. Nothing read it (its only reader was guarded on the dropped
+`candidate_observations` table), and cohort identity is now the fold of the
+behavioural probe digest, the ADR-059 snapshot payload digest, and this
+constant. Record shape changes, so schema-12 rows stay historical.
 Older schema (1-9) rows are outside the current canonical contract — they are
 never mutated, migrated, or reinterpreted here, and their raw payloads are not
 validated by the current-contract validator below.
@@ -50,11 +56,14 @@ from src.domain.value_objects.alpha_trigger_score import (
 )
 
 # Purpose-specific observation payload versions (do not silent-share bumps).
-# Accumulation current: ADR-062 retired group-breadth config/payload surfaces.
-# Schema 12 drops material sector_breadth config-hash inputs and candidate
-# payload keys; live scoring is unchanged (bonus was never production-wired).
-# New captures mint a new compatibility_id; schema-11 rows stay historical.
-ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 12
+# Accumulation current: ADR-068 behavioural cohort identity.
+# Schema 13 drops the write-only ``config_hash`` payload field (both the shared
+# decision-payload key and the per-window engine pack key). Its only reader was
+# an audit branch guarded on the ``candidate_observations`` table dropped
+# 2026-07-27, and the material identity it approximated is now measured by the
+# behavioural probe digest. Live scoring is unchanged; record shape is not, so
+# this is an OBSERVATION_SCHEMA bump and schema-12 rows stay historical.
+ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 13
 # Pre-open remains on the pre-attested-ticker shared era; accumulation-only
 # population fields must not fork pre-open compatibility by accident.
 PRE_OPEN_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 10

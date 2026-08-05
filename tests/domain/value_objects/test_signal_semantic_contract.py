@@ -13,10 +13,14 @@ from src.domain.value_objects.signal_artifact_schema import (
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY,
     ACCUMULATION_DISCOVERY_CONTRACT,
-    EVIDENCE_CONTRACT_VERSION,
-    SEMANTIC_ENGINE_VERSION,
     SemanticContractDefinition,
 )
+
+# ADR-068 deleted the bumpable EVIDENCE_CONTRACT_VERSION / SEMANTIC_ENGINE_VERSION
+# constants. SemanticContractDefinition is the parked full-identity apparatus and
+# still declares the fields; the value is now a frozen label, so tests state it
+# literally rather than importing a constant that no longer exists.
+_PARKED_CONTRACT_VERSION_LABEL = "1.5"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -60,8 +64,8 @@ _AUTHORITY_NAMES = ("company_quality_context", "setup_quality")
 def _valid(**overrides) -> SemanticContractDefinition:
     kwargs = dict(
         observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
-        evidence_contract_version=EVIDENCE_CONTRACT_VERSION,
-        semantic_engine_version=SEMANTIC_ENGINE_VERSION,
+        evidence_contract_version=_PARKED_CONTRACT_VERSION_LABEL,
+        semantic_engine_version=_PARKED_CONTRACT_VERSION_LABEL,
         observation_schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
         label_schema_version=SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
         execution_label_policy_versions=_VALID_POLICY_VERSIONS,
@@ -82,8 +86,8 @@ def _valid(**overrides) -> SemanticContractDefinition:
 def test_valid_contract():
     c = _valid()
     assert c.observation_contract == ACCUMULATION_DISCOVERY_CONTRACT
-    assert c.evidence_contract_version == EVIDENCE_CONTRACT_VERSION
-    assert c.semantic_engine_version == SEMANTIC_ENGINE_VERSION
+    assert c.evidence_contract_version == _PARKED_CONTRACT_VERSION_LABEL
+    assert c.semantic_engine_version == _PARKED_CONTRACT_VERSION_LABEL
 
 
 def test_known_instance_exists():

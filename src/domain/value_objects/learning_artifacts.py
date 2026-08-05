@@ -1270,20 +1270,14 @@ class LearningPolicyApplication:
         )
 
 
-def material_config_hash_from_canonical(resolved_config_canonical: str) -> str:
-    """Hash whole resolved-config bytes for the policy-snapshot row column.
-
-    Distinct from lean ``compatibility_id``: this hash covers config content
-    only (no schema / semantic-engine / evidence-contract version fold-in).
-    """
-
-    if not isinstance(resolved_config_canonical, str):
-        raise LearningContractError(
-            "resolved_config_canonical must be a str, got "
-            f"{type(resolved_config_canonical).__name__}"
-        )
-    digest = hashlib.sha256(resolved_config_canonical.encode("utf-8")).hexdigest()
-    return "sha256:" + digest
+# ADR-068 removed ``material_config_hash_from_canonical``. It hashed the raw
+# resolved-config bytes for the policy-snapshot ``material_config_hash`` column,
+# and was the domain half of the deleted config-byte identity mechanism. That
+# column now carries the ADR-059 seven-row payload fold, which is also the
+# declared-policy axis of the cohort id, so the two can never disagree — see
+# ``src/application/services/behavioral_cohort_identity.py``. Keeping this
+# function would leave a usable path back to config-byte identity, which
+# ADR-068 §7 forbids.
 
 
 def policy_snapshot_payload_digest(canonical_payload: Mapping[str, Any]) -> str:

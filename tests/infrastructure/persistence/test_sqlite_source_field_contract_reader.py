@@ -52,22 +52,6 @@ def _create_broker_daily_flow(conn: sqlite3.Connection) -> None:
         """)
 
 
-def _create_candidate_observations(conn: sqlite3.Connection) -> None:
-    conn.execute("""
-        CREATE TABLE candidate_observations (
-            ticker TEXT NOT NULL,
-            snapshot_date TEXT NOT NULL,
-            captured_at TEXT NOT NULL,
-            schema_version INTEGER NOT NULL,
-            payload_json TEXT NOT NULL,
-            workflow TEXT NOT NULL DEFAULT '',
-            window_sessions INTEGER NOT NULL DEFAULT 0,
-            data_as_of_date TEXT NOT NULL DEFAULT '',
-            config_hash TEXT NOT NULL DEFAULT ''
-        )
-        """)
-
-
 @pytest.fixture
 def catalog() -> StaticSourceFieldContractCatalog:
     return StaticSourceFieldContractCatalog()
@@ -178,35 +162,6 @@ def test_broker_daily_flow_reports_all_fields_for_tracked_broker_contract(tmp_pa
     contracts = catalog.contracts_for_table("broker_daily_flow")
     ticker_contract = next(c for c in contracts if c.field == "ticker")
     assert "tracked broker subset" in ticker_contract.aggregation
-
-
-def _retired_candidate_observations_empty_config_hash_emits_legacy_warning(tmp_path: Path, catalog):
-    db_path = tmp_path / "candidate_observations.db"
-    conn = sqlite3.connect(str(db_path))
-    _create_candidate_observations(conn)
-    conn.executemany(
-        "INSERT INTO candidate_observations "
-        "(ticker, snapshot_date, captured_at, schema_version, payload_json, workflow, "
-        "window_sessions, data_as_of_date, config_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-            ("BBCA", "2026-01-02", "2026-01-02T00:00:00", 1, "{}", "w", 5, "2026-01-02", ""),
-            ("BBCA", "2026-01-03", "2026-01-03T00:00:00", 1, "{}", "w", 5, "2026-01-03", "abc123"),
-        ],
-    )
-    conn.commit()
-    conn.close()
-
-    reader = SQLiteSourceFieldContractReader(db_path, catalog=catalog)
-    raw = reader.observe_table("candidate_observations")
-
-    assert raw.special_checks["legacy_config_hash_count"] == 1
-
-    use_case = AuditSourceFieldContractsUseCase(
-        reader=reader, catalog=catalog, clock=lambda: "2026-07-16T00:00:00+00:00"
-    )
-    response = use_case.execute()
-    legacy_findings = [f for f in response.findings if f.code == "LEGACY_NON_CANONICAL_IDENTITY"]
-    assert len(legacy_findings) == 1
 
 
 def test_missing_database_reports_not_exists(catalog):

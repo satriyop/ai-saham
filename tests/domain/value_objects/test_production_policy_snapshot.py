@@ -17,7 +17,6 @@ from src.domain.value_objects.learning_artifacts import (
     LearningContractId,
     ProductionPolicySnapshot,
     canonical_json,
-    material_config_hash_from_canonical,
     policy_snapshot_payload_digest,
     stable_learning_id,
     validate_policy_snapshot_integrity,
@@ -109,10 +108,18 @@ def test_payload_digest_is_sha256_of_canonical_json_bytes() -> None:
     assert len(snap.payload_digest) == 64
 
 
-def test_material_config_hash_prefixes_sha256() -> None:
-    assert material_config_hash_from_canonical("cfg-bytes") == (
-        "sha256:" + __import__("hashlib").sha256(b"cfg-bytes").hexdigest()
-    )
+def test_material_config_hash_still_requires_the_sha256_prefix_form() -> None:
+    """ADR-068 changed what fills this column, not what the column accepts.
+
+    ``material_config_hash_from_canonical`` (raw config bytes) is deleted; the
+    value now comes from the ADR-059 payload fold. The validation contract is
+    unchanged and still rejects a bare digest, so a caller cannot quietly write
+    an unprefixed hash while the format moves underneath it.
+    """
+    digest = __import__("hashlib").sha256(b"cfg-bytes").hexdigest()
+    assert _snapshot(material="sha256:" + digest).material_config_hash == ("sha256:" + digest)
+    with pytest.raises(LearningContractError, match="material_config_hash"):
+        _snapshot(material=digest)
 
 
 def test_payload_change_changes_digest_not_id_when_identity_same() -> None:

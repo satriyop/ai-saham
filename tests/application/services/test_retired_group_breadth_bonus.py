@@ -14,10 +14,6 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
 )
-from src.application.services.accumulation_observation_fingerprint import (
-    _CONFIG_HASH_FIELDS,
-    compute_accumulation_config_hash,
-)
 
 
 def _candidate(ticker: str = "BBCA") -> AccumulationCandidate:
@@ -61,27 +57,26 @@ def test_screen_request_has_no_sector_breadth_fields() -> None:
     assert not hasattr(request, "sector_breadth_min_tickers")
 
 
-def test_config_hash_fields_exclude_retired_breadth_knobs() -> None:
-    retired = {
-        "sector_breadth_enabled",
-        "sector_breadth_threshold",
-        "sector_breadth_bonus_pts",
-        "sector_breadth_min_tickers",
-    }
-    assert retired.isdisjoint(set(_CONFIG_HASH_FIELDS))
+def test_no_retired_breadth_knob_survives_on_the_screen_request() -> None:
+    """ADR-062 knobs are gone from the request surface entirely.
 
-
-def test_config_hash_is_stable_without_breadth_fields() -> None:
+    This used to also assert they were excluded from ``_CONFIG_HASH_FIELDS``.
+    ADR-068 deleted that tuple with the rest of the ``config_hash`` mechanism,
+    so absence from the request is now the whole guarantee.
+    """
     request = AccumulationScreenRequest(
         tickers=["BBCA", "BBRI"],
         window_days=7,
         as_of_date=date(2026, 6, 19),
         min_accum_score=0.0,
     )
-    h1 = compute_accumulation_config_hash(request)
-    h2 = compute_accumulation_config_hash(request)
-    assert h1 == h2
-    assert len(h1) == 16
+    for retired in (
+        "sector_breadth_enabled",
+        "sector_breadth_threshold",
+        "sector_breadth_bonus_pts",
+        "sector_breadth_min_tickers",
+    ):
+        assert not hasattr(request, retired)
 
 
 def test_production_output_equivalence_no_score_mutation_surface() -> None:

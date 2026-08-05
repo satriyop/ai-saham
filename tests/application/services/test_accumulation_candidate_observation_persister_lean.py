@@ -143,15 +143,13 @@ def test_missing_required_window_raises() -> None:
         )
 
 
-def test_persist_skips_existing_observation_without_rebuild(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Re-backfill must skip existing observation_id (no digest conflict)."""
-    monkeypatch.setattr(
-        "src.application.services.accumulation_candidate_observation_persister."
-        "compute_accumulation_config_hash",
-        lambda _req: "cfghash",
-    )
+def test_persist_skips_existing_observation_without_rebuild() -> None:
+    """Re-backfill must skip existing observation_id (no digest conflict).
+
+    ADR-068 removed the ``compute_accumulation_config_hash`` stub this test used
+    to pin: the persister no longer computes a config hash at all, so there is
+    nothing left to hold still.
+    """
     repo = _SpyRepo()
     session = _session()
     session.decision_at = datetime(2026, 7, 16, 16, 0, tzinfo=IDX_TIMEZONE)

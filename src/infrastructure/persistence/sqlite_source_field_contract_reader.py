@@ -148,10 +148,10 @@ class SQLiteSourceFieldContractReader:
     ) -> dict[str, int]:
         checks: dict[str, int] = {}
 
-        if table == "candidate_observations" and "config_hash" in columns:
-            checks["legacy_config_hash_count"] = conn.execute(
-                f"SELECT COUNT(*) FROM {table} WHERE config_hash = ''"
-            ).fetchone()[0]
+        # ADR-068 removed the ``legacy_config_hash_count`` check that sat here.
+        # It fed the dead ``candidate_observations`` audit branch (that table was
+        # dropped 2026-07-27) and read ``config_hash``, which is no longer
+        # written to any payload.
 
         if table == "signal_forward_labels":
             if {"outcome_label", "unavailable_reason"} <= columns:

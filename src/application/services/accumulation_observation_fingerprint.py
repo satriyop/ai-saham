@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Mapping
 
@@ -58,47 +56,12 @@ if TYPE_CHECKING:
     from src.domain.value_objects.ticker_profile_snapshot import TickerProfileSnapshot
 
 
-# Config-derived request fields that make a persisted observation belong to a
-# distinct scoring "version". Excludes tickers/window_days/as_of_date/regime/
-# market_context — those are run-context, not config, and already have their
-# own identity slots (or would make the hash churn daily without a real config
-# edit). If a config knob is added to AccumulationScreenRequest, add it here so
-# reruns after a config change get a distinct canonical observation.
-_CONFIG_HASH_FIELDS = (
-    "min_net_buy_days",
-    "min_accum_score",
-    "min_accum_score_enabled",
-    "min_signal_score",
-    "min_signal_score_enabled",
-    "rsi_period",
-    "sma_period",
-    "resistance_gate_enabled",
-    "resistance_headroom_min_pct",
-    "ex_date_warning_days",
-    "bci_cluster_min_count",
-    "bci_stable_min_count",
-    "min_market_cap_idr",
-    "min_piotroski",
-    "strategy_name",
-)
-
-
-def compute_accumulation_config_hash(
-    request: "accumulation_dto.AccumulationScreenRequest",
-) -> str:
-    """Fingerprint the scoring-config knobs carried on the request.
-
-    Deterministic across runs with the same config; changes whenever a
-    config-driven threshold changes, independent of which tickers/dates were
-    screened.
-    """
-    values = {name: getattr(request, name) for name in _CONFIG_HASH_FIELDS}
-    values["tier1_broker_codes"] = sorted(request.tier1_broker_codes)
-    # HIGH-2: schema version is part of canonical identity — a schema-3 write
-    # must never overwrite a schema-2 identity-equivalent row (or vice versa).
-    values["candidate_observation_schema_version"] = CANDIDATE_OBSERVATION_SCHEMA_VERSION
-    canonical = json.dumps(values, sort_keys=True, default=str, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+# ADR-068 removed ``_CONFIG_HASH_FIELDS`` / ``compute_accumulation_config_hash``
+# and the write-only ``config_hash`` payload field they populated. The request
+# knobs they fingerprinted are declared-policy material, now carried by the
+# ADR-059 snapshot payload digest, and scoring behaviour itself is measured by
+# the behavioural probe digest — see
+# ``src/application/services/behavioral_cohort_identity.py``.
 
 
 def build_candidate_observation_payload(

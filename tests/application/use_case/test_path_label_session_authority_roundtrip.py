@@ -36,6 +36,9 @@ from src.domain.value_objects.learning_artifacts import (
     recompute_path_label_fingerprint,
     stamp_universe_membership_id,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.domain.value_objects.trading_session_calendar_snapshot import (
     PATH_LABEL_METRICS_SCHEMA_VERSION,
     STOCKBIT_TRADING_SESSIONS_CONTRACT,
@@ -118,7 +121,7 @@ def _observation(*, day: int, ticker: str = "BBCA") -> LearningObservation:
         universe_id=UNIVERSE,
         window_id=f"{ticker}:{sd}",
         decision_payload={
-            "schema_version": 12,
+            "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
             "artifact_type": "accumulation_session_observation",
             "ticker": ticker,
             "session_date": sd,

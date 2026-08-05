@@ -60,9 +60,11 @@ filesystem access, and no iteration-order dependence. Every probe supplies its
 own ``as_of_date``, so the ``date.today()`` fallback inside
 ``AccumulationScreenUseCase.execute`` is never reachable.
 
-This module computes and returns a digest. Wiring it into cohort identity is
-deliberately **not** done here — see ADR-068 §7 trust ordering and slices 3-4
-of the implementation task.
+This module computes and returns a digest. Folding it into the authoritative
+``compatibility_id`` — together with the ADR-059 snapshot payload digest and the
+observation payload schema version — is owned by
+``src/application/services/behavioral_cohort_identity.py``, the single consumer
+of ``compute_behavioral_probe_digest`` in production code.
 """
 
 from __future__ import annotations
@@ -871,10 +873,11 @@ def compute_behavioral_probe_digest(
 ) -> str:
     """Digest ``{probe_id -> canonical output projection}`` (ADR-068 §2).
 
-    This is the behavioural identity **candidate**. It is intentionally not
-    consumed by ``resolve_lean_semantic_compatibility_id`` or any other
-    identity path yet: ADR-068 §7 requires the probe set to prove it detects
-    deliberate scoring changes before the digest may become authoritative.
+    This is the **code axis** of the authoritative cohort identity. It is
+    consumed by exactly one production path,
+    ``behavioral_cohort_identity.resolve_accumulation_cohort_identity_from_payloads``,
+    which folds it with the ADR-059 snapshot payload digest and the observation
+    payload schema version. There is no other identity path and no fallback.
     """
     return _sha256(
         {

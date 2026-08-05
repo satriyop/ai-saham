@@ -160,7 +160,16 @@ def test_database_missing_returns_fail_without_crashing():
     assert any(f.code == "DATABASE_MISSING" for f in response.findings)
 
 
-def test_legacy_candidate_rows_produce_warning_not_crash():
+def test_legacy_candidate_config_hash_check_is_retired():
+    """ADR-068 §7 deleted the dead ``candidate_observations`` audit branch.
+
+    The branch was already unreachable — ``candidate_observations`` was dropped
+    in the 2026-07-27 clean break — and ``config_hash``, the only field it
+    inspected, is no longer written to any payload. This test inverts with the
+    deletion rather than disappearing with it: feeding the audit the exact input
+    that used to trip the branch must now produce no finding at all, which is
+    what proves the branch is gone rather than merely unexercised.
+    """
     catalog = _FakeCatalog({"candidate_observations": ()})
     reader = _FakeReader(
         {
@@ -177,11 +186,8 @@ def test_legacy_candidate_rows_produce_warning_not_crash():
     use_case = AuditSourceFieldContractsUseCase(reader, catalog, clock=_fixed_clock)
     response = use_case.execute()
 
-    assert response.status == "WARN"
-    legacy_findings = [f for f in response.findings if f.code == "LEGACY_NON_CANONICAL_IDENTITY"]
-    assert len(legacy_findings) == 1
-    assert legacy_findings[0].severity == "WARN"
-    assert legacy_findings[0].table == "candidate_observations"
+    assert response.status == "PASS"
+    assert [f.code for f in response.findings if f.code == "LEGACY_NON_CANONICAL_IDENTITY"] == []
 
 
 def test_invalid_source_value_fails_field_and_table():

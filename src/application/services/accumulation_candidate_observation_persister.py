@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 from src.application.services.accumulation_observation_fingerprint import (
     build_candidate_observation_payload,
     build_session_observation_payload,
-    compute_accumulation_config_hash,
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import (
@@ -165,9 +164,7 @@ class AccumulationCandidateObservationPersister:
                 by_ticker.setdefault(ticker, {})[int(window)] = oc
 
         captured_at = datetime.now(IDX_TIMEZONE)
-        # Config hash from canonical window request (material config identity).
         canon_req = window_results[canonical_window][0]
-        config_hash = compute_accumulation_config_hash(canon_req)
         market_context = getattr(canon_req, "market_context", None)
         shared_mce = (
             market_context.to_dict()
@@ -206,7 +203,6 @@ class AccumulationCandidateObservationPersister:
                     request=req,
                     captured_at=captured_at,
                     effective_session=effective_session,
-                    config_hash=config_hash,
                 )
                 features_by_window[str(window)] = engine_pack
                 screen_results[str(window)] = str(oc.screen_result)
@@ -218,7 +214,6 @@ class AccumulationCandidateObservationPersister:
 
             shared: dict[str, Any] = {
                 "current_price": str(current_price),
-                "config_hash": config_hash,
                 "universe_membership_note": "see capture response survivorship fields",
                 "provenance": {
                     "decision_at": effective_session.decision_at.isoformat(),
@@ -268,7 +263,6 @@ class AccumulationCandidateObservationPersister:
         request: "accumulation_dto.AccumulationScreenRequest",
         captured_at: datetime,
         effective_session: "EffectiveMarketSession",
-        config_hash: str,
     ) -> dict[str, Any]:
         """Full per-window engine pack (candidate + signal + risk + contexts)."""
         c, screen_result, flow_ev = oc.candidate, oc.screen_result, oc.flow_evidence
@@ -321,7 +315,6 @@ class AccumulationCandidateObservationPersister:
             )
         pack["window_days"] = int(request.window_days)
         pack["data_as_of_date"] = data_as_of_date.isoformat()
-        pack["config_hash"] = config_hash
         pack["session_provenance"] = {
             "decision_at": effective_session.decision_at.isoformat(),
             "latest_completed_session": (

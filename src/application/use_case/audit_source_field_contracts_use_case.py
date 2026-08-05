@@ -412,26 +412,10 @@ class AuditSourceFieldContractsUseCase:
         findings: list[SourceContractFinding] = []
         checks = raw.special_checks
 
-        if table == "candidate_observations":
-            legacy = checks.get("legacy_config_hash_count", 0)
-            if legacy:
-                findings.append(
-                    SourceContractFinding(
-                        severity="WARN",
-                        code="LEGACY_NON_CANONICAL_IDENTITY",
-                        table=table,
-                        field="config_hash",
-                        message=(
-                            f"{legacy} row(s) have empty config_hash "
-                            "(legacy/non-canonical identity)."
-                        ),
-                        impact=(
-                            "These rows predate canonical identity and are not "
-                            "point-in-time reproducible; exclude from canonical "
-                            "replay/readiness."
-                        ),
-                    )
-                )
+        # ADR-068 removed the ``candidate_observations`` empty-``config_hash``
+        # branch that used to sit here. That table was dropped 2026-07-27, so
+        # the branch was unreachable, and ``config_hash`` is no longer written
+        # to any observation payload.
 
         malformed_identity = checks.get("malformed_artifact_identity_count", 0)
         if malformed_identity:

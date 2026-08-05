@@ -1,4 +1,4 @@
-"""Tests for EnsureAccumulationPolicySnapshotsUseCase (ADR-059 v2)."""
+"""Tests for EnsureAccumulationPolicySnapshotsUseCase (ADR-059 v2 + ADR-068)."""
 
 from __future__ import annotations
 
@@ -11,9 +11,11 @@ import pytest
 from src.application.services.accumulation_screen_hard_filter_policy import (
     AccumulationScreenHardFilterPolicy,
 )
+from src.application.services.behavioral_cohort_identity import (
+    resolve_accumulation_cohort_identity,
+)
 from src.application.services.lean_observation_identity import (
     LeanObservationIdentity,
-    resolve_lean_semantic_compatibility_id,
 )
 from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.ensure_accumulation_policy_snapshots_use_case import (
@@ -104,13 +106,6 @@ class _MemoryPolicySnapshotRepo:
         )
 
 
-def _identity(canonical: str) -> LeanObservationIdentity:
-    return LeanObservationIdentity(
-        observation_contract=ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
-        semantic_compatibility_id=resolve_lean_semantic_compatibility_id(canonical),
-    )
-
-
 def _default_hard_filters() -> AccumulationScreenHardFilterPolicy:
     return AccumulationScreenHardFilterPolicy(
         min_market_cap_idr=0,
@@ -124,22 +119,41 @@ def _default_hard_filters() -> AccumulationScreenHardFilterPolicy:
 
 def _request(
     *,
-    canonical: str = "resolved-config-v1",
     accum: AccumScorePolicy | None = None,
     signal: SignalEngineConfig | None = None,
     hard_filter: AccumulationScreenHardFilterPolicy | None = None,
     created_at: datetime = NOW,
     source_revision: str = SOURCE_REVISION,
 ) -> EnsureAccumulationPolicySnapshotsRequest:
+    """Build a request whose stamped identity matches its own typed policies.
+
+    This mirrors the production composition root: the adapter resolves the cohort
+    id from the *same* typed policy objects it hands the use case, so the
+    recompute inside ``execute`` agrees by construction. Tests that want a
+    mismatch construct one explicitly.
+    """
+    accum_score_policy = accum or AccumScorePolicy()
+    signal_engine_config = signal or SignalEngineConfig()
+    structural_gates = [FundamentalGate(), LiquidityGate()]
+    execution_gates = [BandarGate()]
+    hard_filter_policy = hard_filter or _default_hard_filters()
+    identity = resolve_accumulation_cohort_identity(
+        accum_score_policy=accum_score_policy,
+        signal_engine_config=signal_engine_config,
+        structural_gates=structural_gates,
+        execution_gates=execution_gates,
+        hard_filter_policy=hard_filter_policy,
+    )
     return EnsureAccumulationPolicySnapshotsRequest(
-        resolved_config_canonical=canonical,
-        verified_config_canonical=canonical,
-        observation_identity=_identity(canonical),
-        accum_score_policy=accum or AccumScorePolicy(),
-        signal_engine_config=signal or SignalEngineConfig(),
-        structural_gates=[FundamentalGate(), LiquidityGate()],
-        execution_gates=[BandarGate()],
-        hard_filter_policy=hard_filter or _default_hard_filters(),
+        observation_identity=LeanObservationIdentity(
+            observation_contract=ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
+            semantic_compatibility_id=identity.semantic_compatibility_id,
+        ),
+        accum_score_policy=accum_score_policy,
+        signal_engine_config=signal_engine_config,
+        structural_gates=structural_gates,
+        execution_gates=execution_gates,
+        hard_filter_policy=hard_filter_policy,
         created_at=created_at,
         source_revision=source_revision,
     )
@@ -197,11 +211,17 @@ def test_ensure_is_idempotent_for_same_cohort_content() -> None:
 
 
 def test_ensure_rejects_compatibility_mismatch() -> None:
+    """Fail-closed guard: a stamped id that does not match the policies written.
+
+    This is the surviving half of the old double-read defence. ADR-068 removed
+    the config-byte re-read because the guarantee became structural — identity is
+    derived from the very payloads these rows serialize — but the recompute-and-
+    compare stays, because the caller stamps the id on its observations
+    separately and a wiring bug there must not reach the corpus.
+    """
     repo = _MemoryPolicySnapshotRepo()
-    request = _request(canonical="cfg-a")
+    request = _request()
     bad = EnsureAccumulationPolicySnapshotsRequest(
-        resolved_config_canonical="cfg-a",
-        verified_config_canonical="cfg-a",
         observation_identity=LeanObservationIdentity(
             observation_contract=ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
             semantic_compatibility_id=SemanticCompatibilityId("sha256:" + ("00" * 32)),
@@ -224,37 +244,77 @@ def test_ensure_rejects_empty_source_revision() -> None:
         EnsureAccumulationPolicySnapshotsUseCase(repo).execute(_request(source_revision=""))
 
 
-def test_ensure_rejects_config_generation_change_before_any_write() -> None:
+def test_mismatched_identity_writes_nothing() -> None:
+    """Fail closed *before* any row lands, not part-way through the seven."""
     repo = _MemoryPolicySnapshotRepo()
-    request = replace(_request(canonical="cfg-a"), verified_config_canonical="cfg-b")
-
-    with pytest.raises(LearningContractError, match="configuration changed"):
-        EnsureAccumulationPolicySnapshotsUseCase(repo).execute(request)
+    request = _request()
+    bad = replace(
+        request,
+        observation_identity=LeanObservationIdentity(
+            observation_contract=ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,
+            semantic_compatibility_id=SemanticCompatibilityId("sha256:" + ("11" * 32)),
+        ),
+    )
+    with pytest.raises(LearningContractError, match="compatibility_id mismatch"):
+        EnsureAccumulationPolicySnapshotsUseCase(repo).execute(bad)
 
     assert repo.rows == {}
     assert repo.batch_calls == []
 
 
-def test_typed_material_change_same_cohort_fails_closed() -> None:
+def test_typed_material_change_forks_the_cohort_instead_of_colliding() -> None:
+    """ADR-068 turns the old under-forking failure into a clean fork.
+
+    Before ADR-068 a typed policy change with unchanged config bytes produced the
+    *same* ``compatibility_id``, so the same ``snapshot_id`` was recomputed with a
+    different payload digest and the immutable-artifact conflict was the only
+    thing standing between that change and a silently pooled cohort. The snapshot
+    payload digest is now identity-material, so the changed policy lands in its
+    own cohort and the conflict is structurally unreachable — the under-forking it
+    used to catch cannot occur.
+    """
     base = AccumScorePolicy()
     accum_mutated = replace(base, consistency=replace(base.consistency, weight=40.0))
 
     repo = _MemoryPolicySnapshotRepo()
     use_case = EnsureAccumulationPolicySnapshotsUseCase(repo)
-    use_case.execute(_request(canonical="cfg-1", accum=base))
-    with pytest.raises(LearningContractError, match="immutable artifact conflict"):
-        use_case.execute(_request(canonical="cfg-1", accum=accum_mutated))
-    # Atomic failure must not leave partial conflict-side rows; original set remains.
-    assert len(repo.rows) == 7
+    first = use_case.execute(_request(accum=base))
+    second = use_case.execute(_request(accum=accum_mutated))
+
+    assert first.compatibility_id != second.compatibility_id
+    assert set(first.snapshot_ids).isdisjoint(second.snapshot_ids)
+    assert len(repo.rows) == 14
 
 
-def test_resolved_config_change_forks_compatibility_id() -> None:
+def test_declared_policy_change_forks_compatibility_id() -> None:
+    """The declared-policy axis of ADR-068 §1, exercised through the use case."""
     repo = _MemoryPolicySnapshotRepo()
     use_case = EnsureAccumulationPolicySnapshotsUseCase(repo)
-    a = use_case.execute(_request(canonical="cfg-1"))
-    b = use_case.execute(_request(canonical="cfg-2"))
+    a = use_case.execute(_request())
+    b = use_case.execute(_request(hard_filter=replace(_default_hard_filters(), min_piotroski=7)))
     assert a.compatibility_id != b.compatibility_id
     assert len(repo.rows) == 14
+
+
+def test_material_config_hash_is_the_resolved_policy_fold() -> None:
+    """The row column and the cohort must never describe different policy.
+
+    ADR-068 repoints ``material_config_hash`` from a hash of raw config bytes to
+    the same seven-row payload fold that feeds the declared-policy axis of the
+    cohort id, so the two can no longer drift apart.
+    """
+    repo = _MemoryPolicySnapshotRepo()
+    identity = resolve_accumulation_cohort_identity(
+        accum_score_policy=AccumScorePolicy(),
+        signal_engine_config=SignalEngineConfig(),
+        structural_gates=[FundamentalGate(), LiquidityGate()],
+        execution_gates=[BandarGate()],
+        hard_filter_policy=_default_hard_filters(),
+    )
+    EnsureAccumulationPolicySnapshotsUseCase(repo).execute(_request())
+
+    expected = "sha256:" + identity.policy_snapshot_payload_digest
+    assert {r.material_config_hash for r in repo.rows.values()} == {expected}
 
 
 def test_created_at_change_does_not_affect_digest() -> None:

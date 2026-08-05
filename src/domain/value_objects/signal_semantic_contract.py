@@ -22,13 +22,16 @@ _LOWERCASE_SNAKE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 ACCUMULATION_DISCOVERY_CONTRACT = ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT
 
-EVIDENCE_CONTRACT_VERSION = "1.5"
-# 1.5: risk-path PIT cutoff fix — as_of_date now bounds indicator aggregation and
-# LiquidityGate candle enrichment, so historical risk gate verdicts change
-# (deterministic decision behavior). SEMANTIC_ENGINE only; EVIDENCE_CONTRACT
-# unchanged (no evidence meaning/authority/derivation change). See
-# tasks/backlog/fix_risk_pit_cutoff_lookahead.md.
-SEMANTIC_ENGINE_VERSION = "1.5"
+# Frozen label for the parked full-identity apparatus below.
+#
+# ADR-068 deleted the bumpable engine/evidence version constants that used to
+# live here. They were identity proxies a human had to remember to change, and
+# accumulation cohort identity is now *measured* instead — see
+# ``src/application/services/behavioral_cohort_identity.py``. Nothing bumps this
+# label: it records the last declared version of ``SemanticContractDefinition``,
+# whose registry (``signal_semantic_contract_registry``) has no production
+# consumer, and it is not accumulation cohort identity material.
+_PARKED_CONTRACT_VERSION_LABEL = "1.5"
 
 _EXECUTION_LABEL_POLICY_VERSIONS: tuple[tuple[str, str], ...] = (
     ("TACTICAL_3D", "tactical_3d_v1"),
@@ -943,8 +946,8 @@ class SemanticContractDefinition:
 
 ACCUMULATION_DISCOVERY = SemanticContractDefinition(
     observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
-    evidence_contract_version=EVIDENCE_CONTRACT_VERSION,
-    semantic_engine_version=SEMANTIC_ENGINE_VERSION,
+    evidence_contract_version=_PARKED_CONTRACT_VERSION_LABEL,
+    semantic_engine_version=_PARKED_CONTRACT_VERSION_LABEL,
     observation_schema_version=CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     label_schema_version=SIGNAL_FORWARD_LABEL_SCHEMA_VERSION,
     execution_label_policy_versions=_EXECUTION_LABEL_POLICY_VERSIONS,

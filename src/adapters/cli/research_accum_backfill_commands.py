@@ -20,19 +20,18 @@ from src.adapters.composition.producer_source_revision import (
 from src.adapters.composition.screen_accum_workflow_factory import (
     create_accumulation_screen_workflow_bundle,
 )
+from src.application.services.behavioral_cohort_identity import (
+    AccumulationCohortIdentity,
+    resolve_accumulation_cohort_identity,
+)
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSessionResolver,
 )
 from src.application.services.lean_observation_identity import (
     LeanObservationIdentity,
-    resolve_lean_semantic_compatibility_id,
 )
 from src.application.services.pit_tradable_membership import (
     resolve_pit_tradable_membership,
-)
-from src.application.services.shadow_behavioral_cohort_identity import (
-    ShadowBehavioralCohortIdentity,
-    resolve_shadow_behavioral_cohort_identity,
 )
 from src.application.services.signal_evidence_execution_context_builder import (
     SignalEvidenceExecutionContextBuilder,
@@ -73,92 +72,34 @@ from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
 )
 from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarketRepository
 
-# Scoring config files whose resolved content is folded into the lean
-# semantic_compatibility_id. The full scoring set: any material change to any
-# of these forks the learning cohort. Over-forking on a cosmetic edit is safe;
-# silent under-forking is the failure mode this hash prevents.
-_SCORING_CONFIG_PATH_ATTRS = (
-    "accumulation_screener",
-    "swing_setups",
-    "swing_targets",
-    "swing_risk_policy",
-    "plan_swing",
-    "risk_engine",
-    "signal_engine",
-    "institutional_accumulation",
-    "ticker_profile",
-    "sector_context",
-    "company_quality_context",
-    "market_context_engine",
-)
 
-
-def _read_scoring_config_canonical(
-    config_paths,
-    *,
-    pit_tradable_lookback_sessions: int,
-) -> str:
-    """Read the resolved scoring config file contents into a deterministic
-    canonical string.
-
-    The adapter owns file I/O only; it performs NO hashing. Each file is
-    rendered as a path-labelled block, blocks are ordered by path so the string
-    is deterministic regardless of attribute order, and a NUL delimiter keeps
-    file boundaries unambiguous. The application resolver hashes this string.
-
-    ``pit_tradable_lookback_sessions`` (N) is corpus-material and is folded in
-    explicitly so changing N forks the lean cohort without hashing all of
-    ``default.yaml``.
-    """
-    rel_paths = sorted({getattr(config_paths, attr) for attr in _SCORING_CONFIG_PATH_ATTRS})
-    blocks = []
-    for rel_path in rel_paths:
-        content = Path(rel_path).read_text(encoding="utf-8")
-        blocks.append(f"# path: {rel_path}\n{content}")
-    blocks.append(f"# pit_tradable_lookback_sessions\n{int(pit_tradable_lookback_sessions)}")
-    return "\n\x00\n".join(blocks)
-
-
-def _echo_shadow_behavioral_identity(shadow: ShadowBehavioralCohortIdentity) -> None:
-    """Print the ADR-068 shadow digests beside the authoritative cohort id.
+def _echo_cohort_identity(identity: AccumulationCohortIdentity) -> None:
+    """Print the authoritative ADR-068 cohort id and the three parts it folds.
 
     Written to **stderr** on purpose. ``--format json`` stdout is the machine
     contract this command already publishes (the nightly cron calls it with
-    ``--format json``), and a non-authoritative diagnostic must not enter it —
-    a key inside the response payload invites a downstream consumer to treat it
-    as authoritative, which ADR-068 §7 trust ordering forbids until slice 4.
-    stderr reaches the operator on both output formats and is captured by the
-    cron log redirect, which is exactly the visibility slice 3 needs.
+    ``--format json``), and the per-axis digests are operator attribution aids,
+    not a second identity surface for a downstream consumer to key on. stderr
+    reaches the operator on both output formats and is captured by the cron log
+    redirect.
     """
     typer.echo(
-        "[shadow-identity] ADR-068 slice 3 — non-authoritative; nothing reads these values.",
+        f"[cohort-identity] compatibility_id:            "
+        f"{identity.semantic_compatibility_id.value}",
         err=True,
     )
     typer.echo(
-        f"[shadow-identity]   authoritative compatibility_id: "
-        f"{shadow.authoritative_compatibility_id.value}",
+        f"[cohort-identity]   behavioural probe digest:  sha256:{identity.behavioral_probe_digest}",
         err=True,
     )
-    if shadow.is_available:
-        typer.echo(
-            f"[shadow-identity]   behavioural probe digest:       "
-            f"sha256:{shadow.behavioral_probe_digest}",
-            err=True,
-        )
-        typer.echo(
-            f"[shadow-identity]   probe input digest:             "
-            f"sha256:{shadow.probe_input_digest}",
-            err=True,
-        )
-    else:
-        typer.echo(
-            f"[shadow-identity]   behavioural probe digest:       "
-            f"unavailable ({shadow.unavailable_reason})",
-            err=True,
-        )
     typer.echo(
-        f"[shadow-identity]   probe set / projection:         "
-        f"{shadow.probe_set_id} / {shadow.projection_contract}",
+        f"[cohort-identity]   snapshot payload digest:   "
+        f"sha256:{identity.policy_snapshot_payload_digest}",
+        err=True,
+    )
+    typer.echo(
+        f"[cohort-identity]   payload schema version:    "
+        f"{identity.observation_payload_schema_version}",
         err=True,
     )
 
@@ -212,14 +153,6 @@ def run_signal_observation_corpus_write(
             named_tickers=named_tickers,
         )
 
-    # Bracket every production-policy config resolve with byte-identical
-    # canonical reads.  The application ensure use case rejects a changed
-    # generation before snapshots or observations can be written.
-    resolved_config_canonical = _read_scoring_config_canonical(
-        cfg.config_paths,
-        pit_tradable_lookback_sessions=pit_window,
-    )
-
     accumulation_config = load_accumulation_screener_config()
     swing_policy = load_swing_policy_config()
 
@@ -254,34 +187,27 @@ def run_signal_observation_corpus_write(
             universe=universe,
         )
 
-    # Confirm the typed policies above were resolved while the exact material
-    # config generation remained stable.  This second read is validation only;
-    # hashing and fail-closed policy remain in the application use case.
-    verified_config_canonical = _read_scoring_config_canonical(
-        cfg.config_paths,
-        pit_tradable_lookback_sessions=pit_window,
+    # ADR-068 authoritative cohort identity. Resolved from the exact typed
+    # policy objects injected into the engines above — the adapter reads no
+    # config file for identity and performs no hashing. The application service
+    # owns the whole formula; the adapter only echoes it for the operator.
+    cohort_identity = resolve_accumulation_cohort_identity(
+        accum_score_policy=production_policy_bundle.accum_score_policy,
+        signal_engine_config=production_policy_bundle.signal_engine_config,
+        structural_gates=production_policy_bundle.structural_gates,
+        execution_gates=production_policy_bundle.execution_gates,
+        hard_filter_policy=production_policy_bundle.hard_filter_policy,
     )
     observation_identity = LeanObservationIdentity(
         observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
-        semantic_compatibility_id=resolve_lean_semantic_compatibility_id(resolved_config_canonical),
+        semantic_compatibility_id=cohort_identity.semantic_compatibility_id,
     )
-
-    # ADR-068 slice 3 shadow. Observational only: the application resolver owns
-    # both the probe run and its unavailable policy, the adapter only formats
-    # the result to stderr. Nothing below reads it, and
-    # ``observation_identity`` above is unaffected.
-    _echo_shadow_behavioral_identity(
-        resolve_shadow_behavioral_cohort_identity(
-            authoritative_compatibility_id=observation_identity.semantic_compatibility_id,
-        )
-    )
+    _echo_cohort_identity(cohort_identity)
 
     learning_repo = SQLiteLearningArtifactRepository(resolved_db)
     try:
         EnsureAccumulationPolicySnapshotsUseCase(learning_repo).execute(
             EnsureAccumulationPolicySnapshotsRequest(
-                resolved_config_canonical=resolved_config_canonical,
-                verified_config_canonical=verified_config_canonical,
                 observation_identity=observation_identity,
                 accum_score_policy=production_policy_bundle.accum_score_policy,
                 signal_engine_config=production_policy_bundle.signal_engine_config,

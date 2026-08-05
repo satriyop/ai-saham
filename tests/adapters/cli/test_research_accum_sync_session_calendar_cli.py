@@ -24,6 +24,9 @@ from src.domain.value_objects.learning_artifacts import (
     ProductionPolicySnapshot,
     stamp_universe_membership_id,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 from src.domain.value_objects.trading_session_calendar_snapshot import (
     TradingSessionCalendarSnapshot,
 )
@@ -73,7 +76,7 @@ def _observation(db_day: int = 1, ticker: str = "BBCA") -> LearningObservation:
         universe_id=UNIVERSE,
         window_id=f"{ticker}:{sd}",
         decision_payload={
-            "schema_version": 12,
+            "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
             "artifact_type": "accumulation_session_observation",
             "ticker": ticker,
             "session_date": sd,

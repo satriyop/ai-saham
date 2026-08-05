@@ -25,6 +25,7 @@ visible in review.
 
 from __future__ import annotations
 
+import ast
 import builtins
 import dataclasses
 import hashlib
@@ -351,23 +352,61 @@ _PROBE_MODULES = (
 )
 
 
-# The single production consumer the probe harness is allowed to have while the
-# digest remains non-authoritative. Slice 3 runs the harness for its side-by-side
-# operator diagnostic only; nothing reads its digests back. Slice 4 replaces this
-# allowlist when the digest becomes identity-material — a deliberate edit, never
-# a silent one.
-_SHADOW_CONSUMER_MODULE = "src.application.services.shadow_behavioral_cohort_identity"
+# The single production consumer the probe harness is allowed to have now that
+# the digest is authoritative. ADR-068 §1 makes identity a fold of three parts,
+# and this module owns that fold; anything else reading the harness would be a
+# second identity path, which task §4 forbids. Slice 3's shadow resolver used to
+# sit here and was deleted at cutover — it is not an alternative consumer, it no
+# longer exists.
+_IDENTITY_CONSUMER_MODULE = "src.application.services.behavioral_cohort_identity"
+
+# The only production modules allowed to consume the identity resolver: the
+# composition root that stamps the id onto observations, and the use case that
+# recomputes it to fail closed before writing snapshots. Both derive the same
+# value from the same typed policies — one path, checked twice, never two paths.
+_IDENTITY_CALL_SITES = [
+    "src.adapters.cli.research_accum_backfill_commands",
+    "src.application.use_case.ensure_accumulation_policy_snapshots_use_case",
+]
+
+_IDENTITY_MODULE_PATH = _ROOT / "src" / "application" / "services" / "behavioral_cohort_identity.py"
 
 
-def test_probe_digest_is_not_wired_into_cohort_identity_yet() -> None:
-    """ADR-068 Section 7 trust ordering: the digest must stay non-authoritative.
+def _code_identifiers(path: Path) -> set[str]:
+    """Every identifier a module *uses in code*, ignoring prose.
 
-    Slices 1-2 introduced the measurement and proved it. Slice 3 wires it into
-    the real corpus-write path as a **shadow** diagnostic, so the harness now has
-    exactly one permitted production consumer. Making the digest identity-material
-    is still slice 4's job: nothing may read these digests back to decide
-    anything, and the persisted ``semantic_compatibility_id`` must stay a pure
-    function of the incumbent mechanism.
+    Substring search over raw source cannot tell a live reference from a
+    tombstone comment explaining why a symbol was deleted — and ADR-068's
+    deletions are precisely the kind that deserve such comments. Parsing to AST
+    keeps the guard strict about code while leaving documentation free.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            found.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            found.add(node.attr)
+        elif isinstance(node, ast.alias):
+            found.update(part for part in node.name.split(".") if part)
+            if node.asname:
+                found.add(node.asname)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            found.update(part for part in node.module.split(".") if part)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            found.add(node.name)
+    return found
+
+
+def test_probe_digest_feeds_cohort_identity_through_exactly_one_module() -> None:
+    """ADR-068 §7 post-cutover: the digest is authoritative, via one path only.
+
+    Slices 1-2 introduced the measurement and proved it; slice 3 shadowed it;
+    slice 4 (this state) made it the code axis of the persisted
+    ``semantic_compatibility_id``. The invariant this test guards inverted at
+    cutover: the question is no longer "is the digest kept out of identity?" but
+    "does it reach identity through exactly one fold, with nothing else reading
+    it?" A second consumer of the harness would be a second identity mechanism.
     """
     importers: list[str] = []
     for path in sorted((_ROOT / "src").rglob("*.py")):
@@ -379,54 +418,71 @@ def test_probe_digest_is_not_wired_into_cohort_identity_yet() -> None:
         if any(probe_module in source for probe_module in _PROBE_MODULES):
             importers.append(module)
 
-    assert importers == [_SHADOW_CONSUMER_MODULE], (
-        "the behavioural probe harness may be consumed only by the slice-3 shadow "
-        f"resolver while the digest is non-authoritative, but found: {importers}"
+    assert importers == [_IDENTITY_CONSUMER_MODULE], (
+        "the behavioural probe harness must be consumed by exactly the ADR-068 "
+        f"identity fold and nothing else, but found: {importers}"
     )
 
-    identity_source = (
-        _ROOT / "src" / "application" / "services" / "lean_observation_identity.py"
-    ).read_text(encoding="utf-8")
-    assert "behavioral_probe" not in identity_source
-    assert "probe_digest" not in identity_source
-    assert "shadow_behavioral" not in identity_source, (
-        "the shadow resolver must not leak into the authoritative identity path"
+    assert "compute_behavioral_probe_digest" in _code_identifiers(_IDENTITY_MODULE_PATH), (
+        "the identity fold must actually run the probe set — a cached, injected, "
+        "or defaulted digest would let identity be minted without measuring code"
+    )
+    # No degradation path: a broken probe must fail the capture closed, never
+    # mint an identity missing its code axis (contrast slice 3's shadow, whose
+    # values were diagnostic and therefore safe to degrade).
+    identity_tree = ast.parse(_IDENTITY_MODULE_PATH.read_text(encoding="utf-8"))
+    assert not [n for n in ast.walk(identity_tree) if isinstance(n, ast.ExceptHandler)], (
+        "the identity fold must have no exception handler: a swallowed probe "
+        "failure would mint a cohort id that never measured the engine"
     )
 
 
-def test_shadow_consumer_never_feeds_the_authoritative_identity() -> None:
-    """The shadow resolver is a sink, not a source.
+def test_authoritative_identity_has_no_fallback_or_second_path() -> None:
+    """Task §4 / ADR-068 §7: one mechanism, no alias, no 'just in case' path.
 
-    It may read the probe harness and echo the authoritative id, but nothing it
-    produces may reach ``resolve_lean_semantic_compatibility_id`` or any
-    observation writer. Proven structurally: no production module outside the
-    adapter's diagnostic call site imports it, and the adapter's own identity
-    construction is not derived from it.
+    Proven structurally rather than by grep alone: the identity resolver has
+    exactly two production call sites (stamp and fail-closed recompute), the
+    adapter derives what it persists from that resolver, and the retired proxies
+    appear nowhere in ``src/``.
     """
     consumers: list[str] = []
     for path in sorted((_ROOT / "src").rglob("*.py")):
         relative = path.relative_to(_ROOT / "src").with_suffix("")
         module = "src." + relative.as_posix().replace("/", ".")
-        if module == _SHADOW_CONSUMER_MODULE:
+        if module == _IDENTITY_CONSUMER_MODULE:
             continue
-        if _SHADOW_CONSUMER_MODULE in path.read_text(encoding="utf-8"):
+        if _IDENTITY_CONSUMER_MODULE in path.read_text(encoding="utf-8"):
             consumers.append(module)
 
-    assert consumers == ["src.adapters.cli.research_accum_backfill_commands"], (
-        "the shadow resolver must have exactly one call site — the corpus-write "
-        f"adapter's diagnostic echo — but found: {consumers}"
+    assert sorted(consumers) == sorted(_IDENTITY_CALL_SITES), (
+        "the ADR-068 identity resolver must have exactly the stamp and "
+        f"fail-closed-recompute call sites, but found: {consumers}"
     )
 
     adapter_source = (
         _ROOT / "src" / "adapters" / "cli" / "research_accum_backfill_commands.py"
     ).read_text(encoding="utf-8")
-    assert (
-        "semantic_compatibility_id=resolve_lean_semantic_compatibility_id("
-        "resolved_config_canonical)" in adapter_source
-    ), (
-        "the persisted cohort id must remain a pure function of the incumbent "
-        "config-canonical mechanism; slice 3 may not change what is written"
+    persisted_from_resolver = "semantic_compatibility_id=cohort_identity.semantic_compatibility_id"
+    assert persisted_from_resolver in adapter_source, (
+        "the persisted cohort id must be the behavioural resolver's output, not "
+        "a value the adapter derives for itself"
     )
+
+    retired = (
+        "SEMANTIC_ENGINE_VERSION",
+        "EVIDENCE_CONTRACT_VERSION",
+        "resolve_lean_semantic_compatibility_id",
+        "compute_accumulation_config_hash",
+        "_CONFIG_HASH_FIELDS",
+        "_SCORING_CONFIG_PATH_ATTRS",
+        "_read_scoring_config_canonical",
+        "shadow_behavioral_cohort_identity",
+    )
+    survivors: list[str] = []
+    for path in sorted((_ROOT / "src").rglob("*.py")):
+        used = _code_identifiers(path)
+        survivors.extend(f"{path.relative_to(_ROOT)}:{name}" for name in retired if name in used)
+    assert survivors == [], f"ADR-068 §7 deleted these with no alias or fallback: {survivors}"
 
 
 def _valuation_probe() -> BehavioralProbe:

@@ -12,7 +12,6 @@ import pytest
 
 from src.application.services.lean_observation_identity import (
     LeanObservationIdentity,
-    resolve_lean_semantic_compatibility_id,
 )
 from src.application.use_case.backfill_signal_observations_use_case import (
     BackfillSignalObservationsRequest,
@@ -21,6 +20,7 @@ from src.application.use_case.backfill_signal_observations_use_case import (
 )
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.signal_artifact_identity import SemanticCompatibilityId
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY_CONTRACT,
 )
@@ -145,9 +145,16 @@ class StubRequestBuilder:
 
 
 def _identity() -> LeanObservationIdentity:
+    """Backfill treats the cohort tag as an opaque pass-through value.
+
+    A literal stands in for the ADR-068 resolved cohort id on purpose: this use
+    case never derives, recomputes, or inspects identity, so binding the test to
+    the real resolver would couple it to a mechanism it does not own (and pay for
+    a probe run per test).
+    """
     return LeanObservationIdentity(
         observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
-        semantic_compatibility_id=resolve_lean_semantic_compatibility_id("test-config"),
+        semantic_compatibility_id=SemanticCompatibilityId("sha256:" + "cd" * 32),
     )
 
 

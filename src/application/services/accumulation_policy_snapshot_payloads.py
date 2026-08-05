@@ -33,11 +33,14 @@ from src.domain.value_objects.learning_artifacts import (
     PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE,
     PRODUCTION_POLICY_VERSION_V1,
 )
-from src.domain.value_objects.signal_semantic_contract import SEMANTIC_ENGINE_VERSION
 
 # Semantic contract identifiers embedded in snapshot rows (stable strings).
 ACCUM_SCORE_SEMANTIC_CONTRACT_ID = "accum_score_policy.v1"
-SIGNAL_SEMANTIC_CONTRACT_ID = f"signal.semantic_engine.v{SEMANTIC_ENGINE_VERSION}"
+# Frozen since ADR-068. It used to interpolate the deleted SEMANTIC_ENGINE_VERSION
+# constant; it is now a stable contract *name* like its siblings above and below,
+# not a change detector. Engine behaviour changes are detected by the behavioural
+# probe digest, so nothing bumps this string.
+SIGNAL_SEMANTIC_CONTRACT_ID = "signal.semantic_engine.v1.5"
 RISK_HARD_GATES_SEMANTIC_CONTRACT_ID = "risk.hard_gates.accum.v1"
 HARD_FILTERS_SEMANTIC_CONTRACT_ID = "screen.accum.hard_filters.v1"
 HARD_FILTERS_FORMULA_ID = "accumulation_screen.first_match_hard_filters.v1"
