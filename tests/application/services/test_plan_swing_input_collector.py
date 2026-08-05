@@ -120,10 +120,11 @@ def _collector_for_availability_tests(
 
 
 def test_source_availability_use_case_built_when_collecting_input():
-    # Actual per-source assessment now happens later, in
-    # PlanSwingDecisionComposer.recompose_after_evidence, gated on
-    # evidence actually existing — collect() only needs to build the reused
-    # AssessSourceAvailabilityUseCase.
+    # collect() only builds the reusable AssessSourceAvailabilityUseCase; it
+    # performs no per-source assessment itself. Since ADR-067 §3 the plan
+    # surface no longer scores, so nothing downstream of collect() consumes
+    # this use case on the plan path — it is retained because the execution
+    # context is shared with the screen surface, which does score.
     today = date(2026, 7, 17)
     eval_result = _eval_result(broker_summary_date=today, broker_daily_flow_date=today)
 

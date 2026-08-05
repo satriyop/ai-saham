@@ -4,9 +4,11 @@ Layer: Application
 
 Owns the risk-response branch (technical gate opt-in, context-aware
 RiskEngine, fallback AssessRiskUseCase), canonical TradeSetup composition,
-market-context risk/trade-setup preview, and recomposition after the
-evidence-enriched signal re-score. Extracted from
+and market-context risk/trade-setup preview. Extracted from
 `PlanSwingWorkflowUseCase` to keep the use case as orchestration only.
+
+ADR-067 §3: there is no post-evidence re-composition here — plan never
+re-scores, so there is nothing to recompose from.
 """
 
 from datetime import date
@@ -256,72 +258,3 @@ class PlanSwingRiskTradeSetupComposer:
             market_context_trade_setup_preview,
             warnings,
         )
-
-    def recompose_after_signal_rescore(
-        self,
-        *,
-        ticker: str,
-        snapshot_date: date,
-        signal_assessment: "AssessSignalResponse | None",
-        risk_response: Any | None,
-        market_context_risk_preview: Any | None,
-        market_regime: "MarketContext | None",
-        fallback_trade_setup: "TradeSetup | None",
-        fallback_market_context_signal_preview: "AssessSignalResponse | None",
-        fallback_market_context_trade_setup_preview: "TradeSetup | None",
-    ) -> tuple["TradeSetup | None", "AssessSignalResponse | None", "TradeSetup | None", list[str]]:
-        warnings: list[str] = []
-        new_trade_setup = fallback_trade_setup
-        new_mce_signal = fallback_market_context_signal_preview
-        new_mce_trade_preview = fallback_market_context_trade_setup_preview
-
-        if risk_response is not None:
-            try:
-                from src.application.use_case.assess_trade_setup_use_case import (
-                    AssessTradeSetupRequest,
-                    AssessTradeSetupUseCase,
-                )
-
-                new_trade_setup = (
-                    AssessTradeSetupUseCase()
-                    .execute(
-                        AssessTradeSetupRequest(
-                            ticker=ticker,
-                            snapshot_date=snapshot_date,
-                            signal_response=signal_assessment,
-                            risk_response=risk_response,
-                            market_context=None,
-                        )
-                    )
-                    .setup
-                )
-            except Exception as exc:
-                warnings.append(f"TradeSetup re-composition unavailable: {exc}")
-
-        if market_context_risk_preview is not None:
-            try:
-                from src.application.use_case.assess_trade_setup_use_case import (
-                    AssessTradeSetupRequest,
-                    AssessTradeSetupUseCase,
-                )
-
-                # Phase 5: canonical signal already includes regime — no
-                # separate apply_market_context() needed for signal preview.
-                new_mce_signal = signal_assessment
-                new_mce_trade_preview = (
-                    AssessTradeSetupUseCase()
-                    .execute(
-                        AssessTradeSetupRequest(
-                            ticker=ticker,
-                            snapshot_date=snapshot_date,
-                            signal_response=new_mce_signal,
-                            risk_response=market_context_risk_preview,
-                            market_context=market_regime,
-                        )
-                    )
-                    .setup
-                )
-            except Exception as exc:
-                warnings.append(f"MCE preview re-computation unavailable: {exc}")
-
-        return new_trade_setup, new_mce_signal, new_mce_trade_preview, warnings

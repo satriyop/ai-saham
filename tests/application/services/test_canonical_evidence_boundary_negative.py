@@ -11,17 +11,21 @@
 6. A future IHSG candle raises ValueError.
 8. Loose evidence cannot be supplied to SignalEngine.
 12. Contract ValueError escapes instead of becoming a warning.
-13. Screen and swing produce equivalent canonical signal-evidence input at
-    their real application boundaries. This executes
-    `AccumulationCandidateSignalAssessor.assess()` (screen),
-    `PlanSwingEvidenceBuilder.build()` (swing evidence), and
-    `PlanSwingDecisionComposer.recompose_after_evidence()` (swing
-    canonical/scoring) — not the same builder invoked twice in the test
-    body. It captures the complete `CanonicalSignalEvidenceInput` each real
-    boundary hands to its own `SignalEngine.evaluate_accumulation_discovery()` call
-    and asserts the two are equal, including availability, so a divergence
-    in effective session, source-availability wiring, or canonical
-    assembly between the two workflows would be caught here.
+13. Screen and swing build equivalent flow evidence and provenance at their
+    real application boundaries. This executes
+    `AccumulationCandidateSignalAssessor.assess()` (screen) and
+    `PlanSwingEvidenceBuilder.build()` (swing) — not the same builder invoked
+    twice in the test body. It captures the complete
+    `CanonicalSignalEvidenceInput` screen hands to
+    `SignalEngine.evaluate_accumulation_discovery()` and asserts its flow
+    evidence and provenance equal what the swing builder produced, so a
+    divergence in consumed-row transport or evidence assembly between the two
+    workflows would be caught here.
+
+    ADR-067 §3 narrowed this: swing has no canonical/scoring boundary any
+    more. `PlanSwingDecisionComposer.carry_forward_screen_verdict()` is still
+    executed by the fixture, but now to assert the *negative* — that it calls
+    no SignalEngine scoring entry point and assembles no canonical evidence.
 """
 
 from __future__ import annotations
@@ -29,7 +33,6 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -519,9 +522,11 @@ class _EmptyBrokerRepository:
 
 
 class _RecordingRiskTradeSetupComposer:
-    """Strict fake — records `recompose_after_signal_rescore` kwargs and
-    returns the fallback values unchanged, since this test only asserts on
-    the canonical signal-evidence input, not on trade-setup recomposition."""
+    """Strict fake that records any post-re-score recomposition attempt.
+
+    ADR-067 §3 retired the plan re-score, so `calls` must stay empty; the
+    method survives here only so the assertion can distinguish "never invoked"
+    from "the method no longer exists"."""
 
     def __init__(self) -> None:
         self.calls: list[dict] = []
@@ -551,36 +556,6 @@ def _signal_response(score: int = 72) -> AssessSignalResponse:
     return AssessSignalResponse(ticker=TICKER, assessment=assessment)
 
 
-def _swing_request_for(today: date, ticker: str) -> plan_swing_dto.PlanSwingWorkflowRequest:
-    return plan_swing_dto.PlanSwingWorkflowRequest(
-        ticker=ticker,
-        today=today,
-        strategy_name=None,
-        setup_name=None,
-        window=200,
-        flow_window=20,
-        capital=None,
-        risk_pct=1.0,
-        entry_price=None,
-        atr_mult=2.0,
-        rr=2.0,
-        include_sentiment=False,
-        include_flow_detail=False,
-        include_signal_detail=False,
-        include_risk_detail=False,
-        include_market_detail=False,
-        sentiment_verbose=False,
-        auto_refresh=False,
-        force_refresh=False,
-        # Enable recompute so recompose_after_evidence still exercises swing re-score.
-        with_market_context=True,
-        regime_universe="lq45",
-        benchmark="IHSG",
-        db_path=Path("/tmp/does-not-exist.db"),
-        with_technical_gate=False,
-    )
-
-
 @dataclass
 class _ParityBoundaryResult:
     candidate: AccumulationCandidate
@@ -595,7 +570,7 @@ class _ParityBoundaryResult:
     flow_builder: _RecordingFlowConfirmationEvidenceBuilder
     swing_evidence_result: object
     swing_signal_engine: _CanonicalInputRecordingSignalEngine
-    swing_canonical: CanonicalSignalEvidenceInput
+    swing_flow: object
     risk_composer: _RecordingRiskTradeSetupComposer
 
 
@@ -698,7 +673,9 @@ def parity_boundaries() -> _ParityBoundaryResult:
         swing_policy=None,
     )
 
-    # --- Swing canonical/scoring boundary: recompose_after_evidence() ---
+    # --- Swing post-evidence boundary: carry_forward_screen_verdict() ---
+    # ADR-067 §3: this boundary produces no canonical evidence and no score;
+    # it is executed here so the parity test can assert exactly that.
     execution_context = SignalEvidenceExecutionContext(
         effective_session=effective_session,
         source_availability_use_case=source_availability_use_case,
@@ -731,8 +708,8 @@ def parity_boundaries() -> _ParityBoundaryResult:
         risk_trade_setup_composer=risk_composer,
         signal_engine=swing_signal_engine,
     )
-    composer.recompose_after_evidence(_swing_request_for(SNAP, TICKER), state)
-    swing_canonical = swing_signal_engine.calls[0]["kwargs"]["canonical_evidence"]
+    composer.carry_forward_screen_verdict(state)
+    swing_flow = swing_evidence_result.built_flow_evidence
 
     return _ParityBoundaryResult(
         candidate=candidate,
@@ -747,12 +724,12 @@ def parity_boundaries() -> _ParityBoundaryResult:
         flow_builder=flow_builder,
         swing_evidence_result=swing_evidence_result,
         swing_signal_engine=swing_signal_engine,
-        swing_canonical=swing_canonical,
+        swing_flow=swing_flow,
         risk_composer=risk_composer,
     )
 
 
-def test_screen_and_swing_boundaries_pass_equivalent_canonical_flow_input(
+def test_screen_and_swing_boundaries_build_equivalent_flow_evidence(
     parity_boundaries: _ParityBoundaryResult,
 ) -> None:
     b = parity_boundaries
@@ -764,51 +741,41 @@ def test_screen_and_swing_boundaries_pass_equivalent_canonical_flow_input(
 
     assert b.swing_evidence_result.built_setup_evidence is None
     assert b.swing_evidence_result.built_flow_evidence is not None
+    assert b.swing_flow is b.swing_evidence_result.built_flow_evidence
 
-    assert b.swing_canonical is not None
-    assert b.swing_canonical.setup is None
-    assert b.swing_canonical.flow is not None
-
-    # Complete typed objects, then each layer explicitly for diagnosability.
-    assert b.screen_canonical == b.swing_canonical
-    assert b.screen_canonical.flow.evidence == b.swing_canonical.flow.evidence
-    assert b.screen_canonical.flow.provenance == b.swing_canonical.flow.provenance
-    assert b.screen_canonical.flow.availability == b.swing_canonical.flow.availability
+    # Evidence and provenance parity, each layer explicitly for diagnosability.
+    assert b.screen_canonical.flow.evidence == b.swing_flow.evidence
+    assert b.screen_canonical.flow.provenance == b.swing_flow.provenance
 
     assert tuple(
         (row.ticker, row.date, row.source)
         for row in b.screen_canonical.flow.provenance.broker_summary_rows
     ) == tuple(
-        (row.ticker, row.date, row.source)
-        for row in b.swing_canonical.flow.provenance.broker_summary_rows
+        (row.ticker, row.date, row.source) for row in b.swing_flow.provenance.broker_summary_rows
     )
     assert tuple(
         (row.ticker, row.date, row.broker_code, row.source)
         for row in b.screen_canonical.flow.provenance.broker_daily_flow_rows
     ) == tuple(
         (row.ticker, row.date, row.broker_code, row.source)
-        for row in b.swing_canonical.flow.provenance.broker_daily_flow_rows
+        for row in b.swing_flow.provenance.broker_daily_flow_rows
     )
 
+    # Availability is resolved once, pre-score, on the surface that scores.
+    expected_source_families = ("broker_summaries", "broker_daily_flow")
     for assessment in b.screen_canonical.flow.availability.assessments:
         assert assessment.decision_at == b.effective_session.decision_at
-    for assessment in b.swing_canonical.flow.availability.assessments:
-        assert assessment.decision_at == b.effective_session.decision_at
-
-    expected_source_families = ("broker_summaries", "broker_daily_flow")
     assert (
         tuple(a.source_family for a in b.screen_canonical.flow.availability.assessments)
         == expected_source_families
     )
-    assert (
-        tuple(a.source_family for a in b.swing_canonical.flow.availability.assessments)
-        == expected_source_families
-    )
 
+    # ADR-067 §3: only screen scores. Swing's post-evidence boundary called no
+    # SignalEngine entry point and attempted no trade-setup recomposition.
     assert len(b.screen_signal_engine.calls) == 1
-    assert len(b.swing_signal_engine.calls) == 1
+    assert b.swing_signal_engine.calls == []
+    assert b.risk_composer.calls == []
     assert len(b.recording_candidate_evidence_builder.calls) == 1
-    assert len(b.risk_composer.calls) == 1
 
     # Lineage: both boundaries pass FlowConfirmationEvidenceBuilder.build()
     # the *same* consumed-row tuple objects and the *same* candidate object
@@ -828,13 +795,29 @@ def test_screen_and_swing_boundaries_pass_equivalent_canonical_flow_input(
     assert b.swing_evidence_result.warnings == ()
 
 
-def test_parity_fixture_detects_different_effective_sessions(
+def test_parity_fixture_detects_divergent_flow_provenance(
     parity_boundaries: _ParityBoundaryResult,
 ) -> None:
     # Sensitivity counterexample: does not re-run either full boundary.
-    # Reuses the already-produced swing flow evidence/provenance and only
-    # re-derives availability under a different decision_at, proving the
-    # parity assertions above would have caught a session divergence.
+    # Perturbs one consumed broker-summary row in the swing provenance and
+    # shows the parity assertions above would have caught the divergence.
+    b = parity_boundaries
+    rows = b.swing_flow.provenance.broker_summary_rows
+    assert rows, "fixture must produce at least one consumed broker-summary row"
+    altered_rows = (replace(rows[0], date=rows[0].date - timedelta(days=7)), *rows[1:])
+    altered_provenance = replace(b.swing_flow.provenance, broker_summary_rows=altered_rows)
+
+    assert b.screen_canonical.flow.provenance != altered_provenance
+    assert b.screen_canonical.flow.evidence == b.swing_flow.evidence
+
+
+def test_parity_fixture_detects_different_effective_sessions(
+    parity_boundaries: _ParityBoundaryResult,
+) -> None:
+    # Sensitivity counterexample for the availability layer. Availability is
+    # decision-time dependent, so a session divergence between the surface
+    # that builds evidence and the surface that scores it would change the
+    # canonical input even when evidence and provenance match exactly.
     b = parity_boundaries
     altered_session = replace(
         b.effective_session, decision_at=b.effective_session.decision_at + timedelta(hours=1)
@@ -843,18 +826,18 @@ def test_parity_fixture_detects_different_effective_sessions(
         b.source_availability_use_case
     ).assess_flow(
         effective_session=altered_session,
-        provenance=b.swing_canonical.flow.provenance,
+        provenance=b.swing_flow.provenance,
     )
-    altered_swing_canonical = CanonicalSignalEvidenceInput(
+    altered_canonical = CanonicalSignalEvidenceInput(
         setup=None,
         flow=FlowEvidenceGroupInput(
-            evidence=b.swing_canonical.flow.evidence,
-            provenance=b.swing_canonical.flow.provenance,
+            evidence=b.swing_flow.evidence,
+            provenance=b.swing_flow.provenance,
             availability=altered_flow_availability,
         ),
     )
 
-    assert b.screen_canonical.flow.evidence == altered_swing_canonical.flow.evidence
-    assert b.screen_canonical.flow.provenance == altered_swing_canonical.flow.provenance
-    assert b.screen_canonical.flow.availability != altered_swing_canonical.flow.availability
-    assert b.screen_canonical != altered_swing_canonical
+    assert b.screen_canonical.flow.evidence == altered_canonical.flow.evidence
+    assert b.screen_canonical.flow.provenance == altered_canonical.flow.provenance
+    assert b.screen_canonical.flow.availability != altered_canonical.flow.availability
+    assert b.screen_canonical != altered_canonical

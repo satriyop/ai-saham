@@ -1,22 +1,31 @@
-"""Tests for PlanSwingDecisionComposer's canonical evidence construction
-(ADR-041 CANONICAL-EVIDENCE-BOUNDARY).
+"""ADR-067 §3: `plan swing` carries the screen verdict; it never judges.
 
-Proves the composer resolves availability once, pre-score, from exact
-provenance, binds it into CanonicalSignalEvidenceInput, gates each group on
-its evidence actually having been built this run, and never performs a
-separate post-score availability assembly/attachment.
+These tests replace the previous canonical-evidence-construction suite for
+this module. Plan no longer assembles a `CanonicalSignalEvidenceInput` and no
+longer re-scores through `SignalEngine.evaluate_swing_trade_setup()`, so the
+properties worth locking in are:
+
+1. Screen's TradeSetup is inherited verbatim — with *no* flag combination that
+   can override it (this is the ADR-067 behaviour change).
+2. Plan composes a structure-only TradeSetup only when screen never judged the
+   ticker.
+3. The composer cannot regain the retired mechanism: a source-level guard
+   fails if any plan-swing application module names
+   `CanonicalSignalEvidenceInput`, its group inputs, `canonical_evidence`, or
+   `evaluate_swing_trade_setup` (ADR-067 §11 negative test).
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
+import ast
 from datetime import date, datetime
-from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from src.application.dto import plan_swing as plan_swing_dto
 from src.application.dto.assess_signal import AssessSignalResponse
-from src.application.dto.built_evidence import BuiltFlowEvidence, BuiltSetupEvidence
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
@@ -26,44 +35,21 @@ from src.application.services.plan_swing_decision_composer import (
 from src.application.services.plan_swing_workflow_state import (
     PlanSwingWorkflowState,
 )
-from src.application.use_case.assess_source_availability_use_case import (
-    AssessSourceAvailabilityUseCase,
-)
-from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
-from src.domain.value_objects.benchmark_excess_return import (
-    BenchmarkExcessReturn,
-    BenchmarkExcessReturnStatus,
-)
-from src.domain.value_objects.canonical_signal_evidence_input import (
-    BrokerDailyFlowRowIdentity,
-    BrokerSummaryRowIdentity,
-    CandleRowIdentity,
-    FlowProvenance,
-    SetupProvenance,
-)
-from src.domain.value_objects.factor_evidence import Direction, Freshness
-from src.domain.value_objects.flow_confirmation_evidence import (
-    FlowConfirmationEvidence,
-    FlowSubSignal,
-)
+from src.application.services.swing_judgment_authority import SCREEN_JUDGMENT_WARNING
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
-from src.domain.value_objects.setup_evidence import SetupEvidence
 from src.domain.value_objects.signal_assessment import (
     SWING_TRADE_SETUP_IDENTITY,
     EntryQuality,
     SignalAssessment,
     SignalStrength,
 )
-from src.domain.value_objects.source_availability import SourceAvailabilityStatus
+from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
 
 TICKER = "BBCA"
 SNAP = date(2026, 7, 17)
 
 
 def _request(**overrides):
-    """Default enables market-context so re-score path stays testable (ADR-054 S3)."""
-    from pathlib import Path
-
     params = dict(
         ticker=TICKER,
         today=SNAP,
@@ -84,8 +70,7 @@ def _request(**overrides):
         sentiment_verbose=False,
         auto_refresh=False,
         force_refresh=False,
-        # Re-score / Action recompute allowed only with explicit flags (S3).
-        with_market_context=True,
+        with_market_context=False,
         regime_universe="lq45",
         benchmark="COMPOSITE",
         db_path=Path("/tmp/does-not-exist.db"),
@@ -93,84 +78,6 @@ def _request(**overrides):
     )
     params.update(overrides)
     return plan_swing_dto.PlanSwingWorkflowRequest(**params)
-
-
-def _no_excess_return() -> BenchmarkExcessReturn:
-    return BenchmarkExcessReturn(
-        benchmark="IHSG",
-        window_sessions=5,
-        ticker_return_pct=None,
-        benchmark_return_pct=None,
-        excess_return_pct=None,
-        window_start=None,
-        window_end=None,
-        common_session_count=0,
-        status=BenchmarkExcessReturnStatus.UNAVAILABLE,
-        unavailable_reason="test fixture",
-    )
-
-
-def _built_setup_evidence() -> BuiltSetupEvidence:
-    evidence = SetupEvidence(
-        ticker=TICKER,
-        snapshot_date=SNAP,
-        setup_name="foreign-bounce",
-        setup_match="MATCH",
-        match_strength=100.0,
-        failed_gates=(),
-        trend="UP",
-        rsi=45.0,
-        bb_width_pctile=0.20,
-        vwap_discount_pct=1.5,
-        vwap_pct=1.02,
-        benchmark_excess_return_5_session=_no_excess_return(),
-        benchmark_excess_return_20_session=_no_excess_return(),
-        volume_trend_ratio=1.2,
-        volume_freshness=Freshness.FRESH,
-        candle_source="test",
-    )
-    provenance = SetupProvenance(
-        ticker=TICKER,
-        candle_rows=(CandleRowIdentity(ticker=TICKER, date=SNAP, source="test"),),
-    )
-    return BuiltSetupEvidence(evidence=evidence, provenance=provenance)
-
-
-def _built_flow_evidence(has_bandar_contributor: bool = False) -> BuiltFlowEvidence:
-    signal = FlowSubSignal(
-        key="cons", score=40.0, weight=40.0, direction=Direction.BULLISH, freshness=Freshness.FRESH
-    )
-    evidence = FlowConfirmationEvidence(
-        ticker=TICKER,
-        snapshot_date=SNAP,
-        flow_signals=(signal,),
-        flow_score_ex_bb=40.0,
-        confirmation_status="CONFIRMED",
-        flow_direction="POSITIVE",
-        bandar_broad_score=None,
-        bandar_direction=Direction.NEUTRAL,
-        bandar_freshness=Freshness.MISSING,
-        bci_label=None,
-        bci_tier1_count=0,
-        uncapped_strength=0.5,
-        capped_strength=0.5,
-        group_cap=0.80,
-        group_freshness=Freshness.FRESH,
-    )
-    provenance = FlowProvenance(
-        ticker=TICKER,
-        broker_summary_rows=(BrokerSummaryRowIdentity(ticker=TICKER, date=SNAP, source="test"),),
-        broker_daily_flow_rows=(
-            BrokerDailyFlowRowIdentity(ticker=TICKER, date=SNAP, broker_code="AK", source="test"),
-        ),
-        has_bandar_contributor=has_bandar_contributor,
-    )
-    return BuiltFlowEvidence(evidence=evidence, provenance=provenance)
-
-
-def _source_availability_use_case() -> AssessSourceAvailabilityUseCase:
-    calendar = KnownTradingSessionCalendar(sessions=(SNAP,), coverage_start=SNAP, coverage_end=SNAP)
-    return AssessSourceAvailabilityUseCase(calendar=calendar)
 
 
 def _effective_session() -> EffectiveMarketSession:
@@ -202,12 +109,25 @@ def _signal_response(score: int = 72) -> AssessSignalResponse:
     return AssessSignalResponse(ticker=TICKER, assessment=assessment)
 
 
-class _RecordingSignalEngine:
-    """Captures the canonical_evidence passed to evaluate_swing_trade_setup."""
+def _trade_setup(action: SetupAction, score: int, rationale: str) -> TradeSetup:
+    return TradeSetup(
+        ticker=TICKER,
+        snapshot_date=SNAP,
+        action=action,
+        signal_score=score,
+        signal_score_raw=score,
+        signal_strength=SignalStrength.MODERATE,
+        blocking_gates=(),
+        regime=None,
+        signal_multiplier=1.0,
+        gate_tightening=False,
+        rationale=rationale,
+    )
 
-    def __init__(self, response_score: int = 91) -> None:
-        self.calls: list[dict] = []
-        self._response_score = response_score
+
+class _EngineThatMustNotJudge:
+    """Any scoring entry point on this engine is a contract violation for the
+    plan surface (ADR-067 §3)."""
 
     def foreign_flow_quality_from_accum_score(self, score):
         return None
@@ -215,30 +135,35 @@ class _RecordingSignalEngine:
     def bandar_max_range(self, num_optional):
         return 6
 
-    def evaluate_swing_trade_setup(self, ticker, signal_ctx, **kwargs):
-        self.calls.append(kwargs)
-        resp = _signal_response(score=self._response_score)
-        if kwargs.get("canonical_evidence") is not None:
-            from src.domain.value_objects.evidence_source_availability import (
-                AvailabilityEnforcementMode,
-            )
+    def evaluate_swing_trade_setup(self, *args, **kwargs):
+        raise AssertionError("plan must not re-score: ADR-067 §3")
 
-            resp.availability_enforcement = AvailabilityEnforcementMode.SHADOW
-        return resp
+    def evaluate_accumulation_discovery(self, *args, **kwargs):
+        raise AssertionError("plan must not re-score: ADR-067 §3")
 
 
-class _RecordingRiskTradeSetupComposer:
+class _RiskComposerThatMustNotRecompose:
+    def __init__(self, plan_setup: TradeSetup | None) -> None:
+        self._plan_setup = plan_setup
+
+    def compose_trade_setup(self, **kwargs):
+        return self._plan_setup, []
+
+    def compose_market_context_preview(self, **kwargs):
+        return None, None, None, []
+
     def recompose_after_signal_rescore(self, **kwargs):
-        return ("SENTINEL_TRADE_SETUP", kwargs["signal_assessment"], None, [])
+        raise AssertionError("plan must not recompose after a re-score: ADR-067 §3")
 
 
-def _state(
-    *,
-    built_setup_evidence: BuiltSetupEvidence | None,
-    built_flow_evidence: BuiltFlowEvidence | None,
-    source_availability_use_case: AssessSourceAvailabilityUseCase | None,
-) -> PlanSwingWorkflowState:
+def _state_with_screen_verdict(screen_setup: TradeSetup | None) -> PlanSwingWorkflowState:
+    from src.application.dto.signal_evidence_execution_context import (
+        SignalEvidenceExecutionContext,
+    )
+
     candidate = SimpleNamespace(
+        trade_setup=screen_setup,
+        signal_assessment=_signal_response(50),
         bandar_detector=None,
         seasonal_edge=None,
         analyst_consensus=None,
@@ -249,515 +174,239 @@ def _state(
     )
     state = PlanSwingWorkflowState()
     state.accumulation_evaluation = SimpleNamespace(candidate=candidate)
-    from src.application.dto.signal_evidence_execution_context import (
-        SignalEvidenceExecutionContext,
-    )
-
     state.signal_evidence_execution_context = SignalEvidenceExecutionContext(
         effective_session=_effective_session(),
-        source_availability_use_case=source_availability_use_case,
-    )
-    state.candles = [SimpleNamespace(date=SNAP)]
-    state.built_setup_evidence = built_setup_evidence
-    state.built_flow_evidence = built_flow_evidence
-    state.evidence = plan_swing_dto.SwingEvidence(
-        accumulation_candidate=candidate,
-        setup_eval=None,
-        backtest_result=None,
-        sentiment_response=None,
-        sentiment_warning=None,
-        take_profit_pct=Decimal("5"),
-        stop_loss_pct=Decimal("5"),
-        regime_label=None,
-        setup_evidence=built_setup_evidence.evidence if built_setup_evidence else None,
-        flow_confirmation_evidence=built_flow_evidence.evidence if built_flow_evidence else None,
-    )
-    state.signal_assessment = _signal_response(score=50)
-    state.trade_setup = None
-    state.market_context_signal_preview = None
-    state.market_context_trade_setup_preview = None
-    state.risk_response = None
-    state.verdict = plan_swing_dto.SwingVerdict(
-        trade_setup=None,
-        signal_assessment=state.signal_assessment,
-        risk_response=None,
-        market_regime=None,
-        signal_assessment_availability=plan_swing_dto.SignalAssessmentAvailability(
-            status=plan_swing_dto.SignalAssessmentStatus.AVAILABLE
-        ),
-    )
-    return state
-
-
-def test_canonical_evidence_includes_both_groups_when_both_built():
-    engine = _RecordingSignalEngine()
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
-    )
-    state = _state(
-        built_setup_evidence=_built_setup_evidence(),
-        built_flow_evidence=_built_flow_evidence(),
-        source_availability_use_case=_source_availability_use_case(),
-    )
-
-    result = composer.recompose_after_evidence(_request(), state)
-
-    assert len(engine.calls) == 1
-    canonical_evidence = engine.calls[0]["canonical_evidence"]
-    assert canonical_evidence is not None
-    assert canonical_evidence.setup is not None
-    assert canonical_evidence.flow is not None
-    assert canonical_evidence.setup.availability.assessments[0].source_family == "candles"
-    assert result.signal_assessment.score == 91
-
-
-def test_canonical_evidence_setup_stays_none_when_setup_evidence_not_built():
-    engine = _RecordingSignalEngine()
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
-    )
-    state = _state(
-        built_setup_evidence=None,
-        built_flow_evidence=_built_flow_evidence(),
-        source_availability_use_case=_source_availability_use_case(),
-    )
-
-    composer.recompose_after_evidence(_request(), state)
-
-    canonical_evidence = engine.calls[0]["canonical_evidence"]
-    assert canonical_evidence.setup is None
-    assert canonical_evidence.flow is not None
-
-
-def test_no_rescore_when_no_evidence_built():
-    # No built evidence at all -> canonical_evidence is None -> the rescore
-    # branch must not run (fast-path score stays untouched).
-    engine = _RecordingSignalEngine()
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
-    )
-    state = _state(
-        built_setup_evidence=None,
-        built_flow_evidence=None,
-        source_availability_use_case=_source_availability_use_case(),
-    )
-
-    result = composer.recompose_after_evidence(_request(), state)
-
-    assert engine.calls == []
-    assert result.signal_assessment.score == 50
-
-
-def test_missing_source_availability_use_case_rescores_with_unknown_shadow_availability():
-    engine = _RecordingSignalEngine()
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
-    )
-    state = _state(
-        built_setup_evidence=_built_setup_evidence(),
-        built_flow_evidence=_built_flow_evidence(),
         source_availability_use_case=None,
     )
-
-    result = composer.recompose_after_evidence(_request(), state)
-
-    # SignalEngine is called exactly once
-    assert len(engine.calls) == 1
-
-    # canonical setup/flow evidence is supplied
-    canonical_evidence = engine.calls[0]["canonical_evidence"]
-    assert canonical_evidence is not None
-    assert canonical_evidence.setup is not None
-    assert canonical_evidence.flow is not None
-
-    # each required source assessment is UNKNOWN
-    setup_assessments = canonical_evidence.setup.availability.assessments
-    assert len(setup_assessments) == 1
-    assert setup_assessments[0].status == SourceAvailabilityStatus.UNKNOWN
-
-    flow_assessments = canonical_evidence.flow.availability.assessments
-    assert len(flow_assessments) == 2
-    assert flow_assessments[0].status == SourceAvailabilityStatus.UNKNOWN
-    assert flow_assessments[1].status == SourceAvailabilityStatus.UNKNOWN
-
-    # every UNKNOWN assessment has is_authoritative is False
-    assert setup_assessments[0].is_authoritative is False
-    assert flow_assessments[0].is_authoritative is False
-    assert flow_assessments[1].is_authoritative is False
-
-    # availability_enforcement == SHADOW
-    from src.domain.value_objects.evidence_source_availability import AvailabilityEnforcementMode
-
-    assert result.signal_assessment.availability_enforcement == AvailabilityEnforcementMode.SHADOW
-
-    # built evidence is not removed
-    assert result.built_setup_evidence is not None
-    assert result.built_flow_evidence is not None
-
-
-def test_bandar_contributor_flows_into_flow_group_availability():
-    engine = _RecordingSignalEngine()
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
-    )
-    state = _state(
-        built_setup_evidence=None,
-        built_flow_evidence=_built_flow_evidence(has_bandar_contributor=True),
-        source_availability_use_case=_source_availability_use_case(),
-    )
-
-    composer.recompose_after_evidence(_request(), state)
-
-    flow_group = engine.calls[0]["canonical_evidence"].flow
-    assert flow_group.availability.unassessed_contributors == ("bandar_detector",)
-    assert flow_group.availability.all_authoritative is False
-
-
-def test_trade_setup_recomposition_runs_alongside_canonical_evidence():
-    engine = _RecordingSignalEngine(response_score=91)
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
-    )
-    state = _state(
-        built_setup_evidence=_built_setup_evidence(),
-        built_flow_evidence=_built_flow_evidence(),
-        source_availability_use_case=_source_availability_use_case(),
-    )
-
-    result = composer.recompose_after_evidence(_request(), state)
-
-    assert result.verdict.trade_setup == "SENTINEL_TRADE_SETUP"
-    assert result.signal_assessment.score == 91
-
-
-# --- Swing composer fallback/error tests (Step 4 tests) ---------------------------
-
-
-def test_rescores_when_availability_use_case_is_none():
-    # 9. Built setup and flow evidence are rescored when the availability use case is None.
-    from src.application.services.signal_engine import SignalEngine
-
-    engine = SignalEngine()
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
-    )
-    state = _state(
-        built_setup_evidence=_built_setup_evidence(),
-        built_flow_evidence=_built_flow_evidence(),
-        source_availability_use_case=None,
-    )
-    assert state.signal_assessment.score == 50
-
-    result = composer.recompose_after_evidence(_request(), state)
-    assert result.signal_assessment.score != 50
-
-
-def test_operational_availability_failure_still_rescored():
-    # 10. Operational availability failure still rescored with canonical evidence.
-    from src.application.services.signal_engine import SignalEngine
-
-    engine = SignalEngine()
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
-    )
-
-    class _FailingUseCase:
-        def execute(self, **kwargs):
-            raise RuntimeError("Database timeout")
-
-    state = _state(
-        built_setup_evidence=_built_setup_evidence(),
-        built_flow_evidence=_built_flow_evidence(),
-        source_availability_use_case=_FailingUseCase(),
-    )
-
-    result = composer.recompose_after_evidence(_request(), state)
-    assert result.signal_assessment.score != 50
-    assert (
-        result.signal_assessment.setup_source_availability.assessments[0].status
-        == SourceAvailabilityStatus.UNKNOWN
-    )
-    assert (
-        result.signal_assessment.flow_source_availability.assessments[0].status
-        == SourceAvailabilityStatus.UNKNOWN
-    )
-    assert (
-        result.signal_assessment.flow_source_availability.assessments[1].status
-        == SourceAvailabilityStatus.UNKNOWN
-    )
-
-
-def test_contract_value_error_escapes_in_swing():
-    # 11. Contract ValueError still escapes.
-    import pytest
-
-    from src.application.services.signal_engine import SignalEngine
-
-    engine = SignalEngine()
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
-    )
-
-    class _ContractErrorUseCase:
-        def execute(self, **kwargs):
-            raise ValueError("Invalid format")
-
-    state = _state(
-        built_setup_evidence=_built_setup_evidence(),
-        built_flow_evidence=_built_flow_evidence(),
-        source_availability_use_case=_ContractErrorUseCase(),
-    )
-
-    with pytest.raises(ValueError, match="Invalid format"):
-        composer.recompose_after_evidence(_request(), state)
-
-
-def test_current_and_unknown_availability_produce_identical_directional_score_in_swing():
-    # 12. CURRENT and UNKNOWN availability produce identical directional
-    #     score. HIGH-2 explicitly supersedes the coverage/entry-quality-
-    #     identical guarantee this test previously enforced:
-    #     signal_authority_coverage is now availability-gated by design.
-    from src.application.services.signal_engine import SignalEngine
-
-    engine = SignalEngine()
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(), signal_engine=engine
-    )
-
-    state_current = _state(
-        built_setup_evidence=_built_setup_evidence(),
-        built_flow_evidence=_built_flow_evidence(),
-        source_availability_use_case=_source_availability_use_case(),
-    )
-    result_current = composer.recompose_after_evidence(_request(), state_current)
-
-    state_unknown = _state(
-        built_setup_evidence=_built_setup_evidence(),
-        built_flow_evidence=_built_flow_evidence(),
-        source_availability_use_case=None,
-    )
-    result_unknown = composer.recompose_after_evidence(_request(), state_unknown)
-
-    a1 = result_current.signal_assessment
-    a2 = result_unknown.signal_assessment
-    assert a1.score == a2.score
-
-
-def test_recompose_after_evidence_forwards_market_context_to_signal_engine():
-    from src.domain.value_objects.market_context import MarketContext, MarketRegime
-
-    _RISK_OFF_CONTEXT = MarketContext(
-        regime=MarketRegime.RISK_OFF,
-        conviction=0.9,
-        factors=(),
-        signal_multiplier=0.4,
-        gate_tightening=True,
-        as_of_date=SNAP,
-        staleness_warning=None,
-        coverage_warning=None,
-    )
-
-    engine = _RecordingSignalEngine()
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(),
-        signal_engine=engine,
-    )
-
-    state = _state(
-        built_setup_evidence=_built_setup_evidence(),
-        built_flow_evidence=_built_flow_evidence(),
-        source_availability_use_case=_source_availability_use_case(),
-    )
-    state.market_regime = _RISK_OFF_CONTEXT
-
-    composer.recompose_after_evidence(_request(), state)
-
-    assert len(engine.calls) == 1
-    assert engine.calls[0].get("market_context") is _RISK_OFF_CONTEXT
-
-
-def test_compose_trade_setup_inherits_screen_action_by_default():
-    """ADR-054 S3: initial plan TradeSetup defers to screen candidate."""
-    from src.application.services.swing_judgment_authority import SCREEN_JUDGMENT_WARNING
-    from src.domain.value_objects.signal_assessment import SignalStrength
-    from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
-
-    screen_setup = TradeSetup(
-        ticker=TICKER,
-        snapshot_date=SNAP,
-        action=SetupAction.WATCH,
-        signal_score=55,
-        signal_score_raw=55,
-        signal_strength=SignalStrength.MODERATE,
-        blocking_gates=(),
-        regime=None,
-        signal_multiplier=1.0,
-        gate_tightening=False,
-        rationale="screen",
-    )
-    plan_setup = TradeSetup(
-        ticker=TICKER,
-        snapshot_date=SNAP,
-        action=SetupAction.ENTER,
-        signal_score=90,
-        signal_score_raw=90,
-        signal_strength=SignalStrength.STRONG,
-        blocking_gates=(),
-        regime=None,
-        signal_multiplier=1.0,
-        gate_tightening=False,
-        rationale="plan",
-    )
-
-    class _ComposerRisk:
-        def compose_trade_setup(self, **kwargs):
-            return plan_setup, []
-
-        def compose_market_context_preview(self, **kwargs):
-            return None, None, None, []
-
-    candidate = SimpleNamespace(
-        trade_setup=screen_setup,
-        signal_assessment=_signal_response(50),
-    )
-    state = PlanSwingWorkflowState()
-    state.accumulation_evaluation = SimpleNamespace(candidate=candidate)
     state.signal_assessment = candidate.signal_assessment
     state.signal_assessment_availability = plan_swing_dto.SignalAssessmentAvailability(
         status=plan_swing_dto.SignalAssessmentStatus.AVAILABLE
     )
     state.risk_response = SimpleNamespace()
+    return state
 
+
+# --- 1/2: screen verdict is inherited, under every flag combination ----------
+
+
+@pytest.mark.parametrize(
+    ("with_market_context", "with_technical_gate"),
+    [(False, False), (True, False), (False, True), (True, True)],
+)
+def test_compose_trade_setup_inherits_screen_action_under_every_flag_combination(
+    with_market_context: bool,
+    with_technical_gate: bool,
+) -> None:
+    """ADR-067 §3 behaviour change: the re-judge flags no longer buy an Action.
+
+    Before ADR-067, `with_market_context`/`with_technical_gate` unlocked a
+    plan-side Action recompute that replaced screen's verdict. They must now
+    change nothing about which TradeSetup the plan verdict shows.
+    """
+    screen_setup = _trade_setup(SetupAction.WATCH, 55, "screen")
+    plan_setup = _trade_setup(SetupAction.ENTER, 90, "plan")
+
+    state = _state_with_screen_verdict(screen_setup)
     composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_ComposerRisk(),
-        signal_engine=_RecordingSignalEngine(),
+        risk_trade_setup_composer=_RiskComposerThatMustNotRecompose(plan_setup),
+        signal_engine=_EngineThatMustNotJudge(),
     )
+
     result = composer.compose_trade_setup_and_preview(
-        _request(with_market_context=False, with_technical_gate=False),
+        _request(
+            with_market_context=with_market_context,
+            with_technical_gate=with_technical_gate,
+        ),
         state,
     )
+
     assert result.trade_setup is screen_setup
     assert result.verdict.trade_setup is screen_setup
     assert result.trade_setup.action == SetupAction.WATCH
     assert SCREEN_JUDGMENT_WARNING in result.warnings
 
 
-def test_recompose_skips_rescore_when_action_recompute_not_allowed():
-    """ADR-054 S3: default plan freezes screen TradeSetup Action."""
-    from src.application.services.swing_judgment_authority import SCREEN_JUDGMENT_WARNING
-    from src.domain.value_objects.signal_assessment import SignalStrength
-    from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
+def test_compose_trade_setup_uses_plan_structure_when_screen_never_judged() -> None:
+    """A ticker screen never judged has no verdict to inherit — plan's
+    structure-only TradeSetup stands (ADR-054 S3 rule 2)."""
+    plan_setup = _trade_setup(SetupAction.AVOID, 20, "plan")
 
-    engine = _RecordingSignalEngine()
+    state = _state_with_screen_verdict(None)
     composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(),
-        signal_engine=engine,
+        risk_trade_setup_composer=_RiskComposerThatMustNotRecompose(plan_setup),
+        signal_engine=_EngineThatMustNotJudge(),
     )
-    screen_setup = TradeSetup(
-        ticker=TICKER,
-        snapshot_date=SNAP,
-        action=SetupAction.WATCH,
-        signal_score=60,
-        signal_score_raw=60,
-        signal_strength=SignalStrength.MODERATE,
-        blocking_gates=(),
-        regime=None,
-        signal_multiplier=1.0,
-        gate_tightening=False,
-        rationale="screen",
+
+    result = composer.compose_trade_setup_and_preview(_request(), state)
+
+    assert result.trade_setup is plan_setup
+    assert result.verdict.trade_setup is plan_setup
+    assert SCREEN_JUDGMENT_WARNING not in result.warnings
+
+
+# --- 3: the post-evidence step carries forward and nothing else -------------
+
+
+@pytest.mark.parametrize(
+    ("with_market_context", "with_technical_gate"),
+    [(False, False), (True, False), (False, True), (True, True)],
+)
+def test_carry_forward_freezes_screen_action_and_never_rescores(
+    with_market_context: bool,
+    with_technical_gate: bool,
+) -> None:
+    screen_setup = _trade_setup(SetupAction.WATCH, 60, "screen")
+    plan_temp = _trade_setup(SetupAction.ENTER, 99, "plan-temp")
+
+    state = _state_with_screen_verdict(screen_setup)
+    composer = PlanSwingDecisionComposer(
+        risk_trade_setup_composer=_RiskComposerThatMustNotRecompose(plan_temp),
+        signal_engine=_EngineThatMustNotJudge(),
     )
-    plan_temp = TradeSetup(
-        ticker=TICKER,
-        snapshot_date=SNAP,
-        action=SetupAction.ENTER,
-        signal_score=99,
-        signal_score_raw=99,
-        signal_strength=SignalStrength.STRONG,
-        blocking_gates=(),
-        regime=None,
-        signal_multiplier=1.0,
-        gate_tightening=False,
-        rationale="plan-temp",
-    )
-    state = _state(
-        built_setup_evidence=_built_setup_evidence(),
-        built_flow_evidence=_built_flow_evidence(),
-        source_availability_use_case=_source_availability_use_case(),
-    )
-    # Screen candidate carries authoritative TradeSetup.
-    state.accumulation_evaluation.candidate.trade_setup = screen_setup
+    # Whatever the earlier structure pass left behind is irrelevant to Action.
     state.trade_setup = plan_temp
-    state.verdict = replace(state.verdict, trade_setup=plan_temp)
-
-    result = composer.recompose_after_evidence(
-        _request(with_market_context=False, with_technical_gate=False),
-        state,
+    state.verdict = plan_swing_dto.SwingVerdict(
+        trade_setup=plan_temp,
+        signal_assessment=state.signal_assessment,
+        risk_response=None,
+        market_regime=None,
+        signal_assessment_availability=state.signal_assessment_availability,
     )
 
-    assert engine.calls == []
+    # Flags are inert here by construction; parametrised to prove it.
+    _ = (with_market_context, with_technical_gate)
+    result = composer.carry_forward_screen_verdict(state)
+
     assert result.trade_setup is screen_setup
     assert result.trade_setup.action == SetupAction.WATCH
     assert result.verdict.trade_setup is screen_setup
     assert SCREEN_JUDGMENT_WARNING in result.warnings
+    # Signal assessment is screen's, untouched — no enriched re-score exists.
+    assert result.signal_assessment.assessment.score == 50
 
 
-def test_recompose_after_evidence_failure_clears_pre_existing_trade_setup():
-    class FailingSignalEngine:
-        def foreign_flow_quality_from_accum_score(self, score):
-            return None
+def test_carry_forward_leaves_plan_structure_intact_without_screen_verdict() -> None:
+    plan_temp = _trade_setup(SetupAction.AVOID, 20, "plan-temp")
 
-        def bandar_max_range(self, n):
-            return 0
-
-        def evaluate_swing_trade_setup(self, ticker, signal_context, market_context=None, **kwargs):
-            raise RuntimeError("rescore boom")
-
-    engine = FailingSignalEngine()
+    state = _state_with_screen_verdict(None)
     composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=_RecordingRiskTradeSetupComposer(),
-        signal_engine=engine,
+        risk_trade_setup_composer=_RiskComposerThatMustNotRecompose(plan_temp),
+        signal_engine=_EngineThatMustNotJudge(),
+    )
+    state.trade_setup = plan_temp
+    state.verdict = plan_swing_dto.SwingVerdict(
+        trade_setup=plan_temp,
+        signal_assessment=state.signal_assessment,
+        risk_response=None,
+        market_regime=None,
+        signal_assessment_availability=state.signal_assessment_availability,
     )
 
-    # Pre-existing verdict and trade setup
-    from src.domain.value_objects.signal_assessment import SignalStrength
-    from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
+    result = composer.carry_forward_screen_verdict(state)
 
-    pre_existing_setup = TradeSetup(
-        ticker=TICKER,
-        snapshot_date=SNAP,
-        action=SetupAction.ENTER,
-        signal_score=75,
-        signal_score_raw=75,
-        signal_strength=SignalStrength.STRONG,
-        blocking_gates=(),
-        regime=None,
-        signal_multiplier=1.0,
-        gate_tightening=False,
-        rationale="test",
+    assert result.trade_setup is plan_temp
+    assert result.verdict.trade_setup is plan_temp
+    assert result.warnings == []
+
+
+def test_carry_forward_appends_the_screen_judgment_note_only_once() -> None:
+    screen_setup = _trade_setup(SetupAction.WATCH, 60, "screen")
+    state = _state_with_screen_verdict(screen_setup)
+    composer = PlanSwingDecisionComposer(
+        risk_trade_setup_composer=_RiskComposerThatMustNotRecompose(None),
+        signal_engine=_EngineThatMustNotJudge(),
+    )
+    state.warnings.append(SCREEN_JUDGMENT_WARNING)
+
+    result = composer.carry_forward_screen_verdict(state)
+
+    assert result.warnings.count(SCREEN_JUDGMENT_WARNING) == 1
+
+
+# --- 4: source-level guard (ADR-067 §11 negative test) ----------------------
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_SERVICES_DIR = _REPO_ROOT / "src" / "application" / "services"
+
+_PLAN_SWING_APPLICATION_MODULES = (
+    *sorted(_SERVICES_DIR.glob("plan_swing_*.py")),
+    _SERVICES_DIR / "swing_judgment_authority.py",
+    _SERVICES_DIR / "swing_trade_plan_builder.py",
+    _REPO_ROOT / "src" / "application" / "use_case" / "plan_swing_workflow_use_case.py",
+)
+
+# Identifiers whose presence anywhere on the plan surface would mean plan had
+# regained a route to producing its own Action.
+_FORBIDDEN_IDENTIFIERS = frozenset(
+    {
+        "CanonicalSignalEvidenceInput",
+        "SetupEvidenceGroupInput",
+        "FlowEvidenceGroupInput",
+        "canonical_evidence",
+        "evaluate_swing_trade_setup",
+        "evaluate_accumulation_discovery",
+        "allow_action_recompute",
+        "allow_recompute",
+    }
+)
+
+
+def _referenced_identifiers(module_path: Path) -> set[str]:
+    """Every name the module actually references in code.
+
+    Docstrings and comments are deliberately excluded — this must fail on a
+    real re-introduction, not on prose describing the retirement.
+    """
+    tree = ast.parse(module_path.read_text(encoding="utf-8"), filename=str(module_path))
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            names.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            names.add(node.attr)
+        elif isinstance(node, ast.keyword) and node.arg is not None:
+            names.add(node.arg)
+        elif isinstance(node, ast.arg):
+            names.add(node.arg)
+        elif isinstance(node, ast.alias):
+            names.add(node.name.rsplit(".", 1)[-1])
+            if node.asname:
+                names.add(node.asname)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+    return names
+
+
+def test_plan_swing_modules_are_discovered_by_the_source_guard() -> None:
+    # A guard that silently globs nothing would pass forever.
+    paths = {p.name for p in _PLAN_SWING_APPLICATION_MODULES}
+    assert "plan_swing_decision_composer.py" in paths
+    assert "plan_swing_risk_trade_setup.py" in paths
+    assert len(_PLAN_SWING_APPLICATION_MODULES) >= 8
+    for path in _PLAN_SWING_APPLICATION_MODULES:
+        assert path.is_file(), path
+
+
+@pytest.mark.parametrize("module_path", _PLAN_SWING_APPLICATION_MODULES, ids=lambda p: p.name)
+def test_plan_surface_never_constructs_canonical_signal_evidence(module_path: Path) -> None:
+    """ADR-067 §11: fail if `plan swing` regains a scoring/judgment route."""
+    offenders = sorted(_referenced_identifiers(module_path) & _FORBIDDEN_IDENTIFIERS)
+    assert offenders == [], (
+        f"{module_path} references retired plan-judgment identifiers {offenders}. "
+        "ADR-067 §3: plan carries the screen verdict and must neither assemble "
+        "canonical evidence nor invoke a SignalEngine scoring entry point."
     )
 
-    state = _state(
-        built_setup_evidence=_built_setup_evidence(),
-        built_flow_evidence=_built_flow_evidence(),
-        source_availability_use_case=_source_availability_use_case(),
-    )
-    state.trade_setup = pre_existing_setup
 
-    composer.recompose_after_evidence(_request(), state)
-
-    assert state.trade_setup is None
-    assert state.signal_assessment is None
-    assert state.market_context_signal_preview is None
-    assert state.market_context_trade_setup_preview is None
-    assert state.verdict.trade_setup is None
-    assert state.verdict.signal_assessment is None
-    assert state.verdict.market_context_signal_preview is None
-    assert state.verdict.market_context_trade_setup_preview is None
-    assert (
-        state.signal_assessment_availability.status
-        == plan_swing_dto.SignalAssessmentStatus.UNAVAILABLE
+def test_source_guard_detects_a_reintroduction(tmp_path: Path) -> None:
+    """Sensitivity counterexample — proves the guard above can actually fail."""
+    offending = tmp_path / "plan_swing_regression.py"
+    offending.write_text(
+        "def judge(engine, ctx, evidence):\n"
+        "    return engine.evaluate_swing_trade_setup(ctx, canonical_evidence=evidence)\n",
+        encoding="utf-8",
     )
-    assert (
-        state.signal_assessment_availability.unavailable_reason
-        == plan_swing_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
-    )
+    assert _referenced_identifiers(offending) & _FORBIDDEN_IDENTIFIERS == {
+        "canonical_evidence",
+        "evaluate_swing_trade_setup",
+    }

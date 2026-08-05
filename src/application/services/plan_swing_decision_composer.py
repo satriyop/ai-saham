@@ -3,9 +3,13 @@
 Layer: Application
 
 Owns gate context, initial risk assessment, initial signal assessment,
-initial TradeSetup composition, market-context preview, and the
-evidence-enriched signal re-score with recomposition. Extracted from
+initial TradeSetup composition, and market-context preview. Extracted from
 `PlanSwingWorkflowUseCase` to keep the use case as orchestration only.
+
+ADR-067 §3: plan does not judge. This module composes no canonical signal
+evidence and runs no swing re-score — the Action shown by `plan swing` is
+always the screen verdict carried forward (or, for a ticker screen never
+judged, the structure-only TradeSetup composed from the initial risk pass).
 """
 
 from __future__ import annotations
@@ -15,23 +19,11 @@ from typing import TYPE_CHECKING
 
 from src.application.dto import plan_swing as plan_swing_dto
 from src.application.exceptions import NoProductionSignalEvidenceError
-from src.application.services.evidence_source_availability_assembler import (
-    EvidenceSourceAvailabilityAssembler,
-)
 from src.application.services.plan_swing_workflow_state import (
     PlanSwingWorkflowState,
 )
-from src.application.services.signal_context_builder import (
-    build_signal_context_from_candidate,
-)
 from src.application.services.swing_judgment_authority import (
-    allow_action_recompute,
     resolve_authoritative_trade_setup,
-)
-from src.domain.value_objects.canonical_signal_evidence_input import (
-    CanonicalSignalEvidenceInput,
-    FlowEvidenceGroupInput,
-    SetupEvidenceGroupInput,
 )
 
 if TYPE_CHECKING:
@@ -42,7 +34,7 @@ if TYPE_CHECKING:
 
 
 class PlanSwingDecisionComposer:
-    """Owns risk/signal/trade-setup decisions and evidence-enriched re-score."""
+    """Owns risk/signal/trade-setup composition for the plan surface."""
 
     def __init__(
         self,
@@ -144,14 +136,11 @@ class PlanSwingDecisionComposer:
         )
         state.warnings.extend(mce_preview_warnings)
 
-        # ADR-054 S3: default Action is screen TradeSetup when present.
+        # ADR-054 S3 / ADR-067 §3: Action is screen TradeSetup whenever screen
+        # produced one. There is no flag that lets plan override it.
         trade_setup, authority_note = resolve_authoritative_trade_setup(
             state.accumulation_candidate,
             plan_recomputed=trade_setup,
-            allow_recompute=allow_action_recompute(
-                with_market_context=request.with_market_context,
-                with_technical_gate=request.with_technical_gate,
-            ),
         )
         if authority_note:
             state.warnings.append(authority_note)
@@ -172,181 +161,25 @@ class PlanSwingDecisionComposer:
         )
         return state
 
-    def recompose_after_evidence(
+    def carry_forward_screen_verdict(
         self,
-        request: plan_swing_dto.PlanSwingWorkflowRequest,
         state: PlanSwingWorkflowState,
     ) -> PlanSwingWorkflowState:
-        # ADR-054 S3: without explicit re-judge flags, freeze screen Action —
-        # do not overwrite with swing-purpose re-score.
-        if not allow_action_recompute(
-            with_market_context=request.with_market_context,
-            with_technical_gate=request.with_technical_gate,
-        ):
-            trade_setup, authority_note = resolve_authoritative_trade_setup(
-                state.accumulation_candidate,
-                plan_recomputed=state.trade_setup,
-                allow_recompute=False,
-            )
-            if authority_note and authority_note not in state.warnings:
-                state.warnings.append(authority_note)
-            if trade_setup is not state.trade_setup:
-                state.trade_setup = trade_setup
-                if state.verdict is not None:
-                    state.verdict = replace(state.verdict, trade_setup=trade_setup)
-            return state
+        """Final Action resolution after the diagnostic evidence pass.
 
-        evidence = state.evidence
-        canonical_evidence = self._build_canonical_evidence(state)
-
-        if (
-            self._signal_engine is not None
-            and state.accumulation_candidate is not None
-            and canonical_evidence is not None
-        ):
-            signal_assessment = state.signal_assessment
-            try:
-                _evidence_ctx = build_signal_context_from_candidate(
-                    ticker=request.ticker,
-                    snapshot_date=request.today,
-                    candidate=state.accumulation_candidate,
-                    signal_engine=self._signal_engine,
-                )
-                signal_assessment = self._signal_engine.evaluate_swing_trade_setup(
-                    request.ticker,
-                    _evidence_ctx,
-                    market_context=state.market_regime,
-                    canonical_evidence=canonical_evidence,
-                    setup_family=request.setup_name,
-                    setup_phase=evidence.setup_phase if evidence is not None else None,
-                    sector_context_evidence=(
-                        evidence.sector_context_evidence if evidence is not None else None
-                    ),
-                    company_quality_context_evidence=(
-                        evidence.company_quality_context_evidence if evidence is not None else None
-                    ),
-                )
-            except (NoProductionSignalEvidenceError, TypeError, ValueError):
-                # A malformed evidence/provenance/availability contract is a
-                # programming or data-integrity defect, not an operational
-                # "evidence unavailable" condition — it must fail closed,
-                # never be silently downgraded to a warning.
-                raise
-            except Exception as exc:
-                state.warnings.append(f"Evidence-enriched signal re-score unavailable: {exc}")
-                state.signal_assessment_availability = plan_swing_dto.SignalAssessmentAvailability(
-                    status=plan_swing_dto.SignalAssessmentStatus.UNAVAILABLE,
-                    unavailable_reason=(
-                        plan_swing_dto.SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
-                    ),
-                )
-                state.signal_assessment = None
-                state.trade_setup = None
-                state.market_context_signal_preview = None
-                state.market_context_trade_setup_preview = None
-                state.verdict = replace(
-                    state.verdict,
-                    signal_assessment=None,
-                    trade_setup=None,
-                    market_context_signal_preview=None,
-                    market_context_trade_setup_preview=None,
-                    signal_assessment_availability=state.signal_assessment_availability,
-                )
-            else:
-                # Re-score succeeded — recompose trade_setup and MCE preview so
-                # all three fields in verdict use the same enriched signal score.
-                (
-                    _new_trade_setup,
-                    _new_mce_signal,
-                    _new_mce_trade_preview,
-                    recompose_warnings,
-                ) = self._risk_trade_setup_composer.recompose_after_signal_rescore(
-                    ticker=request.ticker,
-                    snapshot_date=request.today,
-                    signal_assessment=signal_assessment,
-                    risk_response=state.risk_response,
-                    market_context_risk_preview=state.market_context_risk_preview,
-                    market_regime=state.market_regime,
-                    fallback_trade_setup=state.trade_setup,
-                    fallback_market_context_signal_preview=state.market_context_signal_preview,
-                    fallback_market_context_trade_setup_preview=(
-                        state.market_context_trade_setup_preview
-                    ),
-                )
-                state.warnings.extend(recompose_warnings)
-
-                # Explicit recompute path still runs authority for consistency.
-                _new_trade_setup, authority_note = resolve_authoritative_trade_setup(
-                    state.accumulation_candidate,
-                    plan_recomputed=_new_trade_setup,
-                    allow_recompute=True,
-                )
-                if authority_note:
-                    state.warnings.append(authority_note)
-                else:
-                    state.warnings.append(
-                        "Action recomputed for structure-time flags "
-                        "(market context and/or technical gate; ADR-054 S3)"
-                    )
-
-                state.signal_assessment = signal_assessment
-                state.signal_assessment_availability = plan_swing_dto.SignalAssessmentAvailability(
-                    status=plan_swing_dto.SignalAssessmentStatus.AVAILABLE,
-                )
-                state.trade_setup = _new_trade_setup
-                state.verdict = replace(
-                    state.verdict,
-                    signal_assessment=signal_assessment,
-                    trade_setup=_new_trade_setup,
-                    market_context_signal_preview=_new_mce_signal,
-                    market_context_trade_setup_preview=_new_mce_trade_preview,
-                    signal_assessment_availability=state.signal_assessment_availability,
-                )
+        ADR-067 §3: plan carries the screen verdict forward and computes no
+        verdict of its own. No canonical evidence is assembled here and the
+        SignalEngine is never re-invoked — the only decision made is *whose*
+        already-composed TradeSetup the plan verdict shows.
+        """
+        trade_setup, authority_note = resolve_authoritative_trade_setup(
+            state.accumulation_candidate,
+            plan_recomputed=state.trade_setup,
+        )
+        if authority_note and authority_note not in state.warnings:
+            state.warnings.append(authority_note)
+        if trade_setup is not state.trade_setup:
+            state.trade_setup = trade_setup
+            if state.verdict is not None:
+                state.verdict = replace(state.verdict, trade_setup=trade_setup)
         return state
-
-    def _build_canonical_evidence(
-        self, state: PlanSwingWorkflowState
-    ) -> "CanonicalSignalEvidenceInput | None":
-        """Resolve availability once, pre-score, from exact provenance only,
-        and bind it into the canonical evidence groups (ADR-041
-        CANONICAL-EVIDENCE-BOUNDARY) — never a separate post-score step.
-        Only includes a group whose evidence was actually built this run;
-        never describes evidence that could theoretically have been produced
-        from the same candidate."""
-        built_setup = state.built_setup_evidence
-        built_flow = state.built_flow_evidence
-        if built_setup is None and built_flow is None:
-            return None
-
-        if state.signal_evidence_execution_context is None:
-            raise ValueError("Canonical swing evidence requires SignalEvidenceExecutionContext")
-
-        assembler = EvidenceSourceAvailabilityAssembler(state.source_availability_use_case)
-
-        setup_group: "SetupEvidenceGroupInput | None" = None
-        if built_setup is not None:
-            setup_availability = assembler.assess_setup(
-                effective_session=state.effective_session,
-                provenance=built_setup.provenance,
-            )
-            setup_group = SetupEvidenceGroupInput(
-                evidence=built_setup.evidence,
-                provenance=built_setup.provenance,
-                availability=setup_availability,
-            )
-
-        flow_group: "FlowEvidenceGroupInput | None" = None
-        if built_flow is not None:
-            flow_availability = assembler.assess_flow(
-                effective_session=state.effective_session,
-                provenance=built_flow.provenance,
-            )
-            flow_group = FlowEvidenceGroupInput(
-                evidence=built_flow.evidence,
-                provenance=built_flow.provenance,
-                availability=flow_availability,
-            )
-
-        if setup_group is None and flow_group is None:
-            return None
-        return CanonicalSignalEvidenceInput(setup=setup_group, flow=flow_group)

@@ -219,5 +219,5 @@ class PlanSwingWorkflowUseCase:
         state = self._decision_composer.compose_trade_setup_and_preview(request, state)
         state = self._sizing_service.resolve_targets_and_percent_sizing(request, state)
         state = self._optional_evidence_runner.build_evidence(request, state)
-        state = self._decision_composer.recompose_after_evidence(request, state)
+        state = self._decision_composer.carry_forward_screen_verdict(state)
         return self._response_assembler.assemble(request, state)

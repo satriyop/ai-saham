@@ -152,16 +152,20 @@ def _signal_response(score: float) -> AssessSignalResponse:
     )
 
 
-def test_signal_assessment_failure_returns_exact_warning():
-    class FailingSignalEngine:
+def test_candidate_without_signal_assessment_reports_typed_unavailable():
+    """ADR-067 §3: plan never scores, so a candidate that arrived without a
+    screen signal assessment is reported typed-unavailable rather than being
+    re-scored by the plan surface."""
+
+    class EngineThatMustNotJudge:
         def foreign_flow_quality_from_accum_score(self, score):
             return None
 
         def bandar_max_range(self, n):
             return 0
 
-        def evaluate_swing_trade_setup(self, ticker, signal_context, market_context=None, **kwargs):
-            raise RuntimeError("signal boom")
+        def evaluate_swing_trade_setup(self, *args, **kwargs):
+            raise AssertionError("plan must not re-score: ADR-067 §3")
 
     workflow = PlanSwingWorkflowUseCase(
         **_base_kwargs(
@@ -169,14 +173,24 @@ def test_signal_assessment_failure_returns_exact_warning():
             build_accumulation_candidate_evaluation=lambda **kwargs: _eval_result(
                 _MinimalCandidate()
             ),
-            signal_engine=FailingSignalEngine(),
+            signal_engine=EngineThatMustNotJudge(),
         )
     )
 
-    # Re-score path only runs with explicit re-judge flags (ADR-054 S3).
-    response = workflow.execute(_request(with_market_context=True))
+    # Both former re-judge flags on — they must no longer unlock a re-score.
+    response = workflow.execute(_request(with_market_context=True, with_technical_gate=True))
 
-    assert "Evidence-enriched signal re-score unavailable: signal boom" in response.warnings
+    from src.application.dto.plan_swing import (
+        SignalAssessmentStatus,
+        SignalAssessmentUnavailableReason,
+    )
+
+    assert response.signal_assessment is None
+    assert response.signal_assessment_availability.status is SignalAssessmentStatus.UNAVAILABLE
+    assert response.signal_assessment_availability.unavailable_reason is (
+        SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE
+    )
+    assert not any("re-score" in w for w in response.warnings)
 
 
 class _RescoreSignalEngine:
@@ -257,50 +271,20 @@ _MARKET_CONTEXT = MarketContext(
 )
 
 
-def test_evidence_enriched_rescore_failure_returns_exact_warning():
+def test_evidence_stage_never_rescores_and_carries_screen_assessment_forward():
+    """ADR-067 §3 behaviour change, end to end.
+
+    Before this change, `with_market_context=True` made the post-evidence
+    stage call `SignalEngine.evaluate_swing_trade_setup()` and replace the
+    screen assessment (40.0) with the plan re-score (90.0). The flag is still
+    on here; the screen assessment must survive untouched and the engine must
+    never be called. (`with_technical_gate` is covered at composer level in
+    `tests/application/services/test_plan_swing_decision_composer.py`; it
+    cannot be exercised here because the fake RiskEngine has no indicator
+    evaluator for the technical-gate branch.)
+    """
     signal_engine = _RescoreSignalEngine(fail_rescore=True)
-    # Fast path: candidate already carries a pre-computed signal_assessment,
-    # so the initial signal step reuses it without calling evaluate_swing_trade_setup.
-    candidate = _MinimalCandidate()
-    candidate.signal_assessment = _signal_response(40.0)
-
-    workflow = PlanSwingWorkflowUseCase(
-        **_base_kwargs(
-            FakeMarketRepository([_candle(date(2026, 6, 18))]),
-            build_accumulation_candidate_evaluation=lambda **kwargs: _eval_result(candidate),
-            signal_engine=signal_engine,
-            risk_engine=_FakeRiskEngine(),
-        )
-    )
-
-    # Re-score path only runs with explicit re-judge flags (ADR-054 S3).
-    response = workflow.execute(_request(with_market_context=True))
-
-    assert signal_engine.rescore_calls == 1
-    assert "Evidence-enriched signal re-score unavailable: rescore boom" in response.warnings
-    # Under the new availability-aware design, a failed rescore clears the signal assessment
-    assert response.signal_assessment is None
-    from src.application.dto.plan_swing import (
-        SignalAssessmentStatus,
-        SignalAssessmentUnavailableReason,
-    )
-
-    assert response.signal_assessment_availability.status == SignalAssessmentStatus.UNAVAILABLE
-    assert (
-        response.signal_assessment_availability.unavailable_reason
-        == SignalAssessmentUnavailableReason.ASSESSMENT_FAILED
-    )
-    assert response.verdict.signal_assessment is None
-    assert response.trade_setup is None
-    assert response.market_context_signal_preview is None
-    assert response.market_context_trade_setup_preview is None
-    assert response.verdict.trade_setup is None
-    assert response.verdict.market_context_signal_preview is None
-    assert response.verdict.market_context_trade_setup_preview is None
-
-
-def test_evidence_enriched_rescore_success_updates_response():
-    signal_engine = _RescoreSignalEngine(fail_rescore=False)
+    # Fast path: candidate already carries a pre-computed signal_assessment.
     candidate = _MinimalCandidate()
     candidate.signal_assessment = _signal_response(40.0)
 
@@ -316,16 +300,11 @@ def test_evidence_enriched_rescore_success_updates_response():
 
     response = workflow.execute(_request(with_market_context=True))
 
-    assert signal_engine.rescore_calls == 1
-    assert response.signal_assessment.assessment.score == 90.0
+    assert signal_engine.rescore_calls == 0
+    assert response.signal_assessment.assessment.score == 40.0
+    assert response.verdict.signal_assessment.assessment.score == 40.0
     assert response.trade_setup is not None
-    assert response.verdict.signal_assessment.assessment.score == 90.0
     assert response.verdict.trade_setup is response.trade_setup
-    assert response.market_context_signal_preview.assessment.score == 90.0
-    assert response.market_context_trade_setup_preview is not None
-    assert response.verdict.market_context_trade_setup_preview is (
-        response.market_context_trade_setup_preview
-    )
 
 
 class _SignalEngineMustNotAssessWithoutEvidence:
