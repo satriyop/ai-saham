@@ -159,12 +159,15 @@ def format_action_why(candidate: Any, *, gate: str = "") -> str:
                 bits.append(text if len(text) < 52 else text[:49] + "…")
 
     gate_s = str(gate or "")
+    unknown = unevaluable_gates(candidate)
     if gate_s == "BLOCKED":
         risk = getattr(candidate, "risk_assessment", None)
         which = getattr(risk, "gate_triggered", None) if risk else None
         bits.append(f"gate blocked ({which})" if which else "gate blocked")
     elif gate_s == "OPEN":
-        bits.append("gate open")
+        # An open gate with unknowns is not an all-clear: those gates never
+        # checked anything. Never let "gate open" stand alone in that case.
+        bits.append(f"gate open, {format_unknown_gates(unknown)}" if unknown else "gate open")
 
     if not bits:
         ts = getattr(candidate, "trade_setup", None)
@@ -374,12 +377,34 @@ def _strength_label(candidate: Any) -> str:
     return str(getattr(strength, "value", strength) or "—")
 
 
+def unevaluable_gates(candidate: Any) -> tuple[str, ...]:
+    """Gates that ran but had no usable input, from the risk assessment.
+
+    Empty when every gate that ran reached a real verdict. Distinct from gates
+    that never ran because an earlier one short-circuited.
+    """
+    risk = getattr(candidate, "risk_assessment", None) if candidate is not None else None
+    names = getattr(risk, "unevaluable_gates", None) if risk is not None else None
+    if not names:
+        return ()
+    return tuple(str(name) for name in names)
+
+
+def format_unknown_gates(names: tuple[str, ...]) -> str:
+    """Operator phrasing for unevaluable gates. Empty string when there are none."""
+    if not names:
+        return ""
+    noun = "gate" if len(names) == 1 else "gates"
+    return f"{len(names)} {noun} unknown ({', '.join(names)})"
+
+
 def _risk_verdict(candidate: Any) -> str:
     risk = getattr(candidate, "risk_assessment", None) if candidate is not None else None
     if risk is None:
         return "—"
     verdict = getattr(risk, "risk_level_name", None)
-    if verdict is not None:
-        return str(verdict)
-    triggered = getattr(risk, "gate_triggered", None)
-    return "BLOCKED" if triggered else "OPEN"
+    if verdict is None:
+        triggered = getattr(risk, "gate_triggered", None)
+        verdict = "BLOCKED" if triggered else "OPEN"
+    note = format_unknown_gates(unevaluable_gates(candidate))
+    return f"{verdict} · {note}" if note else str(verdict)

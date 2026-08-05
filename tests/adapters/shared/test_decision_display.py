@@ -10,6 +10,8 @@ from src.adapters.shared.decision_display import (
     format_decision_stack,
     format_market_context_lines,
     format_setup_readiness,
+    format_unknown_gates,
+    unevaluable_gates,
 )
 
 
@@ -178,3 +180,59 @@ def test_format_market_context_absent_honest():
     text = "\n".join(format_market_context_lines(None, candidate=_candidate()))
     assert "not evaluated" in text or "not on this screen" in text
     assert "RISK_ON" not in text or "decision constraints" in text
+
+
+# ── Unevaluable risk gates ──────────────────────────────────────────────────
+# An open gate with unknowns is not an all-clear: those gates never checked
+# anything. The operator must see "N gates unknown", not an implied all-clear.
+
+
+def _candidate_with_unknown_gates(*names: str, gate_triggered=None):
+    c = _candidate(gate_triggered=gate_triggered)
+    c.risk_assessment = SimpleNamespace(
+        gate_triggered=gate_triggered,
+        risk_level_name="OPEN" if gate_triggered is None else "BLOCKED",
+        unevaluable_gates=tuple(names),
+    )
+    return c
+
+
+def test_no_unknown_gates_reads_as_a_plain_open_gate():
+    c = _candidate_with_unknown_gates()
+    assert unevaluable_gates(c) == ()
+    assert format_unknown_gates(()) == ""
+    why = format_action_why(c, gate="OPEN")
+    assert "gate open" in why
+    assert "unknown" not in why
+
+
+def test_open_gate_with_unknowns_is_never_an_implied_all_clear():
+    c = _candidate_with_unknown_gates("FundamentalGate", "BandarGate")
+    why = format_action_why(c, gate="OPEN")
+    assert "2 gates unknown" in why
+    assert "FundamentalGate" in why
+    assert "BandarGate" in why
+    # The bare phrase must not stand alone.
+    assert "gate open, 2 gates unknown" in why
+
+
+def test_single_unknown_gate_is_singular():
+    assert format_unknown_gates(("FundamentalGate",)) == "1 gate unknown (FundamentalGate)"
+
+
+def test_decision_stack_risk_line_carries_the_unknown_count():
+    c = _candidate_with_unknown_gates("FundamentalGate")
+    text = "\n".join(format_decision_stack(c, action="WATCH", gate="OPEN", signal="79"))
+    assert "← Risk OPEN · 1 gate unknown (FundamentalGate)" in text
+
+
+def test_a_blocked_gate_still_reports_what_was_never_checked():
+    c = _candidate_with_unknown_gates("FundamentalGate", gate_triggered="FreeFloatGate")
+    text = "\n".join(format_decision_stack(c, action="AVOID", gate="BLOCKED", signal="40"))
+    assert "BLOCKED" in text
+    assert "1 gate unknown (FundamentalGate)" in text
+
+
+def test_a_candidate_without_a_risk_assessment_reports_no_unknowns():
+    assert unevaluable_gates(SimpleNamespace(risk_assessment=None)) == ()
+    assert unevaluable_gates(None) == ()

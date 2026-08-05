@@ -26,8 +26,10 @@ from src.adapters.shared.decision_display import (
     format_market_context_lines,
     format_primary_setup_family,
     format_setup_readiness,
+    format_unknown_gates,
     named_setup_match_glyphs,
     readiness_and_family,
+    unevaluable_gates,
 )
 from src.adapters.shared.score_display_labels import ACCUM, SIGNAL
 from src.adapters.shared.screen_accum_board_fields import extract_screen_accum_board_fields
@@ -371,6 +373,10 @@ def _section_risk(source: Any) -> list[str]:
             lines.append(f"  rationale: {'; '.join(str(x) for x in rat)}")
         else:
             lines.append(f"  rationale: {rat}")
+
+    unknown = format_unknown_gates(unevaluable_gates(source))
+    if unknown:
+        lines.append(f"  {unknown}")
 
     gates = getattr(source, "risk_gate_evaluations", None) or ()
     if not gates:

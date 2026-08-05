@@ -38,8 +38,10 @@ from src.adapters.shared.decision_display import (
     format_market_context_lines,
     format_primary_setup_family,
     format_setup_readiness,
+    format_unknown_gates,
     named_setup_match_glyphs,
     readiness_and_family,
+    unevaluable_gates,
 )
 from src.adapters.shared.score_display_labels import (
     ACCUM,
@@ -125,7 +127,8 @@ def _build_judgment_header(candidate: Any) -> Any:
     table.add_column("Value")
     table.add_row("Ticker", fields.ticker)
     table.add_row("Action", fields.action)
-    table.add_row("Gate", fields.gate)
+    unknown = format_unknown_gates(unevaluable_gates(candidate))
+    table.add_row("Gate", f"{fields.gate}  ·  {unknown}" if unknown else fields.gate)
     table.add_row(SIGNAL, fields.signal)
     table.add_row(ACCUM, fields.accum)
     table.add_row("Authority", auth)
