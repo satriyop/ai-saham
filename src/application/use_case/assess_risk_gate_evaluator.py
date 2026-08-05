@@ -22,6 +22,22 @@ from src.domain.value_objects.risk_gate_audit import (
 )
 
 
+def _unevaluable_gate_names(
+    evaluations: list[GateEvaluationRecord],
+) -> tuple[str, ...]:
+    """Names of gates that ran but had no usable input, in evaluation order."""
+    return tuple(row.gate for row in evaluations if row.is_unevaluable)
+
+
+def _no_gate_fired_rationale(unevaluable_gates: tuple[str, ...]) -> str:
+    """Rationale when nothing fired — never claim a clean sweep we did not get."""
+    if not unevaluable_gates:
+        return "all gates passed"
+    count = len(unevaluable_gates)
+    noun = "gate" if count == 1 else "gates"
+    return f"no gate blocked; {count} {noun} unevaluable ({', '.join(unevaluable_gates)})"
+
+
 class AssessRiskGateEvaluator:
     """Evaluates risk using the standard configured structural/execution gates."""
 
@@ -167,6 +183,8 @@ class AssessRiskGateEvaluator:
                     firing_structural = False
                     short_circuited = True
 
+        unevaluable = _unevaluable_gate_names(evaluations)
+
         if firing_gate is not None and firing_result is not None:
             return self._gate_response(
                 agg_response,
@@ -177,13 +195,15 @@ class AssessRiskGateEvaluator:
                 is_structural=bool(firing_structural),
                 gate_evaluations=tuple(evaluations),
                 gate_context_completeness=completeness,
+                unevaluable_gates=unevaluable,
             )
 
         assessment = RiskAssessment(
-            rationale=("all gates passed",),
+            rationale=(_no_gate_fired_rationale(unevaluable),),
             snapshot_date=latest_snapshot.date,
             indicators=latest_snapshot,
             gate_triggered=None,
+            unevaluable_gates=unevaluable,
         )
         return AssessRiskResponse(
             ticker=agg_response.ticker,
@@ -206,6 +226,7 @@ class AssessRiskGateEvaluator:
         is_structural: bool,
         gate_evaluations: tuple[GateEvaluationRecord, ...] = (),
         gate_context_completeness: GateContextCompleteness | None = None,
+        unevaluable_gates: tuple[str, ...] = (),
     ) -> AssessRiskResponse:
         assessment = RiskAssessment(
             rationale=(gate_result.reason,),
@@ -214,6 +235,7 @@ class AssessRiskGateEvaluator:
             gate_triggered=type(gate).__name__,
             gate_is_structural=is_structural,
             gate_confidence=gate_result.confidence,
+            unevaluable_gates=unevaluable_gates,
         )
         return AssessRiskResponse(
             ticker=agg_response.ticker,

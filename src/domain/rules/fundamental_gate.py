@@ -34,7 +34,9 @@ class FundamentalGate(RiskGate):
     Structural gate: Piotroski F-score ≤ threshold fires.
 
     Runs before execution gates and short-circuits regardless of the current
-    RSI or trend signal. No fundamental data available → gate passes silently.
+    RSI or trend signal. No fundamental data available → the result is
+    ``GateOutcome.UNEVALUABLE``; whether that also blocks is governed by
+    ``FundamentalGatePolicy.missing_data_action``.
     """
 
     def __init__(
@@ -49,13 +51,13 @@ class FundamentalGate(RiskGate):
 
     def evaluate(self, context: GateContext) -> GateResult:
         if context.piotroski_f_score is None:
-            triggered = self._policy.missing_data_action == "block"
-            return GateResult(
-                triggered=triggered,
+            blocks = self._policy.missing_data_action == "block"
+            return GateResult.unevaluable(
                 reason="no fundamental data — gate blocked"
-                if triggered
+                if blocks
                 else "no fundamental data — gate skipped",
                 confidence=self._policy.missing_data_confidence,
+                blocks=blocks,
             )
         if context.piotroski_f_score <= self._threshold:
             return GateResult(

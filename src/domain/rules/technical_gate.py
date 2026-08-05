@@ -33,15 +33,15 @@ class TechnicalGate(RiskGate):
 
     def evaluate(self, context: GateContext) -> GateResult:
         if context.latest_snapshot is None:
-            triggered = self._config.missing_data_action == "block"
-            return GateResult(
-                triggered=triggered,
+            blocks = self._config.missing_data_action == "block"
+            return GateResult.unevaluable(
                 reason=(
                     "no snapshot for technical gate — blocked"
-                    if triggered
+                    if blocks
                     else "no snapshot for technical gate"
                 ),
                 confidence=self._config.missing_data_confidence,
+                blocks=blocks,
             )
         indicator_ctx = self._evaluator.evaluate(context.latest_snapshot)
         if self._config.block_when_bearish and indicator_ctx.overall == IndicatorReading.BEARISH:

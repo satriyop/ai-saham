@@ -29,22 +29,76 @@ def test_classify_pass_triggered_skipped_blocked_on_missing() -> None:
     )
     assert (
         classify_gate_outcome(
-            GateResult(triggered=False, reason="no bandar flow data — gate skipped", confidence=0)
+            GateResult.unevaluable(reason="no bandar flow data — gate skipped", confidence=0)
         )
         == "skipped"
     )
     assert (
         classify_gate_outcome(
-            GateResult(triggered=True, reason="no fundamental data — gate blocked", confidence=0)
+            GateResult.unevaluable(
+                reason="no fundamental data — gate blocked",
+                confidence=0,
+                blocks=True,
+            )
         )
         == "blocked_on_missing"
     )
     assert (
         classify_gate_outcome(
-            GateResult(triggered=False, reason="no snapshot for technical gate", confidence=0)
+            GateResult.unevaluable(reason="no snapshot for technical gate", confidence=0)
         )
         == "skipped"
     )
+
+
+def test_classify_does_not_read_the_reason_prose() -> None:
+    """A real verdict is never reclassified because its wording resembles a skip."""
+    # Reads like a skip, is a real evaluated pass.
+    assert (
+        classify_gate_outcome(
+            GateResult(triggered=False, reason="no distribution — gate skipped", confidence=0)
+        )
+        == "pass"
+    )
+    # Reads like a missing-data block, is a real trigger.
+    assert (
+        classify_gate_outcome(
+            GateResult(triggered=True, reason="no bandar flow data — gate blocked", confidence=80)
+        )
+        == "triggered"
+    )
+    # Says nothing at all, but is typed unevaluable.
+    assert classify_gate_outcome(GateResult.unevaluable(reason="", confidence=0)) == "skipped"
+
+
+def test_unevaluable_record_is_flagged_and_not_evaluated_is_not() -> None:
+    unevaluable = GateEvaluationRecord.from_result(
+        gate_name="FundamentalGate",
+        tier="structural",
+        order=0,
+        result=GateResult.unevaluable(reason="no fundamental data — gate skipped"),
+    )
+    blocked = GateEvaluationRecord.from_result(
+        gate_name="FreeFloatGate",
+        tier="structural",
+        order=1,
+        result=GateResult.unevaluable(reason="unavailable — gate blocked", blocks=True),
+    )
+    passed = GateEvaluationRecord.from_result(
+        gate_name="LiquidityGate",
+        tier="structural",
+        order=2,
+        result=GateResult(triggered=False, reason="ok", confidence=100),
+    )
+    never_ran = GateEvaluationRecord.not_evaluated(
+        gate_name="BandarGate", tier="execution", order=3
+    )
+
+    assert unevaluable.is_unevaluable is True
+    assert blocked.is_unevaluable is True
+    assert passed.is_unevaluable is False
+    # "never ran" is a different fact from "ran with no input".
+    assert never_ran.is_unevaluable is False
 
 
 def test_gate_context_completeness_missingness() -> None:

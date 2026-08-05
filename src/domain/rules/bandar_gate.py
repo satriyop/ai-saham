@@ -42,7 +42,8 @@ class BandarGate(RiskGate):
     Execution gate: bandar 5-day distribution present.
 
     Fires unconditionally when distribution is present in the 5-day flow.
-    Skips silently when no bandar flow data is available.
+    With no bandar flow data the result is ``GateOutcome.UNEVALUABLE``; whether
+    that also blocks is governed by ``BandarGateConfig.missing_data_action``.
     """
 
     def __init__(self, config: BandarGateConfig | None = None) -> None:
@@ -50,15 +51,15 @@ class BandarGate(RiskGate):
 
     def evaluate(self, context: GateContext) -> GateResult:
         if context.five_day_accdist is None:
-            triggered = self._config.missing_data_action == "block"
-            return GateResult(
-                triggered=triggered,
+            blocks = self._config.missing_data_action == "block"
+            return GateResult.unevaluable(
                 reason=(
                     "no bandar flow data — gate blocked"
-                    if triggered
+                    if blocks
                     else "no bandar flow data — gate skipped"
                 ),
                 confidence=self._config.missing_data_confidence,
+                blocks=blocks,
             )
         if context.five_day_accdist in self._config.distribution_labels:
             return GateResult(

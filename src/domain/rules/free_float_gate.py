@@ -45,15 +45,15 @@ class FreeFloatGate(RiskGate):
 
     def evaluate(self, context: GateContext) -> GateResult:
         if context.free_float_pct is None:
-            triggered = self._policy.missing_data_action == "block"
-            return GateResult(
-                triggered=triggered,
+            blocks = self._policy.missing_data_action == "block"
+            return GateResult.unevaluable(
                 reason=(
                     "Free float data unavailable — gate blocked"
-                    if triggered
+                    if blocks
                     else "Free float data unavailable — gate skipped"
                 ),
                 confidence=self._policy.missing_data_confidence,
+                blocks=blocks,
             )
 
         ff = context.free_float_pct

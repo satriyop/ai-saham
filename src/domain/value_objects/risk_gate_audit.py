@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING, Any, Literal
 
-from src.domain.rules.risk_gate import GateContext, GateResult
+from src.domain.rules.risk_gate import GateContext, GateOutcome, GateResult
 
 if TYPE_CHECKING:
     from src.domain.value_objects.risk_assessment import RiskAssessment
@@ -26,28 +26,25 @@ GateEvaluationOutcome = Literal[
     "not_evaluated",
 ]
 
+#: Persisted labels that mean "the gate asserted nothing about this ticker".
+#: `not_evaluated` is excluded: that gate never ran (an earlier gate
+#: short-circuited), which is a different fact from "ran but had no input".
+UNEVALUABLE_OUTCOMES: frozenset[str] = frozenset({"skipped", "blocked_on_missing"})
+
 GateTier = Literal["structural", "execution"]
 
 
 def classify_gate_outcome(result: GateResult) -> GateEvaluationOutcome:
-    """Map a GateResult to a C2 outcome label without changing gate behavior."""
-    reason = result.reason.lower()
-    if result.triggered:
-        # Missing-data block paths use "gate blocked" / "— blocked" phrasing.
-        if "gate blocked" in reason or reason.endswith("— blocked") or " — blocked" in reason:
-            return "blocked_on_missing"
-        if reason.startswith("no ") and "blocked" in reason:
-            return "blocked_on_missing"
-        if "unavailable" in reason and "blocked" in reason:
-            return "blocked_on_missing"
-        return "triggered"
-    if "skipped" in reason:
-        return "skipped"
-    if result.confidence == 0 and (
-        reason.startswith("no ") or "unavailable" in reason or "no snapshot" in reason
-    ):
-        return "skipped"
-    return "pass"
+    """Map a GateResult to a C2 outcome label.
+
+    Reads the typed `GateResult.outcome`; it does not parse the human-readable
+    reason. The persisted label vocabulary is unchanged: an unevaluable gate is
+    `skipped` when the missing-data policy lets it through and
+    `blocked_on_missing` when the policy makes it block.
+    """
+    if result.outcome is GateOutcome.UNEVALUABLE:
+        return "blocked_on_missing" if result.triggered else "skipped"
+    return "triggered" if result.triggered else "pass"
 
 
 @dataclass(frozen=True)
@@ -62,6 +59,11 @@ class GateEvaluationRecord:
     triggered: bool | None
     reason: str | None
     confidence: int | None
+
+    @property
+    def is_unevaluable(self) -> bool:
+        """True when this gate ran but had no usable input."""
+        return self.outcome in UNEVALUABLE_OUTCOMES
 
     def to_dict(self) -> dict[str, Any]:
         return {

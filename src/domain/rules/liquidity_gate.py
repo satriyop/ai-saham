@@ -30,6 +30,14 @@ _THIRD_LINER_CAP_IDR = 1_000_000_000_000  # IDR 1T
 _LIQUIDITY_FLOOR_IDR = 5_000_000_000  # IDR 5B per day
 _DEFAULT_LOOKBACK = 20  # trading sessions
 
+# Non-triggering reason, keyed by (market-cap leg checked, median-tx leg checked).
+# (False, False) never reaches here — that case is GateOutcome.UNEVALUABLE.
+_PASS_REASONS = {
+    (True, True): "liquidity and market cap checks passed",
+    (True, False): "market cap above floor; no traded sessions (median tx floor not applied)",
+    (False, True): "median 20d tx above floor; market cap unknown (cap floor not applied)",
+}
+
 
 @dataclass(frozen=True)
 class LiquidityGatePolicy:
@@ -45,8 +53,11 @@ class LiquidityGate(RiskGate):
 
     Market cap check (static, requires fundamentals data) runs before median
     transaction check (dynamic, requires recent candles). Either condition
-    alone triggers HIGH_RISK. If neither data source is available, the gate
-    passes silently.
+    alone triggers HIGH_RISK. If neither leg has usable input the result is
+    ``GateOutcome.UNEVALUABLE``; whether that also blocks is governed by
+    ``LiquidityGatePolicy.missing_data_action``. If exactly one leg has input,
+    the gate reaches a verdict on that leg and the reason names the leg that
+    was not applied.
     """
 
     def __init__(
@@ -63,6 +74,7 @@ class LiquidityGate(RiskGate):
 
     def evaluate(self, context: GateContext) -> GateResult:
         # Rec 6: market cap tiering (static check, runs first)
+        cap_checked = context.market_cap_idr is not None
         if context.market_cap_idr is not None:
             if context.market_cap_idr < self._cap_threshold:
                 cap_b = context.market_cap_idr // 1_000_000_000
@@ -77,10 +89,12 @@ class LiquidityGate(RiskGate):
                 )
 
         # Rec 2: median 20-day transaction value (dynamic, requires candles)
+        tx_checked = False
         if context.recent_candles:
             candles = context.recent_candles[-self._lookback :]
             tx_values = [float(c.close * c.volume) for c in candles if c.volume > 0]
             if tx_values:
+                tx_checked = True
                 median_tx = statistics.median(tx_values)
                 if median_tx < self._liquidity_floor:
                     median_m = int(median_tx) // 1_000_000
@@ -94,20 +108,24 @@ class LiquidityGate(RiskGate):
                         confidence=self._policy.triggered_confidence,
                     )
 
-        if context.market_cap_idr is None and not context.recent_candles:
-            triggered = self._policy.missing_data_action == "block"
-            return GateResult(
-                triggered=triggered,
+        if not cap_checked and not tx_checked:
+            blocks = self._policy.missing_data_action == "block"
+            return GateResult.unevaluable(
                 reason=(
                     "liquidity data unavailable — gate blocked"
-                    if triggered
+                    if blocks
                     else "liquidity data unavailable — gate skipped"
                 ),
                 confidence=self._policy.missing_data_confidence,
+                blocks=blocks,
             )
 
+        # At least one leg reached a verdict and nothing fired, so this is a
+        # PASS. When the other leg had no usable input the reason names it
+        # rather than claiming both checks passed; the missing input itself is
+        # recorded in GateContextCompleteness.missingness.
         return GateResult(
             triggered=False,
-            reason="liquidity and market cap checks passed",
+            reason=_PASS_REASONS[(cap_checked, tx_checked)],
             confidence=self._policy.pass_confidence,
         )

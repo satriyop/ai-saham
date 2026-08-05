@@ -28,6 +28,9 @@ class RiskAssessment:
         gate_triggered: The verdict — name of the gate that fired, or None
         gate_is_structural: True=structural, False=execution, None=no gate
         gate_confidence: Confidence of the gate that fired, or None
+        unevaluable_gates: Names of gates that ran but had no usable input.
+            These asserted nothing about the ticker — an empty tuple means
+            every gate that ran reached a real verdict. Not a verdict itself.
     """
 
     rationale: tuple[str, ...]
@@ -36,11 +39,17 @@ class RiskAssessment:
     gate_triggered: str | None = None
     gate_is_structural: bool | None = None
     gate_confidence: int | None = None
+    unevaluable_gates: tuple[str, ...] = ()
 
     @property
     def rationale_list(self) -> list[str]:
         """Return rationale as a mutable list for convenience."""
         return list(self.rationale)
+
+    @property
+    def unevaluable_gate_count(self) -> int:
+        """How many gates ran without usable input."""
+        return len(self.unevaluable_gates)
 
     # ── Display-only derived verdict (no intermediate RiskLevel exists) ──────
     @property
@@ -60,6 +69,7 @@ class RiskAssessment:
             "gate_is_structural": self.gate_is_structural,
             "gate_confidence": self.gate_confidence,
             "confidence": self.confidence,
+            "unevaluable_gates": list(self.unevaluable_gates),
             "rationale": list(self.rationale),
             "indicators": self.indicators.to_dict(),
         }

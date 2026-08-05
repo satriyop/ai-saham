@@ -7,6 +7,11 @@ the application layer (AssessRiskUseCase / RiskEngine) before gate evaluation.
 The verdict is purely `gate_triggered`: a gate either fires (triggered=True)
 or it does not. Gates no longer override an intermediate RiskLevel.
 
+Orthogonal to that verdict, `GateResult.outcome` records *what the gate was able
+to determine*: it reached a clean verdict (PASS / TRIGGERED) or it had no usable
+input at all (UNEVALUABLE). An unevaluable gate is never a silent pass — whether
+it blocks is a separate, policy-driven decision carried by `triggered`.
+
 Layer: Domain
 Depends on: Domain value objects only
 """
@@ -16,19 +21,79 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import date
+from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 
 
+class GateOutcome(str, Enum):
+    """What a gate was able to determine — independent of whether it blocks.
+
+    ``UNEVALUABLE`` means the gate had no usable input and therefore asserts
+    nothing about the ticker. It is deliberately *not* a flavour of ``PASS``:
+    "checked and clean" and "never checked" must stay discriminable at the type
+    level, not only through the free-text ``reason``.
+    """
+
+    PASS = "pass"
+    TRIGGERED = "triggered"
+    UNEVALUABLE = "unevaluable"
+
+
 @dataclass(frozen=True)
 class GateResult:
-    """Outcome from a single RiskGate evaluation."""
+    """Outcome from a single RiskGate evaluation.
+
+    ``outcome`` is derived from ``triggered`` unless stated explicitly, so a
+    gate can only produce ``UNEVALUABLE`` on purpose — via
+    :meth:`GateResult.unevaluable`. ``outcome`` is never ``None`` after
+    construction.
+    """
 
     triggered: bool
     reason: str  # human-readable; surfaced in RiskAssessment rationale
     confidence: int = 100  # confidence of the trigger (0, 50, 80, or 100)
+    outcome: GateOutcome | None = None
+
+    def __post_init__(self) -> None:
+        if self.outcome is None:
+            object.__setattr__(
+                self,
+                "outcome",
+                GateOutcome.TRIGGERED if self.triggered else GateOutcome.PASS,
+            )
+            return
+        if self.outcome is GateOutcome.TRIGGERED and not self.triggered:
+            raise ValueError("GateOutcome.TRIGGERED requires triggered=True")
+        if self.outcome is GateOutcome.PASS and self.triggered:
+            raise ValueError("GateOutcome.PASS requires triggered=False")
+
+    @classmethod
+    def unevaluable(
+        cls,
+        *,
+        reason: str,
+        confidence: int = 0,
+        blocks: bool = False,
+    ) -> GateResult:
+        """Build the "no usable input" result.
+
+        ``blocks`` is the gate's configured missing-data action, not a verdict
+        about the ticker: the gate still asserts nothing either way.
+        """
+        return cls(
+            triggered=blocks,
+            reason=reason,
+            confidence=confidence,
+            outcome=GateOutcome.UNEVALUABLE,
+        )
+
+    @property
+    def is_unevaluable(self) -> bool:
+        """True when the gate had no usable input for this context."""
+        return self.outcome is GateOutcome.UNEVALUABLE
 
 
 @dataclass(frozen=True)
