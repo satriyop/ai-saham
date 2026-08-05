@@ -351,13 +351,23 @@ _PROBE_MODULES = (
 )
 
 
+# The single production consumer the probe harness is allowed to have while the
+# digest remains non-authoritative. Slice 3 runs the harness for its side-by-side
+# operator diagnostic only; nothing reads its digests back. Slice 4 replaces this
+# allowlist when the digest becomes identity-material — a deliberate edit, never
+# a silent one.
+_SHADOW_CONSUMER_MODULE = "src.application.services.shadow_behavioral_cohort_identity"
+
+
 def test_probe_digest_is_not_wired_into_cohort_identity_yet() -> None:
     """ADR-068 Section 7 trust ordering: the digest must stay non-authoritative.
 
-    Slice 1 introduces the measurement only. Making it identity-material before
-    the slice-2 coverage/mutation gate proves the probe set detects deliberate
-    scoring changes would be strictly worse than today's proxies. This guard is
-    expected to be updated deliberately by slices 3 and 4 — never silently.
+    Slices 1-2 introduced the measurement and proved it. Slice 3 wires it into
+    the real corpus-write path as a **shadow** diagnostic, so the harness now has
+    exactly one permitted production consumer. Making the digest identity-material
+    is still slice 4's job: nothing may read these digests back to decide
+    anything, and the persisted ``semantic_compatibility_id`` must stay a pure
+    function of the incumbent mechanism.
     """
     importers: list[str] = []
     for path in sorted((_ROOT / "src").rglob("*.py")):
@@ -369,9 +379,9 @@ def test_probe_digest_is_not_wired_into_cohort_identity_yet() -> None:
         if any(probe_module in source for probe_module in _PROBE_MODULES):
             importers.append(module)
 
-    assert importers == [], (
-        "the behavioural probe harness must not be consumed by production code "
-        f"in slice 1, but these modules reference it: {importers}"
+    assert importers == [_SHADOW_CONSUMER_MODULE], (
+        "the behavioural probe harness may be consumed only by the slice-3 shadow "
+        f"resolver while the digest is non-authoritative, but found: {importers}"
     )
 
     identity_source = (
@@ -379,6 +389,44 @@ def test_probe_digest_is_not_wired_into_cohort_identity_yet() -> None:
     ).read_text(encoding="utf-8")
     assert "behavioral_probe" not in identity_source
     assert "probe_digest" not in identity_source
+    assert "shadow_behavioral" not in identity_source, (
+        "the shadow resolver must not leak into the authoritative identity path"
+    )
+
+
+def test_shadow_consumer_never_feeds_the_authoritative_identity() -> None:
+    """The shadow resolver is a sink, not a source.
+
+    It may read the probe harness and echo the authoritative id, but nothing it
+    produces may reach ``resolve_lean_semantic_compatibility_id`` or any
+    observation writer. Proven structurally: no production module outside the
+    adapter's diagnostic call site imports it, and the adapter's own identity
+    construction is not derived from it.
+    """
+    consumers: list[str] = []
+    for path in sorted((_ROOT / "src").rglob("*.py")):
+        relative = path.relative_to(_ROOT / "src").with_suffix("")
+        module = "src." + relative.as_posix().replace("/", ".")
+        if module == _SHADOW_CONSUMER_MODULE:
+            continue
+        if _SHADOW_CONSUMER_MODULE in path.read_text(encoding="utf-8"):
+            consumers.append(module)
+
+    assert consumers == ["src.adapters.cli.research_accum_backfill_commands"], (
+        "the shadow resolver must have exactly one call site — the corpus-write "
+        f"adapter's diagnostic echo — but found: {consumers}"
+    )
+
+    adapter_source = (
+        _ROOT / "src" / "adapters" / "cli" / "research_accum_backfill_commands.py"
+    ).read_text(encoding="utf-8")
+    assert (
+        "semantic_compatibility_id=resolve_lean_semantic_compatibility_id("
+        "resolved_config_canonical)" in adapter_source
+    ), (
+        "the persisted cohort id must remain a pure function of the incumbent "
+        "config-canonical mechanism; slice 3 may not change what is written"
+    )
 
 
 def _valuation_probe() -> BehavioralProbe:

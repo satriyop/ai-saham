@@ -30,6 +30,10 @@ from src.application.services.lean_observation_identity import (
 from src.application.services.pit_tradable_membership import (
     resolve_pit_tradable_membership,
 )
+from src.application.services.shadow_behavioral_cohort_identity import (
+    ShadowBehavioralCohortIdentity,
+    resolve_shadow_behavioral_cohort_identity,
+)
 from src.application.services.signal_evidence_execution_context_builder import (
     SignalEvidenceExecutionContextBuilder,
 )
@@ -113,6 +117,50 @@ def _read_scoring_config_canonical(
         blocks.append(f"# path: {rel_path}\n{content}")
     blocks.append(f"# pit_tradable_lookback_sessions\n{int(pit_tradable_lookback_sessions)}")
     return "\n\x00\n".join(blocks)
+
+
+def _echo_shadow_behavioral_identity(shadow: ShadowBehavioralCohortIdentity) -> None:
+    """Print the ADR-068 shadow digests beside the authoritative cohort id.
+
+    Written to **stderr** on purpose. ``--format json`` stdout is the machine
+    contract this command already publishes (the nightly cron calls it with
+    ``--format json``), and a non-authoritative diagnostic must not enter it —
+    a key inside the response payload invites a downstream consumer to treat it
+    as authoritative, which ADR-068 §7 trust ordering forbids until slice 4.
+    stderr reaches the operator on both output formats and is captured by the
+    cron log redirect, which is exactly the visibility slice 3 needs.
+    """
+    typer.echo(
+        "[shadow-identity] ADR-068 slice 3 — non-authoritative; nothing reads these values.",
+        err=True,
+    )
+    typer.echo(
+        f"[shadow-identity]   authoritative compatibility_id: "
+        f"{shadow.authoritative_compatibility_id.value}",
+        err=True,
+    )
+    if shadow.is_available:
+        typer.echo(
+            f"[shadow-identity]   behavioural probe digest:       "
+            f"sha256:{shadow.behavioral_probe_digest}",
+            err=True,
+        )
+        typer.echo(
+            f"[shadow-identity]   probe input digest:             "
+            f"sha256:{shadow.probe_input_digest}",
+            err=True,
+        )
+    else:
+        typer.echo(
+            f"[shadow-identity]   behavioural probe digest:       "
+            f"unavailable ({shadow.unavailable_reason})",
+            err=True,
+        )
+    typer.echo(
+        f"[shadow-identity]   probe set / projection:         "
+        f"{shadow.probe_set_id} / {shadow.projection_contract}",
+        err=True,
+    )
 
 
 def run_signal_observation_corpus_write(
@@ -216,6 +264,16 @@ def run_signal_observation_corpus_write(
     observation_identity = LeanObservationIdentity(
         observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
         semantic_compatibility_id=resolve_lean_semantic_compatibility_id(resolved_config_canonical),
+    )
+
+    # ADR-068 slice 3 shadow. Observational only: the application resolver owns
+    # both the probe run and its unavailable policy, the adapter only formats
+    # the result to stderr. Nothing below reads it, and
+    # ``observation_identity`` above is unaffected.
+    _echo_shadow_behavioral_identity(
+        resolve_shadow_behavioral_cohort_identity(
+            authoritative_compatibility_id=observation_identity.semantic_compatibility_id,
+        )
     )
 
     learning_repo = SQLiteLearningArtifactRepository(resolved_db)
