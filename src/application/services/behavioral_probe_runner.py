@@ -31,15 +31,19 @@ Substituted at the port boundary only, and only with frozen in-memory data:
 - ``RulesLoader`` (never invoked — probes set no ``strategy_name``)
 
 Note on the input digest: ``compute_probe_input_digest`` hashes candles, broker
-summaries, broker daily flows, the request knobs, and every enrichment stub a
-probe ticker declares (fundamentals, shareholding, bandar, forward estimates,
-and any future stub — they are discovered structurally via
-``probe_enrichment_stubs``, not by name). Enrichment stubs were outside it as
-shipped in slice 1, which broke the attribution the two digests exist for: an
-enrichment-only probe edit moved the behavioural digest while the input digest
-stayed still, reading exactly like "the engine changed". Stubs are hashed
-whether or not the probe wires the providers, because the digest describes the
-probe set **as authored**, not the subset a given probe happens to consume.
+summaries, broker daily flows, the built request, every enrichment stub a probe
+ticker declares (fundamentals, shareholding, bandar, forward estimates, and any
+future stub — discovered structurally via ``probe_enrichment_stubs``), and every
+flat ``BehavioralProbe`` field (discovered structurally via
+``probe_input_fields``). Both structural sweeps replaced hand-written name lists
+that had already gone stale twice: enrichment stubs sat outside the digest as
+shipped in slice 1, and the regime dimensions, indicator periods, availability
+and setup-family flags, and authoring notes sat outside it until the sweep.
+Either omission breaks the attribution the two digests exist for — a probe-input
+edit moved the behavioural digest while the input digest stayed still, reading
+exactly like "the engine changed". Inputs are hashed whether or not a probe
+wires the corresponding path, because the digest describes the probe set **as
+authored**, not the subset a given probe happens to consume.
 
 Why config values are not read from disk
 ----------------------------------------
@@ -89,6 +93,7 @@ from src.application.services.behavioral_probe_set import (
     build_probe_daily_flows,
     core_probe_set,
     probe_enrichment_stubs,
+    probe_input_fields,
     probe_sessions,
 )
 from src.application.services.effective_market_session_resolver import (
@@ -744,8 +749,9 @@ def _sha256(payload: Any) -> str:
 
 
 def _canonical_input_value(value: Any) -> Any:
-    """Coerce one frozen stub value into a JSON-canonical, hashable form.
+    """Coerce one frozen probe input value into a JSON-canonical, hashable form.
 
+    Used for both enrichment stubs and the flat ``BehavioralProbe`` fields.
     Fails closed on an unmodelled type rather than falling back to ``str``: a
     value the digest cannot represent faithfully is a probe-authoring error, not
     missing data.
@@ -760,7 +766,7 @@ def _canonical_input_value(value: Any) -> Any:
         return [_canonical_input_value(item) for item in value]
     if isinstance(value, dict):
         return {str(key): _canonical_input_value(item) for key, item in value.items()}
-    raise TypeError(f"probe enrichment stub carries an unhashable input value: {type(value)!r}")
+    raise TypeError(f"probe input carries an unhashable value: {type(value)!r}")
 
 
 def compute_probe_input_digest(
@@ -771,10 +777,21 @@ def compute_probe_input_digest(
     Recorded separately from the output digest so a moved behavioural digest can
     be attributed. Input digest stable + behavioural digest moved means the
     *engine* changed, which is the signal ADR-068 §2 relies on; both moved means
-    the probe's own test data changed. That attribution only holds while every
-    real input is folded in here — enrichment stubs included, discovered
-    structurally through ``probe_enrichment_stubs`` so a future stub field
-    cannot silently fall outside the digest.
+    the probe's own test data changed. That attribution only holds while **every**
+    real input is folded in here, so both open-ended parts of a probe are
+    discovered structurally rather than from a hand-written name list:
+
+    - ``probe_enrichment_stubs`` picks up every enrichment stub a ticker
+      declares, so a future stub field cannot fall outside the digest.
+    - ``probe_input_fields`` picks up every flat ``BehavioralProbe`` field
+      except the two hashed by a more specific mechanism (``probe_id`` is the
+      payload key; ``tickers`` is expanded into candles/broker rows/stubs), so
+      a future request knob or feature flag cannot fall outside it either.
+
+    ``request`` is kept beside the swept fields deliberately. It is not a
+    duplicate axis: the swept fields are the probe **as authored**, while
+    ``request`` is the DTO ``build_probe_request`` actually hands the engine, so
+    a change to that mapping stays attributable as an input change too.
     """
     selected = core_probe_set() if probes is None else probes
     payload: dict[str, Any] = {}
@@ -821,10 +838,13 @@ def compute_probe_input_digest(
             )
         request = build_probe_request(probe)
         payload[probe.probe_id] = {
-            "surface": probe.surface,
-            "as_of_date": probe.as_of_date.isoformat(),
-            "regime": probe.regime,
-            "enrichment_providers_enabled": probe.enrichment_providers_enabled,
+            # Structural sweep of every flat probe field. Replaces the four
+            # itemised keys that used to sit here (surface, as_of_date, regime,
+            # enrichment_providers_enabled) — those are covered by the sweep, so
+            # keeping them would hash the same values twice.
+            "probe_fields": {
+                name: _canonical_input_value(value) for name, value in probe_input_fields(probe)
+            },
             "request": {
                 "tickers": list(request.tickers),
                 "window_days": request.window_days,

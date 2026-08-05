@@ -11,8 +11,10 @@ supplies its own ``as_of_date`` (so the ``date.today()`` fallback is
 structurally unreachable), that the frozen probe ports fail closed on any
 write, that the core probe set actually exercises the accum decision
 surface named in ADR-068 Section 2, that the extended probe set stays
-disjoint from core and never enters identity, and that deliberately
-mutating a frozen threshold moves the digest.
+disjoint from core and never enters identity, that every declared probe
+input — enrichment stubs and flat ``BehavioralProbe`` fields alike — is
+folded into the input digest, and that deliberately mutating a frozen
+threshold moves the digest.
 
 The digests here are read from the fixture, never hardcoded, so a
 deliberate core-set change is a one-file fixture regeneration reviewed
@@ -33,6 +35,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from datetime import date
 from pathlib import Path
 from typing import NoReturn, get_args, get_type_hints
 
@@ -59,6 +62,7 @@ from src.application.services.behavioral_probe_set import (
     ProbeTicker,
     core_probe_set,
     extended_probe_set,
+    probe_input_fields,
 )
 from src.application.services.engine_bootstrap.risk_config_resolvers import (
     resolve_risk_gates,
@@ -461,6 +465,94 @@ def test_input_digest_still_moves_for_already_covered_inputs() -> None:
 
     knob_mutated = (dataclasses.replace(_valuation_probe(), window_days=5),)
     assert compute_probe_input_digest(knob_mutated) != baseline
+
+
+# One materially different value per BehavioralProbe field, used to prove each
+# field on its own moves the input digest. Asserted below to be exhaustive over
+# ``dataclasses.fields(BehavioralProbe)``, so a newly declared field fails this
+# suite until it is proven covered rather than silently escaping the hash.
+_PROBE_FIELD_MUTATIONS: dict[str, object] = {
+    "probe_id": "mutated_probe_id",
+    "surface": "mutated surface description",
+    "tickers": None,  # filled in per-probe below: a strict subset of the real tuple
+    "as_of_date": date(2026, 6, 18),
+    "window_days": 5,
+    "min_net_buy_days": 3,
+    "min_accum_score": 1.5,
+    "min_accum_score_enabled": False,
+    "min_signal_score": 2.5,
+    "min_signal_score_enabled": True,
+    "min_market_cap_idr": 1_000,
+    "min_piotroski": 2,
+    "resistance_gate_enabled": False,
+    "resistance_headroom_min_pct": 6.5,
+    "regime": "RISK_ON",
+    "regime_conviction": 0.55,
+    "regime_signal_multiplier": 0.8,
+    "regime_gate_tightening": True,
+    "enrichment_providers_enabled": False,
+    "source_availability_enabled": False,
+    "swing_setup_families_enabled": True,
+    "rsi_period": 9,
+    "sma_period": 30,
+    "extra_notes": ("mutated note",),
+}
+
+
+def test_probe_field_mutation_map_covers_every_behavioral_probe_field() -> None:
+    """Guard the guard: the map below must stay exhaustive.
+
+    Without this, adding a field to ``BehavioralProbe`` would leave the
+    per-field digest test silently blind to it — the exact shape of the bug the
+    structural sweep exists to prevent.
+    """
+    declared = {probe_field.name for probe_field in dataclasses.fields(BehavioralProbe)}
+    assert set(_PROBE_FIELD_MUTATIONS) == declared, (
+        "add an entry to _PROBE_FIELD_MUTATIONS for every new BehavioralProbe "
+        f"field; missing: {declared - set(_PROBE_FIELD_MUTATIONS)}, "
+        f"stale: {set(_PROBE_FIELD_MUTATIONS) - declared}"
+    )
+
+
+@pytest.mark.parametrize("field_name", sorted(_PROBE_FIELD_MUTATIONS))
+def test_input_digest_moves_for_every_behavioral_probe_field(field_name: str) -> None:
+    """Every declared probe field must move the input digest on its own.
+
+    Slice 1 hashed candles, broker rows and a hand-listed subset of the request
+    knobs; the enrichment-stub fix widened it structurally over ``ProbeTicker``
+    but left the flat probe fields itemised, so ``rsi_period``, ``sma_period``,
+    the three regime dimensions, ``source_availability_enabled``,
+    ``swing_setup_families_enabled`` and ``extra_notes`` all sat outside the
+    hash. Each can change what the engine is asked, so editing one moved the
+    behavioural digest alone — reading as "the engine changed" (ADR-068 §2).
+    """
+    probe = _valuation_probe()
+    value = _PROBE_FIELD_MUTATIONS[field_name]
+    if field_name == "tickers":
+        assert len(probe.tickers) > 1
+        value = (probe.tickers[0],)
+    assert value != getattr(probe, field_name), (
+        f"the mutation for {field_name} equals its current value, so this test would pass vacuously"
+    )
+
+    baseline = compute_probe_input_digest((probe,))
+    mutated = (dataclasses.replace(probe, **{field_name: value}),)
+    assert compute_probe_input_digest(mutated) != baseline, (
+        f"BehavioralProbe.{field_name} is not folded into the input digest"
+    )
+
+
+def test_probe_input_field_sweep_excludes_only_structurally_hashed_fields() -> None:
+    """Pin the two deliberate exclusions so a third cannot be added quietly.
+
+    ``probe_id`` keys the digest payload and ``tickers`` is expanded into
+    candles/broker rows/enrichment stubs. Anything else dropped from the sweep
+    would leave a real input outside the hash.
+    """
+    swept = {name for name, _ in probe_input_fields(_valuation_probe())}
+    declared = {probe_field.name for probe_field in dataclasses.fields(BehavioralProbe)}
+    assert declared - swept == {"probe_id", "tickers"}
+    assert swept, "an empty sweep would make the per-field test above meaningless"
 
 
 # tail only shapes candles, which are already hashed via build_probe_candles —

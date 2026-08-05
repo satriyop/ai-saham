@@ -313,6 +313,44 @@ def probe_enrichment_stubs(spec: ProbeTicker) -> tuple[tuple[str, ProbeEnrichmen
     return tuple(declared)
 
 
+# The only ``BehavioralProbe`` fields deliberately left out of the flat-field
+# sweep, each because it is already hashed by a *more specific* mechanism:
+#
+# - ``probe_id`` keys the per-probe entry in the input-digest payload, so a
+#   renamed probe already moves the digest; hashing it inside its own value
+#   would be pure duplication.
+# - ``tickers`` is structured input expanded by ``build_probe_candles`` /
+#   ``build_probe_broker_summaries`` / ``build_probe_daily_flows`` /
+#   ``probe_enrichment_stubs``, which is strictly richer than hashing the specs:
+#   it hashes the entities the engine actually receives.
+#
+# Nothing else may be excluded. Every other field is model input that can move
+# production output, so it is swept in generically.
+_STRUCTURALLY_HASHED_PROBE_FIELDS = frozenset({"probe_id", "tickers"})
+
+
+def probe_input_fields(probe: BehavioralProbe) -> tuple[tuple[str, object], ...]:
+    """Return ``(field_name, value)`` for every flat input field of a probe.
+
+    Structural rather than itemised, for the same reason
+    ``probe_enrichment_stubs`` is: a hand-written name list silently omits the
+    next field somebody adds, and an omitted input breaks the attribution the
+    input and behavioural digests exist to provide (ADR-068 §2). Sweeping
+    ``dataclasses.fields`` instead means a new request knob, regime dimension,
+    or feature flag is folded into the input digest the moment it is declared.
+
+    Values are returned raw, in declared field order; canonicalisation is the
+    digest's job. "Flat" covers scalars, ``None``, dates, and tuples of
+    scalars — everything ``BehavioralProbe`` carries apart from the two fields
+    in ``_STRUCTURALLY_HASHED_PROBE_FIELDS``.
+    """
+    return tuple(
+        (probe_field.name, getattr(probe, probe_field.name))
+        for probe_field in fields(probe)
+        if probe_field.name not in _STRUCTURALLY_HASHED_PROBE_FIELDS
+    )
+
+
 def probe_sessions(*, end_date: date, count: int) -> tuple[date, ...]:
     """Return ``count`` weekday sessions ending on ``end_date``, oldest first.
 

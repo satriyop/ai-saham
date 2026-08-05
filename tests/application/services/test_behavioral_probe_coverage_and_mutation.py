@@ -126,11 +126,14 @@ _ROOT = Path(__file__).resolve().parents[3]
 #
 # The input digest moved a second time, alone, when enrichment stubs were folded
 # into it (they were real probe inputs sitting outside the hash, which broke the
-# attribution the two digests exist for). That change hashed more of the same
-# frozen inputs; it changed no probe data and no engine behaviour, which is why
-# the behavioural digest below is untouched by it.
+# attribution the two digests exist for), and a third time, alone, when the
+# remaining flat BehavioralProbe fields were folded in the same way — the regime
+# dimensions, indicator periods, availability and setup-family flags, and
+# authoring notes were all still outside it. Both changes hashed more of the same
+# frozen inputs; neither changed probe data or engine behaviour, which is why the
+# behavioural digest below is untouched by them.
 _FROZEN_CORE_BEHAVIORAL_DIGEST = "85ce36cc91adcb23a0afbdb22e01843b760c28000cc01064055877005efcf4b1"
-_FROZEN_CORE_INPUT_DIGEST = "9c0380c430cbd581f083a1fc5182e6603d661f60fd4a6a90f79d7c89695f753b"
+_FROZEN_CORE_INPUT_DIGEST = "503e5ea13714334d8de1a4c4a91b351a5a4545b492a3a114485436b595076d4e"
 
 
 # ── Coverage scope and floors ───────────────────────────────────────────────
