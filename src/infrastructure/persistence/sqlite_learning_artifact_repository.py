@@ -277,6 +277,14 @@ _POLICY_SNAPSHOT_COLUMNS: tuple[str, ...] = (
     "created_at",
     "artifact_json",
 )
+# Provenance, not content: legitimately differs across otherwise-identical
+# (matching payload_digest) re-writes — a later build re-asserting the same
+# policy set, or a re-run at a different wall-clock time. ADR-068 §6: a
+# cohort containing several builds is expected and reassuring, not an error.
+# artifact_json is excluded too because it serializes both fields.
+_POLICY_SNAPSHOT_PROVENANCE_COLUMNS: frozenset[str] = frozenset(
+    {"source_revision", "created_at", "artifact_json"}
+)
 
 _POLICY_SNAPSHOT_CREATE_V3 = """
 CREATE TABLE learning_policy_snapshots__v3 (
@@ -484,6 +492,14 @@ _OBS_COLUMNS: tuple[str, ...] = (
     "artifact_json",
 )
 _OBS_SELECT = ", ".join(_OBS_COLUMNS)
+# Provenance, not content: a re-capture of an already-persisted, content-
+# identical (matching artifact_digest) observation legitimately has a
+# different capture wall-clock time. artifact_json is excluded too because
+# it serializes captured_at. If a future producer-provenance field (e.g.
+# producer_source_revision, ADR-068 slice 5) is added to _OBS_COLUMNS, add it
+# here too — it is provenance beside identity, by the same ADR-068 §6 rule
+# already applied to policy snapshots.
+_OBS_PROVENANCE_COLUMNS: frozenset[str] = frozenset({"captured_at", "artifact_json"})
 
 _LABEL_COLUMNS: tuple[str, ...] = (
     "label_id",
@@ -500,6 +516,8 @@ _LABEL_COLUMNS: tuple[str, ...] = (
     "artifact_json",
 )
 _LABEL_SELECT = ", ".join(_LABEL_COLUMNS)
+# Provenance, not content: same reasoning as _OBS_PROVENANCE_COLUMNS.
+_LABEL_PROVENANCE_COLUMNS: frozenset[str] = frozenset({"labeled_at", "artifact_json"})
 
 _POLICY_SELECT = ", ".join(_POLICY_SNAPSHOT_COLUMNS)
 
@@ -604,6 +622,7 @@ def _immutable_insert(
     values: tuple[Any, ...],
     digest_column: str = "artifact_digest",
     column_names: Sequence[str] | None = None,
+    exclude_from_check: frozenset[str] = frozenset(),
 ) -> bool:
     existing = connection.execute(
         f"SELECT * FROM {table} WHERE {id_column} = ?",  # noqa: S608
@@ -613,12 +632,23 @@ def _immutable_insert(
         if existing[digest_column] != digest:
             raise LearningContractError(f"immutable artifact conflict for {table}.{artifact_id}")
         # Matching digest alone is not enough: corrupted shadow columns must fail.
+        # `exclude_from_check` carves out columns that are provenance, not content
+        # (a wall-clock capture/create timestamp, and any serialized blob that
+        # embeds it) — these are expected to differ on a legitimate re-attempt of
+        # already-persisted content and must not be treated as corruption. The
+        # existing row's own internal consistency for those columns is still
+        # verified at read time against its own artifact_json, independent of
+        # what a later caller happens to submit.
         if column_names is not None:
             if len(column_names) != len(values):
                 raise LearningContractError(
                     f"immutable insert column/value arity mismatch for {table}.{artifact_id}"
                 )
-            expected = dict(zip(column_names, values, strict=True))
+            expected = {
+                name: value
+                for name, value in zip(column_names, values, strict=True)
+                if name not in exclude_from_check
+            }
             _assert_row_matches_expected(existing, expected, table=table, artifact_id=artifact_id)
         return False
     connection.execute(insert_sql, values)
@@ -814,6 +844,7 @@ class SQLiteLearningArtifactRepository:
                 """,
                 values=values,
                 column_names=_OBS_COLUMNS,
+                exclude_from_check=_OBS_PROVENANCE_COLUMNS,
             )
 
     def get_observation(self, observation_id: str) -> LearningObservation | None:
@@ -900,6 +931,7 @@ class SQLiteLearningArtifactRepository:
                 """,
                 values=values,
                 column_names=_LABEL_COLUMNS,
+                exclude_from_check=_LABEL_PROVENANCE_COLUMNS,
             )
 
     def list_labels(self, observation_ids: Sequence[str]) -> Sequence[LearningOutcomeLabel]:
@@ -1139,6 +1171,7 @@ class SQLiteLearningArtifactRepository:
                 insert_sql=self._POLICY_SNAPSHOT_INSERT_SQL,
                 values=self._policy_snapshot_insert_values(artifact),
                 column_names=_POLICY_SNAPSHOT_COLUMNS,
+                exclude_from_check=_POLICY_SNAPSHOT_PROVENANCE_COLUMNS,
             )
 
     def add_policy_snapshots_atomic(
@@ -1178,6 +1211,7 @@ class SQLiteLearningArtifactRepository:
                     insert_sql=self._POLICY_SNAPSHOT_INSERT_SQL,
                     values=self._policy_snapshot_insert_values(artifact),
                     column_names=_POLICY_SNAPSHOT_COLUMNS,
+                    exclude_from_check=_POLICY_SNAPSHOT_PROVENANCE_COLUMNS,
                 )
                 if wrote:
                     inserted += 1

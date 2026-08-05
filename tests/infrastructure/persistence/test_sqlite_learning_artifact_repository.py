@@ -119,6 +119,44 @@ def test_identical_insert_is_idempotent_and_conflict_fails(tmp_path: Path) -> No
         repository.add_observation(conflict)
 
 
+def test_observation_digest_still_varies_with_captured_at(tmp_path: Path) -> None:
+    """Pins current, deliberately-unchanged behaviour: unlike labels and policy
+    snapshots, LearningObservation.DIGEST_EXCLUDED_FIELDS is empty, so
+    captured_at participates in artifact_digest. A second add_observation for
+    the same content at a different wall-clock time is therefore a genuine
+    digest conflict, not the shadow-column mismatch this module's other new
+    tests guard against. Production safety for the real capture path comes
+    from AccumulationCandidateObservationPersister's own pre-existence check
+    (get_observation(...) is not None -> skip) before it ever calls
+    add_observation twice for one observation_id — not from this repository
+    method being safe to call twice with a drifting captured_at. If a future
+    change adds captured_at to DIGEST_EXCLUDED_FIELDS, this test's second
+    assertion will start failing and should be updated deliberately, not
+    silently.
+    """
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    first = _observation()
+    second = LearningObservation.create(
+        purpose=first.purpose,
+        policy_contract=first.policy_contract,
+        horizon_contract=first.horizon_contract,
+        compatibility_id=first.compatibility_id,
+        cutoff_at=first.cutoff_at,
+        universe_id=first.universe_id,
+        window_id=first.window_id,
+        decision_payload=first.decision_payload,
+        captured_at=NOW.replace(hour=2),
+    )
+    # observation_id is identity-derived (purpose/contracts/compatibility_id/
+    # cutoff_at/universe_id/window_id) and does not include captured_at.
+    assert first.observation_id == second.observation_id
+    assert first.artifact_digest != second.artifact_digest
+
+    assert repository.add_observation(first) is True
+    with pytest.raises(LearningContractError, match="immutable artifact conflict"):
+        repository.add_observation(second)
+
+
 def test_tracks_and_labels_reject_orphan_observations(tmp_path: Path) -> None:
     repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
     track = LearningTrackSnapshot.create(
@@ -173,6 +211,44 @@ def test_round_trip_observation_track_and_label(tmp_path: Path) -> None:
     assert repository.get_observation(observation.observation_id) == observation
     assert repository.list_track_snapshots(observation.observation_id) == (track,)
     assert repository.list_labels([observation.observation_id]) == (label,)
+
+
+def test_label_reuse_tolerates_different_labeled_at(tmp_path: Path) -> None:
+    """Regression: labeled_at is already excluded from LearningOutcomeLabel's
+    digest, so a re-run that recomputes the same label content at a different
+    wall-clock time must reuse the existing row, not raise on the shadow
+    column check.
+    """
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    observation = _observation()
+    repository.add_observation(observation)
+    first = LearningOutcomeLabel.create(
+        contract_id=LearningContractId.ACCUM_10D_LABEL,
+        observation_id=observation.observation_id,
+        outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
+        availability=LabelAvailability.AVAILABLE,
+        outcome="UP",
+        metrics={"return_pct": 2.0},
+        fingerprint="prices-1",
+        labeled_at=NOW,
+    )
+    second = LearningOutcomeLabel.create(
+        contract_id=first.contract_id,
+        observation_id=first.observation_id,
+        outcome_basis=first.outcome_basis,
+        availability=first.availability,
+        outcome=first.outcome,
+        metrics=first.metrics,
+        fingerprint=first.fingerprint,
+        labeled_at=NOW.replace(hour=9),
+    )
+    assert first.label_id == second.label_id
+    assert first.artifact_digest == second.artifact_digest
+    assert first.labeled_at != second.labeled_at
+
+    assert repository.add_label(first) is True
+    assert repository.add_label(second) is False
+    assert repository.list_labels([observation.observation_id]) == (first,)
 
 
 def test_proposal_validation_application_foreign_keys_and_round_trip(
@@ -309,6 +385,42 @@ def test_policy_snapshot_round_trip_and_idempotent(tmp_path: Path) -> None:
         compatibility_id=snap.compatibility_id,
     )
     assert listed == (snap,)
+
+
+def test_policy_snapshot_reuse_tolerates_different_provenance(tmp_path: Path) -> None:
+    """Regression: EnsureAccumulationPolicySnapshotsUseCase calls
+    add_policy_snapshots_atomic on every capture, unconditionally, with a
+    fresh created_at and the current build's source_revision each time. Under
+    a stable cohort the payload is unchanged day to day, so this is the
+    designed-for "reused" path (ADR-068 SS6: a cohort spanning several builds
+    is expected and reassuring, not an error) -- it must not raise.
+    """
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    first = _policy_snapshot()
+    second = ProductionPolicySnapshot.create(
+        contract_id=first.contract_id,
+        purpose=first.purpose,
+        learning_observation_contract_id=first.learning_observation_contract_id,
+        producer_observation_contract=first.producer_observation_contract,
+        compatibility_id=first.compatibility_id,
+        policy_id=first.policy_id,
+        policy_version=first.policy_version,
+        decision_type=first.decision_type,
+        semantic_engine_contract_id=first.semantic_engine_contract_id,
+        material_config_hash=first.material_config_hash,
+        canonical_payload=first.canonical_payload,
+        source_revision="ai-saham@a-different-build",
+        created_at=NOW.replace(hour=5),
+    )
+    assert first.snapshot_id == second.snapshot_id
+    assert first.payload_digest == second.payload_digest
+    assert first.created_at != second.created_at
+    assert first.source_revision != second.source_revision
+
+    assert repository.add_policy_snapshot(first) is True
+    assert repository.add_policy_snapshot(second) is False
+    # First write wins: the stored row keeps the original provenance.
+    assert repository.get_policy_snapshot(first.snapshot_id) == first
 
 
 def test_policy_snapshot_digest_conflict_fails_closed(tmp_path: Path) -> None:
