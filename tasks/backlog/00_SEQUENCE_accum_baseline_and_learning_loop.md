@@ -35,7 +35,7 @@ Measurements). Doing it two months from now costs two months.
 
 | # | Task | Identity-moving? | Gate |
 |---|---|---|---|
-| 1 | `01_implement_adr_068_behavioral_engine_identity.md` | **Yes** | none — ADR-068 accepted 2026-08-04 |
+| 1 | `01_implement_adr_068_behavioral_engine_identity.md` (**DONE** → `tasks/done/`) | **Yes** | none — ADR-068 accepted 2026-08-04; implemented 2026-08-05 |
 | 2 | `02_implement_adr_067_retire_setup_quality.md` | **Yes** (snapshot payload) | needs 1 |
 | 3 | `03_fix_risk_gate_silent_skip_and_fundamentals_pit_hole.md` | **Yes** (snapshot payload) | needs 1 |
 | — | **── PURGE + REBUILD (task 4), then CONFIG FREEZE ──** | | |

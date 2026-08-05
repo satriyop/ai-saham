@@ -2,7 +2,9 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted
+**Status:** Accepted — **implemented** 2026-08-05 (task
+`01_implement_adr_068_behavioral_engine_identity`, slices 1–6). Probe coverage
+remains a measured floor, not a proof of behavioural equivalence.
 
 **Date:** 2026-08-04
 
@@ -279,7 +281,7 @@ it does not close it.
 - `BOUNDARY.md` (both repos)
 
 Implementation task:
-[`tasks/backlog/01_implement_adr_068_behavioral_engine_identity.md`](../../tasks/backlog/01_implement_adr_068_behavioral_engine_identity.md).
+[`tasks/done/01_implement_adr_068_behavioral_engine_identity.md`](../../tasks/done/01_implement_adr_068_behavioral_engine_identity.md).
 It lands **before** ADR-067 implementation (which then uses the probe set as its
 gate and needs no version bump), and before the corpus accumulation window opens — see
 [`tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`](../../tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md).

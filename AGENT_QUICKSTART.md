@@ -202,13 +202,17 @@ or label behavior, classify the change explicitly in preflight. Use exactly one
 or more of these categories:
 
 - `CONFIG_MATERIAL`: a scoring/policy/config value can change canonical output;
-  include its resolved path/value in the material config identity.
+  for ACCUM, identity moves only when the ADR-068 behavioural probe digest or
+  the ADR-059 snapshot payload digest moves (not when a comment/rename lands).
 - `SEMANTIC_ENGINE`: deterministic calculation or decision behavior changes;
-  bump the semantic engine/scoring contract version.
+  under ADR-068 the accum cohort key is the **measured probe digest**, not a
+  hand-typed `SEMANTIC_ENGINE_VERSION` bump (that constant is deleted).
 - `EVIDENCE_CONTRACT`: evidence meaning, availability, authority, or derivation
-  changes; bump the evidence contract version.
+  changes; same rule — probe/snapshot digests, not a hand-typed
+  `EVIDENCE_CONTRACT_VERSION`.
 - `OBSERVATION_SCHEMA`: persisted observation meaning or shape changes; bump the
-  observation schema version and preserve old rows unchanged.
+  observation payload schema version (identity-material under ADR-068) and
+  preserve old rows unchanged.
 - `LABEL_POLICY`: execution, costs, stop/target, sizing, or label interpretation
   changes; bump the execution/label-policy version.
 - `LABEL_SCHEMA`: persisted label meaning or shape changes; bump the label schema
@@ -218,10 +222,11 @@ or more of these categories:
 
 Do not classify a material change as `NON_SEMANTIC` merely because tests still
 pass. Do not hash the whole repository into semantic compatibility: the full
-revision belongs in provenance, while explicit contract versions and resolved
-material config belong in compatibility identity. Until canonical artifact
-identity production is fully wired, do not claim changed rules/config are
-comparable with earlier observations or labels.
+revision belongs in **provenance** (`producer_source_revision`), while
+identity for ACCUM is the ADR-068 triple (probe digest, snapshot payload
+digest, payload schema version). Probe coverage is a measured floor, not a
+proof of behavioural equivalence. Until a purge/rebuild lands after the
+config-edit batch, do not claim mixed historical cohorts are comparable.
 
 ### Signal Evidence Program Clean-Break Policy
 

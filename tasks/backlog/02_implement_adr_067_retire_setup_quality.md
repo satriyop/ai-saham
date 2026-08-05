@@ -1,7 +1,7 @@
 # Implement ADR-067: Retire `setup_quality`, One Evidence Basis, Plan Does Not Judge
 
-Status: `BLOCKED` — requires `01_implement_adr_068_behavioral_engine_identity.md`
-to land first.
+Status: `READY` — task 01 (ADR-068) completed 2026-08-05; see
+`tasks/done/01_implement_adr_068_behavioral_engine_identity.md`.
 
 > **Why 068 goes first (2026-08-04):** ADR-068 deletes
 > `SEMANTIC_ENGINE_VERSION` and `EVIDENCE_CONTRACT_VERSION`, which this task's

@@ -119,6 +119,26 @@ Full mirror of this contract: [`ml-saham/BOUNDARY.md`](../ml-saham/BOUNDARY.md) 
 - Historical cohorts without the active snapshot set are ineligible for verified
   `baseline=production`.
 
+### ADR-068 behavioural cohort identity (ACCUM only)
+
+- **Identity material** for `ACCUMULATION_DISCOVERY` is exactly three parts:
+  behavioural probe digest + ADR-059 snapshot payload digest + observation
+  payload schema version. Nothing else.
+- **Deleted proxies:** raw config-file hashing, `SEMANTIC_ENGINE_VERSION`, and
+  `EVIDENCE_CONTRACT_VERSION` are gone for accum identity. Do not reintroduce
+  hand-typed engine version bumps as the cohort key.
+- **Probe coverage is a measured floor, not a proof of behavioural
+  equivalence.** CI enforces branch coverage and a mutation suite over the
+  accum decision path. A change that only hits unprobed branches can still
+  fail to fork; that gap is named, not denied.
+- **`producer_source_revision`** is recorded on every observation as
+  **provenance beside identity** (also still on population bindings and
+  policy snapshots). It must not enter `observation_id` or `artifact_digest`.
+  Multi-build cohorts under one `compatibility_id` are expected and reassuring.
+- **Pre-open identity is unchanged** by ADR-068 (purpose isolation).
+- **ml-saham** continues to key panels on opaque `compatibility_id` values; it
+  does not recompute the probe digest. Treat a new id as a new cohort forever.
+
 Horizons **3 / 10 / 20** (primary **10**) align by number.  
 **Label math is not the same product** as challenge excess (see vocabulary).
 

@@ -1,6 +1,7 @@
 # Implement ADR-068: Behavioral Engine Identity For Accum Cohorts
 
-Status: `READY` — ADR-068 accepted 2026-08-04. No blockers.
+Status: `DONE` — slices 1–6 landed 2026-08-05. Cron remains disabled until
+task 02 (and the rest of the identity-moving batch) complete.
 Sequence: **1 of 8** — first task in the config-edit batch. See
 `tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`.
 
@@ -258,11 +259,19 @@ Offline. `pytest -m "not tui"` for the inner loop. Ruff before close.
 
 ## 15. Completion Record
 
-- Completed date:
+- Completed date: 2026-08-05
 - Slice commits:
-- Core probe count / extended probe count:
-- Branch coverage achieved (and the CI floor set):
-- Mutants planted / caught / surviving (with rationale for each survivor):
-- New `compatibility_id`:
-- Cron disabled / re-enabled at:
-- Test / Lint result:
+  - Slice 1: `5108b0b6` feat(identity): add deterministic behavioural probe harness
+  - Slice 2: `10a59b29` test(identity): coverage floor and mutation gate for the probe set
+    (+ `851be521`, `6f92310a`, `35c77bd7` probe-set gap closes)
+  - Slice 3: `9df058c2` feat(identity): compute behavioural cohort identity in shadow
+  - Slice 4: `f215ca77` refactor(identity)!: behavioural cohort identity replaces config and version proxies
+  - Persistence fix (enables slice 5 provenance): `0798fccf` fix(persistence): tolerate provenance drift on immutable-insert reuse
+  - Slice 5: (this close-out) feat(corpus): record producing build and warn before a cohort fork
+  - Slice 6: (this close-out) docs(identity): document behavioural cohort identity and its limits
+- Core probe count / extended probe count: 19 core / 4 extended
+- Branch coverage achieved (and the CI floor set): aggregate floor **60%** (measured ~60.69% at slice 2; per-module floors in `test_behavioral_probe_coverage_and_mutation.py`)
+- Mutants planted / caught / surviving: **45 planted / 36 caught by core digest / 9 surviving** (named in the mutation test module; equivalent/out-of-core holes)
+- New `compatibility_id`: opaque digests from `resolve_accumulation_cohort_identity` (no dual path to old config-hash)
+- Cron disabled / re-enabled at: **disabled** through the identity-moving batch (re-enable only after task 02 + batch, not here)
+- Test / Lint result: focused slice-5 suite green; whole-repo ruff required at close
