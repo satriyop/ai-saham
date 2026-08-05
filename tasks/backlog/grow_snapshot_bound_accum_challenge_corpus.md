@@ -2,6 +2,64 @@
 
 Status: `IN_PROGRESS_CONTRACT_HARDENING`
 
+## ADR-067 / ADR-068 interaction review (2026-08-04)
+
+Checked whether [ADR-067](../../docs/adr/ADR-067-retire-setup-quality-and-fix-judgment-authority-by-surface.md)
+invalidates anything this task locked.
+
+**No locked decision is invalidated.** The 2026-08-01 locks (1–7), the Option-A
+population binding, the ACCUM label-integrity anchors, and the Stockbit
+market-session calendar authority all survive unchanged. ADR-067 touches none of
+population binding, labels, or calendar, and it explicitly forbids observation
+rewrite, snapshot v3, an eighth policy row, and compatibility aliases — matching
+locks 1 and 3 and Non-Goals.
+
+Three interactions do require action:
+
+**A. Schema references are stale (pre-existing, not caused by ADR-067).**
+Lock 4b and the 2026-08-02/03 lock table state
+`ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION=11`. Live code is already at
+**12** (ADR-062). The config-edit batch may take it to **13** — ADR-067 bumps it
+only if the payload shape actually changes, and ADR-068 adds
+`producer_source_revision`. Update every schema reference in this file before
+resuming; do not treat `11` as current, and confirm the live value rather than
+assuming `13`.
+
+**B. P3's root-cause question is answered, not invalidated.**
+P3 requires "a checked-in root-cause note with measured denominators for each
+absence cause." That note can now be written from evidence rather than
+investigated:
+
+`accumulation_candidate_signal_assessor.py:244` passes no setup evidence, so
+`SetupPhaseReadinessEvaluator` (`setup_phase_readiness_evaluator.py:28-110`)
+resolves through rules 1–4 only. Measured across 7,764 accum window-observations:
+
+| status | cause (evaluator rule) | n |
+|---|---|---|
+| `None` | rule 1 — no setup family | 7,379 |
+| INELIGIBLE | rules 2–3 — DISTRIBUTION / FAILED phase (evidence-free) | 201 |
+| UNAVAILABLE | rule 4 — `setup_evidence is None` | 184 |
+| INCOMPLETE | rules 7 — unreachable without evidence | **0** |
+| READY | rule 13 — unreachable without evidence | **0** |
+
+READY has never occurred and is structurally unreachable. There is no broken
+transport to repair here: the typed value is absent at source, not lost in
+transit. P3's bounded-repair clause is therefore **not triggered** by readiness
+absence — but P3 must still verify no *other* already-computed typed value is
+being dropped. Do not synthesize READY; ADR-067 makes this absence permanent and
+intended.
+
+**C. Lock 6's operational DONE gate cannot be met across the config-edit batch fork.**
+Operational DONE requires "an ml-saham report with at least two valid
+post-embargo OOS folds" from the explicit LQ45 cohort. ADR-068 replaces the
+identity mechanism outright and ADR-067 moves the snapshot payload, so any cohort
+grown before the batch cannot satisfy it. The
+accumulation window must restart **after** the config-edit batch completes and
+config freezes — see `00_SEQUENCE_accum_baseline_and_learning_loop.md`. This does
+not weaken lock 6; it re-dates it.
+
+Do not resume P1 capture operations until the config freeze is in effect.
+
 ## Locked design decision (2026-08-02) — lookback / compatibility identity
 
 **Option A — Producer attestation (selected for this task).**

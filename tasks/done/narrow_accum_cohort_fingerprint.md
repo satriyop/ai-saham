@@ -22,7 +22,7 @@ Status: `SUPERSEDED` — **do not implement this task as written.**
 >
 > Retained as a record of the reasoning, not as work.
 
-Sequence: ~~3 of 8~~ — see `tasks/backlog/SEQUENCE_accum_baseline_and_learning_loop.md`
+Sequence: ~~3 of 8~~ — see `tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`
 
 ## 1. Task Metadata
 
