@@ -149,7 +149,7 @@ def build_accum_score_weights_payload(policy: AccumScorePolicy) -> dict[str, Any
             }
         ],
         "observation_result_fields": {
-            "accum_score": (f"features_by_window.{ACCUM_CANONICAL_WINDOW}.accum.score_points"),
+            "accum_score": (f"features_by_window.{ACCUM_CANONICAL_WINDOW}.candidate.accum_score"),
         },
     }
 
@@ -364,7 +364,7 @@ def build_risk_hard_gates_payload(
             "blocking_gates": (
                 f"features_by_window.{ACCUM_CANONICAL_WINDOW}.trade_setup.blocking_gates"
             ),
-            "risk_status": (f"features_by_window.{ACCUM_CANONICAL_WINDOW}.trade_setup.risk_status"),
+            "risk_status": (f"features_by_window.{ACCUM_CANONICAL_WINDOW}.candidate.risk_status"),
         },
     }
 

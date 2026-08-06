@@ -3,9 +3,21 @@
 from __future__ import annotations
 
 from dataclasses import fields as dataclass_fields
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
 
+from src.application.dto.accumulation_screen import (
+    AccumulationCandidate,
+    AccumulationScreenRequest,
+)
 from src.application.dto.assess_signal import AssessSignalResponse
+from src.application.services.accumulation_observation_fingerprint import (
+    build_candidate_observation_payload,
+    build_session_observation_payload,
+)
 from src.application.services.accumulation_policy_snapshot_payloads import (
+    ACCUM_CANONICAL_WINDOW,
     ACCUM_SCORE_SEMANTIC_CONTRACT_ID,
     EVIDENCE_GROUP_BASE_SCORE_FORMULA_ID,
     HARD_FILTERS_FORMULA_ID,
@@ -21,6 +33,7 @@ from src.application.services.accumulation_policy_snapshot_payloads import (
     build_evidence_group_weights_payload,
     build_hard_filters_payload,
     build_raw_score_identity_payload,
+    build_risk_hard_gates_payload,
 )
 from src.application.services.accumulation_screen_hard_filter_policy import (
     AccumulationScreenHardFilterPolicy,
@@ -34,10 +47,13 @@ from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     PRODUCTION_POLICY_ID_HARD_FILTERS,
+    PRODUCTION_POLICY_ID_RISK_HARD_GATES,
     PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
     PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE,
     canonical_json,
 )
+from src.domain.value_objects.signal_assessment import SignalStrength
+from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
 
 
 def _default_hard_filters() -> AccumulationScreenHardFilterPolicy:
@@ -49,6 +65,99 @@ def _default_hard_filters() -> AccumulationScreenHardFilterPolicy:
         min_signal_score=45.0,
         min_signal_score_enabled=False,
     )
+
+
+_PROBE_DATE = date(2026, 8, 5)
+_PROBE_CAPTURED_AT = datetime(2026, 8, 5, 19, 15)
+
+
+def _probe_candidate() -> AccumulationCandidate:
+    """A real `AccumulationCandidate` carrying a real `TradeSetup`.
+
+    Real DTOs, not stubs: the point of the payload-path tests below is that the
+    keys come from the production `to_dict()` implementations, so a stub with a
+    hand-written `to_dict` would assert nothing.
+    """
+    return AccumulationCandidate(
+        ticker="BBCA",
+        window_days=ACCUM_CANONICAL_WINDOW,
+        net_buy_days=4,
+        total_days=7,
+        net_buy_ratio=0.5714,
+        total_net_value=Decimal("1000000"),
+        consecutive_streak=2,
+        foreign_vwap=Decimal("1000"),
+        current_price=Decimal("1010"),
+        vwap_discount_pct=-1.0,
+        rsi=55.0,
+        trend="UP",
+        accum_score=70.0,
+        top_brokers=None,
+        institutional_flag=False,
+        trade_setup=TradeSetup(
+            ticker="BBCA",
+            snapshot_date=_PROBE_DATE,
+            action=SetupAction.BLOCKED_STRUCTURAL,
+            signal_score=60,
+            signal_score_raw=60,
+            signal_strength=SignalStrength.MODERATE,
+            blocking_gates=("fundamental_gate",),
+            regime=None,
+            signal_multiplier=1.0,
+            gate_tightening=False,
+            rationale="probe",
+        ),
+    )
+
+
+def _probe_session_observation() -> dict[str, Any]:
+    """One session observation built by the real production payload writers.
+
+    `observation_result_fields` claims where a policy's output lands in a stored
+    observation, so the claim is checked against a payload the canonical
+    producers actually emit rather than against a second copy of the string.
+    """
+    candidate = _probe_candidate()
+    pack = build_candidate_observation_payload(
+        candidate,
+        screen_result="pass",
+        flow_ev=None,
+        setup_phase=None,
+        snapshot_date=_PROBE_DATE,
+        captured_at=_PROBE_CAPTURED_AT,
+        request=AccumulationScreenRequest(tickers=[candidate.ticker]),
+    )
+    return build_session_observation_payload(
+        ticker=candidate.ticker,
+        session_date=_PROBE_DATE,
+        captured_at=_PROBE_CAPTURED_AT,
+        canonical_window=ACCUM_CANONICAL_WINDOW,
+        features_by_window={"7": pack, "30": pack, "90": pack},
+        shared={"current_price": str(candidate.current_price)},
+        population_binding={"population_id": "probe"},
+        screen_results_by_window={"7": "pass", "30": "pass", "90": "pass"},
+    )
+
+
+def _assert_declared_paths_resolve(payload: dict[str, Any], observation: dict[str, Any]) -> None:
+    """Every declared dotted path must name a key the observation really has."""
+    declared = payload["observation_result_fields"]
+    assert declared, f"{payload['policy_id']} declares no observation_result_fields"
+    for name, path in declared.items():
+        node: Any = observation
+        walked: list[str] = []
+        for segment in path.split("."):
+            assert isinstance(node, dict), (
+                f"{payload['policy_id']}.{name} -> {path}: "
+                f"{'.'.join(walked) or '<root>'} is not a mapping"
+            )
+            assert segment in node, (
+                f"{payload['policy_id']}.{name} -> {path}: "
+                f"{'.'.join(walked) or '<root>'} has no key {segment!r} "
+                f"(has {sorted(node)})"
+            )
+            node = node[segment]
+            walked.append(segment)
 
 
 def test_closed_set_payloads_are_byte_stable() -> None:
@@ -80,6 +189,48 @@ def test_accum_score_payload_excludes_sector_breadth() -> None:
     keys = {c["key"] for c in payload["components"]}
     assert "sector_breadth" not in keys
     assert any(x["key"] == "sector_breadth" for x in payload["explicitly_excluded"])
+
+
+def test_accum_score_payload_declares_the_real_producer_field() -> None:
+    """The accum score lands on the candidate pack, not on an ``accum`` pack.
+
+    This row used to declare ``features_by_window.7.accum.score_points``. There
+    is no ``accum`` key in a window pack and no ``score_points`` key anywhere:
+    ``build_candidate_observation_payload`` writes ``candidate:
+    candidate.to_dict()``, and ``AccumulationCandidate.to_dict()`` carries the
+    value as ``accum_score``. A declared field no producer emits makes the
+    archived policy record unusable for replay.
+    """
+    payload = build_accum_score_weights_payload(AccumScorePolicy())
+
+    _assert_declared_paths_resolve(payload, _probe_session_observation())
+    assert payload["observation_result_fields"] == {
+        "accum_score": "features_by_window.7.candidate.accum_score",
+    }
+
+
+def test_risk_hard_gates_payload_declares_the_real_producer_fields() -> None:
+    """``blocking_gates`` is on the trade setup; ``risk_status`` is not.
+
+    ``TradeSetup.to_dict()`` emits ``blocking_gates`` (and ``gate_triggered``),
+    but the risk level name is only ever serialized by
+    ``AccumulationCandidate.to_dict()`` as ``risk_status`` — so the two outputs
+    of this one policy land under two different keys of the window pack, which
+    is exactly what the stale declaration got wrong.
+    """
+    payload = build_risk_hard_gates_payload([FundamentalGate()], [BandarGate()])
+
+    assert payload["policy_id"] == PRODUCTION_POLICY_ID_RISK_HARD_GATES
+    observation = _probe_session_observation()
+    _assert_declared_paths_resolve(payload, observation)
+    assert payload["observation_result_fields"] == {
+        "blocking_gates": "features_by_window.7.trade_setup.blocking_gates",
+        "risk_status": "features_by_window.7.candidate.risk_status",
+    }
+
+    pack = observation["features_by_window"]["7"]
+    assert "risk_status" not in pack["trade_setup"]
+    assert "blocking_gates" not in pack["candidate"]
 
 
 def test_evidence_group_payload_declares_one_production_basis() -> None:
