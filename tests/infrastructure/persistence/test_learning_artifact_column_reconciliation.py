@@ -22,6 +22,7 @@ from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
     LearningArtifactReadIntegrityError,
     SQLiteLearningArtifactReadRepository,
     SQLiteLearningArtifactRepository,
+    _artifact_json,
 )
 
 NOW = datetime(2026, 7, 27, 12, 0, tzinfo=timezone.utc)
@@ -641,3 +642,141 @@ def test_combined_anchor_label_obs_and_id_fails_closed(tmp_path: Path) -> None:
         conn.commit()
     with pytest.raises(LearningArtifactReadIntegrityError):
         list(repo.list_labels([obs.observation_id]))
+
+
+# --- Read-time provenance drift (historical rows) --------------------------------
+# Regression guard: the read path reconstructs the artifact FROM artifact_json and
+# then reconciles the shadow columns. Re-serializing that artifact and comparing it
+# to the stored blob is a round-trip assertion, not an integrity check, and it broke
+# on every pre-ADR-068 observation row once `_observation_from_dict` started
+# synthesising producer_source_revision. artifact_json must stay out of the
+# read-time comparison; every other column must stay in it.
+
+
+def _stored_artifact_json(db: Path, table: str, id_column: str, artifact_id: str) -> dict:
+    with sqlite3.connect(db) as conn:
+        raw = conn.execute(
+            f"SELECT artifact_json FROM {table} WHERE {id_column} = ?",  # noqa: S608
+            (artifact_id,),
+        ).fetchone()[0]
+    return json.loads(raw)
+
+
+def _rewrite_artifact_json(
+    db: Path, table: str, id_column: str, artifact_id: str, payload: str
+) -> None:
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            f"UPDATE {table} SET artifact_json = ? WHERE {id_column} = ?",  # noqa: S608
+            (payload, artifact_id),
+        )
+        conn.commit()
+
+
+def _make_observation_row_historical(db: Path, observation_id: str) -> str:
+    """Rewrite a row's artifact_json into its pre-ADR-068 shape (no provenance key)."""
+    raw = _stored_artifact_json(db, "learning_observations", "observation_id", observation_id)
+    assert "producer_source_revision" in raw
+    raw.pop("producer_source_revision")
+    payload = json.dumps(raw, sort_keys=True, separators=(",", ":"))
+    _rewrite_artifact_json(db, "learning_observations", "observation_id", observation_id, payload)
+    return payload
+
+
+@pytest.mark.parametrize(
+    "repo_cls",
+    [SQLiteLearningArtifactRepository, SQLiteLearningArtifactReadRepository],
+)
+def test_observation_read_tolerates_pre_adr068_artifact_json(
+    tmp_path: Path, repo_cls: type
+) -> None:
+    db = tmp_path / "historical.db"
+    write = SQLiteLearningArtifactRepository(db)
+    obs = _observation()
+    write.add_observation(obs)
+    stored = _make_observation_row_historical(db, obs.observation_id)
+
+    repo = write if repo_cls is SQLiteLearningArtifactRepository else repo_cls(db)
+    loaded = list(repo.list_observations(AssessmentPurpose.ACCUMULATION_DISCOVERY))
+
+    assert len(loaded) == 1
+    # Fallback fired: the historical row has no build provenance to recover.
+    assert loaded[0].producer_source_revision == ""
+    assert loaded[0].observation_id == obs.observation_id
+    # The stored blob genuinely differs from a re-serialization of the loaded
+    # artifact — this is exactly the comparison that used to raise.
+    assert "producer_source_revision" not in stored
+    assert _artifact_json(loaded[0]) != stored
+
+
+def test_historical_observation_row_still_reconciles_shadow_columns(tmp_path: Path) -> None:
+    """Excluding artifact_json must not blanket-disable read-time reconciliation."""
+    db = tmp_path / "historical_drift.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    obs = _observation()
+    repo.add_observation(obs)
+    _make_observation_row_historical(db, obs.observation_id)
+
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "UPDATE learning_observations SET captured_at = ? WHERE observation_id = ?",
+            ("2099-01-01T00:00:00+00:00", obs.observation_id),
+        )
+        conn.commit()
+
+    with pytest.raises(LearningArtifactReadIntegrityError, match="captured_at"):
+        list(repo.list_observations(AssessmentPurpose.ACCUMULATION_DISCOVERY))
+
+
+def _noncanonical(payload: dict) -> str:
+    """Semantically identical JSON, non-canonical byte layout."""
+    return json.dumps(payload, indent=2, sort_keys=False)
+
+
+def test_observation_read_tolerates_noncanonical_artifact_json(tmp_path: Path) -> None:
+    db = tmp_path / "nc_obs.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    obs = _observation()
+    repo.add_observation(obs)
+    raw = _stored_artifact_json(db, "learning_observations", "observation_id", obs.observation_id)
+    _rewrite_artifact_json(
+        db, "learning_observations", "observation_id", obs.observation_id, _noncanonical(raw)
+    )
+
+    loaded = list(repo.list_observations(AssessmentPurpose.ACCUMULATION_DISCOVERY))
+    assert [o.observation_id for o in loaded] == [obs.observation_id]
+
+
+def test_label_read_tolerates_noncanonical_artifact_json(tmp_path: Path) -> None:
+    db = tmp_path / "nc_label.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    obs = _observation()
+    repo.add_observation(obs)
+    label = _label(obs.observation_id, obs.artifact_digest)
+    repo.add_label(label)
+    raw = _stored_artifact_json(db, "learning_outcome_labels", "label_id", label.label_id)
+    _rewrite_artifact_json(
+        db, "learning_outcome_labels", "label_id", label.label_id, _noncanonical(raw)
+    )
+
+    loaded = list(repo.list_labels([obs.observation_id]))
+    assert [item.label_id for item in loaded] == [label.label_id]
+
+
+def test_policy_snapshot_read_tolerates_noncanonical_artifact_json(tmp_path: Path) -> None:
+    db = tmp_path / "nc_policy.db"
+    repo = SQLiteLearningArtifactRepository(db)
+    snap = _policy()
+    repo.add_policy_snapshot(snap)
+    raw = _stored_artifact_json(db, "learning_policy_snapshots", "snapshot_id", snap.snapshot_id)
+    _rewrite_artifact_json(
+        db, "learning_policy_snapshots", "snapshot_id", snap.snapshot_id, _noncanonical(raw)
+    )
+
+    loaded = list(
+        repo.list_policy_snapshots(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id="compat-1",
+        )
+    )
+    assert [item.snapshot_id for item in loaded] == [snap.snapshot_id]

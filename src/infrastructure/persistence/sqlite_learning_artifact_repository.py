@@ -538,6 +538,29 @@ def _cell_equal(actual: Any, expected: Any) -> bool:
     return actual == expected
 
 
+# Read-time reconciliation compares each normalized shadow column against the
+# artifact reconstructed FROM artifact_json. artifact_json is therefore the
+# *source* of the comparison, not an independent witness: comparing it to a
+# re-serialization of the object it just produced asserts round-trip stability
+# of the serializer, not integrity of the data. It detects no corruption the
+# other shadow columns miss (any edit to the blob's content propagates into the
+# reconstructed artifact and trips the matching column), and it breaks by
+# construction the moment an `*_from_dict` gains a field with a fallback default
+# for pre-existing rows — as ADR-068 slice 5's producer_source_revision did.
+# So reads exclude artifact_json only; every other column stays checked,
+# including the provenance timestamps the *write* path has to exclude (on write
+# the comparison is against a different caller-submitted artifact; on read it is
+# against the row's own blob, where a captured_at/labeled_at/created_at/
+# source_revision divergence really is corruption).
+_READ_SELF_DERIVED_COLUMNS: frozenset[str] = frozenset({"artifact_json"})
+
+
+def _checked_columns(expected: Mapping[str, Any], exclude: frozenset[str]) -> dict[str, Any]:
+    """Drop columns that are provenance or self-derived before reconciliation."""
+
+    return {name: value for name, value in expected.items() if name not in exclude}
+
+
 def _assert_row_matches_expected(
     row: sqlite3.Row,
     expected: Mapping[str, Any],
@@ -646,11 +669,9 @@ def _immutable_insert(
                 raise LearningContractError(
                     f"immutable insert column/value arity mismatch for {table}.{artifact_id}"
                 )
-            expected = {
-                name: value
-                for name, value in zip(column_names, values, strict=True)
-                if name not in exclude_from_check
-            }
+            expected = _checked_columns(
+                dict(zip(column_names, values, strict=True)), exclude_from_check
+            )
             _assert_row_matches_expected(existing, expected, table=table, artifact_id=artifact_id)
         return False
     connection.execute(insert_sql, values)
@@ -667,7 +688,7 @@ def _load_observation_row(row: sqlite3.Row) -> LearningObservation:
     obs = _observation_from_dict(raw)
     _assert_row_matches_expected(
         row,
-        _observation_expected_columns(obs),
+        _checked_columns(_observation_expected_columns(obs), _READ_SELF_DERIVED_COLUMNS),
         table="learning_observations",
         artifact_id=str(row["observation_id"]),
     )
@@ -684,7 +705,7 @@ def _load_label_row(row: sqlite3.Row) -> LearningOutcomeLabel:
     label = _label_from_dict(raw)
     _assert_row_matches_expected(
         row,
-        _label_expected_columns(label),
+        _checked_columns(_label_expected_columns(label), _READ_SELF_DERIVED_COLUMNS),
         table="learning_outcome_labels",
         artifact_id=str(row["label_id"]),
     )
@@ -701,7 +722,7 @@ def _load_policy_row(row: sqlite3.Row) -> ProductionPolicySnapshot:
     snap = _policy_snapshot_from_dict(raw)
     _assert_row_matches_expected(
         row,
-        _policy_expected_columns(snap),
+        _checked_columns(_policy_expected_columns(snap), _READ_SELF_DERIVED_COLUMNS),
         table="learning_policy_snapshots",
         artifact_id=str(row["snapshot_id"]),
     )
