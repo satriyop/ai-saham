@@ -38,7 +38,6 @@ from src.application.services.signal_engine_config import (
     NeutralRegimeConfig,
     PreOpenDirectionalBaselineConfig,
     RegimeConditioningConfig,
-    RiskOffRegimeConfig,
     SignalClassificationConfig,
     SignalEngineConfig,
     SignalEnrichmentConfig,
@@ -123,7 +122,6 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
     flag_insider = flags.get("insider_selling", {})
     regime_cfg = root.get("regime_conditioning", {})
     rc_neutral = regime_cfg.get("neutral", {})
-    rc_risk_off = regime_cfg.get("risk_off", {})
     rc_volatile = regime_cfg.get("volatile", {})
     decision_cfg = root.get("decision_policy", {})
     decision_policy = resolve_decision_policy_config(decision_cfg)
@@ -200,12 +198,7 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
                 weak_flow_threshold=rc_neutral.get("weak_flow_threshold", 50.0),
                 weak_flow_discount=rc_neutral.get("weak_flow_discount", 0.80),
             ),
-            risk_off=RiskOffRegimeConfig(
-                weak_setup_threshold=rc_risk_off.get("weak_setup_threshold", 60.0),
-                weak_setup_discount=rc_risk_off.get("weak_setup_discount", 0.50),
-            ),
             volatile=VolatileRegimeConfig(
-                setup_discount=rc_volatile.get("setup_discount", 0.70),
                 flow_discount=rc_volatile.get("flow_discount", 0.80),
             ),
         ),

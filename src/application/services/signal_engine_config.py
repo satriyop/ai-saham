@@ -180,18 +180,9 @@ class NeutralRegimeConfig:
 
 
 @dataclass(frozen=True)
-class RiskOffRegimeConfig:
-    """RISK_OFF regime: discount weak (non-MATCH) setup evidence."""
-
-    weak_setup_threshold: float = 60.0  # below this = PARTIAL or NO_MATCH
-    weak_setup_discount: float = 0.50
-
-
-@dataclass(frozen=True)
 class VolatileRegimeConfig:
-    """VOLATILE regime: discount both evidence groups."""
+    """VOLATILE regime: discount flow confirmation."""
 
-    setup_discount: float = 0.70
     flow_discount: float = 0.80
 
 
@@ -199,14 +190,16 @@ class VolatileRegimeConfig:
 class RegimeConditioningConfig:
     """Per-regime group score conditioning applied before renormalization.
 
-    RISK_ON: no conditioning (normal confidence).
-    NEUTRAL: weak flow discounted (market needs stronger flow confirmation).
-    RISK_OFF: weak setup discounted (only MATCH-quality setups count).
-    VOLATILE: both groups discounted (higher bar in fast-moving markets).
+    RISK_ON:  no conditioning (normal confidence).
+    NEUTRAL:  weak flow discounted (market needs stronger flow confirmation).
+    RISK_OFF: no conditioning. Its only branch discounted setup evidence, which
+              ADR-067 retired as an evidence group; the whole RISK_OFF config
+              (weak_setup_threshold / weak_setup_discount) went with it.
+    VOLATILE: flow discounted (higher bar in fast-moving markets). Its setup
+              half was removed with RISK_OFF's, for the same reason.
     """
 
     neutral: NeutralRegimeConfig = field(default_factory=NeutralRegimeConfig)
-    risk_off: RiskOffRegimeConfig = field(default_factory=RiskOffRegimeConfig)
     volatile: VolatileRegimeConfig = field(default_factory=VolatileRegimeConfig)
 
 
@@ -430,7 +423,6 @@ __all__ = [
     "InsiderSellingFlagConfig",
     "SignalFlagsConfig",
     "NeutralRegimeConfig",
-    "RiskOffRegimeConfig",
     "VolatileRegimeConfig",
     "RegimeConditioningConfig",
     "RegimeDecisionPolicyConfig",

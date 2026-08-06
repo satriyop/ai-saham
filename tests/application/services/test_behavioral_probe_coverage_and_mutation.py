@@ -14,13 +14,13 @@ ADR-068 §5 requires:
 Coverage is a floor over a finite frozen input set. It is **not** a proof of
 behavioural equivalence (ADR-068 "Do Not Interpret This As").
 
-Measured result re-recorded on 2026-08-05, CPython 3.12.10, coverage 7.14.1
+Measured result re-recorded on 2026-08-06, CPython 3.12.10, coverage 7.14.1
 --------------------------------------------------------------------------
 
 Probe sets used for coverage: core (19 probes) + extended (4 probes).
 
-    Aggregate branch coverage over the accum decision path: 60.69% (437/720)
-    Aggregate statement coverage over the same scope:       82.46% (1730/2098)
+    Aggregate branch coverage over the accum decision path: 60.39% (430/712)
+    Aggregate statement coverage over the same scope:       82.30% (1730/2102)
 
 History of the number: core-set-only branch coverage was 55.69% (401/720)
 before slice 2; slice 2's four extended probes raised it to 59.44% (428/720) by
@@ -28,12 +28,16 @@ attaching a swing setup catalog; the four **core** probes added after slice 2 to
 close measured mutation gaps raised it to 60.69% (437/720); ADR-067 slice 3
 lowered it to 60.14% (433/720) by deleting the setup_quality evidence group and
 its absent-group handling, which removed branches rather than stopped reaching
-them.
+them; the ADR-067 clean-break follow-up then raised it to 60.39% (430/712) by
+deleting the RISK_OFF/VOLATILE setup-discount branches — the eight branches it
+removed were five uncovered plus three covered, so the *ratio* rose while the
+numerator fell. (The headline pair above was left stale at slice 3's figures;
+it is re-measured here.)
 
-Mutants: **44 planted / 35 caught by the core (identity) digest / 9 surviving.**
+Mutants: **43 planted / 35 caught by the core (identity) digest / 8 surviving.**
 
     GATE_THRESHOLD   14   risk gate thresholds, enablement, confidence
-    SIGNAL_CONSTANT  13   SignalEngineConfig scoring/classification/policy
+    SIGNAL_CONSTANT  12   SignalEngineConfig scoring/classification/policy
     ACCUM_WEIGHT      8   AccumScorePolicy weights, caps, saturation points
     PHASE_THRESHOLD   5   setup-phase detection thresholds
     COMPARISON_FLIP   4   inverted gate verdicts (comparison direction)
@@ -49,30 +53,38 @@ probes deliberately moved both frozen core digests — under ADR-068 §3 a core
 addition *is* a cohort boundary, taken while it is still free because no cohort
 holds value and the digest is not yet wired into production identity.
 
-**Read the survivor list before making the probe digest authoritative.** The 9
+**Read the survivor list before making the probe digest authoritative.** The 8
 remaining survivors are of two different kinds, and the distinction matters:
 
 - **Probe-input holes** (3): the constant is genuinely compared on the accum
   decision path, but no probe supplies data that reaches the comparison. These
   are closable by a future core probe.
-- **Equivalent mutants** (6): the constant cannot change any field of the
+- **Equivalent mutants** (5): the constant cannot change any field of the
   canonical projection no matter what a probe supplies, because the value it
   feeds is diagnostic-only on this surface. Adding probes cannot close these;
   only changing what production treats as authoritative, or widening the
   projection contract to carry diagnostic output, would — and neither is a
   probe-set decision.
 
-Two of the six were recorded by slice 2 as probe-input holes and are corrected
-here after tracing the call graph: the RISK_OFF ``weak_setup_discount`` and the
-VOLATILE ``flow_discount`` both terminate in ``legacy_conditioned_score``, which
-the canonical projection deliberately excludes.
+One of the five was recorded by slice 2 as a probe-input hole and is corrected
+here after tracing the call graph: the VOLATILE ``flow_discount`` terminates in
+``legacy_conditioned_score``, which the canonical projection deliberately
+excludes.
 
-ADR-067 slice 3 changed the composition of the six without changing the count.
-The ``setup_quality`` weight mutant was **deleted** with the group it mutated,
+ADR-067 slice 3 changed the composition without changing the count. The
+``setup_quality`` weight mutant was **deleted** with the group it mutated,
 exactly as its own record predicted. In its place ``flow_confirmation.weight``
 became equivalent: it used to be caught, and a lone production evidence group
 has no weight arithmetic left to observe. That is a real loss of measurement
 and it is recorded rather than absorbed — see its entry below.
+
+The ADR-067 clean-break follow-up then took the count from 9 to 8 the honest
+way: the RISK_OFF ``weak_setup_discount`` mutant was **deleted with the config
+key it mutated**, exactly as the ``setup_quality`` weight mutant was. Its
+setup-discount branch, and VOLATILE's setup half, went with it. Removing a
+mutant because its constant no longer exists is not silencing a hole — the
+constant it perturbed is gone from config, from the typed dataclasses, and from
+the conditioning branches, and the frozen core digest did not move.
 
 Why the floor lives here and not in CI config
 ---------------------------------------------
@@ -191,7 +203,18 @@ _BRANCH_COVERAGE_FLOOR: dict[str, tuple[int, int]] = {
     #     handling is the point of the slice, so these are removed holes, not
     #     new ones.
     "src/application/services/signal_evidence_group_scorer.py": (41, 62),
-    "src/application/services/signal_legacy_regime_conditioning.py": (11, 16),
+    # 8/8: lowered from 11/16 by the ADR-067 clean-break follow-up, which
+    # deleted the RISK_OFF weak-setup branch and VOLATILE's setup half. Both
+    # halves moved and the module is now fully branch-covered:
+    #   - total fell 16 -> 8: two `if setup_present` guards, the weak-setup
+    #     threshold comparison, and the RISK_OFF regime arm are all gone.
+    #   - uncovered fell 5 -> 0: every arc that no probe reached was a
+    #     setup-present arc, unreachable because screen accum never attaches
+    #     setup evidence (proven by
+    #     test_setup_evidence_is_structurally_absent_on_the_screen_accum_surface).
+    # Covered branches fell 11 -> 8 only because the branches themselves were
+    # deleted; nothing that survives is measured less than before.
+    "src/application/services/signal_legacy_regime_conditioning.py": (8, 8),
     "src/application/use_case/accumulation_screen_use_case.py": (15, 30),
     # 26/34: raised from 23/30 by the unevaluable-gate work. One of the eight
     # uncovered arcs is the `risk_engine.gates.unevaluable_policy=block` path.
@@ -520,16 +543,6 @@ _MUTANTS: tuple[Mutant, ...] = (
         ),
     ),
     _signal_config_mutant(
-        "signal.regime_conditioning.risk_off.weak_setup_discount:0.50->0.05",
-        lambda c: _replace(
-            c,
-            regime_conditioning=_replace(
-                c.regime_conditioning,
-                risk_off=_replace(c.regime_conditioning.risk_off, weak_setup_discount=0.05),
-            ),
-        ),
-    ),
-    _signal_config_mutant(
         "signal.alpha_trigger.low_weight_cap:0.10->0.90",
         lambda c: _replace(c, alpha_trigger=_replace(c.alpha_trigger, low_weight_cap=0.90)),
     ),
@@ -694,17 +707,6 @@ _SURVIVING_MUTANTS: dict[str, str] = {
         "decision — it would require widening the projection contract to carry "
         "diagnostic output, or giving conditioning real authority."
     ),
-    "signal.regime_conditioning.risk_off.weak_setup_discount:0.50->0.05": (
-        "EQUIVALENT MUTANT, doubly so. First, screen accum never attaches setup "
-        "evidence (setup=None, as above), so setup_present is False and the "
-        "RISK_OFF branch is skipped entirely — attaching a swing setup catalog "
-        "resolves a setup *family*, not setup *evidence*, so no probe input "
-        "reaches it. Second, even when the branch does run, only "
-        "weak_setup_threshold decides whether a note is emitted; the discount "
-        "value itself terminates in the same unprojected "
-        "legacy_conditioned_score. Slice-2 recorded this as closable by a "
-        "partially-matched setup family; that is not achievable from probe input."
-    ),
     "signal.alpha_trigger.low_weight_cap:0.10->0.90": (
         "EQUIVALENT MUTANT. alpha_trigger_score is computed in "
         "AssessSignalEvidenceUseCase step 4, strictly after entry_quality and "
@@ -765,16 +767,18 @@ def test_gap_closing_core_probes_are_present_and_identity_material() -> None:
 
 
 def test_setup_evidence_is_structurally_absent_on_the_screen_accum_surface() -> None:
-    """Backs two EQUIVALENT MUTANT records with a measurement, not a claim.
+    """Backs the ADR-067 setup removals with a measurement, not a claim.
 
-    ``signal.evidence_groups.setup_quality.weight`` and
-    ``signal.regime_conditioning.risk_off.weak_setup_discount`` both require a
-    present setup evidence group. Screen accum builds
-    ``CanonicalSignalEvidenceInput(setup=None, ...)`` unconditionally, so the
-    group is absent for every probe — including the extended probes that attach
-    a swing setup catalog, which resolves a setup *family*, not setup
-    *evidence*. If this ever stops holding, those two records must be revisited
-    rather than left as equivalent mutants.
+    The retired ``signal.evidence_groups.setup_quality.weight`` and
+    ``signal.regime_conditioning.risk_off.weak_setup_discount`` mutants both
+    required a present setup evidence group, and so does every branch deleted
+    with them (RISK_OFF's weak-setup discount, VOLATILE's setup half). Screen
+    accum builds ``CanonicalSignalEvidenceInput(setup=None, ...)``
+    unconditionally, so the group is absent for every probe — including the
+    extended probes that attach a swing setup catalog, which resolves a setup
+    *family*, not setup *evidence*. This test is the standing proof of that
+    premise: if it ever stops holding, the removals above were load-bearing on
+    this surface and must be revisited rather than assumed dead.
     """
     from src.application.services.behavioral_probe_runner import run_probe_set
 

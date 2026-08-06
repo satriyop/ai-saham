@@ -175,23 +175,22 @@ signal_engine:
   # Output is stored as legacy_conditioned_score only — does NOT affect canonical
   # assessment.score. decision_policy is the canonical regime gate (Stage 7).
   # The double-regime effect is resolved: canonical score is regime-neutral.
-  # DO NOT tune these values. Removal pending explicit clean-break decision.
+  # DO NOT tune these values.
   # NEUTRAL:  weak flow confirmation (< threshold) discounted in legacy path.
-  # VOLATILE: both groups discounted in legacy path.
+  # VOLATILE: flow discounted unconditionally in legacy path.
   # gate_tightening: ENTER → WATCH cap is set per MarketContext via decision_policy.
   #
-  # The RISK_OFF block (weak_setup_threshold / weak_setup_discount) was removed
-  # by ADR-067 with the setup_quality evidence group: it conditioned a setup
-  # group score that no production surface attaches, and after the two-name
-  # blend was deleted it cannot reach legacy_conditioned_score at all. The
-  # typed RiskOffRegimeConfig default is untouched, so nothing moved. Retiring
-  # the remaining archived branches is a separate clean-break decision.
+  # The whole RISK_OFF block (weak_setup_threshold / weak_setup_discount) and
+  # volatile.setup_discount conditioned a setup group score. ADR-067 retired
+  # setup_quality as an evidence group and deleted the two-name blend, so those
+  # discounts could reach neither assessment.score nor legacy_conditioned_score.
+  # They are now removed from config AND from the typed dataclasses and the
+  # conditioning branches — flow is the only group this stage conditions.
   regime_conditioning:
     neutral:
       weak_flow_threshold: 50.0     # flow scores below this are discounted
       weak_flow_discount: 0.80      # ×0.80 (20% haircut)
     volatile:
-      setup_discount: 0.70          # ×0.70 applied to all setups in volatile regime
       flow_discount: 0.80           # ×0.80 applied to all flow in volatile regime
 
   # PRODUCTION / CANONICAL EVIDENCE ENGINE.

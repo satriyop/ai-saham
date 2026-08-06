@@ -68,8 +68,6 @@ class AssessSignalEvidenceUseCase:
 
         # 2. Compute legacy diagnostic conditioning
         legacy_conditioning = SignalLegacyRegimeConditioning.condition(
-            setup_group_score=group_scores.setup_group_score,
-            setup_present=group_scores.setup_present,
             flow_group_score=group_scores.flow_group_score,
             flow_present=group_scores.flow_present,
             market_context=request.market_context,
