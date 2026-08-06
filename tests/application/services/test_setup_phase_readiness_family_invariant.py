@@ -11,20 +11,19 @@ from src.domain.value_objects.setup_phase_readiness import SetupReadinessStatus
 def test_family_none_returns_none_flow_only():
     result = SetupPhaseReadinessEvaluator().evaluate(
         setup_family=None,
-        setup_evidence=None,
         setup_phase=None,
     )
     assert result is None
 
 
-def test_family_set_missing_evidence_returns_unavailable_not_none():
+def test_family_set_returns_unavailable_not_none():
     result = SetupPhaseReadinessEvaluator().evaluate(
         setup_family="pullback",
-        setup_evidence=None,
         setup_phase=None,
     )
     assert result is not None
     assert result.status == SetupReadinessStatus.UNAVAILABLE
-    assert "setup_evidence" in result.missing_required_inputs
-    # Never invent READY without evidence
+    # ADR-067 §4: the reason is prose, never the name of a code symbol.
+    assert result.missing_required_inputs == ("setup match not evaluated",)
+    # Never invent READY — the accum path has no producer for it at all.
     assert result.status is not SetupReadinessStatus.READY

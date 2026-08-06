@@ -19,7 +19,7 @@ def _readiness(
     *,
     status: str = "UNAVAILABLE",
     family: str = "pullback",
-    missing: tuple[str, ...] = ("setup_evidence",),
+    missing: tuple[str, ...] = ("setup match not evaluated",),
     failed: tuple[str, ...] = (),
 ) -> SimpleNamespace:
     return SimpleNamespace(
@@ -106,10 +106,10 @@ def test_readiness_none_with_family_is_defect():
     assert "READY" not in text
 
 
-def test_readiness_unavailable_shows_missing_inputs():
+def test_readiness_unavailable_shows_its_reason():
     text = format_setup_readiness(_readiness(), style="full")
     assert "UNAVAILABLE" in text
-    assert "missing: setup_evidence" in text
+    assert "(setup match not evaluated)" in text
     assert "pullback" in text
 
 
@@ -132,7 +132,7 @@ def test_format_action_why_includes_authority_readiness_gate():
     why = format_action_why(c, gate="OPEN")
     assert "authority 0%" in why
     assert "setup readiness UNAVAILABLE" in why
-    assert "missing: setup_evidence" in why
+    assert "(setup match not evaluated)" in why
     assert "gate open" in why
     assert "recipe" not in why.lower()
 

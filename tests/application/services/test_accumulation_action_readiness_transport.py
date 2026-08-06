@@ -109,7 +109,6 @@ def _candidate(*, action: SetupAction, readiness: SetupPhaseReadiness | None) ->
 def test_evaluator_returns_none_when_family_missing_not_synthetic_ready() -> None:
     result = SetupPhaseReadinessEvaluator().evaluate(
         setup_family=None,
-        setup_evidence=None,
         setup_phase=SetupPhaseSnapshot(
             current_phase=SetupPhaseState.NONE,
             previous_phase=None,

@@ -224,14 +224,20 @@ def _setup_with_excess_return(excess_return_pct: float) -> SetupEvidence:
 def test_poor_benchmark_excess_return_cannot_cap_enter():
     """Task HIGH-1: a deliberately poor benchmark excess return must not cap
     an otherwise identical ENTER result — the diagnostic evidence carries no
-    decision authority."""
+    decision authority.
+
+    ADR-067 §4: ``setup_family`` is deliberately not set here. A named family
+    now always resolves readiness to UNAVAILABLE, which caps ENTER to WATCH on
+    both sides and would leave the comparison unable to tell a benchmark-driven
+    cap from a readiness-driven one. Dropping it keeps ENTER as the discriminating
+    outcome this test needs.
+    """
     strong_response = AssessSignalEvidenceUseCase().execute(
         _req(
             ticker="TEST",
             snapshot_date=SNAP,
             setup_evidence=_setup_with_excess_return(1.05),
             flow_confirmation_evidence=_flow(),
-            setup_family="foreign-bounce",
         )
     )
     assert strong_response.assessment.entry_quality == EntryQuality.ENTER
@@ -242,7 +248,6 @@ def test_poor_benchmark_excess_return_cannot_cap_enter():
             snapshot_date=SNAP,
             setup_evidence=_setup_with_excess_return(-50.0),
             flow_confirmation_evidence=_flow(),
-            setup_family="foreign-bounce",
         )
     )
 

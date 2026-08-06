@@ -41,7 +41,7 @@ def _candidate(
         setup_readiness=SimpleNamespace(
             status=SimpleNamespace(value="UNAVAILABLE"),
             setup_family="pullback",
-            missing_required_inputs=("setup_evidence",),
+            missing_required_inputs=("setup match not evaluated",),
             failed_requirements=(),
             current_phase=None,
         ),
@@ -100,7 +100,7 @@ def test_build_accum_focus_why_recipe_lag():
     assert "Why" in focus.strip
     assert "authority 0%" in focus.strip
     assert "setup readiness UNAVAILABLE" in focus.strip
-    assert "missing: setup_evidence" in focus.strip
+    assert "(setup match not evaluated)" in focus.strip
     assert "pullback" in focus.strip
     assert "gate open" in focus.strip
     assert "Accum breakdown" in focus.strip
@@ -194,9 +194,9 @@ def test_board_summary_counts_actions_and_gates():
 
 def test_setup_readiness_shows_missing_inputs_not_only_generic():
     c = _candidate()
-    # Ensure VO carries concrete missing inputs
+    # Ensure VO carries a concrete reason (ADR-067 §4: prose, not a code name)
     assert c.signal_assessment.assessment.setup_readiness.missing_required_inputs == (
-        "setup_evidence",
+        "setup match not evaluated",
     )
     row = (
         AccumPresenter()
@@ -213,6 +213,6 @@ def test_setup_readiness_shows_missing_inputs_not_only_generic():
         .rows[0]
     )
     focus = build_accum_focus(row)
-    assert "missing: setup_evidence" in focus.strip
-    # Should not stop at vague line alone without the missing list
-    assert "setup readiness UNAVAILABLE [pullback] (missing: setup_evidence)" in focus.strip
+    assert "(setup match not evaluated)" in focus.strip
+    # Should not stop at the vague line alone without the reason
+    assert "setup readiness UNAVAILABLE [pullback] (setup match not evaluated)" in focus.strip

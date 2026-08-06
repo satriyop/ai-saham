@@ -99,7 +99,10 @@ def test_exhaustion_ineligible_readiness_caps_enter_to_watch():
 def test_incomplete_and_unavailable_readiness_cap_enter_to_watch():
     for status, kwargs in (
         (SetupReadinessStatus.INCOMPLETE, {"failed_requirements": ("setup_match:PARTIAL",)}),
-        (SetupReadinessStatus.UNAVAILABLE, {"missing_required_inputs": ("setup_evidence",)}),
+        (
+            SetupReadinessStatus.UNAVAILABLE,
+            {"missing_required_inputs": ("setup match not evaluated",)},
+        ),
     ):
         result = DecisionPolicyService().resolve(
             entry_quality=EntryQuality.ENTER,

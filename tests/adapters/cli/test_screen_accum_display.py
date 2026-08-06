@@ -166,7 +166,7 @@ def test_display_results_decision_why_matches_shared_formatter(capsys):
     readiness = SimpleNamespace(
         status=SimpleNamespace(value="UNAVAILABLE"),
         setup_family="pullback",
-        missing_required_inputs=("setup_evidence",),
+        missing_required_inputs=("setup match not evaluated",),
         failed_requirements=(),
         current_phase=None,
     )
@@ -236,7 +236,7 @@ def test_display_results_decision_why_matches_shared_formatter(capsys):
     # Shared formatter contract (TUI uses the same function)
     assert "authority 0%" in expected_why
     assert "setup readiness UNAVAILABLE" in expected_why
-    assert "missing: setup_evidence" in expected_why
+    assert "(setup match not evaluated)" in expected_why
     assert "gate open" in expected_why
 
     response = AccumulationScreenResponse(
@@ -259,7 +259,7 @@ def test_display_results_decision_why_matches_shared_formatter(capsys):
     # Rich may wrap the Why column; assert key tokens from shared formatter
     assert "authority 0%" in out
     assert "setup readiness UNAVAILABLE" in out
-    assert "setup_evidence" in out
+    assert "setup match not evaluated" in out
     assert "gate open" in out
     assert "Decision · Action Why" in out
     assert "cons 28.5" in out

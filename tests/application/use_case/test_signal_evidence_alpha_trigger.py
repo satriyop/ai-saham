@@ -62,66 +62,63 @@ def test_signal_authority_coverage_drives_decision_floor():
     )
 
 
-def test_confirmation_only_setup_evidence_caps_enter_to_watch():
-    """smart-money-confirmed MATCH with entry_authority=False must not
-    independently produce ENTER, even with a high combined score."""
-    resp = _use_case().execute(
+@pytest.mark.parametrize(
+    "setup_evidence_kwargs",
+    [
+        pytest.param(None, id="no_setup_evidence"),
+        pytest.param(
+            {
+                "setup_name": "foreign-bounce",
+                "setup_family": "accumulation",
+                "entry_authority": True,
+                "can_enter_from_phases": ("BREAKOUT_CONFIRMATION",),
+            },
+            id="would_once_have_resolved_ready",
+        ),
+        pytest.param(
+            {
+                "setup_name": "smart-money-confirmed",
+                "setup_family": "confirmation",
+                "entry_authority": False,
+            },
+            id="would_once_have_resolved_ineligible",
+        ),
+        pytest.param(
+            {
+                "setup_name": "foreign-bounce",
+                "setup_family": "accumulation",
+                "entry_authority": True,
+                "can_enter_from_phases": ("COMPRESSION",),
+            },
+            id="would_once_have_failed_phase_membership",
+        ),
+    ],
+)
+def test_setup_evidence_has_no_route_to_the_action(setup_evidence_kwargs):
+    """ADR-067 §4: setup evidence cannot reach Action through readiness.
+
+    These four requests are identical apart from the ``SetupEvidence`` attached,
+    and the three that carry one span the branches that used to decide the
+    verdict outright — ``entry_authority``, ``can_enter_from_phases`` membership,
+    and the READY path. Before this slice they produced ENTER, WATCH-via-
+    INELIGIBLE and WATCH-via-INELIGIBLE respectively; the readiness evaluator
+    no longer accepts the input, so all four must now agree exactly. A future
+    change that re-opens the side door fails here rather than silently restoring
+    setup evidence's veto.
+    """
+    baseline = _use_case().execute(
         _req(
-            setup_evidence=_setup_evidence(
-                "MATCH",
-                setup_name="smart-money-confirmed",
-                setup_family="confirmation",
-                entry_authority=False,
-            ),
-            flow_confirmation_evidence=_flow_evidence(0.95),
-            setup_family="smart-money-confirmed",
-        )
-    )
-
-    assert resp.assessment.entry_quality.value == "WATCH"
-    assert resp.assessment.decision_constraints.max_decision == "WATCH"
-    assert any(
-        "Setup readiness INELIGIBLE" in reason
-        for reason in resp.assessment.decision_constraints.constraint_reasons
-    )
-
-
-def test_phase_gated_setup_evidence_caps_enter_when_phase_not_breakout():
-    """foreign-bounce MATCH but setup_phase=ACCUMULATION caps ENTER to WATCH."""
-    resp = _use_case().execute(
-        _req(
-            setup_evidence=_setup_evidence(
-                "MATCH",
-                setup_name="foreign-bounce",
-                setup_family="accumulation",
-                entry_authority=True,
-                can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
-            ),
             flow_confirmation_evidence=_flow_evidence(0.95),
             setup_family="foreign-bounce",
-            setup_phase=_phase_state(SetupPhaseState.ACCUMULATION),
+            setup_phase=_phase_state(SetupPhaseState.BREAKOUT_CONFIRMATION),
         )
     )
-
-    assert resp.assessment.entry_quality.value == "WATCH"
-    assert resp.assessment.decision_constraints.max_decision == "WATCH"
-    assert any(
-        "Setup readiness INELIGIBLE" in reason
-        for reason in resp.assessment.decision_constraints.constraint_reasons
-    )
-
-
-def test_phase_gated_setup_evidence_allows_enter_at_breakout_confirmation():
-    """foreign-bounce MATCH with setup_phase=BREAKOUT_CONFIRMATION can remain
-    ENTER when nothing else caps the decision."""
     resp = _use_case().execute(
         _req(
-            setup_evidence=_setup_evidence(
-                "MATCH",
-                setup_name="foreign-bounce",
-                setup_family="accumulation",
-                entry_authority=True,
-                can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
+            setup_evidence=(
+                _setup_evidence("MATCH", **setup_evidence_kwargs)
+                if setup_evidence_kwargs is not None
+                else None
             ),
             flow_confirmation_evidence=_flow_evidence(0.95),
             setup_family="foreign-bounce",
@@ -129,21 +126,23 @@ def test_phase_gated_setup_evidence_allows_enter_at_breakout_confirmation():
         )
     )
 
-    assert resp.assessment.entry_quality.value == "ENTER"
-    assert resp.assessment.decision_constraints.max_decision == "ENTER"
+    assert resp.assessment.entry_quality == baseline.assessment.entry_quality
+    assert (
+        resp.assessment.decision_constraints.max_decision
+        == baseline.assessment.decision_constraints.max_decision
+    )
+    assert (
+        resp.assessment.decision_constraints.constraint_reasons
+        == baseline.assessment.decision_constraints.constraint_reasons
+    )
+    assert resp.setup_readiness == baseline.setup_readiness
 
 
-def test_missing_setup_phase_with_required_phases_caps_enter_to_watch():
-    """Missing setup_phase with a phase-gated setup must not default-allow ENTER."""
+def test_setup_family_without_a_match_still_caps_enter_to_watch():
+    """The surviving cap: a named family whose match is not evaluated on this
+    path resolves UNAVAILABLE, and UNAVAILABLE still caps ENTER to WATCH."""
     resp = _use_case().execute(
         _req(
-            setup_evidence=_setup_evidence(
-                "MATCH",
-                setup_name="foreign-bounce",
-                setup_family="accumulation",
-                entry_authority=True,
-                can_enter_from_phases=("BREAKOUT_CONFIRMATION",),
-            ),
             flow_confirmation_evidence=_flow_evidence(0.95),
             setup_family="foreign-bounce",
             setup_phase=None,

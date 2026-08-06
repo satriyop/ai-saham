@@ -78,9 +78,12 @@ class AssessSignalEvidenceUseCase:
         # 3. Build typed setup-family readiness once (HIGH-2), then apply
         # flags/classification/decision policy. DecisionPolicyService is the
         # only gate that consumes signal_authority_coverage and readiness.
+        # ADR-067 §4: readiness is resolved from family + phase only. Setup
+        # evidence is deliberately not passed — routing it here would give
+        # retired setup evidence a path back to Action through the readiness
+        # caps.
         setup_readiness = SetupPhaseReadinessEvaluator().evaluate(
             setup_family=request.setup_family,
-            setup_evidence=request.setup_evidence,
             setup_phase=request.setup_phase,
         )
         decision_result = DecisionPolicyService(self._config.decision_policy).resolve(

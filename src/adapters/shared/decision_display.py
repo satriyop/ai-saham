@@ -61,8 +61,8 @@ def format_setup_readiness(
     - readiness VO READY → shown in full style only (why style stays silent)
     - readiness VO non-READY → status + missing/failed inputs
 
-    Screen batch often has family=None and readiness=None by design (no
-    SetupEvidence on canonical flow). That is not a bug.
+    Screen batch often has family=None and readiness=None by design — with no
+    setup family there is nothing for readiness to describe. That is not a bug.
     """
     family = setup_family or _family_from_readiness(readiness)
 
@@ -92,11 +92,16 @@ def format_setup_readiness(
         return f"setup readiness READY{family_s}" if style == "full" else ""
 
     if status_s == "UNAVAILABLE":
+        # ADR-067 §4: the detail is rendered verbatim from the VO and is never
+        # labelled "missing". On the accum path UNAVAILABLE is by design (the
+        # setup match is not evaluated there), so the old
+        # `(missing: setup_evidence)` phrasing was wrong twice over — it read as
+        # a wiring defect and it printed a code identifier at the operator.
         if missing:
-            miss = ", ".join(str(m) for m in missing[:5])
+            detail = ", ".join(str(m) for m in missing[:5])
             if len(missing) > 5:
-                miss += ", …"
-            return f"setup readiness UNAVAILABLE{family_s} (missing: {miss})"
+                detail += ", …"
+            return f"setup readiness UNAVAILABLE{family_s} ({detail})"
         return f"setup readiness UNAVAILABLE{family_s}"
 
     if status_s == "INCOMPLETE":

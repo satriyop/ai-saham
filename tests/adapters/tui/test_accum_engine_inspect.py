@@ -39,7 +39,7 @@ def _candidate(
         setup_readiness = SimpleNamespace(
             status=SimpleNamespace(value="UNAVAILABLE"),
             setup_family="pullback",
-            missing_required_inputs=("setup_evidence",),
+            missing_required_inputs=("setup match not evaluated",),
             failed_requirements=(),
         )
     else:
@@ -175,7 +175,7 @@ def test_inspect_readiness_when_present():
     row, _ = _row(_candidate(readiness="unavailable"))
     text = present_accum_engine_inspect(row).text
     assert "UNAVAILABLE" in text
-    assert "setup_evidence" in text
+    assert "setup match not evaluated" in text
 
 
 def test_inspect_display_market_context():

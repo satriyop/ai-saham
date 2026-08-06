@@ -183,7 +183,23 @@ _BRANCH_COVERAGE_FLOOR: dict[str, tuple[int, int]] = {
     "src/application/services/primary_setup_family_resolver.py": (26, 48),
     "src/application/services/screen_assessment_pipeline.py": (18, 42),
     "src/application/services/setup_phase_detector.py": (27, 38),
-    "src/application/services/setup_phase_readiness_evaluator.py": (7, 26),
+    # 6/8: lowered from 7/26 by ADR-067 slice 4, which deleted the
+    # `setup_evidence` parameter so setup evidence can no longer reach Action
+    # through readiness -> DecisionPolicy caps. Both halves moved and neither is
+    # under-forking:
+    #   - total fell 26 -> 8: rules 5-13 (required-phase-absent, unavailable
+    #     phase-evidence reasons, setup_match PARTIAL/NO_MATCH, entry_authority,
+    #     phase NONE, phase membership, sequence validity, READY) all sat behind
+    #     the `setup_evidence is None` gate and were unreachable without an
+    #     evidence input. They are deleted, not left dead.
+    #   - uncovered fell 19 -> 2: the seventeen arcs that no probe reached were
+    #     all inside those deleted rules. The two that remain are the *taken*
+    #     arcs of rules 2-3 (adverse phase -> INELIGIBLE): no probe pairs a
+    #     setup family with a DISTRIBUTION/FAILED/EXHAUSTION phase, which was
+    #     equally true before this slice. Rules 1-3 are preserved bit-for-bit
+    #     and are covered directly by test_setup_phase_readiness_evaluator.py
+    #     and test_adr067_setup_readiness_inputs.py.
+    "src/application/services/setup_phase_readiness_evaluator.py": (6, 8),
     "src/application/services/setup_phase_volume_trigger.py": (14, 26),
     "src/application/services/signal_engine.py": (3, 30),
     # 41/62: lowered from 48/66 by ADR-067 slice 3, which deleted the
