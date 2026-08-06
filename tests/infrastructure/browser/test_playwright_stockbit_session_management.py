@@ -367,12 +367,13 @@ def test_reauth_auth_ui_auto_clicks_then_saves(monkeypatch, tmp_path, capsys):
         browser_mod, "attempt_stockbit_reauth_clicks", lambda p: ("login", "confirm")
     )
 
-    result = browser_mod.reauth_stockbit_session(profile_dir=tmp_path, timeout=5)
+    result = browser_mod.reauth_stockbit_session(profile_dir=tmp_path, timeout=5, mode="headed")
 
     assert result.success is True
     assert result.already_authenticated is False
     assert result.auto_clicks == ("login", "confirm")
     assert result.token_saved is True
+    assert result.mode == "headed"
     assert StockbitTokenStore(tmp_path / "token.json").load() == token
     out = capsys.readouterr().out.lower()
     assert "login" in out and "confirm" in out
@@ -385,12 +386,34 @@ def test_reauth_timeout_fails(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(browser_mod, "_resolve_token", lambda p, box: None)
     monkeypatch.setattr(browser_mod, "attempt_stockbit_reauth_clicks", lambda p: ("login",))
 
-    result = browser_mod.reauth_stockbit_session(profile_dir=tmp_path, timeout=5)
+    result = browser_mod.reauth_stockbit_session(profile_dir=tmp_path, timeout=5, mode="headed")
 
     assert result.success is False
     assert result.token_saved is False
     assert not (tmp_path / "token.json").exists()
     assert "failed" in result.message.lower() or "auth" in result.message.lower()
+
+
+def test_reauth_headless_fails_closed_on_auth_ui_without_clicks(monkeypatch, tmp_path):
+    """Headless must not run Login/OK automation — fail and point at --mode headed."""
+    (tmp_path / ".gitkeep").write_text("x")
+    page = _FakeReauthPage(start_url="https://stockbit.com/login", login_succeeds=True)
+    _patch_common(monkeypatch, page)
+    monkeypatch.setattr(browser_mod, "_resolve_token", lambda p, box: None)
+    clicks = {"n": 0}
+
+    def _clicks(_p):
+        clicks["n"] += 1
+        return ("login", "confirm")
+
+    monkeypatch.setattr(browser_mod, "attempt_stockbit_reauth_clicks", _clicks)
+
+    result = browser_mod.reauth_stockbit_session(profile_dir=tmp_path, timeout=5, mode="headless")
+
+    assert result.success is False
+    assert result.mode == "headless"
+    assert clicks["n"] == 0
+    assert "headed" in result.message.lower()
 
 
 # ── browse_stockbit_session ───────────────────────────────────────────────
