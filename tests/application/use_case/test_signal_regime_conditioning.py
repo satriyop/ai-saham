@@ -215,7 +215,12 @@ def test_neutral_strong_flow_unchanged():
 
 
 def test_neutral_only_discounts_flow_not_setup():
-    """NEUTRAL conditioning targets flow only; setup group is unaffected."""
+    """NEUTRAL conditioning targets flow only; setup group is unaffected.
+
+    ADR-067: with setup retired from the evidence basis, the conditioned setup
+    score no longer reaches legacy_conditioned_score either, so attaching setup
+    evidence produces byte-identical diagnostic output to flow alone.
+    """
     r = UC.execute(
         _req(
             setup_evidence=_setup("NO_MATCH"),  # weak setup (score=20) — unchanged by NEUTRAL
@@ -223,29 +228,49 @@ def test_neutral_only_discounts_flow_not_setup():
             market_context=_mctx("NEUTRAL"),
         )
     )
+    flow_only = UC.execute(
+        _req(
+            flow_confirmation_evidence=_flow(0.40),
+            market_context=_mctx("NEUTRAL"),
+        )
+    )
     bd = _breakdown_dict(r)
-    assert bd.get("setup_quality_group") == pytest.approx(20.0)  # unchanged
+    assert bd.get("setup_quality_group") == pytest.approx(20.0)  # reported, not scored
     assert bd.get("flow_confirmation_group") == pytest.approx(40.0)  # unchanged (neutral)
-    assert r.assessment.legacy_conditioned_score == 25
+    assert r.assessment.legacy_conditioned_score == 32  # 40 × 0.80, flow alone
+    assert r.assessment.legacy_conditioned_score == flow_only.assessment.legacy_conditioned_score
+    assert r.assessment.score == flow_only.assessment.score
 
 
 # ── RISK_OFF — weak setup discounted ─────────────────────────────────────────
 
 
-def test_risk_off_weak_setup_is_discounted():
-    """RISK_OFF + setup_group_score < 60 → setup multiplied by 0.50."""
-    r = UC.execute(
-        _req(
-            setup_evidence=_setup("NO_MATCH"),  # score=20.0 < 60
-            market_context=_mctx("RISK_OFF"),
-        )
-    )
-    bd = _breakdown_dict(r)
+def test_risk_off_weak_setup_discount_cannot_move_any_score():
+    """RISK_OFF still discounts weak setup, and it no longer changes anything.
+
+    The branch fires (regime_conditioning flag set, RISK_OFF note emitted), but
+    ADR-067 removed setup from the evidence basis, so the discounted value
+    reaches neither the canonical score nor legacy_conditioned_score. Proven by
+    comparing a discounted NO_MATCH against an undiscounted MATCH: identical
+    scores, different notes.
+    """
+    weak = UC.execute(
+        _req(setup_evidence=_setup("NO_MATCH"), market_context=_mctx("RISK_OFF"))
+    )  # score=20.0 < 60 → discounted
+    strong = UC.execute(
+        _req(setup_evidence=_setup("MATCH"), market_context=_mctx("RISK_OFF"))
+    )  # score=100.0 >= 60 → not discounted
+
+    bd = _breakdown_dict(weak)
     assert bd.get("setup_quality_group") == pytest.approx(20.0)
-    assert r.assessment.legacy_conditioned_score == 10
-    assert r.assessment.score == 20
     assert bd.get("regime_conditioning") == 1.0
-    assert any("RISK_OFF" in line for line in r.assessment.rationale)
+    assert any("RISK_OFF" in line for line in weak.assessment.rationale)
+
+    # No flow evidence, so both are the 50.0 neutral prior — not the setup score.
+    assert weak.assessment.score == 50
+    assert weak.assessment.legacy_conditioned_score == 50
+    assert weak.assessment.score == strong.assessment.score
+    assert weak.assessment.legacy_conditioned_score == strong.assessment.legacy_conditioned_score
 
 
 def test_risk_off_strong_setup_unchanged():
@@ -286,14 +311,20 @@ def test_risk_off_does_not_discount_flow():
     bd = _breakdown_dict(r)
     assert bd.get("setup_quality_group") == pytest.approx(20.0)
     assert bd.get("flow_confirmation_group") == pytest.approx(30.0)
-    assert r.assessment.legacy_conditioned_score == 18
+    # ADR-067: the diagnostic score is the (undiscounted) flow score alone.
+    assert r.assessment.legacy_conditioned_score == 30
 
 
 # ── VOLATILE — both groups discounted ────────────────────────────────────────
 
 
 def test_volatile_discounts_both_groups():
-    """VOLATILE applies setup_discount and flow_discount to both groups."""
+    """VOLATILE conditions both groups; only flow reaches the diagnostic score.
+
+    ADR-067: the setup discount is still computed and still noted, but with
+    setup out of the evidence basis legacy_conditioned_score is 80 × 0.80 = 64,
+    and the canonical score is the undiscounted flow score, 80.
+    """
     r = UC.execute(
         _req(
             setup_evidence=_setup("MATCH"),  # score=100
@@ -304,14 +335,19 @@ def test_volatile_discounts_both_groups():
     bd = _breakdown_dict(r)
     assert bd.get("setup_quality_group") == pytest.approx(100.0)
     assert bd.get("flow_confirmation_group") == pytest.approx(80.0)
-    assert r.assessment.legacy_conditioned_score == 68
-    assert r.assessment.score == 92
+    assert r.assessment.legacy_conditioned_score == 64
+    assert r.assessment.score == 80
     assert bd.get("regime_conditioning") == 1.0
     assert any("VOLATILE" in line for line in r.assessment.rationale)
 
 
 def test_volatile_with_only_setup():
-    """VOLATILE with only setup evidence — only setup discounted, flow absent."""
+    """VOLATILE with only setup evidence — no production evidence is present.
+
+    ADR-067: setup alone leaves the evidence basis empty, so both the canonical
+    and the diagnostic score are the 50.0 neutral prior no matter how strong
+    the setup is or what discount VOLATILE applies to it.
+    """
     r = UC.execute(
         _req(
             setup_evidence=_setup("MATCH"),  # score=100
@@ -320,8 +356,8 @@ def test_volatile_with_only_setup():
     )
     bd = _breakdown_dict(r)
     assert bd.get("setup_quality_group") == pytest.approx(100.0)
-    assert r.assessment.legacy_conditioned_score == 70
-    assert r.assessment.score == 100
+    assert r.assessment.legacy_conditioned_score == 50
+    assert r.assessment.score == 50
 
 
 def test_volatile_with_only_flow():
@@ -392,21 +428,25 @@ def test_gate_tightening_caps_enter_to_watch():
 
 
 def test_gate_tightening_does_not_affect_watch_or_avoid():
-    """gate_tightening only caps ENTER; WATCH and AVOID are unchanged."""
-    # PARTIAL setup (score=60) is MODERATE (45 ≤ 60 < 70) → WATCH
+    """gate_tightening only caps ENTER; WATCH and AVOID are unchanged.
+
+    Scores are placed with flow evidence: ADR-067 left flow the sole production
+    evidence group, so setup evidence can no longer put a score in a band.
+    """
+    # flow 0.60 → score 60 is MODERATE (45 ≤ 60 < 70) → WATCH
     r_watch = UC.execute(
         _req(
-            setup_evidence=_setup("PARTIAL"),
+            flow_confirmation_evidence=_flow(0.60),
             market_context=_mctx("RISK_ON", gate_tightening=True),
         )
     )
     assert r_watch.assessment.entry_quality == EntryQuality.WATCH
     assert "gate_tightening" not in dict(r_watch.assessment.breakdown)
 
-    # NO_MATCH setup (score=20) is WEAK (< 45) → AVOID
+    # flow 0.20 → score 20 is WEAK (< 45) → AVOID
     r_avoid = UC.execute(
         _req(
-            setup_evidence=_setup("NO_MATCH"),
+            flow_confirmation_evidence=_flow(0.20),
             market_context=_mctx("RISK_ON", gate_tightening=True),
         )
     )
@@ -471,10 +511,9 @@ def test_regime_conditioning_and_flags_both_apply():
         snapshot_date=SNAP,
         forward_pe=60.0,  # triggers VALUATION_STRETCHED (-10)
     )
-    # NO_MATCH setup: score=20
     r = UC.execute(
         _req(
-            setup_evidence=_setup("NO_MATCH"),  # score=20
+            setup_evidence=_setup("NO_MATCH"),  # score=20, reported but not scored
             market_context=_mctx("RISK_OFF"),
             signal_context=ctx_sig,
         )
@@ -483,7 +522,8 @@ def test_regime_conditioning_and_flags_both_apply():
     assert bd.get("setup_quality_group") == pytest.approx(20.0)
     assert bd.get("flag_adjustment") == -10.0  # VALUATION_STRETCHED
     assert bd.get("regime_conditioning") == 1.0
-    # Conditioned: setup=10, flag=-10 -> 0
-    assert r.assessment.legacy_conditioned_score == 0
-    # Canonical: setup=20, flag=-10 -> 10
-    assert r.assessment.score == 10
+    # ADR-067: no production evidence present → 50.0 neutral prior. The flag
+    # still applies independently of regime conditioning, which is the point of
+    # this test: 50 - 10 = 40 on both the canonical and the diagnostic score.
+    assert r.assessment.legacy_conditioned_score == 40
+    assert r.assessment.score == 40

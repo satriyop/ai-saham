@@ -27,23 +27,21 @@ def test_both_groups_missing_raises_no_production_signal_evidence_error():
         uc.execute(_req())
 
 
-def test_only_flow_evidence_renormalized_to_flow_score():
-    # capped_strength=0.80 → flow group score = 80.0
-    # Only flow (weight=0.40) present → renormalized score = 80.0
-    # HIGH-2 Finding 1: a bare SignalEngineConfig() now carries the canonical
-    # RISK_ON/NEUTRAL 0.70 min_signal_authority_coverage floor (matching
-    # config/signal_engine.yaml), not the old dataclass default of 0.0.
-    # _classify_entry itself still gates on directional strength only, so
-    # the raw STRONG score alone would classify ENTER — but
-    # DecisionPolicyService (always applied by the full use case) now caps
-    # this single-group 0.40 coverage below the 0.70 floor to WATCH.
+def test_signal_score_is_exactly_the_flow_group_score():
+    """ADR-067: flow_confirmation is the sole production evidence group.
+
+    capped_strength=0.80 → flow group score 80.0 → signal score 80. No blend,
+    no renormalization, no weight divides anything. Authority coverage is
+    1.0 because flow is now the only required PRODUCTION group, so a bare
+    SignalEngineConfig()'s 0.70 min_signal_authority_coverage floor is met and
+    DecisionPolicyService leaves the ENTER classification standing.
+    """
     uc = _use_case()
     resp = uc.execute(_req(flow_confirmation_evidence=_flow_evidence(capped_strength=0.80)))
     assert resp.assessment.score == 80
-    assert resp.assessment.entry_quality.name == "WATCH"
-    # signal_authority_coverage = 0.40 / (0.60+0.40) = 0.40
-    assert resp.signal_authority_coverage == pytest.approx(0.40)
-    assert resp.assessment.signal_authority_coverage == pytest.approx(0.40)
+    assert resp.assessment.entry_quality.name == "ENTER"
+    assert resp.signal_authority_coverage == pytest.approx(1.0)
+    assert resp.assessment.signal_authority_coverage == pytest.approx(1.0)
 
 
 def test_attached_required_flow_only_reaches_full_authority_coverage():
@@ -83,42 +81,42 @@ def test_settled_bandar_unassessed_does_not_zero_flow_authority():
     assert "unassessed contributors" in (resp.coverage_warning or "")
 
 
-def test_only_setup_evidence_renormalized_to_setup_score():
-    # MATCH → match_strength=100.0; only setup (weight=0.60) present → score=100
-    # HIGH-2 Finding 1: coverage 0.60 is below the default 0.70 floor, so
-    # DecisionPolicyService caps the raw STRONG/ENTER classification to WATCH.
+@pytest.mark.parametrize("match", ["MATCH", "PARTIAL", "NO_MATCH"])
+def test_setup_evidence_alone_scores_the_neutral_prior(match):
+    """ADR-067: setup evidence carries no scoring authority at any strength.
+
+    Setup was retired as a production evidence group, so a request carrying
+    only setup evidence has no production evidence present: the score is the
+    explicit 50.0 neutral prior (never a neutral *fill* of a real group) and
+    authority coverage is 0.0. MATCH, PARTIAL and NO_MATCH are asserted
+    together because the whole point is that match strength no longer moves
+    the score — a single-value test would still pass if only one branch
+    regressed.
+    """
     uc = _use_case()
-    resp = uc.execute(_req(setup_evidence=_setup_evidence("MATCH")))
-    assert resp.assessment.score == 100
-    assert resp.assessment.entry_quality.name == "WATCH"
-    # signal_authority_coverage = 0.60 / 1.0 = 0.60
-    assert resp.signal_authority_coverage == pytest.approx(0.60)
-    assert resp.assessment.signal_authority_coverage == pytest.approx(0.60)
+    resp = uc.execute(_req(setup_evidence=_setup_evidence(match)))
+    assert resp.assessment.score == 50
+    assert resp.signal_authority_coverage == pytest.approx(0.0)
+    assert resp.assessment.entry_quality.name != "ENTER"
 
 
-def test_partial_setup_match_gives_lower_score():
+def test_attaching_setup_evidence_cannot_move_the_flow_score():
+    """The negative form of the retirement: setup is inert beside flow.
+
+    Before ADR-067 this blended to (100*0.60 + 50*0.40) / 1.0 = 80. Now the
+    score is the flow group score, 50, regardless of setup being a full MATCH.
+    """
     uc = _use_case()
-    resp = uc.execute(_req(setup_evidence=_setup_evidence("PARTIAL")))
-    assert resp.assessment.score == 60  # match_strength=60.0
-
-
-def test_no_match_setup_gives_low_score():
-    uc = _use_case()
-    resp = uc.execute(_req(setup_evidence=_setup_evidence("NO_MATCH")))
-    assert resp.assessment.score == 20  # match_strength=20.0
-
-
-def test_both_groups_present_weighted_combination():
-    # setup=MATCH (100.0, weight=0.60) + flow=0.50 capped (50.0, weight=0.40)
-    # base_score = (100*0.60 + 50*0.40) / (0.60+0.40) = (60+20)/1.0 = 80.0
-    uc = _use_case()
-    resp = uc.execute(
+    flow_only = uc.execute(_req(flow_confirmation_evidence=_flow_evidence(capped_strength=0.50)))
+    with_setup = uc.execute(
         _req(
             setup_evidence=_setup_evidence("MATCH"),
             flow_confirmation_evidence=_flow_evidence(capped_strength=0.50),
         )
     )
-    assert resp.assessment.score == 80
+    assert with_setup.assessment.score == 50
+    assert with_setup.assessment.score == flow_only.assessment.score
+    assert with_setup.signal_authority_coverage == flow_only.signal_authority_coverage
 
 
 def test_both_groups_present_full_strength_scores_100():
@@ -136,38 +134,31 @@ def test_both_groups_present_full_strength_scores_100():
     assert resp.assessment.signal_authority_coverage == pytest.approx(1.0)
 
 
-def test_custom_group_weights_affect_score():
-    # Custom: setup=0.80, flow=0.20
+@pytest.mark.parametrize("weight", [0.20, 0.40, 0.95])
+def test_sole_group_weight_cannot_move_the_score_or_the_coverage(weight):
+    """ADR-067 consequence, asserted so it is a decision and not a surprise.
+
+    With one production evidence group there is nothing to weigh against it:
+    ``renormalize`` reads no weight at all, and in the authority arithmetic the
+    single group contributes ``w * fraction`` to the numerator and ``w`` to the
+    denominator, so ``w`` cancels. The declared weight survives only as ADR-059
+    policy-snapshot material (cohort identity), never as behaviour.
+
+    This is the positive twin of the ``flow_confirmation.weight:x3`` equivalent
+    mutant recorded in the ADR-068 mutation suite. If a second production group
+    is ever registered, both should start failing together.
+    """
     cfg = SignalEngineConfig(
         evidence_groups=EvidenceGroupsConfig(
-            setup_quality=EvidenceGroupConfig(weight=0.80),
-            flow_confirmation=EvidenceGroupConfig(weight=0.20),
+            flow_confirmation=EvidenceGroupConfig(
+                weight=weight,
+                authority_registration="institutional_flow",
+            ),
         )
     )
-    uc = _use_case(cfg)
-    # setup=PARTIAL (60), flow=capped=1.0 (100)
-    # score = (60*0.80 + 100*0.20) / 1.0 = (48+20) = 68
-    resp = uc.execute(
-        _req(
-            setup_evidence=_setup_evidence("PARTIAL"),
-            flow_confirmation_evidence=_flow_evidence(capped_strength=1.0),
-        )
+    resp = _use_case(cfg).execute(
+        _req(flow_confirmation_evidence=_flow_evidence(capped_strength=1.0))
     )
-    assert resp.assessment.score == 68
-
-
-def test_strong_setup_only_score_capped_by_default_authority_coverage_floor():
-    # HIGH-2 Finding 1: _classify_entry itself still gates on directional
-    # strength only — a STRONG score alone classifies raw ENTER even though
-    # only one evidence group (weight 0.60) is present. But
-    # DecisionPolicyService is always applied downstream by the full use
-    # case, and a bare SignalEngineConfig() now carries the canonical 0.70
-    # min_signal_authority_coverage floor (matching config/signal_engine.yaml)
-    # instead of the old dataclass default of 0.0 — so single-group 0.60
-    # coverage below that floor caps the final decision to WATCH.
-    uc = _use_case()
-    resp = uc.execute(_req(setup_evidence=_setup_evidence("MATCH")))
     assert resp.assessment.score == 100
     assert resp.assessment.strength == SignalStrength.STRONG
-    assert resp.assessment.signal_authority_coverage == pytest.approx(0.60)
-    assert resp.assessment.entry_quality.name == "WATCH"
+    assert resp.signal_authority_coverage == pytest.approx(1.0)

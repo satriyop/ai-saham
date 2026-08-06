@@ -16,17 +16,16 @@ from tests.application.use_case.signal_evidence_fixtures import (
 )
 
 
-def test_flow_only_emits_coverage_warning_naming_absent_setup_group():
-    # HIGH-2: only flow evidence attached -> setup_quality is a required
-    # PRODUCTION group that is absent; the warning must name it and must not
-    # use the phrase "evidence confidence". Default ALL_REQUIRED scope.
+def test_flow_only_is_complete_coverage_with_no_warning():
+    # ADR-067: flow_confirmation is the only required PRODUCTION group, so a
+    # flow-only request is COMPLETE, not incomplete. Before the retirement this
+    # warned that setup_quality was absent — a warning about a group no
+    # production surface ever attached. Asserted under the default ALL_REQUIRED
+    # scope, because that is where the old warning came from.
     uc = _use_case()
     resp = uc.execute(_req(flow_confirmation_evidence=_flow_evidence()))
-    assert resp.coverage_warning is not None
-    assert "setup_quality" in resp.coverage_warning
-    assert "required evidence absent" in resp.coverage_warning
-    assert "evidence confidence" not in resp.coverage_warning.lower()
-    assert "conviction" not in resp.coverage_warning.lower()
+    assert resp.coverage_warning is None
+    assert resp.signal_authority_coverage == pytest.approx(1.0)
 
 
 def test_attached_required_flow_only_skips_absent_setup_warning():
@@ -56,15 +55,16 @@ def test_full_confidence_no_coverage_warning():
     assert resp.coverage_warning is None
 
 
-def test_setup_only_emits_coverage_warning_naming_absent_flow_group():
-    # HIGH-2: only setup evidence attached -> flow_confirmation (required
-    # PRODUCTION group) is absent and must be named — this is a genuine
-    # incompleteness the old 0.5-ratio heuristic silently hid.
+def test_setup_only_reports_no_production_evidence_present():
+    # ADR-067: setup is no longer a production evidence group, so a setup-only
+    # request has no production evidence at all. The warning is the
+    # "nothing present" form, not the per-group "flow_confirmation absent"
+    # form — there is no attached production group to compare against.
     uc = _use_case()
     resp = uc.execute(_req(setup_evidence=_setup_evidence("MATCH")))
     assert resp.coverage_warning is not None
-    assert "flow_confirmation" in resp.coverage_warning
-    assert "required evidence absent" in resp.coverage_warning
+    assert "neutral prior only" in resp.coverage_warning
+    assert resp.signal_authority_coverage == pytest.approx(0.0)
 
 
 def test_breakdown_includes_present_groups_and_authority_coverage():
@@ -147,25 +147,22 @@ def test_present_but_non_authoritative_flow_names_the_group():
 def test_attached_non_production_registration_names_the_group():
     # HIGH-2 distinction 2: evidence attached but its authority_registration
     # resolves to a non-PRODUCTION status (here: unknown -> DIAGNOSTIC).
+    # Exercised on flow_confirmation now that ADR-067 left it the only
+    # evidence group; the rule under test is unchanged.
     config = SignalEngineConfig(
         evidence_groups=EvidenceGroupsConfig(
-            setup_quality=EvidenceGroupConfig(
-                weight=0.60,
+            flow_confirmation=EvidenceGroupConfig(
+                weight=0.40,
                 authority_registration="not_a_registered_name",
                 required_for_authority=True,
             ),
         )
     )
     uc = _use_case(config)
-    resp = uc.execute(
-        _req(
-            setup_evidence=_setup_evidence("MATCH"),
-            flow_confirmation_evidence=_flow_evidence(),
-        )
-    )
+    resp = uc.execute(_req(flow_confirmation_evidence=_flow_evidence()))
     assert resp.coverage_warning is not None
-    assert "setup_quality" in resp.coverage_warning
+    assert "flow_confirmation" in resp.coverage_warning
     assert "registration is not PRODUCTION" in resp.coverage_warning
-    # setup_quality is diagnostic here, so it cannot lower authority coverage —
-    # flow_confirmation alone (weight 0.40, required) fully covers itself.
-    assert resp.signal_authority_coverage == pytest.approx(1.0)
+    # A diagnostic registration never enters the authority denominator, so
+    # with no PRODUCTION group left the coverage is 0.0, not 1.0.
+    assert resp.signal_authority_coverage == pytest.approx(0.0)

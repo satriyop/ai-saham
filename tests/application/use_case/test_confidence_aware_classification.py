@@ -129,39 +129,48 @@ def _execute(**kwargs):
 
 
 def test_full_evidence_strong_score_can_enter():
+    # ADR-067: "full evidence" is now flow alone. Attaching setup as well
+    # changes neither the score nor the coverage — asserted rather than
+    # assumed, since this test used to depend on the 100/90 blend.
     resp = _execute(
         setup_evidence=_setup("MATCH"),
         flow_confirmation_evidence=_flow(0.90),
     )
+    flow_only = _execute(flow_confirmation_evidence=_flow(0.90))
 
-    assert resp.assessment.score == 96
+    assert resp.assessment.score == 90
     assert resp.assessment.strength == SignalStrength.STRONG
     assert resp.assessment.signal_authority_coverage == pytest.approx(1.0)
     assert resp.assessment.entry_quality == EntryQuality.ENTER
+    assert flow_only.assessment.score == resp.assessment.score
+    assert flow_only.assessment.entry_quality == resp.assessment.entry_quality
 
 
 def test_high_score_with_setup_only_authority_coverage_capped_to_watch():
-    # HIGH-2 Finding 1: raw classification (STRONG score) is coverage-blind,
-    # but DecisionPolicyService's default 0.70 RISK_ON floor caps this
-    # single-group 0.60 coverage to WATCH, not ENTER.
+    # ADR-067: setup alone is no longer evidence at all, so there is no "high
+    # score" to cap — the score is the 50.0 neutral prior with zero authority
+    # coverage, which is MODERATE and therefore WATCH by classification rather
+    # than by the DecisionPolicyService floor. Both routes are asserted so a
+    # regression that restores setup scoring fails here.
     resp = _execute(setup_evidence=_setup("MATCH"))
 
-    assert resp.assessment.score == 100
-    assert resp.assessment.strength == SignalStrength.STRONG
-    assert resp.assessment.signal_authority_coverage == pytest.approx(0.60)
+    assert resp.assessment.score == 50
+    assert resp.assessment.strength == SignalStrength.MODERATE
+    assert resp.assessment.signal_authority_coverage == pytest.approx(0.0)
     assert resp.assessment.entry_quality == EntryQuality.WATCH
 
 
-def test_high_score_with_flow_only_authority_coverage_capped_to_watch():
-    # HIGH-2 Finding 1: single-group flow-only 0.40 coverage is below the
-    # default 0.70 RISK_ON floor, so DecisionPolicyService caps the raw
-    # STRONG/ENTER classification to WATCH.
+def test_high_score_with_flow_only_reaches_full_authority_coverage():
+    # ADR-067: flow_confirmation is the only required PRODUCTION group, so
+    # attached flow covers itself completely and clears the default 0.70
+    # RISK_ON floor. Before the retirement this was 0.40 and capped to WATCH,
+    # purely because the never-attached setup group sat in the denominator.
     resp = _execute(flow_confirmation_evidence=_flow(0.90))
 
     assert resp.assessment.score == 90
     assert resp.assessment.strength == SignalStrength.STRONG
-    assert resp.assessment.signal_authority_coverage == pytest.approx(0.40)
-    assert resp.assessment.entry_quality == EntryQuality.WATCH
+    assert resp.assessment.signal_authority_coverage == pytest.approx(1.0)
+    assert resp.assessment.entry_quality == EntryQuality.ENTER
 
 
 def test_no_evidence_moderate_score_raises_no_production_signal_evidence_error():

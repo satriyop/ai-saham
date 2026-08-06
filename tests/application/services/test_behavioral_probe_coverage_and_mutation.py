@@ -25,12 +25,15 @@ Probe sets used for coverage: core (19 probes) + extended (4 probes).
 History of the number: core-set-only branch coverage was 55.69% (401/720)
 before slice 2; slice 2's four extended probes raised it to 59.44% (428/720) by
 attaching a swing setup catalog; the four **core** probes added after slice 2 to
-close measured mutation gaps raised it to 60.69% (437/720).
+close measured mutation gaps raised it to 60.69% (437/720); ADR-067 slice 3
+lowered it to 60.14% (433/720) by deleting the setup_quality evidence group and
+its absent-group handling, which removed branches rather than stopped reaching
+them.
 
-Mutants: **45 planted / 36 caught by the core (identity) digest / 9 surviving.**
+Mutants: **44 planted / 35 caught by the core (identity) digest / 9 surviving.**
 
     GATE_THRESHOLD   14   risk gate thresholds, enablement, confidence
-    SIGNAL_CONSTANT  14   SignalEngineConfig scoring/classification/policy
+    SIGNAL_CONSTANT  13   SignalEngineConfig scoring/classification/policy
     ACCUM_WEIGHT      8   AccumScorePolicy weights, caps, saturation points
     PHASE_THRESHOLD   5   setup-phase detection thresholds
     COMPARISON_FLIP   4   inverted gate verdicts (comparison direction)
@@ -63,6 +66,13 @@ Two of the six were recorded by slice 2 as probe-input holes and are corrected
 here after tracing the call graph: the RISK_OFF ``weak_setup_discount`` and the
 VOLATILE ``flow_discount`` both terminate in ``legacy_conditioned_score``, which
 the canonical projection deliberately excludes.
+
+ADR-067 slice 3 changed the composition of the six without changing the count.
+The ``setup_quality`` weight mutant was **deleted** with the group it mutated,
+exactly as its own record predicted. In its place ``flow_confirmation.weight``
+became equivalent: it used to be caught, and a lone production evidence group
+has no weight arithmetic left to observe. That is a real loss of measurement
+and it is recorded rather than absorbed — see its entry below.
 
 Why the floor lives here and not in CI config
 ---------------------------------------------
@@ -164,7 +174,23 @@ _BRANCH_COVERAGE_FLOOR: dict[str, tuple[int, int]] = {
     "src/application/services/setup_phase_readiness_evaluator.py": (7, 26),
     "src/application/services/setup_phase_volume_trigger.py": (14, 26),
     "src/application/services/signal_engine.py": (3, 30),
-    "src/application/services/signal_evidence_group_scorer.py": (48, 66),
+    # 41/62: lowered from 48/66 by ADR-067 slice 3, which deleted the
+    # setup_quality evidence group and the two-name blend. Both halves moved
+    # for the same reason and neither is under-forking:
+    #   - total fell 66 -> 62: renormalize lost its three-way present/absent
+    #     branch (`if setup_present` / `if flow_present` / `if not active`) and
+    #     now has one guard.
+    #   - uncovered rose 18 -> 21: every newly-uncovered arc is an ABSENT-GROUP
+    #     arc that only the deleted setup group ever took. _source_authority_
+    #     fraction and _has_unassessed_contributors took their `is None` arc
+    #     solely because setup was always None; _compute_signal_authority_
+    #     coverage took its ATTACHED_REQUIRED `not fact.present` continue and
+    #     _coverage_warning took its `not fact.present` branch solely because
+    #     the setup fact was always absent. With one always-attached group they
+    #     are defensive guards no probe reaches. Deleting the absent-group
+    #     handling is the point of the slice, so these are removed holes, not
+    #     new ones.
+    "src/application/services/signal_evidence_group_scorer.py": (41, 62),
     "src/application/services/signal_legacy_regime_conditioning.py": (11, 16),
     "src/application/use_case/accumulation_screen_use_case.py": (15, 30),
     # 26/34: raised from 23/30 by the unevaluable-gate work. One of the eight
@@ -185,7 +211,9 @@ _BRANCH_COVERAGE_FLOOR: dict[str, tuple[int, int]] = {
     "src/domain/value_objects/accum_score_breakdown.py": (20, 36),
 }
 
-# Headline aggregate floor, in whole percent. Measured 60.69%.
+# Headline aggregate floor, in whole percent. Measured 60.14% (was 60.69%
+# before ADR-067 slice 3 removed the setup_quality evidence group; see the
+# signal_evidence_group_scorer entry above for why both halves moved).
 _AGGREGATE_BRANCH_COVERAGE_FLOOR_PCT = 60
 
 _COVERAGE_SUBPROCESS = """
@@ -436,16 +464,6 @@ _MUTANTS: tuple[Mutant, ...] = (
         ),
     ),
     _signal_config_mutant(
-        "signal.evidence_groups.setup_quality.weight:->0",
-        lambda c: _replace(
-            c,
-            evidence_groups=_replace(
-                c.evidence_groups,
-                setup_quality=_replace(c.evidence_groups.setup_quality, weight=0.0),
-            ),
-        ),
-    ),
-    _signal_config_mutant(
         "signal.decision_policy.regime_confidence_min_enter:0.35->0.99",
         lambda c: _replace(
             c, decision_policy=_replace(c.decision_policy, regime_confidence_min_enter=0.99)
@@ -646,16 +664,21 @@ _SURVIVING_MUTANTS: dict[str, str] = {
         "regime_confidence value and a core probe that sets it."
     ),
     # ── Equivalent mutants (no probe input can close these) ─────────────────
-    "signal.evidence_groups.setup_quality.weight:->0": (
-        "EQUIVALENT MUTANT. Screen accum constructs CanonicalSignalEvidenceInput "
-        "with setup=None unconditionally "
-        "(accumulation_candidate_signal_assessor.py), and "
-        "AssessSignalEvidenceRequest.setup_evidence is derived from that field, "
-        "so setup_present is always False here. SignalEvidenceGroupScorer."
-        "renormalize only sums weights of present groups, and the authority "
-        "denominator uses ATTACHED_REQUIRED scope which skips absent groups — "
-        "the setup weight is never read. ADR-067 retires this group; expect the "
-        "mutant to be deleted with it rather than closed by a probe."
+    "signal.evidence_groups.flow_confirmation.weight:x3": (
+        "EQUIVALENT MUTANT, created deliberately by ADR-067 slice 3. This "
+        "mutant used to be caught. Retiring setup_quality left "
+        "flow_confirmation as the sole production evidence group, and a lone "
+        "weight has nothing to be weighed against: "
+        "SignalEvidenceGroupScorer.renormalize no longer reads any weight (the "
+        "base score IS the flow group score), and in "
+        "_compute_signal_authority_coverage the single group contributes "
+        "`w * authority_fraction` to the numerator and `w` to the denominator, "
+        "so w cancels algebraically for every input rather than for every "
+        "probe. The weight survives only as declared ADR-059 policy material "
+        "in signal.accum.evidence_group_weights, which is cohort-identity "
+        "material, not behaviour. No probe closes this. It closes by itself if "
+        "a second production evidence group is ever registered — at which "
+        "point this suite will fail and demand the entry be deleted."
     ),
     "signal.regime_conditioning.volatile.flow_discount:0.80->0.10": (
         "EQUIVALENT MUTANT. SignalLegacyRegimeConditioning is diagnostic: the "

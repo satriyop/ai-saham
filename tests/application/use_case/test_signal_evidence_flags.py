@@ -12,7 +12,6 @@ from tests.application.use_case.signal_evidence_fixtures import (
     _ctx,
     _flow_evidence,
     _req,
-    _setup_evidence,
     _use_case,
 )
 
@@ -121,7 +120,11 @@ def test_score_clamped_at_zero_with_multiple_flags():
         analyst_buy_pct=0.05,
         insider_net_buy_ratio=-0.60,
     )
-    resp = uc.execute(_req(setup_evidence=_setup_evidence("NO_MATCH"), signal_context=ctx))
+    # ADR-067: the base score comes from flow alone, so the clamp is reached
+    # with a weak flow group (20) minus the 30 points of flag penalty.
+    resp = uc.execute(
+        _req(flow_confirmation_evidence=_flow_evidence(capped_strength=0.20), signal_context=ctx)
+    )
     assert resp.assessment.score == 0
     assert resp.assessment.score >= 0
 

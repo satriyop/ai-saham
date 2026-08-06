@@ -121,13 +121,14 @@ class EvidenceGroupConfig:
 
 @dataclass(frozen=True)
 class EvidenceGroupsConfig:
-    setup_quality: EvidenceGroupConfig = field(
-        default_factory=lambda: EvidenceGroupConfig(
-            weight=0.60,
-            authority_registration="setup_quality",
-            required_for_authority=True,
-        )
-    )
+    """The production evidence basis for canonical signal scoring.
+
+    ADR-067 retired `setup_quality`, leaving exactly one group. There is no
+    blend and no renormalization: the signal score IS the flow group score.
+    `weight` survives as the declared production basis (ADR-059 policy
+    snapshot material), not as a divisor.
+    """
+
     flow_confirmation: EvidenceGroupConfig = field(
         default_factory=lambda: EvidenceGroupConfig(
             weight=0.40,

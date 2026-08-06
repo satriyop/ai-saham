@@ -47,8 +47,8 @@ class _GroupAuthorityFacts:
     present: bool
     authoritative: bool
     # Fraction of group weight that is both source-authoritative and
-    # component-complete. Setup remains 1.0/0.0; flow multiplies source
-    # authority by flow.component_coverage.
+    # component-complete. Flow multiplies source authority by
+    # flow.component_coverage.
     authority_fraction: float
     # True when a real consumed contributor was left unassessed (e.g. bandar).
     # Blocks complete-authority claims without necessarily zeroing
@@ -91,12 +91,10 @@ class SignalEvidenceGroupScorer:
             request.flow_confirmation_evidence
         )
 
-        base_score, _presence_ratio = SignalEvidenceGroupScorer.renormalize(
-            setup_group_score, setup_present, flow_group_score, flow_present, config
-        )
+        base_score = SignalEvidenceGroupScorer.renormalize(flow_group_score, flow_present)
 
         group_authority_facts = SignalEvidenceGroupScorer._group_authority_facts(
-            request, setup_present, flow_present, config
+            request, flow_present, config
         )
         signal_authority_coverage = SignalEvidenceGroupScorer._compute_signal_authority_coverage(
             group_authority_facts,
@@ -155,42 +153,29 @@ class SignalEvidenceGroupScorer:
         return max(0.0, min(100.0, ev.capped_strength * 100.0)), True
 
     @staticmethod
-    def renormalize(
-        setup_group_score: float,
-        setup_present: bool,
-        flow_group_score: float,
-        flow_present: bool,
-        config: SignalEngineConfig,
-    ) -> tuple[float, float]:
-        """Compute directional base score and raw group-presence ratio.
+    def renormalize(flow_group_score: float, flow_present: bool) -> float:
+        """Compute the directional base score.
 
-        base_score is a weighted average of present groups' scores; missing
-        groups are excluded from the denominator (never neutral-filled). The
-        second returned value is a raw presence ratio — NOT
-        signal_authority_coverage. It exists only for internal call-signature
-        compatibility with SignalLegacyRegimeConditioning's diagnostic path.
+        ADR-067 retired `setup_quality`, leaving `flow_confirmation` as the
+        sole production evidence group. There is nothing left to weight
+        against, so **no renormalization happens**: the base score IS the flow
+        group score. The name is kept only because
+        `signal.accum.evidence_group_weights` still declares
+        `formula_id: signal_evidence_group_scorer.renormalize.v1`; renaming
+        both together belongs to the snapshot-payload slice.
+
+        An absent group is never neutral-filled — with no group present the
+        score is the explicit 50.0 neutral prior, unchanged from the two-group
+        form.
+
         Production-authority coverage is computed separately by
-        `_compute_signal_authority_coverage`, since directional score
-        arithmetic must remain based on attached evidence exactly as today
-        while authority coverage additionally requires PRODUCTION
-        registration and source availability.
+        `_compute_signal_authority_coverage`: directional score arithmetic is
+        based on attached evidence, while authority coverage additionally
+        requires PRODUCTION registration and source availability.
         """
-        g = config.evidence_groups
-        total_weight = g.setup_quality.weight + g.flow_confirmation.weight
-
-        active: list[tuple[float, float]] = []  # (score, weight)
-        if setup_present:
-            active.append((setup_group_score, g.setup_quality.weight))
-        if flow_present:
-            active.append((flow_group_score, g.flow_confirmation.weight))
-
-        if not active:
-            return 50.0, 0.0
-
-        present_weight = sum(w for _, w in active)
-        base_score = sum(s * w for s, w in active) / present_weight
-        presence_ratio = min(1.0, present_weight / total_weight) if total_weight > 0 else 0.0
-        return base_score, presence_ratio
+        if not flow_present:
+            return 50.0
+        return flow_group_score
 
     @staticmethod
     def _is_production_registered(
@@ -240,41 +225,26 @@ class SignalEvidenceGroupScorer:
     @staticmethod
     def _group_authority_facts(
         request: AssessSignalEvidenceRequest,
-        setup_present: bool,
         flow_present: bool,
         config: SignalEngineConfig,
     ) -> tuple[_GroupAuthorityFacts, ...]:
         """Single source of truth for per-group authority facts, consumed by
         both `_compute_signal_authority_coverage` and `_coverage_warning` so
         the two can never disagree about what is present/registered/
-        authoritative for a given assessment."""
+        authoritative for a given assessment.
+
+        ADR-067: `flow_confirmation` is the only production evidence group, so
+        this is a one-element tuple. It stays a tuple because both consumers
+        iterate it and neither may assume an arity."""
         g = config.evidence_groups
         canonical_evidence = request.canonical_evidence
-        setup_group_input = canonical_evidence.setup if canonical_evidence else None
         flow_group_input = canonical_evidence.flow if canonical_evidence else None
-        setup_source_auth = SignalEvidenceGroupScorer._source_authority_fraction(setup_group_input)
         flow_source_auth = SignalEvidenceGroupScorer._source_authority_fraction(flow_group_input)
         flow_component_coverage = SignalEvidenceGroupScorer._flow_component_coverage(
             request.flow_confirmation_evidence
         )
-        setup_auth = setup_present and setup_source_auth > 0.0
         flow_auth = flow_present and flow_source_auth > 0.0
         return (
-            _GroupAuthorityFacts(
-                name="setup_quality",
-                weight=g.setup_quality.weight,
-                required=g.setup_quality.required_for_authority,
-                is_production=SignalEvidenceGroupScorer._is_production_registered(
-                    g.setup_quality, config
-                ),
-                present=setup_present,
-                authoritative=setup_auth,
-                # Setup remains source-authoritative 1.0 or 0.0.
-                authority_fraction=(setup_source_auth if setup_present else 0.0),
-                has_unassessed_contributors=(
-                    SignalEvidenceGroupScorer._has_unassessed_contributors(setup_group_input)
-                ),
-            ),
             _GroupAuthorityFacts(
                 name="flow_confirmation",
                 weight=g.flow_confirmation.weight,
@@ -313,8 +283,14 @@ class SignalEvidenceGroupScorer:
         attached on this request enter the denominator. Intentionally
         unattached groups are out of scope for this assessment.
 
-        Flow contributes proportionally via component_coverage; setup remains
-        binary. Directional base_score is unchanged by authority arithmetic.
+        Flow contributes proportionally via component_coverage. Directional
+        base_score is unchanged by authority arithmetic.
+
+        ADR-067 note: `flow_confirmation` is now the only required PRODUCTION
+        group, so on the screen path (ATTACHED_REQUIRED) the denominator is
+        flow's weight whenever flow is attached — exactly what it was before
+        the retirement, because the absent setup group was already skipped by
+        the ATTACHED_REQUIRED branch below.
         """
         denominator = 0.0
         numerator = 0.0
@@ -410,8 +386,8 @@ class SignalEvidenceGroupScorer:
     ) -> str | None:
         """HIGH-2 + DQ-001: distinguish exactly why authority coverage is incomplete.
 
-        1. No setup or flow evidence attached at all — reported once, no
-           per-group detail needed.
+        1. No evidence attached at all — reported once, no per-group detail
+           needed.
         2. Evidence attached but its registration is not PRODUCTION —
            diagnostic/low-weight evidence never raises authority coverage.
         3. Evidence attached and PRODUCTION-registered but its resolved

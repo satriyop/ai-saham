@@ -12,7 +12,10 @@ keys (RETIRE-LEGACY-SIX-FACTOR-BASELINE Slice 2), and
 `signal_engine.scoring.seasonality/analyst/forward_pe` are removed
 non-operational keys (Slice 2 findings fix — no producer ever read them from
 YAML; the diagnostic company-quality producer uses typed SignalScoringConfig()
-defaults). All are rejected explicitly rather than silently ignored, so stale
+defaults). `signal_engine.evidence_groups.setup_quality` is a retired evidence
+group (ADR-067): `flow_confirmation` is the sole production group and the
+signal score is the flow group score, so a declared setup weight configures
+nothing. All are rejected explicitly rather than silently ignored, so stale
 config cannot appear to configure canonical or diagnostic scoring.
 """
 
@@ -127,15 +130,15 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
     alpha_trigger_cfg = resolve_alpha_trigger_config(root.get("alpha_trigger", {}))
     pre_open = root.get("pre_open_directional_baseline", {})
 
-    setup_quality_group = EvidenceGroupConfig(
-        weight=evidence_groups.get("setup_quality", {}).get("weight", 0.60),
-        authority_registration=evidence_groups.get("setup_quality", {}).get(
-            "authority_registration", "setup_quality"
-        ),
-        required_for_authority=evidence_groups.get("setup_quality", {}).get(
-            "required_for_authority", True
-        ),
-    )
+    if "setup_quality" in evidence_groups:
+        raise ValueError(
+            "signal_engine.evidence_groups.setup_quality was retired (ADR-067). "
+            "It was present in 0 of 7,764 accum window-observations, so its "
+            "declared weight configured nothing the screen produced. "
+            "flow_confirmation is the sole production evidence group and the "
+            "signal score is the flow group score. Delete it from config; "
+            "there is no compatibility path."
+        )
     flow_confirmation_group = EvidenceGroupConfig(
         weight=evidence_groups.get("flow_confirmation", {}).get("weight", 0.40),
         authority_registration=evidence_groups.get("flow_confirmation", {}).get(
@@ -145,7 +148,6 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
             "required_for_authority", True
         ),
     )
-    _validate_evidence_group_config("setup_quality", setup_quality_group, alpha_trigger_cfg)
     _validate_evidence_group_config("flow_confirmation", flow_confirmation_group, alpha_trigger_cfg)
 
     return SignalEngineConfig(
@@ -174,7 +176,6 @@ def resolve_signal_engine_config(cfg: dict) -> SignalEngineConfig:
             insider_lookback_days=enrichment.get("insider_lookback_days", 90),
         ),
         evidence_groups=EvidenceGroupsConfig(
-            setup_quality=setup_quality_group,
             flow_confirmation=flow_confirmation_group,
         ),
         flags=SignalFlagsConfig(

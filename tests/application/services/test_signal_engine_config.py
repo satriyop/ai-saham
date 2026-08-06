@@ -699,13 +699,54 @@ def test_resolve_signal_config_rejects_non_positive_evidence_group_weight():
     cfg = {
         "signal_engine": {
             "evidence_groups": {
-                "setup_quality": {"weight": 0.0},
+                "flow_confirmation": {"weight": 0.0},
             },
         },
     }
 
-    with pytest.raises(ValueError, match="evidence_groups.setup_quality.weight must be > 0"):
+    with pytest.raises(ValueError, match="evidence_groups.flow_confirmation.weight must be > 0"):
         _resolve_signal_config(cfg)
+
+
+def test_resolve_signal_config_rejects_retired_setup_quality_evidence_group():
+    """ADR-067: the retired group must fail closed, never resolve silently.
+
+    A re-added `setup_quality` block would otherwise look like it configures
+    scoring while configuring nothing — the decorative-config defect ADR-067
+    exists to remove. There is deliberately no alias and no dual-profile path.
+    """
+    cfg = {
+        "signal_engine": {
+            "evidence_groups": {
+                "setup_quality": {
+                    "weight": 0.60,
+                    "authority_registration": "setup_quality",
+                    "required_for_authority": True,
+                },
+                "flow_confirmation": {"weight": 0.40},
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"signal_engine\.evidence_groups\.setup_quality was retired \(ADR-067\)",
+    ):
+        _resolve_signal_config(cfg)
+
+
+def test_evidence_groups_config_declares_exactly_one_production_group():
+    """ADR-067: flow_confirmation is the sole production evidence basis.
+
+    Guards the general form of the defect: a declared weight for a group with
+    no production registration is decorative config. With one group there is
+    nothing to blend, so any second field here would be a silent re-fork.
+    """
+    from dataclasses import fields
+
+    from src.application.services.signal_engine_config import EvidenceGroupsConfig
+
+    assert [f.name for f in fields(EvidenceGroupsConfig)] == ["flow_confirmation"]
 
 
 def test_resolve_signal_config_rejects_empty_authority_registration():
@@ -730,14 +771,14 @@ def test_resolve_signal_config_rejects_unknown_authority_registration():
     cfg = {
         "signal_engine": {
             "evidence_groups": {
-                "setup_quality": {"authority_registration": "setup_qualty"},
+                "flow_confirmation": {"authority_registration": "institutional_flw"},
             },
         },
     }
 
     with pytest.raises(
         ValueError,
-        match=r"authority_registration='setup_qualty' does not exist",
+        match=r"authority_registration='institutional_flw' does not exist",
     ):
         _resolve_signal_config(cfg)
 
@@ -746,14 +787,14 @@ def test_resolve_signal_config_rejects_non_boolean_required_for_authority():
     cfg = {
         "signal_engine": {
             "evidence_groups": {
-                "setup_quality": {"required_for_authority": "yes"},
+                "flow_confirmation": {"required_for_authority": "yes"},
             },
         },
     }
 
     with pytest.raises(
         ValueError,
-        match="evidence_groups.setup_quality.required_for_authority must be a boolean",
+        match="evidence_groups.flow_confirmation.required_for_authority must be a boolean",
     ):
         _resolve_signal_config(cfg)
 
@@ -814,11 +855,6 @@ def test_resolve_signal_config_accepts_valid_evidence_group_config():
     cfg = {
         "signal_engine": {
             "evidence_groups": {
-                "setup_quality": {
-                    "weight": 0.55,
-                    "authority_registration": "setup_quality",
-                    "required_for_authority": True,
-                },
                 "flow_confirmation": {
                     "weight": 0.45,
                     "authority_registration": "institutional_flow",
@@ -829,6 +865,6 @@ def test_resolve_signal_config_accepts_valid_evidence_group_config():
     }
 
     resolved = _resolve_signal_config(cfg)
-    assert resolved.evidence_groups.setup_quality.weight == 0.55
-    assert resolved.evidence_groups.setup_quality.authority_registration == "setup_quality"
     assert resolved.evidence_groups.flow_confirmation.weight == 0.45
+    assert resolved.evidence_groups.flow_confirmation.authority_registration == "institutional_flow"
+    assert resolved.evidence_groups.flow_confirmation.required_for_authority is True

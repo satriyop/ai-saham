@@ -101,9 +101,7 @@ def test_source_unavailable_flow_has_zero_authority():
         market_context=None,
         canonical_evidence=_Canon(),
     )
-    facts = SignalEvidenceGroupScorer._group_authority_facts(
-        req, setup_present=False, flow_present=True, config=cfg
-    )
+    facts = SignalEvidenceGroupScorer._group_authority_facts(req, flow_present=True, config=cfg)
     flow_fact = [f for f in facts if f.name == "flow_confirmation"][0]
     assert flow_fact.authority_fraction == 0.0
     coverage = SignalEvidenceGroupScorer._compute_signal_authority_coverage(facts)
@@ -136,19 +134,17 @@ def test_partial_flow_coverage_proportionally_lowers_authority():
         market_context=None,
         canonical_evidence=_Canon(),
     )
-    facts = SignalEvidenceGroupScorer._group_authority_facts(
-        req, setup_present=True, flow_present=True, config=cfg
-    )
+    facts = SignalEvidenceGroupScorer._group_authority_facts(req, flow_present=True, config=cfg)
     flow_fact = [f for f in facts if f.name == "flow_confirmation"][0]
     assert flow_fact.authority_fraction == pytest.approx(flow_ev.component_coverage)
     assert 0.0 < flow_fact.authority_fraction < 1.0
 
+    # ADR-067: flow_confirmation is the sole production evidence group, so its
+    # weight cancels and coverage IS its authority fraction. Asserted against
+    # the component coverage directly rather than a weight ratio, so the test
+    # cannot silently pass on a reintroduced blend.
     coverage = SignalEvidenceGroupScorer._compute_signal_authority_coverage(facts)
-    g = cfg.evidence_groups
-    expected = (
-        g.setup_quality.weight * 1.0 + g.flow_confirmation.weight * flow_ev.component_coverage
-    ) / (g.setup_quality.weight + g.flow_confirmation.weight)
-    assert coverage == pytest.approx(expected)
+    assert coverage == pytest.approx(flow_ev.component_coverage)
 
 
 def test_alpha_trigger_partial_coverage_lowers_authority_not_directional_score():

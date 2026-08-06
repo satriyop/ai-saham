@@ -132,7 +132,10 @@ def test_risk_off_enter_allowed_false_caps_enter_without_mutating_score():
         )
     )
 
-    assert response.assessment.score == 92
+    # ADR-067: the score is the flow group score alone (was the 100/0.60 +
+    # 80/0.40 blend = 92). The constraint assertions below are what this test
+    # is about and none of them moved.
+    assert response.assessment.score == 80
     assert response.assessment.entry_quality == EntryQuality.WATCH
 
     constraints = response.assessment.decision_constraints

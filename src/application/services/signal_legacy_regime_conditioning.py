@@ -46,12 +46,12 @@ class SignalLegacyRegimeConditioning:
             )
         )
 
-        base_score_conditioned, _ = SignalEvidenceGroupScorer.renormalize(
-            setup_score_conditioned,
-            setup_present,
+        # ADR-067: flow_confirmation is the sole production evidence group, so
+        # the conditioned setup score no longer reaches the diagnostic score.
+        # It is still returned below for the operator-facing note trail.
+        base_score_conditioned = SignalEvidenceGroupScorer.renormalize(
             flow_score_conditioned,
             flow_present,
-            config,
         )
 
         legacy_conditioned_score = max(0, min(100, round(base_score_conditioned) + flag_adjustment))

@@ -23,8 +23,13 @@ from tests.application.use_case.signal_evidence_fixtures import (
 def test_signal_authority_coverage_drives_decision_floor():
     # HIGH-2: there is one canonical signal_authority_coverage, computed by
     # SignalEvidenceGroupScorer from evidence presence/authority — not a
-    # separate phase-level coverage/conviction pair. Flow-only evidence
-    # (weight 0.40) is below a configured 0.70 RISK_ON floor.
+    # separate phase-level coverage/conviction pair.
+    #
+    # ADR-067: sub-floor coverage used to come for free from the absent
+    # setup_quality group sitting in the ALL_REQUIRED denominator. With
+    # flow_confirmation the sole production group, attached flow covers itself
+    # completely, so the shortfall is now produced the way production produces
+    # it — unresolved source availability (flow_all_authoritative=False).
     config = SignalEngineConfig(
         decision_policy=DecisionPolicyConfig(
             regime_policy={
@@ -44,11 +49,12 @@ def test_signal_authority_coverage_drives_decision_floor():
     resp = _use_case(config).execute(
         _req(
             flow_confirmation_evidence=_flow_evidence(0.95),
+            flow_all_authoritative=False,
             setup_family="foreign-bounce",
         )
     )
 
-    assert resp.signal_authority_coverage == pytest.approx(0.40)
+    assert resp.signal_authority_coverage == pytest.approx(0.0)
     assert resp.assessment.entry_quality.value == "WATCH"
     assert any(
         "ENTER requires signal_authority_coverage" in reason
@@ -177,8 +183,13 @@ def test_alpha_trigger_projection_uses_existing_group_scores():
     }
     assert "sector_context:missing" in at.unavailable_reasons
     assert "company_quality_context:missing" in at.unavailable_reasons
-    assert resp.assessment.score == 80
-    assert resp.assessment.raw_exact_score == pytest.approx(80.0)
+    # ADR-067 boundary check: every Alpha/Trigger number above is unchanged by
+    # the retirement — the Alpha/Trigger `setup_quality` slot is a separate
+    # diagnostic projection with its own group_weights and route_fractions, and
+    # it still reads setup_group_score. Only the canonical score moved, from
+    # the old 100/50 blend to the flow group score alone.
+    assert resp.assessment.score == 50
+    assert resp.assessment.raw_exact_score == pytest.approx(50.0)
     final_score = resp.assessment.to_dict()["alpha_trigger_score"]["final_exact_score"]
     assert final_score == pytest.approx(75.6098)
 

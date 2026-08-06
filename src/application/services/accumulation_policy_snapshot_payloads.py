@@ -166,13 +166,6 @@ def build_evidence_group_weights_payload(groups: EvidenceGroupsConfig) -> dict[s
         },
         "components": [
             _component(
-                "setup_quality",
-                enabled=True,
-                weight=groups.setup_quality.weight,
-                authority_registration=groups.setup_quality.authority_registration,
-                required_for_authority=groups.setup_quality.required_for_authority,
-            ),
-            _component(
                 "flow_confirmation",
                 enabled=True,
                 weight=groups.flow_confirmation.weight,
