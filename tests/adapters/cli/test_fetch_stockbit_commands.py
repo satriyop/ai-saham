@@ -53,16 +53,24 @@ def test_status_valid_token_shows_state_and_no_jwt_leak(monkeypatch):
 def test_reauth_command_success_exit_zero(monkeypatch):
     from src.infrastructure.browser.stockbit_session_actions import StockbitReauthResult
 
-    monkeypatch.setattr(
-        playwright_stockbit_provider,
-        "reauth_stockbit_session",
-        lambda timeout=180: StockbitReauthResult(
+    captured: dict = {}
+
+    def _fake_reauth(timeout=180, mode="headless"):
+        captured["timeout"] = timeout
+        captured["mode"] = mode
+        return StockbitReauthResult(
             success=True,
             token_saved=True,
             already_authenticated=True,
             auto_clicks=(),
             message="ok",
-        ),
+            mode=mode,
+        )
+
+    monkeypatch.setattr(
+        playwright_stockbit_provider,
+        "reauth_stockbit_session",
+        _fake_reauth,
     )
     # CLI imports reauth from provider inside the function.
     monkeypatch.setattr(
@@ -73,6 +81,8 @@ def test_reauth_command_success_exit_zero(monkeypatch):
     result = runner.invoke(app, ["fetch", "stockbit", "reauth", "--timeout", "60"])
 
     assert result.exit_code == 0
+    assert captured["mode"] == "headless"
+    assert captured["timeout"] == 60
 
 
 def test_reauth_command_failure_exit_one(monkeypatch):
@@ -81,12 +91,13 @@ def test_reauth_command_failure_exit_one(monkeypatch):
     monkeypatch.setattr(
         playwright_stockbit_provider,
         "reauth_stockbit_session",
-        lambda timeout=180: StockbitReauthResult(
+        lambda timeout=180, mode="headless": StockbitReauthResult(
             success=False,
             token_saved=False,
             already_authenticated=False,
             auto_clicks=("login",),
             message="failed",
+            mode=mode,
         ),
     )
     monkeypatch.setattr(
@@ -99,13 +110,53 @@ def test_reauth_command_failure_exit_one(monkeypatch):
     assert result.exit_code == 1
 
 
-def test_reauth_help_is_headed_only_no_headed_option():
+def test_reauth_command_passes_headed_mode(monkeypatch):
+    from src.infrastructure.browser.stockbit_session_actions import StockbitReauthResult
+
+    captured: dict = {}
+
+    def _fake_reauth(timeout=180, mode="headless"):
+        captured["mode"] = mode
+        return StockbitReauthResult(
+            success=True,
+            token_saved=True,
+            already_authenticated=False,
+            auto_clicks=("login",),
+            message="ok",
+            mode=mode,
+        )
+
+    monkeypatch.setattr(playwright_stockbit_provider, "reauth_stockbit_session", _fake_reauth)
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
+        lambda: None,
+    )
+
+    result = runner.invoke(
+        app, ["fetch", "stockbit", "reauth", "--mode", "headed", "--timeout", "90"]
+    )
+    assert result.exit_code == 0
+    assert captured["mode"] == "headed"
+
+
+def test_reauth_command_rejects_invalid_mode(monkeypatch):
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
+        lambda: None,
+    )
+    result = runner.invoke(app, ["fetch", "stockbit", "reauth", "--mode", "turbo"])
+    assert result.exit_code == 1
+    assert "Invalid --mode" in (result.stdout + result.stderr)
+
+
+def test_reauth_help_documents_mode_switch():
     result = runner.invoke(app, ["fetch", "stockbit", "reauth", "--help"])
     assert result.exit_code == 0
     out = result.stdout
     assert "--timeout" in out
-    # Headed is fixed behaviour; CLI must not expose a mode switch.
-    assert "--headed" not in out.split("Options")[-1] if "Options" in out else "--headed" not in out
+    assert "--mode" in out
+    assert "headless" in out
+    assert "headed" in out
     assert "eyJ" not in result.stdout
 
 

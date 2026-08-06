@@ -47,9 +47,10 @@ echo ""
 # No trade confirm / grade / prompt / tune (retired).
 read -r -d '' SAHAM_CRON << ENTRIES || true
 # --- saham-cron-begin ---
-# Headed reauth before IEV (auto Login/OK if UI appears; needs GUI session awake).
-# Fail-soft: IEV ticks still run even if reauth exits non-zero.
-40 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch stockbit reauth --timeout 120' >> $LOG_DIR/stockbit-reauth.log 2>&1 || true
+# Headless JWT refresh before IEV (no window). Fail-soft: IEV still runs if this
+# exits non-zero. If headless fails (auth UI), run once interactively:
+#   saham fetch stockbit reauth --mode headed
+40 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch stockbit reauth --mode headless' >> $LOG_DIR/stockbit-reauth.log 2>&1 || true
 # Multi-tick IEV discovery (diagnostic all-session ΔIEV)
 47 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
 50 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1

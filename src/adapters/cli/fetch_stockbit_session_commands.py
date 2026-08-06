@@ -3,7 +3,7 @@ CLI commands for Stockbit browser session management.
 
 Commands:
   saham fetch stockbit login   — create persistent browser session profile
-  saham fetch stockbit reauth  — headed reauth (auto Login/OK clicks + JWT capture)
+  saham fetch stockbit reauth  — JWT refresh (headless default) or headed UI recovery
   saham fetch stockbit status  — check session health without opening a browser
   saham fetch stockbit browse  — open a headed browser with the saved profile
 
@@ -52,30 +52,51 @@ def reauth(
         int,
         typer.Option(
             "--timeout",
-            help="Seconds to wait after auto-clicks if still on login UI (manual finish OK)",
+            help="Seconds to wait after auto-clicks if still on login UI (headed only)",
             min=30,
         ),
     ] = 180,
+    mode: Annotated[
+        str,
+        typer.Option(
+            "--mode",
+            help=(
+                "headless: JWT refresh from cookies only (cron default). "
+                "headed: visible browser + Login/OK clicks + optional human finish."
+            ),
+        ),
+    ] = "headless",
 ) -> None:
     """
-    Headed reauth for an existing profile (auto Login + confirmation clicks).
+    Refresh Exodus JWT from the saved Stockbit browser profile.
 
-    Always opens a visible browser — this is the only supported mode (password
-    autofill and Stockbit confirmation dialogs need a real UI; headless is not
-    offered).
+    Default ``--mode headless`` opens no window: cookies/session mint a JWT or
+    the command fails closed (for cron). Use ``--mode headed`` when login UI
+    recovery is needed (password autofill / manual clicks).
 
     Requires a profile from ``saham fetch stockbit login`` at least once.
-    Safe to run before morning IEV cron when JWT is near expiry.
 
     Examples:
         saham fetch stockbit reauth
-        saham fetch stockbit reauth --timeout 120
+        saham fetch stockbit reauth --mode headless
+        saham fetch stockbit reauth --mode headed --timeout 120
     """
     require_playwright_cli()
     from src.infrastructure.browser.playwright_stockbit_provider import reauth_stockbit_session
 
+    normalized = (mode or "").strip().lower()
+    if normalized not in ("headless", "headed"):
+        typer.echo(
+            f"Invalid --mode {mode!r}; expected 'headless' or 'headed'.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     try:
-        result = reauth_stockbit_session(timeout=timeout)
+        result = reauth_stockbit_session(
+            timeout=timeout,
+            mode=normalized,  # type: ignore[arg-type]
+        )
     except Exception as e:
         typer.echo(f"Reauth failed: {e}", err=True)
         raise typer.Exit(1)
@@ -142,9 +163,10 @@ def status() -> None:
         typer.echo("      saham fetch stockbit test (live smoke-test)")
     else:
         typer.echo(
-            "Token is not locally valid. Next API call may refresh JWT from the\n"
-            "browser profile, or run: saham fetch stockbit reauth\n"
-            "  (first-time profile only: saham fetch stockbit login)"
+            "Token is not locally valid. Try:\n"
+            "  saham fetch stockbit reauth              # headless JWT refresh\n"
+            "  saham fetch stockbit reauth --mode headed  # UI recovery\n"
+            "  saham fetch stockbit login               # first-time profile only"
         )
 
 

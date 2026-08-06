@@ -12,7 +12,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from src.infrastructure.browser.stockbit_browser_context import (
     LOGIN_URL,
@@ -63,13 +63,17 @@ _CONFIRM_BUTTON_NAME = re.compile(
 
 @dataclass(frozen=True)
 class StockbitReauthResult:
-    """Outcome of headed Stockbit reauth (always visible browser)."""
+    """Outcome of Stockbit reauth / JWT refresh."""
 
     success: bool
     token_saved: bool
     already_authenticated: bool
     auto_clicks: tuple[str, ...]
     message: str
+    mode: str = "headed"
+
+
+ReauthMode = Literal["headless", "headed"]
 
 
 def _url_looks_logged_in(url: str) -> bool:
@@ -100,6 +104,56 @@ def _save_rs256_token_if_valid(*, profile_dir: Path, token: str | None) -> bool:
 def _mark_profile_logged_in(profile_dir: Path) -> None:
     profile_dir.mkdir(parents=True, exist_ok=True)
     (profile_dir / ".logged_in_at").write_text(str(time.time()))
+
+
+def _clear_stale_chromium_profile_locks(profile_dir: Path) -> None:
+    """Drop Singleton* locks left by a crashed Chromium when the lock pid is dead.
+
+    Safe no-op when the lock owner process is still alive or the marker is
+    unparseable. Never touches cookies / Local Storage / token.json.
+    """
+    lock = profile_dir / "SingletonLock"
+    if not lock.exists() and not lock.is_symlink():
+        return
+    owner_pid: int | None = None
+    try:
+        target = str(lock.readlink()) if lock.is_symlink() else lock.read_text(encoding="utf-8")
+        # Chromium writes "hostname-pid" (symlink target or file contents).
+        tail = target.strip().rsplit("-", 1)[-1]
+        if tail.isdigit():
+            owner_pid = int(tail)
+    except OSError:
+        owner_pid = None
+    if owner_pid is not None:
+        try:
+            import os
+
+            os.kill(owner_pid, 0)
+            # Process still exists — leave locks alone.
+            return
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            # Alive but not ours to signal; leave locks.
+            return
+        except OSError:
+            return
+    for name in (
+        "SingletonLock",
+        "SingletonCookie",
+        "SingletonSocket",
+        "RunningChromeVersion",
+    ):
+        path = profile_dir / name
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            logger.debug("Could not remove stale profile lock %s", path, exc_info=True)
+    default_lock = profile_dir / "Default" / "Lock"
+    try:
+        default_lock.unlink(missing_ok=True)
+    except OSError:
+        logger.debug("Could not remove Default/Lock", exc_info=True)
 
 
 def _try_click_role_button(page: Any, name_pattern: re.Pattern[str], *, timeout_ms: int) -> bool:
@@ -338,61 +392,150 @@ def save_stockbit_session(
             )
 
 
-def reauth_stockbit_session(
-    profile_dir: Path | None = None,
-    timeout: int = 180,
-    *,
-    stockbit_config: StockbitConfig | None = None,
-) -> StockbitReauthResult:
-    """
-    Headed reauth for an existing persistent profile.
-
-    Always opens a visible Chromium window (no headless mode — this path is
-    UI automation + optional human fallback). Flow:
-
-    1. Open profile and try orderbook (cookies may already mint a JWT).
-    2. If still on auth UI, attempt autofill nudge + Login + OK/Confirm clicks.
-    3. Wait up to ``timeout`` for leave-auth URL; human can still click if auto fails.
-    4. Capture/save RS256 Exodus JWT when possible.
-
-    Requires an existing profile (run ``saham fetch stockbit login`` once first).
-    """
-    profile_dir = profile_dir or default_stockbit_profile_dir()
-    cfg = stockbit_config or load_stockbit_config()
-
+def _require_existing_profile(profile_dir: Path) -> None:
     if not (profile_dir.exists() and any(profile_dir.iterdir())):
         raise RuntimeError(
             "No Stockbit profile found.\n"
             "Run: saham fetch stockbit login   # one-time manual bootstrap"
         )
 
-    print("Stockbit reauth (headed browser — only supported mode)")
+
+def _try_capture_valid_jwt_from_orderbook(
+    *,
+    page: Any,
+    token_box: list[str],
+    profile_dir: Path,
+    cfg: StockbitConfig,
+) -> tuple[str | None, bool]:
+    """Navigate orderbook and return (token, is_valid_rs256) when captured."""
+    try:
+        page.goto(ORDERBOOK_PAGE_URL, timeout=cfg.nav_timeout_ms, wait_until="domcontentloaded")
+        page.wait_for_timeout(cfg.spa_settle_ms)
+    except Exception as e:
+        logger.debug("Orderbook open for JWT capture failed: %s", e)
+    token = _resolve_token(page, token_box)
+    if not token:
+        return None, False
+    meta = StockbitTokenStore(profile_dir / "token.json").describe_candidate(token)
+    return token, meta.state == "valid" and meta.algorithm == "RS256"
+
+
+def reauth_stockbit_session(
+    profile_dir: Path | None = None,
+    timeout: int = 180,
+    *,
+    stockbit_config: StockbitConfig | None = None,
+    mode: ReauthMode = "headless",
+) -> StockbitReauthResult:
+    """
+    Refresh Exodus JWT from the persistent Stockbit browser profile.
+
+    Modes
+    -----
+    ``headless`` (default, cron-safe)
+        Open the profile without a window, hit orderbook, capture RS256 JWT.
+        No login UI automation and no human fallback. Fails closed if auth UI
+        appears or no valid JWT is minted — run ``--mode headed`` then.
+
+    ``headed``
+        Visible Chromium for password autofill, confirmation dialogs, and
+        optional manual login when cookies alone cannot mint a JWT.
+
+    Requires an existing profile (``saham fetch stockbit login`` once first).
+    """
+    if mode not in ("headless", "headed"):
+        raise ValueError(f"mode must be 'headless' or 'headed', got {mode!r}")
+
+    profile_dir = profile_dir or default_stockbit_profile_dir()
+    cfg = stockbit_config or load_stockbit_config()
+    _require_existing_profile(profile_dir)
+    _clear_stale_chromium_profile_locks(profile_dir)
+
+    if mode == "headless":
+        return _reauth_headless_jwt_refresh(profile_dir=profile_dir, cfg=cfg)
+    return _reauth_headed_interactive(profile_dir=profile_dir, timeout=timeout, cfg=cfg)
+
+
+def _reauth_headless_jwt_refresh(
+    *,
+    profile_dir: Path,
+    cfg: StockbitConfig,
+) -> StockbitReauthResult:
+    """Cron path: headless only — mint JWT from cookies/session or fail closed."""
+    print("Stockbit JWT refresh (headless)")
+    print(f"  Profile : {profile_dir}")
+    print("  No UI — fails if login page appears; use --mode headed to recover.\n")
+
+    sync_playwright = _require_playwright()
+    with sync_playwright() as pw:
+        ctx, page = _persistent_context(pw, profile_dir, headless=True)
+        try:
+            token_box = _intercept_token(page)
+            token, valid = _try_capture_valid_jwt_from_orderbook(
+                page=page,
+                token_box=token_box,
+                profile_dir=profile_dir,
+                cfg=cfg,
+            )
+            on_auth = _url_looks_auth_flow(page.url)
+            logged_in = _url_looks_logged_in(page.url)
+        finally:
+            ctx.close()
+
+    if valid and token and logged_in and not on_auth:
+        token_saved = _save_rs256_token_if_valid(profile_dir=profile_dir, token=token)
+        _mark_profile_logged_in(profile_dir)
+        msg = "Headless JWT refresh OK — already authenticated."
+        print(f"✓ {msg}")
+        return StockbitReauthResult(
+            success=True,
+            token_saved=token_saved,
+            already_authenticated=True,
+            auto_clicks=(),
+            message=msg,
+            mode="headless",
+        )
+
+    reason = "auth UI" if on_auth else "no valid RS256 JWT from session cookies"
+    msg = f"Headless JWT refresh failed ({reason}). Run: saham fetch stockbit reauth --mode headed"
+    print(f"✗ {msg}")
+    return StockbitReauthResult(
+        success=False,
+        token_saved=False,
+        already_authenticated=False,
+        auto_clicks=(),
+        message=msg,
+        mode="headless",
+    )
+
+
+def _reauth_headed_interactive(
+    *,
+    profile_dir: Path,
+    timeout: int,
+    cfg: StockbitConfig,
+) -> StockbitReauthResult:
+    """Interactive path: visible browser + auto-clicks + optional human finish."""
+    print("Stockbit reauth (headed — UI recovery)")
     print(f"  Profile : {profile_dir}")
     print(f"  Timeout : {timeout}s (auto-clicks first; you can still finish manually)\n")
 
     sync_playwright = _require_playwright()
     auto_clicks: tuple[str, ...] = ()
+    logged_in = False
+    token: str | None = None
 
     with sync_playwright() as pw:
-        # Always headed: password autofill + confirmation dialogs need a real UI.
         ctx, page = _persistent_context(pw, profile_dir, headless=False)
-        token_box = _intercept_token(page)
-
-        # Prefer a post-login page; cookies alone often reissue JWT without login UI.
         try:
-            page.goto(ORDERBOOK_PAGE_URL, timeout=cfg.nav_timeout_ms, wait_until="domcontentloaded")
-            page.wait_for_timeout(cfg.spa_settle_ms)
-        except Exception as e:
-            logger.debug("Initial orderbook open during reauth failed: %s", e)
-
-        token = _resolve_token(page, token_box)
-        if token and _url_looks_logged_in(page.url):
-            candidate_ok = False
-            store = StockbitTokenStore(profile_dir / "token.json")
-            meta = store.describe_candidate(token)
-            candidate_ok = meta.state == "valid" and meta.algorithm == "RS256"
-            if candidate_ok:
-                ctx.close()
+            token_box = _intercept_token(page)
+            token, valid = _try_capture_valid_jwt_from_orderbook(
+                page=page,
+                token_box=token_box,
+                profile_dir=profile_dir,
+                cfg=cfg,
+            )
+            if valid and token and _url_looks_logged_in(page.url):
                 token_saved = _save_rs256_token_if_valid(profile_dir=profile_dir, token=token)
                 _mark_profile_logged_in(profile_dir)
                 msg = "Already authenticated; Exodus JWT refreshed from browser session."
@@ -403,47 +546,49 @@ def reauth_stockbit_session(
                     already_authenticated=True,
                     auto_clicks=(),
                     message=msg,
+                    mode="headed",
                 )
 
-        if _url_looks_auth_flow(page.url):
-            print(f"  Auth UI detected ({page.url})")
-            print("  Attempting Login / confirmation clicks (saved password if browser fills)...")
-            auto_clicks = attempt_stockbit_reauth_clicks(page)
-            if auto_clicks:
-                print(f"  Auto-clicks: {', '.join(auto_clicks)}")
-            else:
-                print("  No matching Login/OK buttons found — complete login in the window.")
-        else:
-            # Not clearly auth, but no usable token — try login page once.
-            print("  No usable JWT yet; opening login page for reauth clicks...")
-            try:
-                page.goto(LOGIN_URL, timeout=cfg.nav_timeout_ms, wait_until="domcontentloaded")
-                page.wait_for_timeout(800)
-            except Exception as e:
-                logger.debug("Login page navigation during reauth failed: %s", e)
-            auto_clicks = attempt_stockbit_reauth_clicks(page)
-            if auto_clicks:
-                print(f"  Auto-clicks: {', '.join(auto_clicks)}")
-
-        logged_in = _url_looks_logged_in(page.url)
-        if not logged_in:
-            print("  Waiting for session to leave auth flow (finish manually if needed)...")
-            try:
-                page.wait_for_url(_url_looks_logged_in, timeout=timeout * 1_000)
-                logged_in = True
-                print(f"  Logged in → {page.url}")
-            except Exception as e:
-                if "Timeout" in str(e):
-                    print(f"\nTimeout ({timeout}s). Last URL: {page.url}")
+            if _url_looks_auth_flow(page.url):
+                print(f"  Auth UI detected ({page.url})")
+                print(
+                    "  Attempting Login / confirmation clicks (saved password if browser fills)..."
+                )
+                auto_clicks = attempt_stockbit_reauth_clicks(page)
+                if auto_clicks:
+                    print(f"  Auto-clicks: {', '.join(auto_clicks)}")
                 else:
-                    print(f"\nReauth wait error: {e}")
+                    print("  No matching Login/OK buttons found — complete login in the window.")
+            else:
+                print("  No usable JWT yet; opening login page for reauth clicks...")
+                try:
+                    page.goto(LOGIN_URL, timeout=cfg.nav_timeout_ms, wait_until="domcontentloaded")
+                    page.wait_for_timeout(800)
+                except Exception as e:
+                    logger.debug("Login page navigation during reauth failed: %s", e)
+                auto_clicks = attempt_stockbit_reauth_clicks(page)
+                if auto_clicks:
+                    print(f"  Auto-clicks: {', '.join(auto_clicks)}")
 
-        token = None
-        if logged_in:
-            page.wait_for_timeout(1_500)
-            token = _capture_exodus_token_from_page(page, token_box, cfg=cfg)
+            logged_in = _url_looks_logged_in(page.url)
+            if not logged_in:
+                print("  Waiting for session to leave auth flow (finish manually if needed)...")
+                try:
+                    page.wait_for_url(_url_looks_logged_in, timeout=timeout * 1_000)
+                    logged_in = True
+                    print(f"  Logged in → {page.url}")
+                except Exception as e:
+                    if "Timeout" in str(e):
+                        print(f"\nTimeout ({timeout}s). Last URL: {page.url}")
+                    else:
+                        print(f"\nReauth wait error: {e}")
 
-        ctx.close()
+            token = None
+            if logged_in:
+                page.wait_for_timeout(1_500)
+                token = _capture_exodus_token_from_page(page, token_box, cfg=cfg)
+        finally:
+            ctx.close()
 
     if not logged_in:
         msg = "Reauth failed — still on auth UI. Run: saham fetch stockbit login"
@@ -454,6 +599,7 @@ def reauth_stockbit_session(
             already_authenticated=False,
             auto_clicks=auto_clicks,
             message=msg,
+            mode="headed",
         )
 
     _mark_profile_logged_in(profile_dir)
@@ -474,6 +620,7 @@ def reauth_stockbit_session(
         already_authenticated=False,
         auto_clicks=auto_clicks,
         message=msg,
+        mode="headed",
     )
 
 
