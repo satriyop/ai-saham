@@ -17,10 +17,10 @@ from enum import Enum
 from typing import Any, Mapping, Sequence
 
 from src.application.services.accumulation_production_policy_descriptors import (
-    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2,
+    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3,
 )
 from src.application.services.lean_observation_identity import (
-    POLICY_SNAPSHOT_BINDING_CONTRACT_V2,
+    POLICY_SNAPSHOT_BINDING_CONTRACT_V3,
 )
 from src.domain.ports.trading_session_calendar_repository import (
     TradingSessionCalendarSnapshotReadError,
@@ -30,6 +30,7 @@ from src.domain.value_objects.learning_artifacts import (
     ACCUM_POPULATION_AUTHORITY_CONTRACT,
     ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
     LEARNING_SCHEMA_VERSION,
     PRODUCTION_POLICY_VERSION_V1,
     AccumPopulationBinding,
@@ -83,9 +84,18 @@ ACTIVE_FEATURES_WINDOWS: frozenset[str] = frozenset({"7", "30", "90"})
 ACTIVE_OUTER_SCHEMA_VERSION = LEARNING_SCHEMA_VERSION
 ACTIVE_PAYLOAD_SCHEMA_VERSION = CANDIDATE_OBSERVATION_SCHEMA_VERSION
 
-# Active closed set for production-baseline challenges (ADR-059 v2).
-ACTIVE_SNAPSHOT_BINDING_CONTRACT = POLICY_SNAPSHOT_BINDING_CONTRACT_V2
-ACTIVE_REQUIRED_POLICY_IDS: tuple[str, ...] = ACCUMULATION_PRODUCTION_POLICY_IDS_V2
+# Active closed set for production-baseline challenges (ADR-059 v3).
+ACTIVE_SNAPSHOT_BINDING_CONTRACT = POLICY_SNAPSHOT_BINDING_CONTRACT_V3
+ACTIVE_REQUIRED_POLICY_IDS: tuple[str, ...] = ACCUMULATION_PRODUCTION_POLICY_IDS_V3
+# Historical closed sets. Readable and immutable; never active authority. A
+# cohort bound entirely to one of these is legacy, not corrupt.
+_LEGACY_SNAPSHOT_CLOSED_SETS: Mapping[str, tuple[str, ...]] = {
+    LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1.value: ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
+    LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2.value: ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
+}
+_ALL_SNAPSHOT_BINDING_CONTRACTS: frozenset[str] = frozenset(
+    {*_LEGACY_SNAPSHOT_CLOSED_SETS, ACTIVE_SNAPSHOT_BINDING_CONTRACT}
+)
 ACTIVE_LEARNING_OBSERVATION_CONTRACT = LearningContractId.ACCUMULATION_OBSERVATION.value
 ACTIVE_PRODUCER_OBSERVATION_CONTRACT = ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT
 ACTIVE_POLICY_CONTRACT = ACCUMULATION_DISCOVERY_POLICY_CONTRACT
@@ -377,7 +387,7 @@ def classify_producer_status(
 
 def _snapshot_matches_production_descriptor(snap: ProductionPolicySnapshot) -> bool:
     """True when row columns match the authoritative production descriptor map."""
-    descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2.get(snap.policy_id)
+    descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3.get(snap.policy_id)
     if descriptor is None:
         return False
     if snap.decision_type != descriptor.decision_type:
@@ -409,7 +419,7 @@ def verify_snapshot_binding(
     expected_learning_observation_contract_id: str = ACTIVE_LEARNING_OBSERVATION_CONTRACT,
     expected_producer_observation_contract: str = ACTIVE_PRODUCER_OBSERVATION_CONTRACT,
 ) -> SnapshotBindingReport:
-    """Verify snapshots for a cohort against the active v2 closed set.
+    """Verify snapshots for a cohort against the active v3 closed set.
 
     Enforces row integrity, purpose/compat/observation contracts, authoritative
     production descriptors (decision_type, semantic contract, policy version),
@@ -456,10 +466,10 @@ def verify_snapshot_binding(
             has_corruption = True
             invalid.append(snap.policy_id)
             continue
-        # Active v2 rows must match production descriptors; unknown policy under
-        # v2 contract is also invalid.
+        # Active v3 rows must match production descriptors; unknown policy under
+        # the v3 contract is also invalid.
         if snap.contract_id.value == ACTIVE_SNAPSHOT_BINDING_CONTRACT:
-            if snap.policy_id not in ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2:
+            if snap.policy_id not in ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3:
                 has_corruption = True
                 invalid.append(snap.policy_id)
                 continue
@@ -473,14 +483,14 @@ def verify_snapshot_binding(
                 continue
         by_policy[snap.policy_id] = snap
 
-    if (
-        LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1.value in observed_contracts
-        and LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2.value in observed_contracts
-    ):
+    # One cohort must be bound to exactly one snapshot closed set. Any mix of
+    # v1/v2/v3 rows under one compatibility_id is a split production identity.
+    snapshot_contracts = observed_contracts & _ALL_SNAPSHOT_BINDING_CONTRACTS
+    if len(snapshot_contracts) > 1:
         has_corruption = True
         claims_active = True
 
-    if LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2.value in observed_contracts:
+    if ACTIVE_SNAPSHOT_BINDING_CONTRACT in observed_contracts:
         claims_active = True
 
     verified_active_ids: list[str] = []
@@ -518,12 +528,11 @@ def verify_snapshot_binding(
         verified_active_ids = []
         missing = tuple(required)
 
-    v1_only = (
-        observed_contracts == {LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1.value}
-        and set(by_policy) >= set(ACCUMULATION_PRODUCTION_POLICY_IDS_V1)
-        and not has_corruption
+    legacy_only = not has_corruption and any(
+        observed_contracts == {contract} and set(by_policy) >= set(closed_set)
+        for contract, closed_set in _LEGACY_SNAPSHOT_CLOSED_SETS.items()
     )
-    if v1_only:
+    if legacy_only:
         claims_active = False
 
     active_set_verified = (

@@ -237,9 +237,11 @@ _BRANCH_COVERAGE_FLOOR: dict[str, tuple[int, int]] = {
     # uncovered arcs is the `risk_engine.gates.unevaluable_policy=block` path.
     # The probe set is frozen at the shipped default (`surface`), so that arc is
     # unreachable by construction rather than by under-forking; it is covered by
-    # tests/application/use_case/test_unevaluable_gate_policy.py instead. If the
-    # shipped default ever becomes `block`, this entry must be re-measured and
-    # the policy added to the production policy snapshot identity.
+    # tests/application/use_case/test_unevaluable_gate_policy.py instead. The
+    # policy is now the eighth ADR-059 row (`risk.accum.unevaluable_policy`), so
+    # a deployment that flips it to `block` forks the cohort on the declared-
+    # policy axis without needing the probe to reach the arc. If the *shipped*
+    # default ever becomes `block`, this entry must be re-measured.
     "src/application/use_case/assess_risk_gate_evaluator.py": (26, 34),
     "src/application/use_case/assess_risk_use_case.py": (1, 4),
     "src/application/use_case/assess_trade_setup_use_case.py": (12, 16),

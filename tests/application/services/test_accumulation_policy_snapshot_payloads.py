@@ -28,12 +28,15 @@ from src.application.services.accumulation_policy_snapshot_payloads import (
     MISSING_ACTION_REJECTED_FLOW,
     MISSING_ACTION_REJECTED_SIGNAL,
     SIGNAL_SEMANTIC_CONTRACT_ID,
+    UNEVALUABLE_GATE_POLICY_FORMULA_ID,
+    UNEVALUABLE_GATE_POLICY_SEMANTIC_CONTRACT_ID,
     build_accum_score_weights_payload,
     build_all_accumulation_policy_payloads,
     build_evidence_group_weights_payload,
     build_hard_filters_payload,
     build_raw_score_identity_payload,
     build_risk_hard_gates_payload,
+    build_unevaluable_gate_policy_payload,
 )
 from src.application.services.accumulation_screen_hard_filter_policy import (
     AccumulationScreenHardFilterPolicy,
@@ -43,6 +46,7 @@ from src.application.services.signal_evidence_group_scorer import SignalEvidence
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.rules.bandar_gate import BandarGate
 from src.domain.rules.fundamental_gate import FundamentalGate
+from src.domain.rules.risk_gate import UnevaluableGateAction, UnevaluableGatePolicy
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
@@ -50,6 +54,7 @@ from src.domain.value_objects.learning_artifacts import (
     PRODUCTION_POLICY_ID_RISK_HARD_GATES,
     PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
     PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE,
+    PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY,
     canonical_json,
 )
 from src.domain.value_objects.signal_assessment import SignalStrength
@@ -168,15 +173,17 @@ def test_closed_set_payloads_are_byte_stable() -> None:
         structural_gates=[FundamentalGate()],
         execution_gates=[BandarGate()],
         hard_filter_policy=hard,
+        unevaluable_gate_policy=UnevaluableGatePolicy(),
     )
     assert set(payloads) == set(ACCUMULATION_PRODUCTION_POLICY_IDS)
-    assert len(payloads) == 7
+    assert len(payloads) == 8
     again = build_all_accumulation_policy_payloads(
         accum_score_policy=AccumScorePolicy(),
         signal_engine_config=SignalEngineConfig(),
         structural_gates=[FundamentalGate()],
         execution_gates=[BandarGate()],
         hard_filter_policy=hard,
+        unevaluable_gate_policy=UnevaluableGatePolicy(),
     )
     for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS:
         assert canonical_json(payloads[policy_id]) == canonical_json(again[policy_id])
@@ -357,3 +364,98 @@ def test_hard_filters_enabled_from_floors_and_flags() -> None:
     assert payload["filters"]["piotroski"]["enabled"] is True
     assert payload["filters"]["accum_score"]["enabled"] is True
     assert payload["filters"]["signal_score"]["enabled"] is True
+
+
+def test_unevaluable_gate_policy_payload_declares_the_configured_action() -> None:
+    """The row must project the resolved policy, not a hardcoded default.
+
+    ``UnevaluableGatePolicy`` has no ``to_dict()``, so both of its fields are
+    serialized by hand here — the exact place a new field would be silently
+    dropped. ``blocks`` is declared alongside ``action`` because ``blocks`` is
+    the property the engine actually reads
+    (``assess_risk_gate_evaluator.evaluate``), and a reader of the archived row
+    should not have to know the enum to see whether unknowns rejected.
+    """
+    surface = build_unevaluable_gate_policy_payload(UnevaluableGatePolicy())
+
+    assert surface["policy_id"] == PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY
+    assert surface["decision_type"] == "gate"
+    assert surface["semantic_engine_contract_id"] == UNEVALUABLE_GATE_POLICY_SEMANTIC_CONTRACT_ID
+    assert surface["formula_id"] == UNEVALUABLE_GATE_POLICY_FORMULA_ID
+    assert surface["action"] == "surface"
+    assert surface["blocks"] is False
+    assert surface["block_confidence"] == 0
+
+    blocking = build_unevaluable_gate_policy_payload(
+        UnevaluableGatePolicy(action=UnevaluableGateAction.BLOCK, block_confidence=70)
+    )
+    assert blocking["action"] == "block"
+    assert blocking["blocks"] is True
+    assert blocking["block_confidence"] == 70
+
+    # The whole point of the row: opposite risk postures must not serialize the
+    # same, or the cohort identity they feed cannot tell them apart.
+    assert canonical_json(surface) != canonical_json(blocking)
+
+
+def test_unevaluable_gate_policy_payload_declares_the_closed_action_vocabulary() -> None:
+    """``supported_actions`` is derived from the enum, never hand-listed."""
+    payload = build_unevaluable_gate_policy_payload(UnevaluableGatePolicy())
+
+    assert payload["supported_actions"] == sorted(a.value for a in UnevaluableGateAction)
+    assert payload["action"] in payload["supported_actions"]
+
+
+def test_unevaluable_gate_policy_formula_id_names_a_real_callable() -> None:
+    """Guard for the 503afeb8 defect class: a formula_id naming nothing.
+
+    The aggregate unevaluable decision is inline in
+    ``AssessRiskGateEvaluator.evaluate``; the declared id must keep naming that
+    method, so a rename cannot leave the archived row pointing at a ghost.
+    """
+    from src.application.use_case.assess_risk_gate_evaluator import AssessRiskGateEvaluator
+
+    assert UNEVALUABLE_GATE_POLICY_FORMULA_ID.startswith("assess_risk_gate_evaluator.evaluate.")
+    assert callable(getattr(AssessRiskGateEvaluator, "evaluate", None))
+
+
+def test_unevaluable_gate_policy_payload_declares_no_observation_fields() -> None:
+    """Omission is deliberate and evidence-based, not an oversight.
+
+    A session observation built by the real producers carries no field that
+    reports this policy's own output: ``RiskAssessment.to_dict()`` has
+    ``unevaluable_gates`` but ``AccumulationCandidate.to_dict()`` never copies
+    it, and the risk fields that *are* persisted
+    (``candidate.risk_status`` / ``candidate.risk_gate`` /
+    ``trade_setup.blocking_gates``) are already declared by
+    ``risk.accum.hard_gates`` and cannot distinguish an unevaluable-block from
+    an ordinary gate trigger. Borrowing one of them would repeat the defect
+    fixed in 746111e9.
+    """
+    payload = build_unevaluable_gate_policy_payload(UnevaluableGatePolicy())
+    assert "observation_result_fields" not in payload
+
+    pack = _probe_session_observation()["features_by_window"]["7"]
+    assert "unevaluable_gates" not in pack["candidate"]
+    assert "unevaluable_gates" not in pack["trade_setup"]
+    assert "unevaluable_gates" not in pack
+
+
+def test_closed_set_row_for_unevaluable_policy_tracks_the_argument() -> None:
+    """The closed-set builder must thread the argument, not rebuild a default."""
+    hard = _default_hard_filters()
+
+    def build(policy: UnevaluableGatePolicy) -> str:
+        payloads = build_all_accumulation_policy_payloads(
+            accum_score_policy=AccumScorePolicy(),
+            signal_engine_config=SignalEngineConfig(),
+            structural_gates=[FundamentalGate()],
+            execution_gates=[BandarGate()],
+            hard_filter_policy=hard,
+            unevaluable_gate_policy=policy,
+        )
+        return canonical_json(payloads[PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY])
+
+    assert build(UnevaluableGatePolicy()) != build(
+        UnevaluableGatePolicy(action=UnevaluableGateAction.BLOCK, block_confidence=70)
+    )

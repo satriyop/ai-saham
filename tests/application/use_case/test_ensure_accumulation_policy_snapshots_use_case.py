@@ -1,4 +1,4 @@
-"""Tests for EnsureAccumulationPolicySnapshotsUseCase (ADR-059 v2 + ADR-068)."""
+"""Tests for EnsureAccumulationPolicySnapshotsUseCase (ADR-059 v3 + ADR-068)."""
 
 from __future__ import annotations
 
@@ -26,9 +26,11 @@ from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.rules.bandar_gate import BandarGate
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.rules.liquidity_gate import LiquidityGate
+from src.domain.rules.risk_gate import UnevaluableGateAction, UnevaluableGatePolicy
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
     PRODUCTION_POLICY_ID_HARD_FILTERS,
+    PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY,
     AssessmentPurpose,
     LearningContractError,
     LearningContractId,
@@ -122,6 +124,7 @@ def _request(
     accum: AccumScorePolicy | None = None,
     signal: SignalEngineConfig | None = None,
     hard_filter: AccumulationScreenHardFilterPolicy | None = None,
+    unevaluable: UnevaluableGatePolicy | None = None,
     created_at: datetime = NOW,
     source_revision: str = SOURCE_REVISION,
 ) -> EnsureAccumulationPolicySnapshotsRequest:
@@ -137,12 +140,14 @@ def _request(
     structural_gates = [FundamentalGate(), LiquidityGate()]
     execution_gates = [BandarGate()]
     hard_filter_policy = hard_filter or _default_hard_filters()
+    unevaluable_gate_policy = unevaluable or UnevaluableGatePolicy()
     identity = resolve_accumulation_cohort_identity(
         accum_score_policy=accum_score_policy,
         signal_engine_config=signal_engine_config,
         structural_gates=structural_gates,
         execution_gates=execution_gates,
         hard_filter_policy=hard_filter_policy,
+        unevaluable_gate_policy=unevaluable_gate_policy,
     )
     return EnsureAccumulationPolicySnapshotsRequest(
         observation_identity=LeanObservationIdentity(
@@ -154,27 +159,29 @@ def _request(
         structural_gates=structural_gates,
         execution_gates=execution_gates,
         hard_filter_policy=hard_filter_policy,
+        unevaluable_gate_policy=unevaluable_gate_policy,
         created_at=created_at,
         source_revision=source_revision,
     )
 
 
-def test_ensure_writes_exactly_seven_closed_v2_policy_ids() -> None:
+def test_ensure_writes_exactly_eight_closed_v3_policy_ids() -> None:
     repo = _MemoryPolicySnapshotRepo()
     response = EnsureAccumulationPolicySnapshotsUseCase(repo).execute(_request())
 
-    assert response.inserted_count == 7
+    assert response.inserted_count == 8
     assert response.reused_count == 0
     assert response.required_policy_ids == ACCUMULATION_PRODUCTION_POLICY_IDS
-    assert len(repo.rows) == 7
+    assert len(repo.rows) == 8
     assert len(repo.batch_calls) == 1
-    assert len(repo.batch_calls[0]) == 7
+    assert len(repo.batch_calls[0]) == 8
     written_ids = {r.policy_id for r in repo.rows.values()}
     assert written_ids == set(ACCUMULATION_PRODUCTION_POLICY_IDS)
     assert PRODUCTION_POLICY_ID_HARD_FILTERS in written_ids
+    assert PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY in written_ids
     for snap in repo.rows.values():
         assert snap.source_revision == SOURCE_REVISION
-        assert snap.contract_id is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2
+        assert snap.contract_id is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3
 
 
 def test_ensure_hard_filter_payload_is_pre_neutralization_policy() -> None:
@@ -203,10 +210,10 @@ def test_ensure_is_idempotent_for_same_cohort_content() -> None:
     first = use_case.execute(_request())
     second = use_case.execute(_request())
 
-    assert first.inserted_count == 7
+    assert first.inserted_count == 8
     assert second.inserted_count == 0
-    assert second.reused_count == 7
-    assert len(repo.rows) == 7
+    assert second.reused_count == 8
+    assert len(repo.rows) == 8
     assert len(repo.batch_calls) == 2
 
 
@@ -231,6 +238,7 @@ def test_ensure_rejects_compatibility_mismatch() -> None:
         structural_gates=request.structural_gates,
         execution_gates=request.execution_gates,
         hard_filter_policy=request.hard_filter_policy,
+        unevaluable_gate_policy=request.unevaluable_gate_policy,
         created_at=NOW,
         source_revision=SOURCE_REVISION,
     )
@@ -245,7 +253,7 @@ def test_ensure_rejects_empty_source_revision() -> None:
 
 
 def test_mismatched_identity_writes_nothing() -> None:
-    """Fail closed *before* any row lands, not part-way through the seven."""
+    """Fail closed *before* any row lands, not part-way through the eight."""
     repo = _MemoryPolicySnapshotRepo()
     request = _request()
     bad = replace(
@@ -283,7 +291,7 @@ def test_typed_material_change_forks_the_cohort_instead_of_colliding() -> None:
 
     assert first.compatibility_id != second.compatibility_id
     assert set(first.snapshot_ids).isdisjoint(second.snapshot_ids)
-    assert len(repo.rows) == 14
+    assert len(repo.rows) == 16
 
 
 def test_declared_policy_change_forks_compatibility_id() -> None:
@@ -293,14 +301,14 @@ def test_declared_policy_change_forks_compatibility_id() -> None:
     a = use_case.execute(_request())
     b = use_case.execute(_request(hard_filter=replace(_default_hard_filters(), min_piotroski=7)))
     assert a.compatibility_id != b.compatibility_id
-    assert len(repo.rows) == 14
+    assert len(repo.rows) == 16
 
 
 def test_material_config_hash_is_the_resolved_policy_fold() -> None:
     """The row column and the cohort must never describe different policy.
 
     ADR-068 repoints ``material_config_hash`` from a hash of raw config bytes to
-    the same seven-row payload fold that feeds the declared-policy axis of the
+    the same eight-row payload fold that feeds the declared-policy axis of the
     cohort id, so the two can no longer drift apart.
     """
     repo = _MemoryPolicySnapshotRepo()
@@ -310,6 +318,7 @@ def test_material_config_hash_is_the_resolved_policy_fold() -> None:
         structural_gates=[FundamentalGate(), LiquidityGate()],
         execution_gates=[BandarGate()],
         hard_filter_policy=_default_hard_filters(),
+        unevaluable_gate_policy=UnevaluableGatePolicy(),
     )
     EnsureAccumulationPolicySnapshotsUseCase(repo).execute(_request())
 
@@ -328,4 +337,55 @@ def test_created_at_change_does_not_affect_digest() -> None:
         )
     )
     assert response.inserted_count == 0
-    assert response.reused_count == 7
+    assert response.reused_count == 8
+
+
+def test_unevaluable_gate_policy_change_forks_the_cohort() -> None:
+    """The eighth row is real identity, not decoration.
+
+    ``surface`` and ``block`` reject different candidates on missing gate input
+    (``assess_risk_gate_evaluator.evaluate``), so two deployments that differ
+    only there must land in different cohorts. Before this row existed they
+    collided on one ``compatibility_id`` while pooling incomparable decisions.
+    """
+    repo = _MemoryPolicySnapshotRepo()
+    use_case = EnsureAccumulationPolicySnapshotsUseCase(repo)
+    surfacing = use_case.execute(_request())
+    blocking = use_case.execute(
+        _request(
+            unevaluable=UnevaluableGatePolicy(
+                action=UnevaluableGateAction.BLOCK, block_confidence=70
+            )
+        )
+    )
+
+    assert surfacing.compatibility_id != blocking.compatibility_id
+    assert set(surfacing.snapshot_ids).isdisjoint(blocking.snapshot_ids)
+    assert len(repo.rows) == 16
+    by_compat = {
+        r.compatibility_id
+        for r in repo.rows.values()
+        if r.policy_id == PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY
+    }
+    assert len(by_compat) == 2
+
+
+def test_block_confidence_alone_forks_the_cohort() -> None:
+    """Both serialized fields are identity, not only ``action``."""
+    repo = _MemoryPolicySnapshotRepo()
+    use_case = EnsureAccumulationPolicySnapshotsUseCase(repo)
+    low = use_case.execute(
+        _request(
+            unevaluable=UnevaluableGatePolicy(
+                action=UnevaluableGateAction.BLOCK, block_confidence=10
+            )
+        )
+    )
+    high = use_case.execute(
+        _request(
+            unevaluable=UnevaluableGatePolicy(
+                action=UnevaluableGateAction.BLOCK, block_confidence=90
+            )
+        )
+    )
+    assert low.compatibility_id != high.compatibility_id

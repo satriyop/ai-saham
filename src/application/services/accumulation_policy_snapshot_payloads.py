@@ -22,7 +22,11 @@ from src.domain.rules.bandar_gate import BandarGate
 from src.domain.rules.free_float_gate import FreeFloatGate
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.rules.liquidity_gate import LiquidityGate
-from src.domain.rules.risk_gate import RiskGate
+from src.domain.rules.risk_gate import (
+    RiskGate,
+    UnevaluableGateAction,
+    UnevaluableGatePolicy,
+)
 from src.domain.value_objects.learning_artifacts import (
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     PRODUCTION_POLICY_ID_HARD_FILTERS,
@@ -31,6 +35,7 @@ from src.domain.value_objects.learning_artifacts import (
     PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
     PRODUCTION_POLICY_ID_SIGNAL_FLAGS,
     PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE,
+    PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY,
     PRODUCTION_POLICY_VERSION_V1,
 )
 
@@ -42,6 +47,11 @@ ACCUM_SCORE_SEMANTIC_CONTRACT_ID = "accum_score_policy.v1"
 # probe digest, so nothing bumps this string.
 SIGNAL_SEMANTIC_CONTRACT_ID = "signal.semantic_engine.v1.5"
 RISK_HARD_GATES_SEMANTIC_CONTRACT_ID = "risk.hard_gates.accum.v1"
+UNEVALUABLE_GATE_POLICY_SEMANTIC_CONTRACT_ID = "risk.unevaluable_gate.accum.v1"
+# Names the method that owns the aggregate unevaluable decision. It is inline in
+# `AssessRiskGateEvaluator.evaluate`, not a separate helper, so the id names that
+# method rather than a callable that does not exist.
+UNEVALUABLE_GATE_POLICY_FORMULA_ID = "assess_risk_gate_evaluator.evaluate.unevaluable_aggregate.v1"
 HARD_FILTERS_SEMANTIC_CONTRACT_ID = "screen.accum.hard_filters.v1"
 HARD_FILTERS_FORMULA_ID = "accumulation_screen.first_match_hard_filters.v1"
 # Must name the method that actually computes the base score. Kept as a
@@ -450,6 +460,59 @@ def build_hard_filters_payload(
     }
 
 
+def build_unevaluable_gate_policy_payload(policy: UnevaluableGatePolicy) -> dict[str, Any]:
+    """Canonical payload for risk.accum.unevaluable_policy (aggregate gate).
+
+    Orthogonal to ``risk.accum.hard_gates``: that row declares what each gate
+    does with its own missing input, this one declares what the *aggregate*
+    assessment does when a gate ran without usable input and no gate fired.
+    ``surface`` records the unknown and keeps going; ``block`` rejects the
+    candidate. The two answers reject different candidates on missing data, so
+    the choice is cohort identity, not presentation.
+
+    ``UnevaluableGatePolicy`` has no ``to_dict``; its two fields are serialized
+    here so the declared row stays a projection of the resolved typed object.
+
+    No ``observation_result_fields``. Verified against the real producers
+    (``build_candidate_observation_payload`` -> ``build_session_observation_payload``):
+    a session observation records ``candidate.risk_status`` /
+    ``candidate.risk_gate`` / ``trade_setup.blocking_gates``, all of which
+    ``risk.accum.hard_gates`` already declares, and none of which distinguish an
+    unevaluable-block from an ordinary gate trigger. ``unevaluable_gates`` lives
+    on ``RiskAssessment.to_dict()`` but ``AccumulationCandidate.to_dict()`` never
+    copies it into the payload, so this policy's own output is not observable in
+    the corpus at all. Declaring a borrowed path would be the same defect class
+    corrected in 503afeb8 / 746111e9.
+    """
+
+    return {
+        "policy_id": PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY,
+        "policy_version": PRODUCTION_POLICY_VERSION_V1,
+        "decision_type": "gate",
+        "semantic_engine_contract_id": UNEVALUABLE_GATE_POLICY_SEMANTIC_CONTRACT_ID,
+        "formula_id": UNEVALUABLE_GATE_POLICY_FORMULA_ID,
+        "scope": "aggregate_risk_assessment",
+        "action": policy.action.value,
+        "blocks": policy.blocks,
+        "block_confidence": policy.block_confidence,
+        "supported_actions": sorted(a.value for a in UnevaluableGateAction),
+        "applies_when": "no gate fired and at least one gate was UNEVALUABLE",
+        "missing_data": {
+            "per_gate_missing_data_action": False,
+            "aggregate_over_unevaluable_gates": True,
+            "unknown_is_never_a_pass": True,
+        },
+        "material_source": {
+            "action": "risk_engine.gates.unevaluable_policy",
+            "block_confidence": "risk_engine.gates.unevaluable_block_confidence",
+        },
+        "note": (
+            "Declares no observation_result_fields: no stored observation field "
+            "carries this policy's own output. See the builder docstring."
+        ),
+    }
+
+
 def build_all_accumulation_policy_payloads(
     *,
     accum_score_policy: AccumScorePolicy,
@@ -457,8 +520,9 @@ def build_all_accumulation_policy_payloads(
     structural_gates: Sequence[RiskGate],
     execution_gates: Sequence[RiskGate],
     hard_filter_policy: AccumulationScreenHardFilterPolicy,
+    unevaluable_gate_policy: UnevaluableGatePolicy,
 ) -> Mapping[str, Mapping[str, Any]]:
-    """Return mapping policy_id -> canonical payload for the closed v2 set."""
+    """Return mapping policy_id -> canonical payload for the closed v3 set."""
 
     return {
         PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS: build_accum_score_weights_payload(
@@ -476,4 +540,7 @@ def build_all_accumulation_policy_payloads(
         ),
         PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE: build_raw_score_identity_payload(),
         PRODUCTION_POLICY_ID_HARD_FILTERS: build_hard_filters_payload(hard_filter_policy),
+        PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY: build_unevaluable_gate_policy_payload(
+            unevaluable_gate_policy
+        ),
     }

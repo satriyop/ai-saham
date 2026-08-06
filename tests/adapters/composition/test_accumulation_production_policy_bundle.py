@@ -38,6 +38,7 @@ from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.rules.bandar_gate import BandarGate
 from src.domain.rules.fundamental_gate import FundamentalGate
+from src.domain.rules.risk_gate import UnevaluableGatePolicy
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
@@ -83,6 +84,7 @@ def _payloads_from(bundle: AccumulationProductionPolicyBundle) -> Mapping[str, M
         structural_gates=bundle.structural_gates,
         execution_gates=bundle.execution_gates,
         hard_filter_policy=bundle.hard_filter_policy,
+        unevaluable_gate_policy=bundle.unevaluable_gate_policy,
     )
 
 
@@ -105,19 +107,23 @@ def _bare_default_payloads() -> Mapping[str, Mapping[str, Any]]:
             min_signal_score=45.0,
             min_signal_score_enabled=False,
         ),
+        # The real bundle resolves `surface` from risk_engine.yaml, so this row
+        # is byte-identical to the real one today. That is fine: the anti-vacuity
+        # check below only requires *some* row to differ.
+        unevaluable_gate_policy=UnevaluableGatePolicy(),
     )
 
 
 def test_real_production_config_builds_the_closed_policy_set() -> None:
-    """Real repo config must build all seven rows without raising.
+    """Real repo config must build all eight rows without raising.
 
     Row count and the policy-id set are pinned deliberately: the closed set is
-    a contract (ADR-059 ``production_policy_snapshot.v2``), not a config value.
+    a contract (ADR-059 ``production_policy_snapshot.v3``), not a config value.
     """
     payloads = _payloads_from(_resolve_real_bundle())
 
     assert set(payloads) == set(ACCUMULATION_PRODUCTION_POLICY_IDS)
-    assert len(payloads) == 7
+    assert len(payloads) == 8
 
 
 def test_real_production_config_payloads_are_deterministic() -> None:
@@ -142,8 +148,8 @@ def test_real_production_config_declared_observation_paths_resolve() -> None:
     ever writes. Only these two rows are checked because they are the only ones
     whose declared paths land on the candidate/trade-setup part of a session
     observation; the four ``signal.*`` rows point into the signal pack, which a
-    candidate-only probe leaves empty, and ``screener.accum.hard_filters``
-    declares no observation fields at all.
+    candidate-only probe leaves empty, and ``screener.accum.hard_filters`` /
+    ``risk.accum.unevaluable_policy`` declare no observation fields at all.
     """
     payloads = _payloads_from(_resolve_real_bundle())
     observation = _probe_session_observation()
@@ -234,8 +240,10 @@ def test_real_production_config_is_not_merely_dataclass_defaults() -> None:
     Without this, every assertion above could be satisfied by a wiring bug that
     quietly handed the builder bare defaults. At the time of writing only
     ``risk.accum.hard_gates`` differs (``risk_engine.yaml`` resolves three
-    structural gates where the bare-default fixture uses one); the other six
-    rows are byte-identical to defaults today. The check is therefore phrased as
+    structural gates where the bare-default fixture uses one); the other seven
+    rows are byte-identical to defaults today —
+    ``risk.accum.unevaluable_policy`` included, because ``risk_engine.yaml``
+    declares the dataclass default (``surface``). The check is therefore phrased as
     "at least one row differs" so an intentional config edit that converges a
     row onto its default does not break it.
     """

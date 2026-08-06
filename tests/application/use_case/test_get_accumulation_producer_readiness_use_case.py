@@ -9,14 +9,14 @@ import pytest
 
 from src.application.services.accumulation_producer_readiness import ProducerReadinessStatus
 from src.application.services.accumulation_production_policy_descriptors import (
-    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2,
+    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3,
 )
 from src.application.use_case.get_accumulation_producer_readiness_use_case import (
     GetAccumulationProducerReadinessUseCase,
 )
 from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
-    ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
     AccumPopulationBinding,
     AssessmentPurpose,
     LabelAvailability,
@@ -211,9 +211,9 @@ def _label(observation: LearningObservation) -> LearningOutcomeLabel:
 
 
 def _snapshot(policy_id: str, compatibility_id: str) -> ProductionPolicySnapshot:
-    descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2[policy_id]
+    descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3[policy_id]
     return ProductionPolicySnapshot.create(
-        contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
+        contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
         learning_observation_contract_id=OBS_CONTRACT,
         producer_observation_contract=PRODUCER_CONTRACT,
@@ -235,8 +235,8 @@ def _snapshot(policy_id: str, compatibility_id: str) -> ProductionPolicySnapshot
     )
 
 
-def _seed_full_v2(repo: SQLiteLearningArtifactRepository, compatibility_id: str) -> None:
-    for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V2:
+def _seed_full_active_set(repo: SQLiteLearningArtifactRepository, compatibility_id: str) -> None:
+    for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V3:
         assert repo.add_policy_snapshot(_snapshot(pid, compatibility_id))
 
 
@@ -305,7 +305,7 @@ def test_use_case_reports_legacy_and_ready_cohorts_without_writes(tmp_path) -> N
     for o in ready_obs:
         repo.add_observation(o)
         repo.add_label(_label(o))
-    _seed_full_v2(repo, COMPAT_B)
+    _seed_full_active_set(repo, COMPAT_B)
 
     spy = _WriteSpyRepo(repo)
     report = GetAccumulationProducerReadinessUseCase(
@@ -321,7 +321,7 @@ def test_use_case_reports_legacy_and_ready_cohorts_without_writes(tmp_path) -> N
     by_id = {c.compatibility_id: c for c in report.cohorts}
     assert by_id[COMPAT_A].producer_status is ProducerReadinessStatus.LEGACY_RAW_ONLY
     assert by_id[COMPAT_B].producer_status is ProducerReadinessStatus.CHALLENGE_INPUT_READY
-    assert by_id[COMPAT_B].snapshot.verified_count == 7
+    assert by_id[COMPAT_B].snapshot.verified_count == 8
     assert by_id[COMPAT_B].labels_by_horizon["H10"].available == 2
 
     payload = report.to_dict()
@@ -345,7 +345,7 @@ def test_use_case_no_implicit_cohort_pooling(tmp_path) -> None:
     o2 = _observation(day=1, compatibility_id=COMPAT_B, ticker="BBRI")
     repo.add_observation(o1)
     repo.add_observation(o2)
-    _seed_full_v2(repo, COMPAT_B)
+    _seed_full_active_set(repo, COMPAT_B)
     repo.add_label(_label(o2))
 
     report = GetAccumulationProducerReadinessUseCase(
@@ -387,7 +387,7 @@ def test_dual_snapshot_compat_drift_raises_integrity_not_legacy(tmp_path) -> Non
     for o in (o1, o2):
         repo.add_observation(o)
         repo.add_label(_label(o))
-    _seed_full_v2(repo, COMPAT_B)
+    _seed_full_active_set(repo, COMPAT_B)
 
     with sqlite3.connect(db) as conn:
         for sid, aj in conn.execute(
@@ -431,7 +431,7 @@ def test_dual_observation_purpose_drift_raises_integrity_not_empty(tmp_path) -> 
     for o in (o1, o2):
         repo.add_observation(o)
         repo.add_label(_label(o))
-    _seed_full_v2(repo, COMPAT_B)
+    _seed_full_active_set(repo, COMPAT_B)
 
     with sqlite3.connect(db) as conn:
         for oid, aj in conn.execute(
@@ -475,7 +475,7 @@ def test_combined_label_anchor_mutation_raises_integrity(tmp_path) -> None:
     for o in (o1, o2):
         repo.add_observation(o)
         repo.add_label(_label(o))
-    _seed_full_v2(repo, COMPAT_B)
+    _seed_full_active_set(repo, COMPAT_B)
 
     with sqlite3.connect(db) as conn:
         for i, (lid, aj) in enumerate(
@@ -518,7 +518,7 @@ def test_invalid_pre_open_label_does_not_block_accum_status(tmp_path) -> None:
     for o in (o1, o2):
         repo.add_observation(o)
         repo.add_label(_label(o))
-    _seed_full_v2(repo, COMPAT_B)
+    _seed_full_active_set(repo, COMPAT_B)
 
     # Insert a PRE_OPEN observation + corrupt PRE_OPEN label (digest mismatch).
     pre_at = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)
@@ -581,7 +581,7 @@ def test_invalid_accum_label_still_fails_closed(tmp_path) -> None:
     for o in (o1, o2):
         repo.add_observation(o)
         repo.add_label(_label(o))
-    _seed_full_v2(repo, COMPAT_B)
+    _seed_full_active_set(repo, COMPAT_B)
 
     with sqlite3.connect(db) as conn:
         lid = conn.execute("SELECT label_id FROM learning_outcome_labels LIMIT 1").fetchone()[0]

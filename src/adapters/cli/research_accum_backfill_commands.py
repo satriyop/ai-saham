@@ -204,6 +204,7 @@ def run_signal_observation_corpus_write(
         structural_gates=production_policy_bundle.structural_gates,
         execution_gates=production_policy_bundle.execution_gates,
         hard_filter_policy=production_policy_bundle.hard_filter_policy,
+        unevaluable_gate_policy=production_policy_bundle.unevaluable_gate_policy,
     )
     observation_identity = LeanObservationIdentity(
         observation_contract=ACCUMULATION_DISCOVERY_CONTRACT,
@@ -246,6 +247,7 @@ def run_signal_observation_corpus_write(
                 structural_gates=production_policy_bundle.structural_gates,
                 execution_gates=production_policy_bundle.execution_gates,
                 hard_filter_policy=production_policy_bundle.hard_filter_policy,
+                unevaluable_gate_policy=production_policy_bundle.unevaluable_gate_policy,
                 created_at=datetime.now(timezone.utc),
                 source_revision=resolve_producer_source_revision(),
             )

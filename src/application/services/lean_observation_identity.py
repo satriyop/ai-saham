@@ -29,10 +29,12 @@ from src.domain.value_objects.signal_artifact_identity import (
     SemanticCompatibilityId,
 )
 
-# ADR-059 v2 policy-snapshot binding contract. Survives ADR-068 untouched (§8):
-# it names which closed snapshot set a cohort is bound to, and is consumed by
-# accumulation readiness rather than by identity resolution.
+# ADR-059 policy-snapshot binding contracts. Survive ADR-068 untouched (§8):
+# they name which closed snapshot set a cohort is bound to, and are consumed by
+# accumulation readiness rather than by identity resolution. v3 is the active
+# one; v1/v2 are historical closed sets that remain readable.
 POLICY_SNAPSHOT_BINDING_CONTRACT_V2 = "production_policy_snapshot.v2"
+POLICY_SNAPSHOT_BINDING_CONTRACT_V3 = "production_policy_snapshot.v3"
 
 
 @dataclass(frozen=True)

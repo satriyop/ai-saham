@@ -10,8 +10,10 @@ from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
     ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     PRODUCTION_POLICY_ID_HARD_FILTERS,
+    PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY,
     AssessmentPurpose,
     LearningContractError,
     LearningContractId,
@@ -228,9 +230,19 @@ def test_closed_v2_policy_id_set_has_exactly_seven() -> None:
     assert len(ACCUMULATION_PRODUCTION_POLICY_IDS_V2) == 7
     assert len(set(ACCUMULATION_PRODUCTION_POLICY_IDS_V2)) == 7
     assert PRODUCTION_POLICY_ID_HARD_FILTERS in ACCUMULATION_PRODUCTION_POLICY_IDS_V2
-    assert ACCUMULATION_PRODUCTION_POLICY_IDS is ACCUMULATION_PRODUCTION_POLICY_IDS_V2
+    assert PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY not in ACCUMULATION_PRODUCTION_POLICY_IDS_V2
+
+
+def test_closed_v3_policy_id_set_has_exactly_eight_and_is_active() -> None:
+    assert len(ACCUMULATION_PRODUCTION_POLICY_IDS_V3) == 8
+    assert len(set(ACCUMULATION_PRODUCTION_POLICY_IDS_V3)) == 8
+    assert PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY in ACCUMULATION_PRODUCTION_POLICY_IDS_V3
+    # v3 grows v2; the historical sets stay prefixes and never change meaning.
+    assert ACCUMULATION_PRODUCTION_POLICY_IDS_V3[:7] == ACCUMULATION_PRODUCTION_POLICY_IDS_V2
+    assert ACCUMULATION_PRODUCTION_POLICY_IDS is ACCUMULATION_PRODUCTION_POLICY_IDS_V3
 
 
 def test_contract_id_enum_values() -> None:
     assert LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1.value == "production_policy_snapshot.v1"
     assert LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2.value == "production_policy_snapshot.v2"
+    assert LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3.value == "production_policy_snapshot.v3"

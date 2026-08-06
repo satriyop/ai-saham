@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence, TypeVar
 
 from src.domain.value_objects.learning_artifacts import (
-    ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
     AssessmentPurpose,
     EvaluationMethod,
     EvaluationReadiness,
@@ -224,7 +224,8 @@ LEARNING_SCHEMA_STATEMENTS = (
             ON DELETE RESTRICT
     )
     """,
-    # ADR-059: cohort-bound production policy snapshots (v1 historical + v2 active).
+    # ADR-059: cohort-bound production policy snapshots
+    # (v1/v2 historical + v3 active).
     """
     CREATE TABLE IF NOT EXISTS learning_policy_snapshots (
         snapshot_id TEXT PRIMARY KEY,
@@ -232,7 +233,8 @@ LEARNING_SCHEMA_STATEMENTS = (
         contract_id TEXT NOT NULL CHECK (
             contract_id IN (
                 'production_policy_snapshot.v1',
-                'production_policy_snapshot.v2'
+                'production_policy_snapshot.v2',
+                'production_policy_snapshot.v3'
             )
         ),
         purpose TEXT NOT NULL,
@@ -285,6 +287,35 @@ _POLICY_SNAPSHOT_COLUMNS: tuple[str, ...] = (
 _POLICY_SNAPSHOT_PROVENANCE_COLUMNS: frozenset[str] = frozenset(
     {"source_revision", "created_at", "artifact_json"}
 )
+
+_POLICY_SNAPSHOT_CREATE_V4 = """
+CREATE TABLE learning_policy_snapshots__v4 (
+    snapshot_id TEXT PRIMARY KEY,
+    schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+    contract_id TEXT NOT NULL CHECK (
+        contract_id IN (
+            'production_policy_snapshot.v1',
+            'production_policy_snapshot.v2',
+            'production_policy_snapshot.v3'
+        )
+    ),
+    purpose TEXT NOT NULL,
+    learning_observation_contract_id TEXT NOT NULL,
+    producer_observation_contract TEXT NOT NULL,
+    compatibility_id TEXT NOT NULL,
+    policy_id TEXT NOT NULL,
+    policy_version TEXT NOT NULL,
+    decision_type TEXT NOT NULL,
+    semantic_engine_contract_id TEXT NOT NULL,
+    material_config_hash TEXT NOT NULL,
+    canonical_payload_json TEXT NOT NULL,
+    payload_digest TEXT NOT NULL,
+    source_revision TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    artifact_json TEXT NOT NULL,
+    UNIQUE (purpose, compatibility_id, policy_id)
+)
+"""
 
 _POLICY_SNAPSHOT_CREATE_V3 = """
 CREATE TABLE learning_policy_snapshots__v3 (
@@ -347,13 +378,19 @@ def _table_exists(connection: sqlite3.Connection, table: str) -> bool:
     return row is not None
 
 
-def _migrate_learning_policy_snapshots_v3(connection: sqlite3.Connection) -> None:
-    """Rebuild learning_policy_snapshots to accept production_policy_snapshot.v2.
+def _rebuild_learning_policy_snapshots(
+    connection: sqlite3.Connection,
+    *,
+    version: int,
+    temp_table: str,
+    create_sql: str,
+) -> None:
+    """Copy learning_policy_snapshots into a rebuilt table with a wider CHECK.
 
-    Existing databases stamped migration 2 with a v1-only CHECK cannot accept
-    v2 rows until the table is rebuilt. Fresh DBs already CREATE with the
-    widened CHECK; this still runs a no-content-loss rebuild when version 3 is
-    missing and the table exists.
+    SQLite cannot ALTER a CHECK constraint, so widening the accepted
+    ``contract_id`` set means a full table rebuild. Content is proven preserved
+    by row count and the ordered ``(snapshot_id, payload_digest)`` pairs before
+    the original table is dropped; provenance columns are copied verbatim.
     """
 
     if not _table_exists(connection, "learning_policy_snapshots"):
@@ -367,37 +404,35 @@ def _migrate_learning_policy_snapshots_v3(connection: sqlite3.Connection) -> Non
     before_count = len(before_rows)
     before_pairs = [(row["snapshot_id"], row["payload_digest"]) for row in before_rows]
 
-    connection.execute("DROP TABLE IF EXISTS learning_policy_snapshots__v3")
-    connection.execute(_POLICY_SNAPSHOT_CREATE_V3)
+    connection.execute(f"DROP TABLE IF EXISTS {temp_table}")  # noqa: S608
+    connection.execute(create_sql)
     if before_count:
         connection.execute(
-            f"INSERT INTO learning_policy_snapshots__v3 ({col_list}) "  # noqa: S608
+            f"INSERT INTO {temp_table} ({col_list}) "  # noqa: S608
             f"SELECT {col_list} FROM learning_policy_snapshots"
         )
     after_count = connection.execute(
-        "SELECT COUNT(*) AS n FROM learning_policy_snapshots__v3"
+        f"SELECT COUNT(*) AS n FROM {temp_table}"  # noqa: S608
     ).fetchone()["n"]
     if int(after_count) != before_count:
         raise LearningContractError(
-            "learning_policy_snapshots v3 migration row count mismatch: "
+            f"learning_policy_snapshots v{version} migration row count mismatch: "
             f"before={before_count} after={after_count}"
         )
     after_pairs = [
         (row["snapshot_id"], row["payload_digest"])
         for row in connection.execute(
-            "SELECT snapshot_id, payload_digest FROM learning_policy_snapshots__v3 "
-            "ORDER BY snapshot_id"
+            f"SELECT snapshot_id, payload_digest FROM {temp_table} ORDER BY snapshot_id"  # noqa: S608
         ).fetchall()
     ]
     if after_pairs != before_pairs:
         raise LearningContractError(
-            "learning_policy_snapshots v3 migration content mismatch (snapshot_id, payload_digest)"
+            f"learning_policy_snapshots v{version} migration content mismatch "
+            "(snapshot_id, payload_digest)"
         )
 
     connection.execute("DROP TABLE learning_policy_snapshots")
-    connection.execute(
-        "ALTER TABLE learning_policy_snapshots__v3 RENAME TO learning_policy_snapshots"
-    )
+    connection.execute(f"ALTER TABLE {temp_table} RENAME TO learning_policy_snapshots")
     connection.execute("DROP INDEX IF EXISTS idx_learning_policy_snapshots_cohort")
     connection.execute(
         """
@@ -408,8 +443,44 @@ def _migrate_learning_policy_snapshots_v3(connection: sqlite3.Connection) -> Non
     violations = connection.execute("PRAGMA foreign_key_check").fetchall()
     if violations:
         raise LearningContractError(
-            f"learning_policy_snapshots v3 migration foreign_key_check failed: {violations!r}"
+            f"learning_policy_snapshots v{version} migration foreign_key_check "
+            f"failed: {violations!r}"
         )
+
+
+def _migrate_learning_policy_snapshots_v3(connection: sqlite3.Connection) -> None:
+    """Rebuild learning_policy_snapshots to accept production_policy_snapshot.v2.
+
+    Existing databases stamped migration 2 with a v1-only CHECK cannot accept
+    v2 rows until the table is rebuilt. Fresh DBs already CREATE with the
+    widened CHECK; this still runs a no-content-loss rebuild when version 3 is
+    missing and the table exists.
+    """
+
+    _rebuild_learning_policy_snapshots(
+        connection,
+        version=3,
+        temp_table="learning_policy_snapshots__v3",
+        create_sql=_POLICY_SNAPSHOT_CREATE_V3,
+    )
+
+
+def _migrate_learning_policy_snapshots_v4(connection: sqlite3.Connection) -> None:
+    """Rebuild learning_policy_snapshots to accept production_policy_snapshot.v3.
+
+    ADR-059 v3 adds an eighth closed-set row (``risk.accum.unevaluable_policy``)
+    and, with it, a new artifact contract id. Databases stamped migration 3 have
+    a v1/v2-only CHECK and would reject every v3 row, so the table is rebuilt
+    once more. Historical v1/v2 rows are preserved byte-for-byte: this widens
+    what may be written, it never rewrites what was.
+    """
+
+    _rebuild_learning_policy_snapshots(
+        connection,
+        version=4,
+        temp_table="learning_policy_snapshots__v4",
+        create_sql=_POLICY_SNAPSHOT_CREATE_V4,
+    )
 
 
 def create_learning_schema(connection: sqlite3.Connection) -> None:
@@ -418,7 +489,8 @@ def create_learning_schema(connection: sqlite3.Connection) -> None:
     Statements use CREATE IF NOT EXISTS so additive tables (e.g. ADR-059
     ``learning_policy_snapshots``) apply on existing databases that already
     recorded migration version 1. Migration version 3 rebuilds the snapshots
-    table CHECK to accept production_policy_snapshot.v2.
+    table CHECK to accept production_policy_snapshot.v2; version 4 widens it
+    again for production_policy_snapshot.v3 (ADR-059 v3 eight-row closed set).
     """
 
     connection.execute("""
@@ -454,6 +526,16 @@ def create_learning_schema(connection: sqlite3.Connection) -> None:
             """
             INSERT OR IGNORE INTO _schema_migrations(namespace, version)
             VALUES (?, 3)
+            """,
+            (LEARNING_MIGRATION_NAMESPACE,),
+        )
+    if 4 not in applied:
+        # Real rebuild required for DBs that still have the v1/v2-only CHECK.
+        _migrate_learning_policy_snapshots_v4(connection)
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO _schema_migrations(namespace, version)
+            VALUES (?, 4)
             """,
             (LEARNING_MIGRATION_NAMESPACE,),
         )
@@ -1355,10 +1437,11 @@ def expected_policy_snapshot_ids(
         return ()
     out: list[str] = []
     for contract in (
+        LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
         LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
         LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
     ):
-        for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS_V2:
+        for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS_V3:
             out.append(
                 stable_learning_id(
                     contract,

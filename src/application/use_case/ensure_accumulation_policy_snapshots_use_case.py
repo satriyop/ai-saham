@@ -13,7 +13,7 @@ from src.application.services.accumulation_policy_snapshot_payloads import (
     build_all_accumulation_policy_payloads,
 )
 from src.application.services.accumulation_production_policy_descriptors import (
-    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2,
+    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3,
 )
 from src.application.services.accumulation_screen_hard_filter_policy import (
     AccumulationScreenHardFilterPolicy,
@@ -29,7 +29,7 @@ from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.ports.learning_artifact_repositories import (
     LearningPolicySnapshotRepository,
 )
-from src.domain.rules.risk_gate import RiskGate
+from src.domain.rules.risk_gate import RiskGate, UnevaluableGatePolicy
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
     AssessmentPurpose,
@@ -50,6 +50,7 @@ class EnsureAccumulationPolicySnapshotsRequest:
     structural_gates: Sequence[RiskGate]
     execution_gates: Sequence[RiskGate]
     hard_filter_policy: AccumulationScreenHardFilterPolicy
+    unevaluable_gate_policy: UnevaluableGatePolicy
     created_at: datetime
     source_revision: str
 
@@ -64,13 +65,13 @@ class EnsureAccumulationPolicySnapshotsResponse:
 
 
 class EnsureAccumulationPolicySnapshotsUseCase:
-    """Materialize the closed v2 set of production policy snapshots for a cohort.
+    """Materialize the closed v3 set of production policy snapshots for a cohort.
 
     Must run before any accumulation observation write. Recomputes the ADR-068
     behavioural cohort identity from the payloads it is about to write and fails
     closed on mismatch with the identity the caller already stamped on its
-    observations. Writes only ``production_policy_snapshot.v2`` (seven rows). No
-    dual-write of v1.
+    observations. Writes only ``production_policy_snapshot.v3`` (eight rows). No
+    dual-write of v1 or v2.
 
     ADR-068 removed the config-byte double-read this use case used to perform.
     The guarantee it bought is now structural rather than checked: identity is
@@ -101,10 +102,11 @@ class EnsureAccumulationPolicySnapshotsUseCase:
             structural_gates=request.structural_gates,
             execution_gates=request.execution_gates,
             hard_filter_policy=request.hard_filter_policy,
+            unevaluable_gate_policy=request.unevaluable_gate_policy,
         )
         if set(payloads) != set(ACCUMULATION_PRODUCTION_POLICY_IDS):
             raise LearningContractError(
-                "payload builder must emit exactly the closed v2 policy set"
+                "payload builder must emit exactly the closed v3 policy set"
             )
 
         identity = resolve_accumulation_cohort_identity_from_payloads(
@@ -129,10 +131,10 @@ class EnsureAccumulationPolicySnapshotsUseCase:
         learning_observation_contract_id = LearningContractId.ACCUMULATION_OBSERVATION.value
         snapshots: list[ProductionPolicySnapshot] = []
         for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS:
-            descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2[policy_id]
+            descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3[policy_id]
             snapshots.append(
                 ProductionPolicySnapshot.create(
-                    contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
+                    contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
                     purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
                     learning_observation_contract_id=learning_observation_contract_id,
                     producer_observation_contract=ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,

@@ -14,6 +14,8 @@ the fold that consumes it is the right fold.
 from __future__ import annotations
 
 import hashlib
+import inspect
+from dataclasses import replace
 
 import pytest
 
@@ -45,6 +47,7 @@ from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.rules.bandar_gate import BandarGate
 from src.domain.rules.fundamental_gate import FundamentalGate
 from src.domain.rules.liquidity_gate import LiquidityGate
+from src.domain.rules.risk_gate import UnevaluableGateAction, UnevaluableGatePolicy
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
     LearningContractError,
@@ -75,6 +78,7 @@ def _payloads(**overrides: object) -> dict:
         structural_gates=[FundamentalGate(), LiquidityGate()],
         execution_gates=[BandarGate()],
         hard_filter_policy=_hard_filters(),
+        unevaluable_gate_policy=UnevaluableGatePolicy(),
     )
     kwargs.update(overrides)
     return dict(build_all_accumulation_policy_payloads(**kwargs))
@@ -129,6 +133,7 @@ def test_typed_policy_resolution_matches_payload_resolution() -> None:
         structural_gates=[FundamentalGate(), LiquidityGate()],
         execution_gates=[BandarGate()],
         hard_filter_policy=_hard_filters(),
+        unevaluable_gate_policy=UnevaluableGatePolicy(),
     )
     from_payloads = resolve_accumulation_cohort_identity_from_payloads(
         policy_snapshot_payloads=_payloads()
@@ -190,12 +195,12 @@ def test_incomplete_policy_set_fails_closed() -> None:
     """A cohort measured over the wrong policy set is worse than no cohort."""
     short = _payloads()
     short.pop(ACCUMULATION_PRODUCTION_POLICY_IDS[0])
-    with pytest.raises(LearningContractError, match="closed v2 policy set"):
+    with pytest.raises(LearningContractError, match="closed v3 policy set"):
         resolve_accumulation_cohort_identity_from_payloads(policy_snapshot_payloads=short)
 
     extra = _payloads()
     extra["unexpected.policy"] = {"anything": 1}
-    with pytest.raises(LearningContractError, match="closed v2 policy set"):
+    with pytest.raises(LearningContractError, match="closed v3 policy set"):
         resolve_accumulation_cohort_identity_from_payloads(policy_snapshot_payloads=extra)
 
 
@@ -277,3 +282,64 @@ def test_pre_open_identity_is_untouched_by_adr_068() -> None:
             "is scoped to ACCUMULATION_DISCOVERY and pre-open keeps its own "
             "mechanism"
         )
+
+
+def _typed_identity(**overrides: object):
+    """Resolve identity through the typed entry point the composition root uses."""
+    kwargs: dict = dict(
+        accum_score_policy=AccumScorePolicy(),
+        signal_engine_config=SignalEngineConfig(),
+        structural_gates=[FundamentalGate(), LiquidityGate()],
+        execution_gates=[BandarGate()],
+        hard_filter_policy=_hard_filters(),
+        unevaluable_gate_policy=UnevaluableGatePolicy(),
+    )
+    kwargs.update(overrides)
+    return resolve_accumulation_cohort_identity(**kwargs)
+
+
+# One materially different value per declared-policy parameter of
+# `resolve_accumulation_cohort_identity`. The sweep below asserts the set of
+# keys equals the signature's, so a ninth parameter that nobody threaded into
+# the payload builder fails here instead of silently colliding cohorts — the
+# exact defect `unevaluable_gate_policy` was.
+_DECLARED_POLICY_MUTATIONS: dict[str, object] = {
+    "accum_score_policy": replace(
+        AccumScorePolicy(), consistency=replace(AccumScorePolicy().consistency, weight=40.0)
+    ),
+    "signal_engine_config": replace(
+        SignalEngineConfig(),
+        classification=replace(SignalEngineConfig().classification, strong_min_score=99.0),
+    ),
+    "structural_gates": [FundamentalGate()],
+    "execution_gates": [],
+    "hard_filter_policy": _hard_filters(min_piotroski=7),
+    "unevaluable_gate_policy": UnevaluableGatePolicy(
+        action=UnevaluableGateAction.BLOCK, block_confidence=70
+    ),
+}
+
+
+def test_every_declared_policy_parameter_is_swept_by_the_mutation_set() -> None:
+    """The sweep must cover the whole signature, not a stale subset."""
+    params = set(inspect.signature(resolve_accumulation_cohort_identity).parameters)
+    assert params == set(_DECLARED_POLICY_MUTATIONS)
+
+
+@pytest.mark.parametrize("param", sorted(_DECLARED_POLICY_MUTATIONS))
+def test_each_declared_policy_parameter_moves_the_compatibility_id(param: str) -> None:
+    """Every declared policy the engines receive must be cohort identity.
+
+    A parameter the engines act on but the snapshot payloads ignore lets two
+    deployments that decide differently share one ``compatibility_id``. Only the
+    declared-policy axis may move; the probe and schema axes must not.
+    """
+    base = _typed_identity()
+    changed = _typed_identity(**{param: _DECLARED_POLICY_MUTATIONS[param]})
+
+    assert changed.semantic_compatibility_id != base.semantic_compatibility_id, (
+        f"{param} does not reach the ADR-059 snapshot payloads"
+    )
+    assert changed.policy_snapshot_payload_digest != base.policy_snapshot_payload_digest
+    assert changed.behavioral_probe_digest == base.behavioral_probe_digest
+    assert changed.observation_payload_schema_version == base.observation_payload_schema_version

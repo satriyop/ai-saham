@@ -7,6 +7,9 @@ Accepted — 2026-07-31
 Amended — 2026-07-31 (`production_policy_snapshot.v2`, hard filters, lean
 compatibility.v2 binding)
 
+Amended — 2026-08-06 (`production_policy_snapshot.v3`, aggregate
+unevaluable-gate policy as the eighth row)
+
 ## Context
 
 `ml-saham` ADR-002 requires a frozen description of production policy for
@@ -33,8 +36,8 @@ cohorts and appear retrospectively verified. That is forbidden.
 2. Snapshots are **content-addressed projections** of the same resolved typed
    engine / screen policies used by live accumulation paths — not a second YAML
    parse in an adapter, not packaged ML mirrors.
-3. After the v2 cutover, the active producer writes **only**
-   `production_policy_snapshot.v2` rows. No dual-write of v1 under a new
+3. After the v3 cutover, the active producer writes **only**
+   `production_policy_snapshot.v3` rows. No dual-write of v1 or v2 under a new
    compatibility ID.
 
 ### Immutable v1 closed set (historical)
@@ -54,9 +57,17 @@ accept a seventh row under `production_policy_snapshot.v1`:
 Historical v1 rows remain readable and immutable. They are **ineligible** for
 active verified hard-filter / current production challenges that require v2.
 
-### Active v2 closed set
+### Immutable v2 closed set (historical)
 
-`production_policy_snapshot.v2` is **closed and exact** (seven rows per active
+v2 export set is **closed and exact** (seven rows): the six v1 rows plus
+`screener.accum.hard_filters` (`gate`). Do not mutate its meaning or accept an
+eighth row under `production_policy_snapshot.v2`. Historical v2 rows remain
+readable and immutable and are **ineligible** for current production challenges,
+which require v3.
+
+### Active v3 closed set
+
+`production_policy_snapshot.v3` is **closed and exact** (eight rows per active
 accumulation cohort). Artifact contract version and each policy version are
 separate: unchanged policies keep policy version `v1`.
 
@@ -68,7 +79,32 @@ separate: unchanged policies keep policy version `v1`.
 | `signal.accum.classification` | `score` | existing `v1` |
 | `risk.accum.hard_gates` | `gate` | existing `v1` |
 | `signal.accum.raw_score` | `score` | existing `v1` |
-| `screener.accum.hard_filters` | `gate` | `v1` |
+| `screener.accum.hard_filters` | `gate` | existing `v1` |
+| `risk.accum.unevaluable_policy` | `gate` | `v1` |
+
+Unevaluable-gate semantic contract:
+
+- `semantic_engine_contract_id = risk.unevaluable_gate.accum.v1`
+- `formula_id = assess_risk_gate_evaluator.evaluate.unevaluable_aggregate.v1`
+
+This row declares the **aggregate** posture for gates that ran without usable
+input, which is orthogonal to each gate's own `missing_data_action` already
+declared by `risk.accum.hard_gates`. Its payload records `action`
+(`surface | block`), the derived `blocks` flag the evaluator reads,
+`block_confidence`, and the closed `supported_actions` vocabulary, sourced from
+`risk_engine.gates.unevaluable_policy` /
+`risk_engine.gates.unevaluable_block_confidence`.
+
+`surface` and `block` reject different candidates on missing gate data, so the
+row is cohort identity, not documentation: before v3 two deployments with
+opposite settings shared one `compatibility_id`.
+
+The row declares **no** `observation_result_fields`. No stored observation field
+carries this policy's own output — `RiskAssessment.to_dict()` has
+`unevaluable_gates` but `AccumulationCandidate.to_dict()` never copies it, and
+the persisted risk fields (`candidate.risk_status`, `candidate.risk_gate`,
+`trade_setup.blocking_gates`) are already declared by `risk.accum.hard_gates`
+and cannot distinguish an unevaluable-block from an ordinary gate trigger.
 
 Hard-filter semantic contract:
 
@@ -105,6 +141,7 @@ Enum members:
 
 - `PRODUCTION_POLICY_SNAPSHOT_V1 = production_policy_snapshot.v1`
 - `PRODUCTION_POLICY_SNAPSHOT_V2 = production_policy_snapshot.v2`
+- `PRODUCTION_POLICY_SNAPSHOT_V3 = production_policy_snapshot.v3`
 
 `ProductionPolicySnapshot.create` requires an **explicit** `contract_id`
 (no default). Snapshot identity:
@@ -146,8 +183,8 @@ alias. Changing only the binding contract forks the compatibility ID. Producer
 recomputes the lean ID and requires equality before snapshot or observation
 writes.
 
-`UNIQUE (purpose, compatibility_id, policy_id)` is unchanged. v1 and v2 rows
-coexist only under different compatibility IDs.
+`UNIQUE (purpose, compatibility_id, policy_id)` is unchanged. v1, v2, and v3
+rows coexist only under different compatibility IDs.
 
 ### Schema migration v3
 
@@ -163,12 +200,22 @@ Existing databases that created the table with a v1-only CHECK must rebuild
 
 Changing only `CREATE TABLE IF NOT EXISTS` is insufficient for existing DBs.
 
+### Schema migration v4
+
+The v3 contract needs the same treatment: databases stamped at migration 3 have
+a v1/v2-only CHECK and reject every v3 row. Learning migration version **4**
+rebuilds `learning_policy_snapshots` again with the same no-content-loss
+procedure, widening `contract_id` CHECK to
+`production_policy_snapshot.v1 | .v2 | .v3`. Historical rows are copied
+byte-for-byte; the migration widens what may be written and never rewrites what
+was.
+
 ### Producer trigger and bundle identity
 
 Shared `run_signal_observation_corpus_write` (`research accum capture` and
-`research accum backfill`) ensures all **seven** v2 snapshots before any
-observation write. No separate export command. No dual-write v1. A partial
-six-of-seven set fails closed before observation writes.
+`research accum backfill`) ensures all **eight** v3 snapshots before any
+observation write. No separate export command. No dual-write of v1 or v2. A
+partial seven-of-eight set fails closed before observation writes.
 
 Corpus write resolves one `AccumulationProductionPolicyBundle` that includes
 `hard_filter_policy` and injects the same typed objects into engines (where
@@ -197,14 +244,14 @@ production-policy challenges. No fabricated snapshot backfill onto old rows.
 
 ### ML consumer
 
-Active production challenges accept snapshot **v2 / seven rows only**. No v1
-fallback for current production eligibility. Historical v1 may be parsed only
-as non-eligible. Hard-filter tournament adapter work is downstream.
+Active production challenges accept snapshot **v3 / eight rows only**. No v1 or
+v2 fallback for current production eligibility. Historical v1/v2 may be parsed
+only as non-eligible. Hard-filter tournament adapter work is downstream.
 
 ## Consequences
 
-- Fresh accumulation capture/backfill materializes seven verified v2 policy rows
-  under a new lean compatibility cohort.
+- Fresh accumulation capture/backfill materializes eight verified v3 policy rows
+  under a new compatibility cohort.
 - The hard-filter production baseline is explicit (currently largely
   non-selective defaults) for policy-design tournaments.
 - Live Signal/Risk/TradeSetup Actions are unchanged (`NON_SEMANTIC` for engine
@@ -215,8 +262,9 @@ as non-eligible. Hard-filter tournament adapter work is downstream.
 
 1. **Exact object identity:** one `AccumulationProductionPolicyBundle` including
    `hard_filter_policy`; no second independent resolve for snapshots.
-2. **Atomic closed set:** seven v2 rows validated then written with
-   `add_policy_snapshots_atomic` under one `BEGIN IMMEDIATE` transaction.
+2. **Atomic closed set:** the whole active closed set (eight v3 rows) validated
+   then written with `add_policy_snapshots_atomic` under one `BEGIN IMMEDIATE`
+   transaction.
 3. **Provenance:** `source_revision` required non-empty
    (`ai-saham@<version>[+git:<sha>]`).
 4. **Integrity:** payload metadata keys must match row columns; integrity uses

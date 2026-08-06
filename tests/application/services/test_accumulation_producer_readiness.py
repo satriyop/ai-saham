@@ -23,7 +23,7 @@ from src.application.services.accumulation_producer_readiness import (
     project_cohort_readiness as _project_cohort_readiness_impl,
 )
 from src.application.services.accumulation_production_policy_descriptors import (
-    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2,
+    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3,
 )
 from src.domain.services.trading_calendar import (
     first_weekday_session_after,
@@ -32,7 +32,7 @@ from src.domain.services.trading_calendar import (
 )
 from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
-    ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     PRODUCTION_POLICY_ID_HARD_FILTERS,
     AccumPopulationBinding,
@@ -433,15 +433,15 @@ def _rehash_label(label: LearningOutcomeLabel) -> LearningOutcomeLabel:
 def _snapshot(
     policy_id: str,
     *,
-    contract: LearningContractId = LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
+    contract: LearningContractId = LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
     compatibility_id: str = COMPAT,
     corrupt_digest: bool = False,
     material: str = MATERIAL,
     semantic_override: str | None = None,
     decision_override: str | None = None,
 ) -> ProductionPolicySnapshot:
-    descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2.get(policy_id)
-    if descriptor is not None and contract is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2:
+    descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3.get(policy_id)
+    if descriptor is not None and contract is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3:
         decision_type = decision_override or descriptor.decision_type
         semantic = semantic_override or descriptor.semantic_engine_contract_id
         policy_version = descriptor.policy_version
@@ -475,12 +475,12 @@ def _snapshot(
     return snap
 
 
-def _full_v2_set(
+def _full_active_set(
     compatibility_id: str = COMPAT, *, material: str = MATERIAL
 ) -> tuple[ProductionPolicySnapshot, ...]:
     return tuple(
         _snapshot(pid, compatibility_id=compatibility_id, material=material)
-        for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V2
+        for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V3
     )
 
 
@@ -488,12 +488,12 @@ def test_classify_legacy_when_active_set_not_verified() -> None:
     from src.application.services.accumulation_producer_readiness import SnapshotBindingReport
 
     snap = SnapshotBindingReport(
-        binding_contract="production_policy_snapshot.v2",
-        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V2),
+        binding_contract="production_policy_snapshot.v3",
+        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
         required_count=7,
         verified_count=0,
         verified_policy_ids=(),
-        missing_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V2),
+        missing_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
         extra_policy_ids=(),
         invalid_policy_ids=(),
         observed_contract_ids=(),
@@ -527,15 +527,15 @@ def test_classify_blocked_on_observation_corruption() -> None:
     from src.application.services.accumulation_producer_readiness import SnapshotBindingReport
 
     snap = SnapshotBindingReport(
-        binding_contract="production_policy_snapshot.v2",
-        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V2),
+        binding_contract="production_policy_snapshot.v3",
+        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
         required_count=7,
-        verified_count=7,
-        verified_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V2),
+        verified_count=8,
+        verified_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
         missing_policy_ids=(),
         extra_policy_ids=(),
         invalid_policy_ids=(),
-        observed_contract_ids=("production_policy_snapshot.v2",),
+        observed_contract_ids=("production_policy_snapshot.v3",),
         material_config_hashes=(MATERIAL,),
         active_set_verified=True,
         has_corruption=False,
@@ -566,15 +566,15 @@ def test_classify_collecting_and_ready() -> None:
     from src.application.services.accumulation_producer_readiness import SnapshotBindingReport
 
     snap = SnapshotBindingReport(
-        binding_contract="production_policy_snapshot.v2",
-        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V2),
+        binding_contract="production_policy_snapshot.v3",
+        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
         required_count=7,
-        verified_count=7,
-        verified_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V2),
+        verified_count=8,
+        verified_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
         missing_policy_ids=(),
         extra_policy_ids=(),
         invalid_policy_ids=(),
-        observed_contract_ids=("production_policy_snapshot.v2",),
+        observed_contract_ids=("production_policy_snapshot.v3",),
         material_config_hashes=(MATERIAL,),
         active_set_verified=True,
         has_corruption=False,
@@ -623,7 +623,7 @@ def test_classify_collecting_and_ready() -> None:
 
 
 def test_verify_rejects_wrong_semantic_contract() -> None:
-    snaps = list(_full_v2_set())
+    snaps = list(_full_active_set())
     snaps[0] = _snapshot(
         PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS, semantic_override="test.semantic.v1"
     )
@@ -638,8 +638,12 @@ def test_verify_rejects_wrong_semantic_contract() -> None:
 
 
 def test_verify_rejects_split_material_hash() -> None:
-    snaps = list(_full_v2_set(material=MATERIAL))
-    snaps[-1] = _snapshot(PRODUCTION_POLICY_ID_HARD_FILTERS, material="sha256:" + ("22" * 32))
+    snaps = list(_full_active_set(material=MATERIAL))
+    # Replace by policy_id, not by position: a positional swap silently turned
+    # this into a duplicate-row test when the closed set grew an eighth row.
+    split = _snapshot(PRODUCTION_POLICY_ID_HARD_FILTERS, material="sha256:" + ("22" * 32))
+    snaps = [split if s.policy_id == PRODUCTION_POLICY_ID_HARD_FILTERS else s for s in snaps]
+    assert len({s.policy_id for s in snaps}) == len(snaps)
     report = verify_snapshot_binding(
         snaps,
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
@@ -652,13 +656,13 @@ def test_verify_rejects_split_material_hash() -> None:
 
 def test_verify_accepts_authoritative_full_set() -> None:
     report = verify_snapshot_binding(
-        _full_v2_set(),
+        _full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
         compatibility_id=COMPAT,
     )
     assert report.active_set_verified is True
     assert report.material_config_hashes == (MATERIAL,)
-    assert report.verified_count == 7
+    assert report.verified_count == 8
 
 
 def test_verify_zero_snapshots_is_legacy_not_blocked() -> None:
@@ -673,7 +677,7 @@ def test_verify_zero_snapshots_is_legacy_not_blocked() -> None:
 
 
 def test_verify_partial_v2_claims_active_and_lists_missing() -> None:
-    snaps = tuple(_snapshot(pid) for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V2[:5])
+    snaps = tuple(_snapshot(pid) for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V3[:5])
     report = verify_snapshot_binding(
         snaps,
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
@@ -724,7 +728,7 @@ def test_project_challenge_input_ready() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.CHALLENGE_INPUT_READY
@@ -776,7 +780,7 @@ def test_invented_universe_labels_cannot_be_challenge_input_ready() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
@@ -823,7 +827,7 @@ def test_free_form_lq45_pit_label_is_not_population_authority() -> None:
         compatibility_id=COMPAT,
         observations=[o1, o2],
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -841,7 +845,7 @@ def test_project_blocked_on_preopen_contract_under_accum_purpose() -> None:
         compatibility_id=COMPAT,
         observations=bad,
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -876,7 +880,7 @@ def test_missing_session_date_does_not_count_sessions_via_cutoff() -> None:
         compatibility_id=COMPAT,
         observations=[o1, o2],
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -886,7 +890,7 @@ def test_missing_session_date_does_not_count_sessions_via_cutoff() -> None:
 
 def test_project_blocked_on_partial_snapshots() -> None:
     obs = [_observation(day=1), _observation(day=2, ticker="BBRI")]
-    snaps = tuple(_snapshot(pid) for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V2[:6])
+    snaps = tuple(_snapshot(pid) for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V3[:6])
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=obs,
@@ -915,7 +919,7 @@ def test_malformed_session_date_prefix_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -932,7 +936,7 @@ def test_fuzzy_accumulation_artifact_type_rejected() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -961,7 +965,7 @@ def test_tampered_label_digest_blocks_challenge_input_ready() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=[tampered],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1015,7 +1019,7 @@ def test_rehashed_available_without_outcome_blocks_and_does_not_count_h10() -> N
         compatibility_id=COMPAT,
         observations=obs,
         labels=[rehashed],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
@@ -1055,7 +1059,7 @@ def test_rehashed_unavailable_with_outcome_blocks_and_does_not_tally_unavailable
         compatibility_id=COMPAT,
         observations=obs,
         labels=[rehashed],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1091,7 +1095,7 @@ def test_valid_available_h10_outcome_still_enables_challenge_input_ready() -> No
         compatibility_id=COMPAT,
         observations=obs,
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.labels_by_horizon["H10"].available >= 1
@@ -1109,7 +1113,7 @@ def test_tampered_observation_digest_blocks() -> None:
         compatibility_id=COMPAT,
         observations=[bad, o2],
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1152,7 +1156,7 @@ def test_wrong_policy_contract_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[bad1, bad2],
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1189,7 +1193,7 @@ def test_wrong_horizon_contract_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[o1, o2],
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1211,7 +1215,7 @@ def test_wrong_label_outcome_basis_blocks_and_does_not_count_h10() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=[forged],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1233,7 +1237,7 @@ def test_forged_observation_id_with_valid_digest_blocks() -> None:
         compatibility_id=COMPAT,
         observations=[forged, o2],
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1254,7 +1258,7 @@ def test_forged_label_id_with_valid_digest_blocks() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=[forged],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1310,7 +1314,7 @@ def test_unbound_payload_session_dates_do_not_manufacture_depth() -> None:
         compatibility_id=COMPAT,
         observations=[o1, o2],
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
@@ -1338,7 +1342,7 @@ def test_ticker_window_mismatch_blocks_session() -> None:
         compatibility_id=COMPAT,
         observations=[o],
         labels=[],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1360,7 +1364,7 @@ def test_production_shaped_multi_session_can_reach_ready() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.session_count == 2
@@ -1396,7 +1400,7 @@ def test_multi_row_h10_path_label_conflict_blocks_ready_fail_closed() -> None:
         compatibility_id=COMPAT,
         observations=[obs_a, obs_b],
         labels=[conflict_a1, conflict_a2, clean_b],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
 
@@ -1441,7 +1445,7 @@ def test_multi_row_h3_path_label_conflict_also_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[obs_a, obs_b],
         labels=[h3_a1, h3_a2, h10_b],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1468,7 +1472,7 @@ def test_provenance_latest_session_mismatch_blocks() -> None:
         compatibility_id=COMPAT,
         observations=[o],
         labels=[],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1501,7 +1505,7 @@ def test_outer_schema_version_999_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[bad1, bad2],
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
@@ -1548,7 +1552,7 @@ def test_payload_schema_version_999_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[bad1, bad2],
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
@@ -1574,7 +1578,7 @@ def test_wrong_workflow_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[o, _observation(day=2, ticker="BBRI")],
         labels=[_label(o)],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1613,7 +1617,7 @@ def test_invalid_observation_contributes_zero_labels_actions_and_readiness() -> 
         compatibility_id=COMPAT,
         observations=[invalid],
         labels=[_label(invalid)],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert solo.observation_validation.has_contract_corruption is True
@@ -1637,7 +1641,7 @@ def test_invalid_observation_contributes_zero_labels_actions_and_readiness() -> 
         compatibility_id=COMPAT,
         observations=[invalid, valid],
         labels=[_label(invalid), _label(valid)],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert mixed.observation_validation.has_contract_corruption is True
@@ -1672,7 +1676,7 @@ def test_wrong_horizon_primary_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[o, _observation(day=2, ticker="BBRI")],
         labels=[_label(o)],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1696,7 +1700,7 @@ def test_missing_provenance_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[o, _observation(day=2, ticker="BBRI")],
         labels=[_label(o)],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1724,7 +1728,7 @@ def test_missing_features_window_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[o, _observation(day=2, ticker="BBRI")],
         labels=[_label(o)],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1744,7 +1748,7 @@ def test_schema9_without_binding_is_legacy_raw_only_even_with_snapshots() -> Non
         compatibility_id=COMPAT,
         observations=obs,
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.snapshot.active_set_verified is True
@@ -1796,7 +1800,7 @@ def test_tampered_membership_count_and_named_digest_block_ready() -> None:
         compatibility_id=COMPAT,
         observations=[tampered_a, tampered_b],
         labels=[_label(tampered_a)],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     reasons = " ".join(cohort.observation_validation.invalid_reasons)
@@ -1829,7 +1833,7 @@ def test_mixed_schema9_and_schema10_cohort_is_blocked_not_ready() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     ov = cohort.observation_validation
@@ -1856,7 +1860,7 @@ def test_current_schema_missing_population_binding_is_blocked_not_ready() -> Non
         compatibility_id=COMPAT,
         observations=[o1, o2],
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -1927,7 +1931,7 @@ def test_incomplete_schema10_without_attested_tickers_is_non_current_not_redefin
         compatibility_id=COMPAT,
         observations=obs,
         labels=[_label(obs[0])],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     ov = cohort.observation_validation
@@ -1950,7 +1954,7 @@ def test_hex_only_universe_without_binding_is_not_population_authority() -> None
         compatibility_id=COMPAT,
         observations=[o1, o2],
         labels=[_label(o1)],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
@@ -1966,7 +1970,7 @@ def test_bad_decision_at_does_not_inflate_session_count_or_ready() -> None:
         compatibility_id=COMPAT,
         observations=[o1, o2],
         labels=[_label(o1)],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
@@ -1994,7 +1998,7 @@ def test_captured_at_mismatch_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[o, _observation(day=2, ticker="BBRI")],
         labels=[_label(o)],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2020,7 +2024,7 @@ def test_analysis_as_of_mismatch_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[o, _observation(day=2, ticker="BBRI")],
         labels=[_label(o)],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2070,7 +2074,7 @@ def test_available_h10_metrics_ticker_mismatch_blocks_not_challenge_input_ready(
         compatibility_id=COMPAT,
         observations=obs,
         labels=[bad_label],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.label_validation.has_integrity_corruption is True
@@ -2086,7 +2090,7 @@ def test_available_h10_metrics_ticker_mismatch_blocks_not_challenge_input_ready(
         compatibility_id=COMPAT,
         observations=obs,
         labels=[bad_label, good],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert mixed.label_validation.has_integrity_corruption is True
@@ -2128,7 +2132,7 @@ def test_unavailable_invented_reason_is_corruption_not_valid_unavailable() -> No
         compatibility_id=COMPAT,
         observations=obs,
         labels=[invented],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.label_validation.has_integrity_corruption is True
@@ -2159,7 +2163,7 @@ def test_unavailable_invented_reason_is_corruption_not_valid_unavailable() -> No
         compatibility_id=COMPAT,
         observations=obs,
         labels=[supported],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert control.label_validation.has_integrity_corruption is False
@@ -2212,7 +2216,7 @@ def test_available_metrics_reject_coerced_types_and_extra_keys() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=[bad_label],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is not ProducerReadinessStatus.CHALLENGE_INPUT_READY
@@ -2226,7 +2230,7 @@ def test_available_metrics_reject_coerced_types_and_extra_keys() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=[good_h10, good_h10_b],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert control.label_validation.has_integrity_corruption is False
@@ -2249,7 +2253,7 @@ def test_label_schema_999_and_banana_outcome_and_invented_fingerprint_block() ->
         compatibility_id=COMPAT,
         observations=obs,
         labels=[bad],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2283,7 +2287,7 @@ def test_incompatible_preopen_label_family_blocks_cohort() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=[pre, clean],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2291,7 +2295,7 @@ def test_incompatible_preopen_label_family_blocks_cohort() -> None:
 
 
 def test_snapshot_schema_version_999_fails_active_set_verified() -> None:
-    snaps = list(_full_v2_set())
+    snaps = list(_full_active_set())
     bad = _rehash_snapshot(replace(snaps[0], schema_version=999))
     snaps[0] = bad
     report = verify_snapshot_binding(
@@ -2415,7 +2419,7 @@ def test_overlong_h10_label_window_rejected_not_challenge_input_ready() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=[overlong],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.labels_by_horizon["H10"].available == 0
@@ -2466,7 +2470,7 @@ def test_exact_n_session_windows_accepted_for_h3_h10_h20() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=[labels[1]],  # H10
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.labels_by_horizon["H10"].available == 1
@@ -2586,7 +2590,7 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=[bad_shift],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
         session_snapshot_lookup=holiday_lookup,
     )
@@ -2613,7 +2617,7 @@ def test_holiday_crossing_and_shifted_window_fail_weekday_approx_path() -> None:
         compatibility_id=COMPAT,
         observations=obs,
         labels=[good],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
         session_snapshot_lookup=holiday_lookup,
     )
@@ -2695,7 +2699,7 @@ def test_string_canonical_window_and_price_block_ready() -> None:
         compatibility_id=COMPAT,
         observations=[bad, obs[1]],
         labels=[_path_label_for(obs[1])],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2726,7 +2730,7 @@ def test_population_binding_string_lookback_blocks() -> None:
         compatibility_id=COMPAT,
         observations=[bad, obs[1]],
         labels=[_path_label_for(obs[1])],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2756,7 +2760,7 @@ def test_population_binding_lowercase_tickers_block() -> None:
         compatibility_id=COMPAT,
         observations=[bad, obs[1]],
         labels=[_path_label_for(obs[1])],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2792,7 +2796,7 @@ def test_cohort_lookback_mismatch_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[o1, o2],
         labels=labels,
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2831,7 +2835,7 @@ def test_malformed_h10_label_not_also_insufficient() -> None:
 
 
 def test_policy_bad_material_hash_blocks_active_set() -> None:
-    snaps = list(_full_v2_set())
+    snaps = list(_full_active_set())
     bad = replace(snaps[0], material_config_hash="not-a-sha256")
     result = verify_snapshot_binding(
         [bad, *snaps[1:]],
@@ -2862,7 +2866,7 @@ def test_lowercase_payload_ticker_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[bad, obs[1]],
         labels=[_path_label_for(obs[1])],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2888,7 +2892,7 @@ def test_whitespace_padded_session_date_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[bad, obs[1]],
         labels=[_path_label_for(obs[1])],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2913,7 +2917,7 @@ def test_whitespace_padded_payload_captured_at_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[bad, obs[1]],
         labels=[_path_label_for(obs[1])],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2941,7 +2945,7 @@ def test_z_suffix_captured_at_alias_blocks_ready() -> None:
         compatibility_id=COMPAT,
         observations=[bad, obs[1]],
         labels=[_path_label_for(obs[1])],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -2992,7 +2996,7 @@ def test_whitespace_padded_label_signal_date_not_available() -> None:
 
 
 def test_naive_created_at_blocks_active_snapshot_set() -> None:
-    snaps = list(_full_v2_set())
+    snaps = list(_full_active_set())
     naive = replace(snaps[0], created_at=datetime(2026, 7, 31, 12, 0))  # no tz
     result = verify_snapshot_binding(
         [naive, *snaps[1:]],
@@ -3023,7 +3027,7 @@ def test_malformed_optional_observation_contract_blocks() -> None:
         compatibility_id=COMPAT,
         observations=[bad, obs[1]],
         labels=[_path_label_for(obs[1])],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
@@ -3048,7 +3052,7 @@ def test_empty_optional_producer_observation_contract_blocks() -> None:
         compatibility_id=COMPAT,
         observations=[bad, obs[1]],
         labels=[_path_label_for(obs[1])],
-        snapshots=_full_v2_set(),
+        snapshots=_full_active_set(),
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
     )
     assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY

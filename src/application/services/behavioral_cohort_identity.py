@@ -59,7 +59,7 @@ from src.application.services.behavioral_probe_runner import (
 )
 from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
-from src.domain.rules.risk_gate import RiskGate
+from src.domain.rules.risk_gate import RiskGate, UnevaluableGatePolicy
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
     LearningContractError,
@@ -94,7 +94,7 @@ class AccumulationCohortIdentity:
 def compute_policy_snapshot_set_digest(
     policy_snapshot_payloads: Mapping[str, Mapping[str, Any]],
 ) -> str:
-    """Fold the closed ADR-059 v2 seven-row payload set into one digest.
+    """Fold the closed ADR-059 v3 eight-row payload set into one digest.
 
     Consumes the existing per-row ``policy_snapshot_payload_digest`` rather than
     inventing a second hashing scheme, so a row's identity digest and its
@@ -106,7 +106,7 @@ def compute_policy_snapshot_set_digest(
     """
     if set(policy_snapshot_payloads) != set(ACCUMULATION_PRODUCTION_POLICY_IDS):
         raise LearningContractError(
-            "cohort identity requires exactly the closed v2 policy set "
+            "cohort identity requires exactly the closed v3 policy set "
             f"{sorted(ACCUMULATION_PRODUCTION_POLICY_IDS)}, got "
             f"{sorted(policy_snapshot_payloads)}"
         )
@@ -153,6 +153,7 @@ def resolve_accumulation_cohort_identity(
     structural_gates: Sequence[RiskGate],
     execution_gates: Sequence[RiskGate],
     hard_filter_policy: AccumulationScreenHardFilterPolicy,
+    unevaluable_gate_policy: UnevaluableGatePolicy,
 ) -> AccumulationCohortIdentity:
     """Resolve cohort identity from the same typed policies the engines receive.
 
@@ -167,5 +168,6 @@ def resolve_accumulation_cohort_identity(
             structural_gates=structural_gates,
             execution_gates=execution_gates,
             hard_filter_policy=hard_filter_policy,
+            unevaluable_gate_policy=unevaluable_gate_policy,
         )
     )

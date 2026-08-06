@@ -24,6 +24,8 @@ from src.domain.value_objects.learning_artifacts import (
     ValidationStatus,
 )
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+    _POLICY_SNAPSHOT_COLUMNS,
+    _POLICY_SNAPSHOT_CREATE_V3,
     SQLiteLearningArtifactRepository,
     connect_learning_database,
 )
@@ -510,24 +512,21 @@ def test_policy_snapshot_atomic_batch_all_or_nothing(tmp_path: Path) -> None:
         == ()
     )
 
-    # Happy path: closed seven-row v2 set in one transaction.
+    # Happy path: closed eight-row v3 set in one transaction.
     inserted, reused = repo.add_policy_snapshots_atomic([first, *rest])
-    assert inserted == 7
+    assert inserted == len(ACCUMULATION_PRODUCTION_POLICY_IDS)
     assert reused == 0
-    assert (
-        len(
-            repo.list_policy_snapshots(
-                purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
-                compatibility_id=compat,
-            )
+    assert len(
+        repo.list_policy_snapshots(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id=compat,
         )
-        == 7
-    )
+    ) == len(ACCUMULATION_PRODUCTION_POLICY_IDS)
 
-    # Idempotent atomic re-run reuses all seven.
+    # Idempotent atomic re-run reuses the whole closed set.
     inserted2, reused2 = repo.add_policy_snapshots_atomic([first, *rest])
     assert inserted2 == 0
-    assert reused2 == 7
+    assert reused2 == len(ACCUMULATION_PRODUCTION_POLICY_IDS)
 
     # Mid-batch conflict against existing rows rolls back: no extra rows, no
     # mutation. Seed a second cohort then fail a mixed batch that collides.
@@ -548,15 +547,12 @@ def test_policy_snapshot_atomic_batch_all_or_nothing(tmp_path: Path) -> None:
         == ()
     )
     # Original cohort intact.
-    assert (
-        len(
-            repo.list_policy_snapshots(
-                purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
-                compatibility_id=compat,
-            )
+    assert len(
+        repo.list_policy_snapshots(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id=compat,
         )
-        == 7
-    )
+    ) == len(ACCUMULATION_PRODUCTION_POLICY_IDS)
 
 
 def test_policy_snapshot_v3_migration_preserves_v1_and_accepts_v2(tmp_path: Path) -> None:
@@ -728,3 +724,101 @@ def test_v1_and_v2_snapshots_coexist_under_different_compatibility_ids(
     assert repo.add_policy_snapshot(v2) is True
     assert repo.get_policy_snapshot(v1.snapshot_id) == v1
     assert repo.get_policy_snapshot(v2.snapshot_id) == v2
+
+
+def test_policy_snapshot_v4_migration_preserves_v1_v2_and_accepts_v3(tmp_path: Path) -> None:
+    """A migration-3 database has a v1/v2-only CHECK and must rebuild for v3.
+
+    ADR-059 v3 adds an eighth closed-set row and a new artifact contract id, so
+    every existing corpus DB would reject the first capture after this change
+    until the table CHECK is widened. Proves the rebuild both accepts v3 and
+    leaves historical rows byte-identical — the migration widens what may be
+    written, it never rewrites what was.
+    """
+    import sqlite3
+
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        LEARNING_MIGRATION_NAMESPACE,
+        ensure_learning_schema,
+    )
+
+    db_path = tmp_path / "migration3_check.db"
+    repo = SQLiteLearningArtifactRepository(db_path)
+    historical = [
+        _policy_snapshot(
+            contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
+            compatibility_id="sha256:" + ("aa" * 32),
+            weight=10.0,
+        ),
+        _policy_snapshot(
+            contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
+            compatibility_id="sha256:" + ("bb" * 32),
+            weight=11.0,
+        ),
+    ]
+    for snap in historical:
+        assert repo.add_policy_snapshot(snap) is True
+
+    # Rewind to the migration-3 world: drop the version-4 stamp and narrow the
+    # CHECK back to v1/v2, which is exactly what a pre-upgrade DB looks like.
+    with connect_learning_database(db_path) as connection:
+        connection.execute(
+            "DELETE FROM _schema_migrations WHERE namespace = ? AND version = 4",
+            (LEARNING_MIGRATION_NAMESPACE,),
+        )
+        connection.execute(_POLICY_SNAPSHOT_CREATE_V3)
+        cols = ", ".join(_POLICY_SNAPSHOT_COLUMNS)
+        connection.execute(
+            f"INSERT INTO learning_policy_snapshots__v3 ({cols}) "  # noqa: S608
+            f"SELECT {cols} FROM learning_policy_snapshots"
+        )
+        connection.execute("DROP TABLE learning_policy_snapshots")
+        connection.execute(
+            "ALTER TABLE learning_policy_snapshots__v3 RENAME TO learning_policy_snapshots"
+        )
+        connection.commit()
+
+    # The narrowed CHECK really does reject v3 before the migration runs.
+    with sqlite3.connect(str(db_path)) as raw, pytest.raises(sqlite3.IntegrityError):
+        raw.execute(
+            """
+            INSERT INTO learning_policy_snapshots (
+                snapshot_id, schema_version, contract_id, purpose,
+                learning_observation_contract_id, producer_observation_contract,
+                compatibility_id, policy_id, policy_version, decision_type,
+                semantic_engine_contract_id, material_config_hash,
+                canonical_payload_json, payload_digest, source_revision,
+                created_at, artifact_json
+            ) VALUES (?, 1, 'production_policy_snapshot.v3', 'ACCUMULATION_DISCOVERY',
+                      'c', 'p', 'compat', 'pid', 'v1', 'gate', 's', 'h', '{}',
+                      ?, 'rev', '2026-01-01T00:00:00+00:00', '{}')
+            """,
+            ("probe", "0" * 64),
+        )
+
+    ensure_learning_schema(db_path)
+
+    with connect_learning_database(db_path) as connection:
+        versions = {
+            int(r[0])
+            for r in connection.execute(
+                "SELECT version FROM _schema_migrations WHERE namespace = ?",
+                (LEARNING_MIGRATION_NAMESPACE,),
+            ).fetchall()
+        }
+        assert 4 in versions
+
+    reopened = SQLiteLearningArtifactRepository(db_path)
+    # Historical rows survive the rebuild unchanged, contract id and digest both.
+    for snap in historical:
+        assert reopened.get_policy_snapshot(snap.snapshot_id) == snap
+
+    v3 = _policy_snapshot(
+        contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
+        compatibility_id="sha256:" + ("cc" * 32),
+        weight=12.0,
+    )
+    assert reopened.add_policy_snapshot(v3) is True
+    loaded = reopened.get_policy_snapshot(v3.snapshot_id)
+    assert loaded is not None
+    assert loaded.contract_id is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3

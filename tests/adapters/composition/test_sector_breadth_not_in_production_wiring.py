@@ -1,6 +1,17 @@
 """ADR-062: group-breadth score bonus is retired from production.
 
-No idx_groups accumulation-scoring seam, no applier module, no v3 snapshot.
+No idx_groups accumulation-scoring seam, no applier module, no sector_breadth
+policy row.
+
+The original version of this module also banned every ``production_policy_snapshot.v3``
+token, as a scope guard against ADR-062 inventing a speculative snapshot version
+while retiring sector breadth. That ban is lifted here: ADR-059 v3 is a real,
+separately motivated closed-set growth (the eighth row is
+``risk.accum.unevaluable_policy``, which threads the aggregate unevaluable-gate
+posture into the ADR-068 cohort identity). What this module actually guards —
+that no group/sector-breadth scoring seam or policy row comes back — is
+unchanged and still asserted below, including that the eighth row is *not*
+sector breadth.
 """
 
 from __future__ import annotations
@@ -22,15 +33,15 @@ from src.domain.value_objects.signal_semantic_contract import ACCUMULATION_DISCO
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_active_closed_set_is_exactly_seven_v2_ids() -> None:
-    assert len(ACCUMULATION_PRODUCTION_POLICY_IDS) == 7
+def test_active_closed_set_is_exactly_eight_v3_ids_without_sector_breadth() -> None:
+    assert len(ACCUMULATION_PRODUCTION_POLICY_IDS) == 8
     assert "screener.accum.sector_breadth" not in ACCUMULATION_PRODUCTION_POLICY_IDS
-    assert LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2.value == (
-        "production_policy_snapshot.v2"
+    assert LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3.value == (
+        "production_policy_snapshot.v3"
     )
-    assert not hasattr(LearningContractId, "PRODUCTION_POLICY_SNAPSHOT_V3")
     values = {m.value for m in LearningContractId}
-    assert "production_policy_snapshot.v3" not in values
+    # ADR-068 retired the lean compatibility contract family outright; no v3 of
+    # it may reappear alongside the snapshot v3.
     assert "lean_accumulation_compatibility.v3" not in values
 
 
@@ -98,12 +109,10 @@ def test_material_config_paths_exclude_retired_sector_breadth() -> None:
     assert retired == []
 
 
-def test_no_v3_snapshot_or_migration_4_tokens() -> None:
-    """Speculative v3/migration artifacts must not appear from this task."""
+def test_no_sector_breadth_or_lean_v3_tokens() -> None:
+    """Retired breadth policy and lean-compatibility identities stay gone."""
     forbidden_snippets = (
-        "production_policy_snapshot.v3",
         "lean_accumulation_compatibility.v3",
-        "PRODUCTION_POLICY_SNAPSHOT_V3",
         "screener.accum.sector_breadth",
     )
     search_roots = [

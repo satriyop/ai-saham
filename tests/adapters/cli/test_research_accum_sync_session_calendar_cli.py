@@ -12,11 +12,11 @@ from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
 from src.application.services.accumulation_production_policy_descriptors import (
-    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2,
+    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3,
 )
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.learning_artifacts import (
-    ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
     AccumPopulationBinding,
     AssessmentPurpose,
     LearningContractId,
@@ -107,11 +107,11 @@ def _observation(db_day: int = 1, ticker: str = "BBCA") -> LearningObservation:
 
 
 def _seed_policy(repo: SQLiteLearningArtifactRepository) -> None:
-    for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS_V2:
-        d = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V2[policy_id]
+    for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS_V3:
+        d = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3[policy_id]
         repo.add_policy_snapshot(
             ProductionPolicySnapshot.create(
-                contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
+                contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
                 purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
                 learning_observation_contract_id=LearningContractId.ACCUMULATION_OBSERVATION.value,
                 producer_observation_contract="accumulation-discovery.v2",
