@@ -28,9 +28,11 @@ ACCUMULATION_DISCOVERY_CONTRACT = ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT
 # live here. They were identity proxies a human had to remember to change, and
 # accumulation cohort identity is now *measured* instead — see
 # ``src/application/services/behavioral_cohort_identity.py``. Nothing bumps this
-# label: it records the last declared version of ``SemanticContractDefinition``,
-# whose registry (``signal_semantic_contract_registry``) has no production
-# consumer, and it is not accumulation cohort identity material.
+# label: it records the last declared version of ``SemanticContractDefinition``.
+# The config-hashing registry that used to consume this definition
+# (``SignalSemanticContractRegistry``) was removed as dead code — it had no
+# production caller, superseded by the behavioral probe mechanism above. This
+# label is not accumulation cohort identity material.
 _PARKED_CONTRACT_VERSION_LABEL = "1.5"
 
 _EXECUTION_LABEL_POLICY_VERSIONS: tuple[tuple[str, str], ...] = (
