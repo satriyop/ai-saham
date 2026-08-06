@@ -117,19 +117,20 @@ def test_no_typed_config_attribute_named_setup_quality_survives() -> None:
 
 
 @pytest.mark.parametrize("flow_score", [0.0, 20.0, 55.5, 100.0])
-def test_renormalize_returns_the_flow_score_unweighted(flow_score: float) -> None:
+def test_base_score_returns_the_flow_score_unweighted(flow_score: float) -> None:
     """The signal score IS the flow group score — no weight, no denominator.
 
-    ``renormalize`` no longer takes a config at all, which is the structural
-    proof that nothing is being weighed: there is no weight in scope to apply.
+    ``base_score_from_flow_group`` takes no config at all, which is the
+    structural proof that nothing is being weighed: there is no weight in
+    scope to apply.
     """
-    assert SignalEvidenceGroupScorer.renormalize(flow_score, True) == flow_score
+    assert SignalEvidenceGroupScorer.base_score_from_flow_group(flow_score, True) == flow_score
 
 
-def test_renormalize_uses_the_neutral_prior_when_no_group_is_present() -> None:
+def test_base_score_uses_the_neutral_prior_when_no_group_is_present() -> None:
     """Absent evidence is never neutral-*filled* into a group average.
 
     With no group present there is no evidence at all, and the score is the
     explicit 50.0 prior — unchanged from the two-group form.
     """
-    assert SignalEvidenceGroupScorer.renormalize(90.0, False) == 50.0
+    assert SignalEvidenceGroupScorer.base_score_from_flow_group(90.0, False) == 50.0

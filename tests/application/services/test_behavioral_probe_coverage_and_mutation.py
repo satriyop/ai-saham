@@ -205,7 +205,8 @@ _BRANCH_COVERAGE_FLOOR: dict[str, tuple[int, int]] = {
     # 41/62: lowered from 48/66 by ADR-067 slice 3, which deleted the
     # setup_quality evidence group and the two-name blend. Both halves moved
     # for the same reason and neither is under-forking:
-    #   - total fell 66 -> 62: renormalize lost its three-way present/absent
+    #   - total fell 66 -> 62: the base-score seam (renamed in slice 5 to
+    #     base_score_from_flow_group) lost its three-way present/absent
     #     branch (`if setup_present` / `if flow_present` / `if not active`) and
     #     now has one guard.
     #   - uncovered rose 18 -> 21: every newly-uncovered arc is an ABSENT-GROUP
@@ -698,7 +699,7 @@ _SURVIVING_MUTANTS: dict[str, str] = {
         "mutant used to be caught. Retiring setup_quality left "
         "flow_confirmation as the sole production evidence group, and a lone "
         "weight has nothing to be weighed against: "
-        "SignalEvidenceGroupScorer.renormalize no longer reads any weight (the "
+        "SignalEvidenceGroupScorer.base_score_from_flow_group reads no weight (the "
         "base score IS the flow group score), and in "
         "_compute_signal_authority_coverage the single group contributes "
         "`w * authority_fraction` to the numerator and `w` to the denominator, "

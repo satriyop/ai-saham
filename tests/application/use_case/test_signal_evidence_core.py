@@ -139,9 +139,9 @@ def test_sole_group_weight_cannot_move_the_score_or_the_coverage(weight):
     """ADR-067 consequence, asserted so it is a decision and not a surprise.
 
     With one production evidence group there is nothing to weigh against it:
-    ``renormalize`` reads no weight at all, and in the authority arithmetic the
-    single group contributes ``w * fraction`` to the numerator and ``w`` to the
-    denominator, so ``w`` cancels. The declared weight survives only as ADR-059
+    ``base_score_from_flow_group`` reads no weight at all, and in the authority
+    arithmetic the single group contributes ``w * fraction`` to the numerator
+    and ``w`` to the denominator, so ``w`` cancels. It survives only as ADR-059
     policy-snapshot material (cohort identity), never as behaviour.
 
     This is the positive twin of the ``flow_confirmation.weight:x3`` equivalent

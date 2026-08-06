@@ -49,7 +49,7 @@ class SignalLegacyRegimeConditioning:
             )
         )
 
-        base_score_conditioned = SignalEvidenceGroupScorer.renormalize(
+        base_score_conditioned = SignalEvidenceGroupScorer.base_score_from_flow_group(
             flow_score_conditioned,
             flow_present,
         )

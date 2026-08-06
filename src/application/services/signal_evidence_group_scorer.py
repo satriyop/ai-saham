@@ -1,5 +1,6 @@
 """
-SignalEvidenceGroupScorer — handles setup/flow scoring, renormalization, flags, and classification.
+SignalEvidenceGroupScorer — evidence-group scoring, flags, classification, and
+production-authority coverage.
 
 Layer: Application
 """
@@ -91,7 +92,9 @@ class SignalEvidenceGroupScorer:
             request.flow_confirmation_evidence
         )
 
-        base_score = SignalEvidenceGroupScorer.renormalize(flow_group_score, flow_present)
+        base_score = SignalEvidenceGroupScorer.base_score_from_flow_group(
+            flow_group_score, flow_present
+        )
 
         group_authority_facts = SignalEvidenceGroupScorer._group_authority_facts(
             request, flow_present, config
@@ -153,16 +156,17 @@ class SignalEvidenceGroupScorer:
         return max(0.0, min(100.0, ev.capped_strength * 100.0)), True
 
     @staticmethod
-    def renormalize(flow_group_score: float, flow_present: bool) -> float:
-        """Compute the directional base score.
+    def base_score_from_flow_group(flow_group_score: float, flow_present: bool) -> float:
+        """Compute the directional base score from the sole evidence group.
 
-        ADR-067 retired `setup_quality`, leaving `flow_confirmation` as the
-        sole production evidence group. There is nothing left to weight
-        against, so **no renormalization happens**: the base score IS the flow
-        group score. The name is kept only because
-        `signal.accum.evidence_group_weights` still declares
-        `formula_id: signal_evidence_group_scorer.renormalize.v1`; renaming
-        both together belongs to the snapshot-payload slice.
+        ADR-067 left `flow_confirmation` as the only production evidence
+        group. There is nothing to weigh it against, so nothing is weighted,
+        blended, or renormalized here: the base score IS the flow group score.
+        The name states which group the score comes from, so registering a
+        second production group forces this seam to be revisited rather than
+        silently reused. `signal.accum.evidence_group_weights` declares the
+        matching `formula_id:
+        signal_evidence_group_scorer.base_score_from_flow_group.v1`.
 
         An absent group is never neutral-filled — with no group present the
         score is the explicit 50.0 neutral prior, unchanged from the two-group

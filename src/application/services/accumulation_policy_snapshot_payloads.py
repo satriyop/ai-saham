@@ -44,6 +44,9 @@ SIGNAL_SEMANTIC_CONTRACT_ID = "signal.semantic_engine.v1.5"
 RISK_HARD_GATES_SEMANTIC_CONTRACT_ID = "risk.hard_gates.accum.v1"
 HARD_FILTERS_SEMANTIC_CONTRACT_ID = "screen.accum.hard_filters.v1"
 HARD_FILTERS_FORMULA_ID = "accumulation_screen.first_match_hard_filters.v1"
+# Must name the method that actually computes the base score. Kept as a
+# constant so the declared formula and its test cannot drift apart silently.
+EVIDENCE_GROUP_BASE_SCORE_FORMULA_ID = "signal_evidence_group_scorer.base_score_from_flow_group.v1"
 
 # Closed missing/action vocabulary (ADR-059 v2 / activation task).
 MISSING_ACTION_PASS_WITHOUT_EVALUATION = "pass_without_evaluation"
@@ -152,15 +155,23 @@ def build_accum_score_weights_payload(policy: AccumScorePolicy) -> dict[str, Any
 
 
 def build_evidence_group_weights_payload(groups: EvidenceGroupsConfig) -> dict[str, Any]:
+    """Declare the single production evidence basis (ADR-067).
+
+    `flow_confirmation` is the only component because it is the only
+    production evidence group left. The declared weight is retained as policy
+    material, not as behaviour: with one group there is nothing to weigh it
+    against, so `base_score_from_flow_group` reads no weight and the weight
+    cancels in the authority ratio.
+    """
+
     return {
         "policy_id": PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
         "policy_version": PRODUCTION_POLICY_VERSION_V1,
         "decision_type": "score",
         "semantic_engine_contract_id": SIGNAL_SEMANTIC_CONTRACT_ID,
-        "formula_id": "signal_evidence_group_scorer.renormalize.v1",
+        "formula_id": EVIDENCE_GROUP_BASE_SCORE_FORMULA_ID,
         "output_scale": {"min": 0.0, "max": 100.0},
         "missing_data": {
-            "missing_groups_excluded_from_denominator": True,
             "neutral_fill": False,
             "no_groups_present_base_score": 50.0,
         },
@@ -173,9 +184,14 @@ def build_evidence_group_weights_payload(groups: EvidenceGroupsConfig) -> dict[s
                 required_for_authority=groups.flow_confirmation.required_for_authority,
             ),
         ],
+        "note": (
+            "Sole production evidence group; the base score is that group's "
+            "score, unweighted. The declared weight is policy material only — "
+            "it is read by no scoring path and cancels in the authority ratio."
+        ),
         "observation_result_fields": {
-            "group_contributions": (
-                f"features_by_window.{ACCUM_CANONICAL_WINDOW}.signal.group_contributions"
+            "raw_group_score": (
+                f"features_by_window.{ACCUM_CANONICAL_WINDOW}.signal.raw_group_score"
             ),
         },
     }
