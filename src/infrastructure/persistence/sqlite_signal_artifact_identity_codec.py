@@ -46,20 +46,6 @@ _SOURCE_KEYS = frozenset(
 )
 
 
-def encode_signal_artifact_identity(
-    identity: SignalArtifactIdentity | None,
-) -> tuple[str, str, str]:
-    if identity is None:
-        return ("", "", "")
-    if not isinstance(identity, SignalArtifactIdentity):
-        raise TypeError(f"Expected SignalArtifactIdentity | None, got {type(identity).__name__}")
-    return (
-        str(identity.artifact_id),
-        str(identity.semantic_compatibility_id),
-        identity.provenance.to_canonical_json(),
-    )
-
-
 def decode_signal_artifact_identity(
     *,
     artifact_id_raw: object,

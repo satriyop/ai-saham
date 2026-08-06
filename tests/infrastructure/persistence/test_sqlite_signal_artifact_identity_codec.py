@@ -15,7 +15,6 @@ from src.domain.value_objects.signal_artifact_identity import (
 )
 from src.infrastructure.persistence.sqlite_signal_artifact_identity_codec import (
     decode_signal_artifact_identity,
-    encode_signal_artifact_identity,
 )
 
 
@@ -73,17 +72,19 @@ def _identity(*, provenance: ArtifactProvenance | None = None) -> SignalArtifact
     )
 
 
-# ── Encode: None ──────────────────────────────────────────────────────────────
+def _encode(identity: SignalArtifactIdentity) -> tuple[str, str, str]:
+    """Build a well-formed encoded row directly from domain methods.
 
-
-class TestEncodeNone:
-    def test_none_returns_three_empty_strings(self):
-        encoded = encode_signal_artifact_identity(None)
-        assert encoded == ("", "", "")
-
-    def test_wrong_type_raises_typeerror(self):
-        with pytest.raises(TypeError, match="Expected SignalArtifactIdentity"):
-            encode_signal_artifact_identity("not-an-identity")  # type: ignore[arg-type]
+    No production encoder exists — the old ``encode_signal_artifact_identity``
+    was removed as dead code (its only callers were the two retired tables it
+    wrote to). This mirrors what it did so decode's tests still exercise
+    valid canonical rows.
+    """
+    return (
+        str(identity.artifact_id),
+        str(identity.semantic_compatibility_id),
+        identity.provenance.to_canonical_json(),
+    )
 
 
 # ── Decode: empty / partial ───────────────────────────────────────────────────
@@ -153,7 +154,7 @@ class TestDecodeEmpty:
 class TestRoundTrip:
     def test_complete_identity_round_trips(self):
         identity = _identity()
-        encoded = encode_signal_artifact_identity(identity)
+        encoded = _encode(identity)
         decoded = decode_signal_artifact_identity(
             artifact_id_raw=encoded[0],
             semantic_compatibility_id_raw=encoded[1],
@@ -171,7 +172,7 @@ class TestRoundTrip:
                 invocation_actor="satriyo",
             )
         )
-        encoded = encode_signal_artifact_identity(identity)
+        encoded = _encode(identity)
         decoded = decode_signal_artifact_identity(
             artifact_id_raw=encoded[0],
             semantic_compatibility_id_raw=encoded[1],
@@ -208,7 +209,7 @@ class TestRoundTrip:
                 )
             )
         )
-        encoded = encode_signal_artifact_identity(identity)
+        encoded = _encode(identity)
         decoded = decode_signal_artifact_identity(
             artifact_id_raw=encoded[0],
             semantic_compatibility_id_raw=encoded[1],
@@ -240,7 +241,7 @@ class TestRoundTrip:
                 )
             )
         )
-        encoded = encode_signal_artifact_identity(identity)
+        encoded = _encode(identity)
         decoded = decode_signal_artifact_identity(
             artifact_id_raw=encoded[0],
             semantic_compatibility_id_raw=encoded[1],
@@ -261,7 +262,7 @@ class TestDecodeInvalidIds:
             decode_signal_artifact_identity(
                 artifact_id_raw="not-a-valid-id",
                 semantic_compatibility_id_raw="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-                provenance_json_raw=encode_signal_artifact_identity(_identity())[2],
+                provenance_json_raw=_encode(_identity())[2],
             )
 
     def test_semantic_compatibility_id_not_sha256_prefixed(self):
@@ -269,7 +270,7 @@ class TestDecodeInvalidIds:
             decode_signal_artifact_identity(
                 artifact_id_raw="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 semantic_compatibility_id_raw="not-valid",
-                provenance_json_raw=encode_signal_artifact_identity(_identity())[2],
+                provenance_json_raw=_encode(_identity())[2],
             )
 
     def test_both_ids_invalid(self):
@@ -277,7 +278,7 @@ class TestDecodeInvalidIds:
             decode_signal_artifact_identity(
                 artifact_id_raw="bad",
                 semantic_compatibility_id_raw="also-bad",
-                provenance_json_raw=encode_signal_artifact_identity(_identity())[2],
+                provenance_json_raw=_encode(_identity())[2],
             )
 
 
@@ -307,7 +308,7 @@ class TestDecodeMalformedProvenance:
 
 class TestDecodeProvenanceKeys:
     def test_missing_key(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         data = __import__("json").loads(valid)
         del data["application_revision"]
         faulty = __import__("json").dumps(data, sort_keys=True, separators=(",", ":"))
@@ -319,7 +320,7 @@ class TestDecodeProvenanceKeys:
             )
 
     def test_extra_key(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         data = __import__("json").loads(valid)
         data["extra_key"] = "should-not-be-here"
         faulty = __import__("json").dumps(data, sort_keys=True, separators=(",", ":"))
@@ -336,7 +337,7 @@ class TestDecodeProvenanceKeys:
 
 class TestDecodeTimestampFormat:
     def test_non_utc_timestamp_raises(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         data = __import__("json").loads(valid)
         data["captured_at"] = "2026-07-03T09:30:00.456789+07:00"
         faulty = __import__("json").dumps(data, sort_keys=True, separators=(",", ":"))
@@ -348,7 +349,7 @@ class TestDecodeTimestampFormat:
             )
 
     def test_naive_timestamp_raises(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         data = __import__("json").loads(valid)
         data["captured_at"] = "2026-07-03T09:30:00.456789"
         faulty = __import__("json").dumps(data, sort_keys=True, separators=(",", ":"))
@@ -360,7 +361,7 @@ class TestDecodeTimestampFormat:
             )
 
     def test_bad_date_format_raises(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         data = __import__("json").loads(valid)
         data["analysis_as_of"] = "not-a-date"
         faulty = __import__("json").dumps(data, sort_keys=True, separators=(",", ":"))
@@ -377,7 +378,7 @@ class TestDecodeTimestampFormat:
 
 class TestDecodeCanonicalJson:
     def test_pretty_printed_json_raises(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         pretty = __import__("json").dumps(__import__("json").loads(valid), indent=2, sort_keys=True)
         with pytest.raises(ValueError, match="canonical provenance serialization"):
             decode_signal_artifact_identity(
@@ -387,7 +388,7 @@ class TestDecodeCanonicalJson:
             )
 
     def test_missing_microseconds_raises(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         data = __import__("json").loads(valid)
         data["captured_at"] = "2026-07-03T09:30:00Z"
         faulty = __import__("json").dumps(data, sort_keys=True, separators=(",", ":"))
@@ -399,7 +400,7 @@ class TestDecodeCanonicalJson:
             )
 
     def test_reordered_keys_raises(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         data = __import__("json").loads(valid)
         keys = sorted(data.keys(), reverse=True)
         reordered = (
@@ -419,7 +420,7 @@ class TestDecodeCanonicalJson:
             )
 
     def test_duplicate_json_keys_raises(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         first_comma = valid.index(",")
         first_key_val = valid[1:first_comma]
         dup = "{" + first_key_val + "," + first_key_val + valid[first_comma:]
@@ -436,7 +437,7 @@ class TestDecodeCanonicalJson:
 
 class TestDecodeSourceValidation:
     def test_source_missing_key_raises(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         data = __import__("json").loads(valid)
         del data["sources"][0]["source_family"]
         faulty = __import__("json").dumps(data, sort_keys=True, separators=(",", ":"))
@@ -448,7 +449,7 @@ class TestDecodeSourceValidation:
             )
 
     def test_source_extra_key_raises(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         data = __import__("json").loads(valid)
         data["sources"][0]["bogus"] = "value"
         faulty = __import__("json").dumps(data, sort_keys=True, separators=(",", ":"))
@@ -460,7 +461,7 @@ class TestDecodeSourceValidation:
             )
 
     def test_duplicate_sources_raises(self):
-        valid_json = encode_signal_artifact_identity(_identity())[2]
+        valid_json = _encode(_identity())[2]
         data = __import__("json").loads(valid_json)
         first = data["sources"][0]
         data["sources"] = [first, first]
@@ -473,7 +474,7 @@ class TestDecodeSourceValidation:
             )
 
     def test_source_not_a_dict_raises(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         data = __import__("json").loads(valid)
         data["sources"] = ["not", "a", "dict"]
         faulty = __import__("json").dumps(data, sort_keys=True, separators=(",", ":"))
@@ -485,7 +486,7 @@ class TestDecodeSourceValidation:
             )
 
     def test_sources_not_a_list_raises(self):
-        valid = encode_signal_artifact_identity(_identity())[2]
+        valid = _encode(_identity())[2]
         data = __import__("json").loads(valid)
         data["sources"] = "not-a-list"
         faulty = __import__("json").dumps(data, sort_keys=True, separators=(",", ":"))
@@ -495,16 +496,3 @@ class TestDecodeSourceValidation:
                 semantic_compatibility_id_raw="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 provenance_json_raw=faulty,
             )
-
-
-# ── Encode: wrong type ────────────────────────────────────────────────────────
-
-
-class TestEncodeWrongType:
-    def test_encode_wrong_type_raises(self):
-        with pytest.raises(TypeError, match="Expected SignalArtifactIdentity"):
-            encode_signal_artifact_identity(42)  # type: ignore[arg-type]
-
-    def test_encode_dict_raises(self):
-        with pytest.raises(TypeError, match="Expected SignalArtifactIdentity"):
-            encode_signal_artifact_identity({"a": 1})  # type: ignore[arg-type]
