@@ -7,7 +7,7 @@
 **Date:** 2026-08-04
 
 **Implementation task:**
-[`tasks/backlog/02_implement_adr_067_retire_setup_quality.md`](../../tasks/backlog/02_implement_adr_067_retire_setup_quality.md)
+[`tasks/done/02_implement_adr_067_retire_setup_quality.md`](../../tasks/done/02_implement_adr_067_retire_setup_quality.md)
 
 **Ordering:** [ADR-068](ADR-068-behavioral-engine-identity-for-accum-cohorts.md)
 lands first. It replaces cohort identity with measured behaviour, so this ADR
@@ -317,7 +317,7 @@ corpus accumulation window begins, not during it.
 - `docs/evidence_diagnostic_factor_accum.md` §5.2 — update to match
 
 Implementation task:
-[`tasks/backlog/02_implement_adr_067_retire_setup_quality.md`](../../tasks/backlog/02_implement_adr_067_retire_setup_quality.md)
+[`tasks/done/02_implement_adr_067_retire_setup_quality.md`](../../tasks/done/02_implement_adr_067_retire_setup_quality.md)
 (6 slices; golden fixture first). It replaces an earlier draft that was written
 on the incorrect premise that the absence was a wiring defect; that draft has
 been deleted and its reasoning is preserved in §Context above.

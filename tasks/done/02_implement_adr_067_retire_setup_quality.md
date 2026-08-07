@@ -1,7 +1,10 @@
 # Implement ADR-067: Retire `setup_quality`, One Evidence Basis, Plan Does Not Judge
 
-Status: `READY` — task 01 (ADR-068) completed 2026-08-05; see
-`tasks/done/01_implement_adr_068_behavioral_engine_identity.md`.
+Status: `DONE` — completed 2026-08-06 (slices 2-5), docs closeout 2026-08-07.
+Task 01 (ADR-068) completed 2026-08-05; see
+`tasks/done/01_implement_adr_068_behavioral_engine_identity.md`. See §15
+Completion Record below for slice commits, measurements, and the follow-on
+`619b6a4c` identity fork this task's closure surfaced.
 
 > **Why 068 goes first (2026-08-04):** ADR-068 deletes
 > `SEMANTIC_ENGINE_VERSION` and `EVIDENCE_CONTRACT_VERSION`, which this task's
@@ -318,11 +321,82 @@ close (plan/judge desks are affected). Ruff before close.
 
 ## 15. Completion Record
 
-- Completed date:
-- Slice commits:
-- Golden result (screen NON_SEMANTIC confirmed?):
-- Plan output before → after:
-- New `compatibility_id`:
-- Cron disabled / re-enabled at:
-- Remaining `setup_quality` references (enumerated, with justification):
-- Test / Lint result:
+- **Completed date:** 2026-08-06 (slices 2-5); docs closeout (slice 6) 2026-08-07.
+- **Slice commits:**
+  - Slice 2 — `73ef8490` `refactor(plan)!: plan swing carries screen verdict instead of judging`
+  - Slice 3 — `55fd9c0a` `refactor(signal)!: retire setup_quality evidence group and two-name blend`
+  - Slice 4 — `650d0b0b` `fix(signal): resolve setup readiness inputs and operator copy for ADR-067`
+  - Slice 5 — `503afeb8` `chore(identity): update accum snapshot payload for ADR-067 retirement`
+  - Slice 6 — this docs closeout (evidence doc §5/§7, this record, cron re-enable)
+- **Golden result (screen NON_SEMANTIC confirmed?):** Yes — the ADR-068 core
+  behavioural probe digest stayed `85ce36cc91adcb23a0afbdb22e01843b760c28000cc01064055877005efcf4b1`
+  across slices 2, 3, 4, and 5 (each commit measured it independently rather
+  than asserting it). Slice 4 additionally replayed all 7,764 captured accum
+  window-observations through the new readiness evaluator: 0 status
+  mismatches, distribution preserved exactly (None 7,379 · INELIGIBLE 201 ·
+  UNAVAILABLE 184 · INCOMPLETE 0 · READY 0).
+- **Plan output before → after** (slice 2, `--as-of 2026-08-05`, scratch DB,
+  flags forced on since production always hardcoded them off):
+  ```
+  before  mce=F gate=F -> WATCH  55 (screen)          signal 50
+  before  mce=T gate=F -> ENTER  90 (plan-recomputed)  signal 90
+  before  mce=F gate=T -> ENTER  90 (plan-recomputed)  signal 90
+  before  mce=T gate=T -> ENTER  90 (plan-recomputed)  signal 90
+  after   all four     -> WATCH  55 (screen)          signal 50
+  ```
+- **New `compatibility_id`:** forked twice within this task's slices, both on
+  the ADR-059 snapshot-payload axis with no hand-bump —
+  slice 3: `sha256:0fa0d3b8.. -> sha256:5494c745..`;
+  slice 5: `sha256:5494c745.. -> sha256:d912dcc5..`.
+  `production_policy_snapshot.v2` stayed exactly seven rows throughout this
+  task. **Not current** — commit `619b6a4c` (separate task, landed
+  2026-08-06 after this task closed) forked identity once more to
+  `production_policy_snapshot.v3` / `sha256:682a2ded..` by adding
+  `unevaluable_gate_policy` as an eighth declared-policy row. See
+  `tasks/backlog/09_expose_unevaluable_gate_block_provenance.md` for the
+  related corpus-observability follow-up that commit surfaced.
+- **Cron disabled / re-enabled at:** disabled 2026-08-05 (before slice 3, per
+  §8's operational constraint) pending ADR-068 slice 4 identity cutover
+  verification; re-enabled 2026-08-07 10:18 WIB, after independently verifying
+  slices 2-5 and the follow-on `619b6a4c` fix (full suite: 6555 passed, 31
+  skipped). Re-enabling also closed an unrelated pre-existing drift: the live
+  crontab still ran the old two-line `accum capture` + `accum labels` pair
+  from before `install_cron.sh` moved to the fail-closed
+  `scripts/cron_accum_challenge_corpus.sh` wrapper (commit `465f2ff8`,
+  pre-dates this task). Re-enable now installs the wrapper-based single job,
+  matching `install_cron.sh`'s canonical block exactly.
+- **Remaining `setup_quality` references (enumerated, with justification):**
+  grep of `src/` and `tests/` for `setup_quality` returns hits in three
+  categories only, all expected:
+  1. **Surviving diagnostic Alpha/Trigger slot** — `signal_engine.yaml`'s
+     `alpha_trigger.group_weights.setup_quality` and its
+     `route_fractions.*.setup_quality` entries, plus the corresponding code in
+     `signal_alpha_trigger_projection.py`, `signal_engine_config.py`,
+     `signal_semantic_contract.py`, and the `setup_quality_group` breakdown
+     key in `signal_evidence_response_builder.py` /
+     `screen_accum_single_display.py` / `plan_swing_*_display.py`. This is a
+     distinct, explicitly-surviving diagnostic projection under the same
+     name (ADR-067 §1), not the retired evidence group — it carries no Action
+     authority.
+  2. **Retirement guards and docstrings** —
+     `engine_bootstrap/signal_scoring_config_resolver.py` (rejects a
+     re-added `evidence_groups.setup_quality` key rather than silently
+     ignoring it), `setup_phase_readiness_evaluator.py`,
+     `signal_legacy_regime_conditioning.py`: all reference the name only to
+     explain what was removed and why a re-add is now a hard error.
+  3. **Test fixtures and regression guards** —
+     `test_adr067_evidence_basis_retirement.py` (AST-based: no scoring-path
+     module may reference `setup_quality`; no typed config object may carry
+     it as an attribute), `test_adr067_setup_readiness_inputs.py`,
+     `test_signal_regime_conditioning.py`,
+     `test_behavioral_probe_coverage_and_mutation.py`, and the Alpha/Trigger
+     unit tests (`test_alpha_trigger_aggregator.py`,
+     `test_alpha_trigger_score.py`, `test_signal_engine_config.py`,
+     `test_signal_semantic_contract.py`) all construct or assert against the
+     surviving diagnostic slot, or exist specifically to prove the retirement
+     holds.
+  No production scoring-path or config-resolution reference survives.
+- **Test / Lint result:** full suite green post-slice-5 (per each slice's own
+  commit) and re-confirmed 2026-08-07 alongside the `619b6a4c` verification:
+  `ruff check` / `ruff format --check` clean; `pytest -m "not tui"` — 6555
+  passed, 31 skipped, 83 deselected.

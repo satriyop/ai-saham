@@ -36,7 +36,7 @@ Measurements). Doing it two months from now costs two months.
 | # | Task | Identity-moving? | Gate |
 |---|---|---|---|
 | 1 | `01_implement_adr_068_behavioral_engine_identity.md` (**DONE** → `tasks/done/`) | **Yes** | none — ADR-068 accepted 2026-08-04; implemented 2026-08-05 |
-| 2 | `02_implement_adr_067_retire_setup_quality.md` | **Yes** (snapshot payload) | needs 1 |
+| 2 | `02_implement_adr_067_retire_setup_quality.md` (**DONE** → `tasks/done/`) | **Yes** (snapshot payload) | none — completed 2026-08-06, docs closeout 2026-08-07 |
 | 3 | `03_fix_risk_gate_silent_skip_and_fundamentals_pit_hole.md` | **Yes** (snapshot payload) | needs 1 |
 | — | **── PURGE + REBUILD (task 4), then CONFIG FREEZE ──** | | |
 | 4 | `04_rebuild_accum_corpus_single_deep_cohort.md` | No | needs 1, 2, 3 — **mandatory** |
@@ -44,6 +44,7 @@ Measurements). Doing it two months from now costs two months.
 | 6 | `06_implement_accum_policy_proposal_lifecycle.md` | No | needs 4 + depth |
 | 7 | `07_improve_screen_accum_progressive_disclosure.md` | No | independent |
 | 8 | `08_fix_cli_error_taxonomy_and_exit_codes.md` | No | independent |
+| 9 | `09_expose_unevaluable_gate_block_provenance.md` | No | independent |
 
 ```
 ┌─ config-edit batch (one identity move, together) ──┐
@@ -59,6 +60,7 @@ Measurements). Doing it two months from now costs two months.
   5 pre-open score  ─── independent (pre-open purpose, own mechanism)
   7 compact output  ─── independent
   8 error taxonomy  ─── independent
+  9 unevaluable-gate block provenance ─── independent
 ```
 
 **Why ADR-068 goes first.** It deletes `SEMANTIC_ENGINE_VERSION` and

@@ -103,10 +103,16 @@ Config home: `config/accumulation_screener.yaml` + `AccumulationScreenRequest`.
 
 ## 5. Production signal evidence (canonical)
 
-### 5.1 Flow confirmation group (production)
+### 5.1 Flow confirmation group (production, sole basis)
 
 **Builder:** flow confirmation from Accum breakdown (+ optional bandar).  
-**Config weight:** `evidence_groups.flow_confirmation` (default **0.40**). On screen, often the **only** attached group → renormalized base.
+**Config weight:** `evidence_groups.flow_confirmation` (default **0.40**). ADR-067
+retired `setup_quality` as an evidence group (it was present in 0 of 7,764
+accum window-observations), so `flow_confirmation` is now the **sole**
+production group — `assessment.score` **is** the flow group score, with no
+blend and no renormalization. The declared `weight` is retained only because
+it is production-policy material under ADR-059, not because anything divides
+by it.
 
 | Factor | Role | Moves Action? |
 |--------|------|---------------|
@@ -117,17 +123,26 @@ Config home: `config/accumulation_screener.yaml` + `AccumulationScreenRequest`.
 
 RSI/BB are **not** in the production flow group (Accum `bb` sleeve disabled by default).
 
-### 5.2 Setup quality group (production when attached)
+### 5.2 Setup quality group — retired (ADR-067)
 
-**Builder:** setup evidence from named `SetupEvaluation`.  
-**Weight:** **0.60** when attached.  
-**Screen discovery:** usually **not** attached.
+`setup_quality` is no longer a production evidence group. It carried no
+scoring authority (0 of 7,764 window-observations), so retiring it changes no
+value the screen ever produced (golden-gate proven, NON_SEMANTIC). The
+two-name blending code, `config/signal_engine.yaml`'s `setup_quality` weight
+and `evidence_registrations` entry, and the `weak_setup_threshold` /
+`weak_setup_discount` regime-conditioning knobs are all deleted, not merely
+zeroed.
 
-| Match | Score points (group) |
-|-------|----------------------|
-| MATCH | 100 |
-| PARTIAL | 60 |
-| NO_MATCH | 20 |
+`SetupPhaseReadinessEvaluator` no longer receives `SetupEvidence` either
+(§7) — deleted structurally, not defaulted to `None`, so setup evidence has
+no route back to Action through DecisionPolicy phase caps. `SetupEvidence`
+itself, and the named-setup MATCH/PARTIAL/NO_MATCH evaluation, survive
+unchanged for the `--setup` **diagnostic** lens (`MATCH ≠ ENTER`).
+
+A same-named `setup_quality` key survives in
+`signal_engine.alpha_trigger.group_weights` — that is a distinct diagnostic
+Alpha/Trigger projection slot, not the retired evidence group, and carries no
+Action authority.
 
 ### 5.3 Production flags (score penalties)
 
@@ -208,10 +223,15 @@ Example phase inputs (config-driven): distribution bandar score, drawdown / supp
 | No setup family | No readiness cap (flow-only OK) |
 | DISTRIBUTION / FAILED | AVOID path |
 | EXHAUSTION | WATCH |
-| Family known but **no setup evidence** | UNAVAILABLE → **WATCH** (common on screen) |
-| PARTIAL / incomplete | WATCH |
-| NO_MATCH / no entry authority / wrong phase / bad sequence | WATCH / not ENTER |
-| READY | No readiness demotion |
+| Family known, phase not DISTRIBUTION/FAILED/EXHAUSTION | UNAVAILABLE (`"setup match not evaluated"`) → **WATCH** (common on screen; ADR-067 §4 — the setup match is never production-evaluated on this path, so no phase/family fact can raise readiness above it) |
+
+**PARTIAL / incomplete, NO_MATCH / no entry authority / wrong phase / bad
+sequence, and READY are retired outcomes.** ADR-067 §4 deleted
+`SetupPhaseReadinessEvaluator`'s nine evidence-gated branches structurally
+(not left as dead code) once the `SetupEvidence` parameter that gated them was
+removed — they are unreachable by construction now, matching the 2026-08-04
+baseline measurement (0 of 7,764 window-observations were READY or
+INCOMPLETE). Only the four rows above remain reachable on the production path.
 
 Most families only allow enter from **BREAKOUT_CONFIRMATION**.
 
