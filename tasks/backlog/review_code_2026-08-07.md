@@ -15,9 +15,9 @@ refactor.
 Spike / Research followed by separately approved bugfix tasks.
 
 **Priority**
-High. RC-01A and RC-03 are fixed and verified in the current worktree. The
-remaining findings include authority/compatibility ambiguity and unsafe
-browser-profile lock cleanup.
+High. RC-01A and RC-03 are fixed and verified; RC-01B is now vetted into an
+implementation-ready design. The remaining unvetted findings include unsafe
+browser-profile lock cleanup and plan-owned Action authority.
 
 **Reviewed range**
 
@@ -29,20 +29,21 @@ browser-profile lock cleanup.
 
 ## 2. Review Conclusion
 
-The review remains open, but RC-01A and RC-03 are now fixed and vertically
-verified. Three findings remain for one-by-one vetting:
+The review remains open. RC-01A and RC-03 are fixed and vertically verified;
+RC-01B is confirmed and design-vetted. RC-02 and RC-04 remain for one-by-one
+vetting:
 
 | ID | Severity | Status | Finding / result |
 |---|---|---|---|
 | RC-01A | P1 | `FIXED / VERIFIED` | Active v4/nine binds the complete resolved `DecisionPolicyConfig`; the original Action-changing counterexample now forks `compatibility_id` |
-| RC-01B | P1 challenge/corpus | `DESIGN_VET_REQUIRED` | Diagnostic producer semantics have no purpose-specific identity |
+| RC-01B | P1 challenge/corpus | `VETTED / READY_FOR_IMPLEMENTATION` | Purpose-specific schema-14 producer bindings and fail-closed consumer contract selected; code not implemented |
 | RC-02 | P1 | `NEEDS_VETTING` | Stockbit stale-lock cleanup fails open when lock ownership is unparseable |
 | RC-03 | P2 | `FIXED / VERIFIED` | Readiness output and validation now source the same active v4 descriptor |
 | RC-04 | P2 | `NEEDS_VETTING` | Plan swing still creates a plan-owned `TradeSetup.action` when screen has no setup |
 
-Passing tests do not invalidate the three open findings: their affected
-counterexamples remain absent from the current suite or, for RC-04, are
-explicitly preserved as expected behavior.
+Passing tests do not invalidate RC-02 or RC-04. RC-01B characterization tests
+also preserve its current auto-selection, fallback, and unbound-artifact gaps;
+the vetted design is not yet implemented.
 
 ## 3. Verification Evidence
 
@@ -193,7 +194,7 @@ mutated decision           WATCH
 
 ### RC-01B — Diagnostic producer semantics lack their own identity
 
-Vetting status: `CONFIRMED / DESIGN_VET_REQUIRED` on 2026-08-07. Exact task:
+Vetting status: `VETTED / READY_FOR_IMPLEMENTATION` on 2026-08-07. Exact task:
 `tasks/backlog/rc01b_design_diagnostic_producer_identity.md`.
 
 #### Problem statement
@@ -225,30 +226,42 @@ same compatibility_id         True
 - This does not change live Action, because these fields remain diagnostic and
   non-authoritative.
 
-#### Vetted direction, not yet an implementation contract
+#### Vetted implementation contract
 
 1. Do **not** add all diagnostic producers to the canonical Action
    `compatibility_id`; that would recreate configuration-driven over-forking and
    fragment unrelated canonical cohorts.
-2. Inventory every feature consumed by each production-facing `ml-saham`
-   diagnostic panel and bind it to its exact ai-saham producer, typed inputs,
-   formula, provenance, missing state, and persisted path.
-3. Design purpose-specific diagnostic producer contract IDs/digests and an
-   explicit observation transport. `ml-saham` must require the relevant
-   producer identity in addition to the Action cohort before pooling rows.
+2. Add immutable ai-owned `diagnostic_producer_snapshot.v1` rows from the exact
+   typed objects used by the producers, then bind a closed purpose-specific
+   producer set in accumulation observation schema 14.
+3. Use four independent bindings: `mce.screen_display`,
+   `sector.peer_context`, `institutional.accumulation_bag`, and
+   `company_quality.bag`. `ml-saham` must require an explicit Action ID and the
+   relevant explicit diagnostic ID before pooling rows.
 4. Missing, mixed, unknown, or invalid diagnostic bindings fail closed for that
    diagnostic challenge. They do not invalidate unrelated canonical Action
    observations.
-5. Historical observations remain raw/display-only for any diagnostic contract
-   they cannot prove. No synthesized bindings or legacy field fallback.
+5. Historical observations/artifacts remain raw/display-only. Product
+   extraction uses exact schema-14 window-7 paths, observation-bound MCE, and
+   canonical `sc_sector_breadth`; no synthesized binding or legacy fallback.
+6. Diagnostic control scoring must use the verified active v4/nine production
+   policy. The current packaged static fixture is not production authority.
+7. Diagnostic artifact schema 4 binds both identities, producer snapshots,
+   spec content digest, population, source revision, and observation schema;
+   reopen independently verifies them read-only and can never promote.
 
-#### Remaining vet gate
+#### Additional confirmed current-code defects
 
-RC-01B is not implementation-ready until its task completes the field-level
-producer/consumer authority matrix and selects the exact typed transport and
-digest material. That design may classify the later implementation as
-`OBSERVATION_SCHEMA` and `DATA_CONTRACT`/`PANEL_SCHEMA`; this review does not
-pre-commit those choices.
+The completed vet found that direct diagnostic execution auto-selects the
+largest cohort, diagnostic health drops its selected compatibility ID,
+diagnostic control scoring uses a static fixture, hand-maintained spec hashes
+do not cover extractor semantics, artifacts discard producer identity, and
+sector breadth is stored as `sc_sector_breadth` but extracted through mismatched
+legacy names. The implementation task makes each path fail closed.
+
+Settled classification: ai-saham `OBSERVATION_SCHEMA` plus diagnostic
+`EVIDENCE_CONTRACT`; ml-saham `DATA_CONTRACT`, `PANEL_SCHEMA`, and diagnostic
+`ARTIFACT_SCHEMA`. None is Action `CONFIG_MATERIAL`.
 
 ### RC-02 — Stockbit profile-lock cleanup deletes on unproven ownership
 
@@ -454,7 +467,8 @@ Layer plan:
 
 1. RC-01A coordinated v4 cutover: completed and verified. RC-03 re-vet:
    completed and classified fixed.
-2. Execute the RC-01B design vet before any diagnostic identity implementation.
+2. RC-01B design vet: completed. Implement only after explicit approval, then
+   vertically re-vet the coordinated cross-repository cutover.
 3. Vet and implement RC-02 independently; it is infrastructure safety and does
    not depend on corpus identity.
 4. Vet RC-04 as a separate authority-contract task. Resolve missing-state and
@@ -476,9 +490,10 @@ move to done only when:
 - [x] RC-01A includes a completed authority matrix and real canonical producer
       -> persistence/deserialization -> read-only consumer proof; RC-03 is then
       re-vetted against that same source of truth.
-- [ ] RC-01B inventories every cross-repository diagnostic consumer before an
+- [x] RC-01B inventories every cross-repository diagnostic consumer before an
       identity transport is selected.
-- [ ] Semantic-change classifications and corpus blast radius are explicit.
+- [x] Semantic-change classifications and corpus blast radius are explicit for
+      RC-01A, RC-01B, and RC-03; RC-02 and RC-04 remain unvetted.
 - [ ] No proposed fix weakens deterministic-first behavior, risk/signal
       guardrails, clean-break rules, or adapter thinness.
 - [ ] The final implementations pass all required focused/full tests, the
