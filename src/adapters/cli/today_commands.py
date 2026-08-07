@@ -313,8 +313,6 @@ def _build_setup_lens_impact_use_case(
         risk_pct=cfg.swing.risk_pct,
         atr_mult=cfg.swing.atr_mult,
         rr=cfg.swing.rr,
-        regime_universe=cfg.analysis.regime_universe,
-        benchmark=cfg.analysis.benchmark,
         db_path=db_path,
     )
 

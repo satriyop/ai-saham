@@ -8,9 +8,10 @@ from src.adapters.cli.plan_swing_display import (
     print_swing_output,
 )
 from src.application.dto.plan_swing import (
-    SignalAssessmentAvailability,
-    SignalAssessmentStatus,
-    SignalAssessmentUnavailableReason,
+    ScreenJudgmentReference,
+    ScreenJudgmentSource,
+    ScreenJudgmentStatus,
+    ScreenJudgmentUnavailableReason,
     SwingDiagnostics,
     SwingEvidence,
     SwingVerdict,
@@ -163,33 +164,31 @@ def _sector_context_unavailable() -> SectorContextEvidence:
 def _call_print(
     *,
     include_signal_detail: bool = False,
-    include_market_detail: bool = False,
     include_flow_detail: bool = False,
     signal_assessment=None,
     sector_context_evidence=None,
     institutional_accumulation_evidence=None,
 ) -> None:
-    if signal_assessment is None:
-        availability = SignalAssessmentAvailability(
-            status=SignalAssessmentStatus.UNAVAILABLE,
-            unavailable_reason=(SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE),
-        )
-    else:
-        availability = SignalAssessmentAvailability(
-            status=SignalAssessmentStatus.AVAILABLE,
-        )
-
     ctx = SwingOutputDisplayContext(
         ticker="BBCA",
         today=date(2026, 7, 1),
         strategy_name="foreign-accumulation",
         window=7,
         verdict=SwingVerdict(
-            trade_setup=None,
+            judgment_ref=ScreenJudgmentReference(
+                status=ScreenJudgmentStatus.UNAVAILABLE,
+                source=ScreenJudgmentSource.SCREEN_ACCUM,
+                ticker="BBCA",
+                snapshot_date=date(2026, 7, 1),
+                trade_setup=None,
+                unavailable_reason=(
+                    ScreenJudgmentUnavailableReason.NO_SCREEN_RISK_ASSESSMENT
+                    if signal_assessment is not None
+                    else ScreenJudgmentUnavailableReason.NO_SCREEN_SIGNAL_ASSESSMENT
+                ),
+            ),
             signal_assessment=signal_assessment,
-            risk_response=None,
-            market_regime=None,
-            signal_assessment_availability=availability,
+            risk_assessment=None,
         ),
         evidence=SwingEvidence(
             accumulation_candidate=None,
@@ -215,8 +214,6 @@ def _call_print(
             include_sentiment=False,
             include_flow_detail=include_flow_detail,
             include_signal_detail=include_signal_detail,
-            include_risk_detail=False,
-            include_market_detail=include_market_detail,
         ),
     )
     print_swing_output(ctx)

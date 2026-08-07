@@ -9,9 +9,14 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from src.application.dto.plan_swing import ScreenJudgmentReference
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.swing_trade_plan import (
     SWING_TRADE_PLAN_HORIZON,
+    SwingPlanJudgmentReference,
+    SwingPlanJudgmentSource,
+    SwingPlanJudgmentStatus,
+    SwingPlanJudgmentUnavailableReason,
     SwingTradePlan,
     compute_plan_id,
 )
@@ -21,7 +26,7 @@ def build_swing_trade_plan(
     *,
     ticker: str,
     as_of,
-    trade_setup: Any | None,
+    judgment_ref: ScreenJudgmentReference,
     setup_eval: Any | None,
     setup_name: str | None,
     sizing: Any | None,
@@ -31,8 +36,6 @@ def build_swing_trade_plan(
     take_profit_pct: Decimal | None,
     stop_loss_pct: Decimal | None,
     max_hold_days: int | None,
-    with_market_context: bool,
-    with_technical_gate: bool,
     latest_close: Decimal | None = None,
     created_at: datetime | None = None,
 ) -> SwingTradePlan:
@@ -47,17 +50,19 @@ def build_swing_trade_plan(
     if entry is None and latest_close is not None:
         entry = latest_close
 
-    action = None
-    action_source = "unavailable"
-    if trade_setup is not None:
-        action_obj = getattr(trade_setup, "action", None)
-        action = getattr(action_obj, "value", action_obj)
-        action = str(action) if action is not None else None
-        # Default path inherits screen (S3); explicit flags recompute.
-        if with_market_context or with_technical_gate:
-            action_source = "plan_recomputed"
-        else:
-            action_source = "screen_judgment"
+    trade_setup = judgment_ref.trade_setup
+    artifact_judgment = SwingPlanJudgmentReference(
+        status=SwingPlanJudgmentStatus(judgment_ref.status.value),
+        source=SwingPlanJudgmentSource(judgment_ref.source.value),
+        ticker=judgment_ref.ticker,
+        snapshot_date=judgment_ref.snapshot_date,
+        action=trade_setup.action if trade_setup is not None else None,
+        unavailable_reason=(
+            SwingPlanJudgmentUnavailableReason(judgment_ref.unavailable_reason.value)
+            if judgment_ref.unavailable_reason is not None
+            else None
+        ),
+    )
 
     setup_match = None
     if setup_eval is not None:
@@ -78,8 +83,7 @@ def build_swing_trade_plan(
         "ticker": ticker.upper(),
         "as_of": as_of.isoformat() if hasattr(as_of, "isoformat") else str(as_of),
         "horizon": SWING_TRADE_PLAN_HORIZON,
-        "action": action,
-        "action_source": action_source,
+        "judgment_ref": artifact_judgment.to_dict(),
         "entry_price": str(entry) if entry is not None else None,
         "stop_price": str(stop) if stop is not None else None,
         "target_price": str(target) if target is not None else None,
@@ -89,8 +93,6 @@ def build_swing_trade_plan(
         "setup_name": setup_name,
         "setup_match": setup_match,
         "max_hold_days": max_hold_days,
-        "with_market_context": with_market_context,
-        "with_technical_gate": with_technical_gate,
         "created_at": created.isoformat(),
         "incomplete_reason": incomplete_reason,
     }
@@ -100,8 +102,7 @@ def build_swing_trade_plan(
         ticker=ticker.upper(),
         as_of=as_of if hasattr(as_of, "year") else created.date(),
         horizon=SWING_TRADE_PLAN_HORIZON,
-        action=action,
-        action_source=action_source,
+        judgment_ref=artifact_judgment,
         entry_price=Decimal(str(entry)) if entry is not None else None,
         stop_price=Decimal(str(stop)) if stop is not None else None,
         target_price=Decimal(str(target)) if target is not None else None,
@@ -114,8 +115,6 @@ def build_swing_trade_plan(
         max_hold_days=max_hold_days,
         stop_loss_pct=stop_loss_pct,
         take_profit_pct=take_profit_pct,
-        with_market_context=with_market_context,
-        with_technical_gate=with_technical_gate,
         created_at=created,
         plan_id=plan_id,
         incomplete_reason=incomplete_reason,

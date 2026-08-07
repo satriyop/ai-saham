@@ -1,5 +1,6 @@
 """Tests for the trade accumulation CLI commands."""
 
+import json
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -16,6 +17,58 @@ from src.application.use_case.log_swing_candidate_use_case import (
 )
 
 runner = CliRunner()
+
+
+def _write_plan(
+    tmp_path,
+    *,
+    status="AVAILABLE",
+    action="WATCH",
+    unavailable_reason=None,
+    lots=10,
+):
+    path = tmp_path / "plan.json"
+    path.write_text(
+        json.dumps(
+            {
+                "artifact_type": "swing_trade_plan",
+                "schema_version": 2,
+                "plan_id": "test-plan",
+                "ticker": "BBRI",
+                "as_of": "2026-08-07",
+                "horizon": "swing",
+                "judgment_ref": {
+                    "status": status,
+                    "source": "screen_accum",
+                    "ticker": "BBRI",
+                    "snapshot_date": "2026-08-07",
+                    "action": action,
+                    "unavailable_reason": unavailable_reason,
+                },
+                "geometry": {
+                    "entry_price": "5000",
+                    "stop_price": "4700",
+                    "target_price": "5600",
+                    "lots": lots,
+                    "capital": "10000000",
+                    "risk_pct": "1",
+                    "risk_amount": "100000",
+                    "stop_loss_pct": "6",
+                    "take_profit_pct": "12",
+                    "max_hold_days": 10,
+                },
+                "setup_lens": {"setup_name": "foreign-bounce", "setup_match": "MATCH"},
+                "provenance": {
+                    "created_at": "2026-08-07T10:00:00+07:00",
+                    "incomplete_reason": None if lots else "sizing_unavailable",
+                    "geometry_complete": bool(lots),
+                    "handoff_ready": bool(lots) and status == "AVAILABLE",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
 
 
 class FakeWorkflow:
@@ -119,6 +172,55 @@ def test_cli_calls_run_accumulation_log_command_from_trade_accum(
     assert result.exit_code == 0
     assert len(router_calls) == 1
     assert router_calls[0][1]["ticker"] == "bbri"
+
+
+def test_from_plan_rejects_unavailable_judgment_with_complete_geometry(tmp_path):
+    plan = _write_plan(
+        tmp_path,
+        status="UNAVAILABLE",
+        action=None,
+        unavailable_reason="no_screen_trade_setup",
+    )
+    result = runner.invoke(
+        app,
+        [
+            "trade",
+            "accum",
+            "log",
+            "--ticker",
+            "BBRI",
+            "--from-plan",
+            str(plan),
+            "--journal",
+            str(tmp_path / "journal.csv"),
+            "--db",
+            str(tmp_path / "test.db"),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "screen judgment unavailable" in result.stderr
+
+
+def test_from_plan_rejects_available_judgment_with_incomplete_geometry(tmp_path):
+    plan = _write_plan(tmp_path, lots=None)
+    result = runner.invoke(
+        app,
+        [
+            "trade",
+            "accum",
+            "log",
+            "--ticker",
+            "BBRI",
+            "--from-plan",
+            str(plan),
+            "--journal",
+            str(tmp_path / "journal.csv"),
+            "--db",
+            str(tmp_path / "test.db"),
+        ],
+    )
+    assert result.exit_code == 1
+    assert "plan geometry incomplete" in result.stderr
 
 
 def test_cli_renders_duplicate_message(monkeypatch, base_response, base_policy):

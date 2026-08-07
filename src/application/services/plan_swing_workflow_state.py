@@ -18,10 +18,9 @@ if TYPE_CHECKING:
         AccumulationCandidate,
         AccumulationCandidateEvaluationResult,
     )
-    from src.application.dto.assess_signal import AssessSignalResponse
     from src.application.dto.built_evidence import BuiltFlowEvidence, BuiltSetupEvidence
     from src.application.dto.plan_swing import (
-        SignalAssessmentAvailability,
+        ScreenJudgmentReference,
         SwingDiagnostics,
         SwingEvidence,
         SwingVerdict,
@@ -36,9 +35,6 @@ if TYPE_CHECKING:
     from src.application.use_case.assess_source_availability_use_case import (
         AssessSourceAvailabilityUseCase,
     )
-    from src.domain.rules.risk_gate import GateContext
-    from src.domain.value_objects.market_context import MarketContext
-    from src.domain.value_objects.trade_setup import TradeSetup
 
 
 @dataclass
@@ -58,11 +54,7 @@ class PlanSwingWorkflowState:
     # `accumulation_candidate` property below.
     accumulation_evaluation: "AccumulationCandidateEvaluationResult | None" = None
     signal_evidence_execution_context: "SignalEvidenceExecutionContext | None" = None
-    market_regime: "MarketContext | None" = None
-    gate_ctx: "GateContext | None" = None
-    risk_response: Any | None = None
-    signal_assessment: "AssessSignalResponse | None" = None
-    signal_assessment_availability: "SignalAssessmentAvailability | None" = None
+    judgment_ref: "ScreenJudgmentReference | None" = None
     atr_value: Decimal | None = None
     setup_eval: Any | None = None
     broker_quality_note: Any | None = None
@@ -72,10 +64,6 @@ class PlanSwingWorkflowState:
     backtest_result: Any | None = None
     sentiment_response: Any | None = None
     sentiment_warning: str | None = None
-    trade_setup: "TradeSetup | None" = None
-    market_context_signal_preview: "AssessSignalResponse | None" = None
-    market_context_risk_preview: Any | None = None
-    market_context_trade_setup_preview: "TradeSetup | None" = None
     swing_policy: Any = None
     regime_label: str | None = None
     take_profit_pct: Decimal | None = None

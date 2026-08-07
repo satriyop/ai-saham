@@ -7,6 +7,12 @@ from types import SimpleNamespace
 
 from src.adapters.cli import plan_swing_commands as swing_cli
 from src.adapters.cli.main import app
+from src.application.dto.plan_swing import (
+    ScreenJudgmentReference,
+    ScreenJudgmentSource,
+    ScreenJudgmentStatus,
+    ScreenJudgmentUnavailableReason,
+)
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
@@ -30,6 +36,20 @@ def _fake_workflow_response(*, request, effective_session=None):
         def to_dict(self):
             return {"as_of_date": "2026-06-28", "warnings": []}
 
+    judgment_ref = ScreenJudgmentReference(
+        status=ScreenJudgmentStatus.UNAVAILABLE,
+        source=ScreenJudgmentSource.SCREEN_ACCUM,
+        ticker=request.ticker,
+        snapshot_date=request.today,
+        trade_setup=None,
+        unavailable_reason=ScreenJudgmentUnavailableReason.NO_SCREEN_CANDIDATE,
+    )
+    verdict = SimpleNamespace(
+        judgment_ref=judgment_ref,
+        signal_assessment=None,
+        risk_assessment=None,
+        trade_setup=None,
+    )
     response = SimpleNamespace(
         ticker=request.ticker,
         today=request.today,
@@ -40,7 +60,6 @@ def _fake_workflow_response(*, request, effective_session=None):
         candles=[],
         latest_close=Decimal("0"),
         accumulation_candidate=None,
-        risk_response=None,
         atr_value=None,
         sizing=None,
         setup_eval=None,
@@ -49,24 +68,13 @@ def _fake_workflow_response(*, request, effective_session=None):
         backtest_result=None,
         sentiment_response=None,
         sentiment_warning=None,
-        market_regime=None,
         take_profit_pct=Decimal("5"),
         stop_loss_pct=Decimal("5"),
         regime_label=None,
+        judgment_ref=judgment_ref,
         signal_assessment=None,
         trade_setup=None,
-        market_context_signal_preview=None,
-        market_context_risk_preview=None,
-        market_context_trade_setup_preview=None,
-        verdict=SimpleNamespace(
-            risk_response=None,
-            market_regime=None,
-            signal_assessment=None,
-            trade_setup=None,
-            market_context_signal_preview=None,
-            market_context_risk_preview=None,
-            market_context_trade_setup_preview=None,
-        ),
+        verdict=verdict,
         evidence=SimpleNamespace(
             accumulation_candidate=None,
             setup_eval=None,
@@ -88,7 +96,7 @@ def _fake_workflow_response(*, request, effective_session=None):
         effective_session=session,
     )
     response.to_dict = lambda **kwargs: {
-        "schema_version": 1,
+        "schema_version": 2,
         "artifact_type": "plan_swing",
         "effective_session": session.to_dict(),
     }
@@ -195,6 +203,14 @@ def test_swing_display_path_prefers_grouped_response_contracts(monkeypatch):
 
     class FakeWorkflow:
         def execute(self, request):
+            judgment_ref = ScreenJudgmentReference(
+                status=ScreenJudgmentStatus.UNAVAILABLE,
+                source=ScreenJudgmentSource.SCREEN_ACCUM,
+                ticker=request.ticker,
+                snapshot_date=request.today,
+                trade_setup=None,
+                unavailable_reason=ScreenJudgmentUnavailableReason.NO_SCREEN_CANDIDATE,
+            )
             return SimpleNamespace(
                 ticker=request.ticker,
                 today=request.today,
@@ -205,7 +221,6 @@ def test_swing_display_path_prefers_grouped_response_contracts(monkeypatch):
                 candles=[],
                 latest_close=Decimal("0"),
                 accumulation_candidate=flat_accum,
-                risk_response="flat-risk",
                 atr_value=None,
                 sizing=None,
                 setup_eval=None,
@@ -214,23 +229,17 @@ def test_swing_display_path_prefers_grouped_response_contracts(monkeypatch):
                 backtest_result=None,
                 sentiment_response=None,
                 sentiment_warning=None,
-                market_regime="flat-market",
                 take_profit_pct=Decimal("5"),
                 stop_loss_pct=Decimal("5"),
                 regime_label=None,
-                signal_assessment="flat-signal",
-                trade_setup="flat-setup",
-                market_context_signal_preview=None,
-                market_context_risk_preview=None,
-                market_context_trade_setup_preview=None,
+                judgment_ref=judgment_ref,
+                signal_assessment="grouped-signal",
+                trade_setup=None,
                 verdict=SimpleNamespace(
-                    risk_response="grouped-risk",
-                    market_regime="grouped-market",
+                    judgment_ref=judgment_ref,
                     signal_assessment="grouped-signal",
-                    trade_setup="grouped-setup",
-                    market_context_signal_preview=None,
-                    market_context_risk_preview=None,
-                    market_context_trade_setup_preview=None,
+                    risk_assessment="grouped-risk",
+                    trade_setup=None,
                 ),
                 evidence=SimpleNamespace(
                     accumulation_candidate=grouped_accum,
@@ -273,7 +282,6 @@ def test_swing_display_path_prefers_grouped_response_contracts(monkeypatch):
     ctx = captured["ctx"]
     assert ctx.diagnostics.data_freshness is grouped_data
     assert ctx.evidence.accumulation_candidate is grouped_accum
-    assert ctx.verdict.risk_response == "grouped-risk"
-    assert ctx.verdict.market_regime == "grouped-market"
+    assert ctx.verdict.risk_assessment == "grouped-risk"
     assert ctx.verdict.signal_assessment == "grouped-signal"
-    assert ctx.verdict.trade_setup == "grouped-setup"
+    assert ctx.verdict.trade_setup is None

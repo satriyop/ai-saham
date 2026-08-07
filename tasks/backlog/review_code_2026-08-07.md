@@ -24,6 +24,8 @@ browser-profile lock cleanup and plan-owned Action authority.
 - Committed baseline: `origin/main` at `05af50dd`.
 - Reviewed HEAD: `619b6a4c` (`17` commits ahead).
 - Diff size: `117 files changed, 5031 insertions, 4500 deletions`.
+- RC-04 re-vet HEAD: `3c3e3c0193feea77d0d600d6fcef15368ab46c68`
+  (`19` commits ahead); unrelated dirty changes were preserved.
 - Current code is the source of truth. Documentation was used only to identify
   intended invariants and then checked against executable paths.
 
@@ -39,11 +41,11 @@ vetting:
 | RC-01B | P1 challenge/corpus | `VETTED / READY_FOR_IMPLEMENTATION` | Purpose-specific schema-14 producer bindings and fail-closed consumer contract selected; code not implemented |
 | RC-02 | P1 | `NEEDS_VETTING` | Stockbit stale-lock cleanup fails open when lock ownership is unparseable |
 | RC-03 | P2 | `FIXED / VERIFIED` | Readiness output and validation now source the same active v4 descriptor |
-| RC-04 | P2 | `NEEDS_VETTING` | Plan swing still creates a plan-owned `TradeSetup.action` when screen has no setup |
+| RC-04 | P2 | `FIXED / VERIFIED` | Plan consumes the exact typed screen judgment; v2 plan artifacts separate geometry from handoff readiness and fail closed |
 
-Passing tests do not invalidate RC-02 or RC-04. RC-01B characterization tests
-also preserve its current auto-selection, fallback, and unbound-artifact gaps;
-the vetted design is not yet implemented.
+Passing tests do not invalidate RC-02. RC-04 is fixed and verified by the
+implementation evidence below. RC-01B characterization tests preserve its
+current identity gaps; its vetted design is not implemented yet.
 
 ## 3. Verification Evidence
 
@@ -359,7 +361,38 @@ historical and cannot satisfy active readiness.
 
 ### RC-04 — Plan swing retains a plan-owned Action fallback
 
-#### Problem statement
+Status: `FIXED / VERIFIED` on 2026-08-07. Exact task:
+`tasks/backlog/rc04_remove_plan_owned_action_fallback.md`.
+
+#### Implemented result
+
+The plan boundary now resolves one typed `ScreenJudgmentReference`. Available
+judgment retains the exact screen `TradeSetup`; unavailable judgment carries no
+Action and one closed reason. The plan-owned risk/TradeSetup fallback, MCE and
+technical preview switches, dependencies, state, and display panels are gone.
+
+Plan JSON and `SwingTradePlan` are schema 2. Every completed workflow saves the
+typed latest artifact, while `handoff_ready` requires both complete geometry
+and available screen judgment. Schema 1, wrapped/flat legacy payloads,
+malformed identity/enums, unavailable judgment, and incomplete geometry fail
+closed before paper handoff.
+
+Final verification:
+
+```text
+.venv/bin/python -m pytest tests -q -k 'plan_swing or swing_trade_plan'
+212 passed, 6437 deselected in 8.04s
+.venv/bin/python -m pytest -q --basetemp=/tmp/ai-saham-rc04-20260807-1
+6624 passed, 41 skipped in 215.69s
+.venv/bin/ruff check src/ tests/
+All checks passed!
+.venv/bin/ruff format --check src/ tests/
+1763 files already formatted
+git diff --check
+passed
+```
+
+#### Pre-fix problem statement
 
 `resolve_authoritative_trade_setup()` returns the screen setup when present,
 but otherwise returns `plan_recomputed`
@@ -383,30 +416,43 @@ compose a setup. Tests currently preserve the fallback.
   second workflow had different data availability.
 - Operator copy and ADR claims overstate the clean break.
 
-#### Proposed fix — requires further vetting
+#### Vetted fix decision
 
-Lock the missing-screen-verdict contract before editing. Recommended direction:
+1. Introduce one closed screen-judgment reference. `AVAILABLE` preserves the
+   exact screen `TradeSetup`; `UNAVAILABLE` carries no setup/Action and one of
+   four observable reasons: no candidate, no screen signal, no screen risk, or
+   no screen setup. Ticker/date or internal-consistency conflicts raise a typed
+   invariant error rather than being repaired or downgraded.
+2. Delete the complete plan-owned Action seam: separate risk assessment,
+   `AssessTradeSetupUseCase`, MCE/technical Action previews, dormant request
+   switches, and their dependencies/displays. Keep canonical Signal/Risk wiring
+   inside the embedded screen builder only.
+3. Bump plan JSON and `SwingTradePlan` to schema 2. Persist the typed screen
+   reference; separate geometry completeness from handoff readiness; accept
+   `trade accum --from-plan` only when both pass.
+4. Treat schema-1 plan files as untouched historical/display-only artifacts.
+   Do not migrate, translate, alias, or reinterpret them. Rerun screen then plan
+   to create a v2 artifact.
+5. Classify this as `SEMANTIC_ENGINE` for the plan surface and
+   `ARTIFACT_SCHEMA` for the two JSON contracts. It is not `CONFIG_MATERIAL`, an
+   observation-schema change, or a corpus change; no compatibility-ID fork or
+   corpus quarantine is required.
 
-1. When no screen-authored `TradeSetup` exists, plan returns a typed
-   unavailable/blocked judgment state and no authority-bearing `TradeSetup`.
-2. If plan still needs structure such as entry, stop, target, or sizing, move
-   those fields into a structure DTO that cannot carry `Action`; do not use an
-   authority-bearing `TradeSetup` as a convenience transport.
-3. Direct the operator back to the canonical screen/judge workflow to obtain a
-   verdict. Do not synthesize WATCH, ENTER, or any other replacement Action.
-4. Preserve the exact screen `TradeSetup` object/provenance when present; plan
-   must not reconstruct an equal-looking copy or make a second judgment read.
+#### Vet evidence and consumer inventory
 
-#### Questions that must be answered before implementation
-
-- What exact typed state represents “screen did not produce a verdict” in
-  workflow state, JSON, plan files, and CLI/TUI output?
-- Which downstream consumers require structural risk fields, and which
-  currently assume `TradeSetup.action` always exists?
-- Does removing the fallback require a `SEMANTIC_ENGINE` compatibility fork or
-  an authority-contract-only clean break? This must be resolved before coding.
-- Must previously persisted plan artifacts be quarantined or merely treated as
-  historical display-only records?
+- CLI, TUI, and daily setup lens all construct `PlanSwingWorkflowRequest`; the
+  two user surfaces hard-code the dormant authority switches false.
+- Plan composition still injects RiskEngine, gates, MCE, and SignalEngine after
+  the embedded screen builder has already run the canonical screen path.
+- `SwingVerdict.risk_response` is plan-produced while its `trade_setup` can be
+  screen-produced, so the grouped verdict can mix incompatible provenance.
+- `SwingTradePlan.action_source` is inferred from flags and `is_complete` checks
+  geometry only; `trade accum --from-plan` trusts that property.
+- The structure/sizing path does not consume the separate plan risk response.
+  Removing it does not remove geometry production.
+- Focused current suites passed (`60 passed in 0.34s`), including assertions
+  that preserve the fallback. The implementation task names the assertions to
+  invert and the new vertical/negative/parity gates.
 
 #### Required negative and vertical tests
 

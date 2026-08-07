@@ -40,14 +40,9 @@ def _request(today: date) -> PlanSwingWorkflowRequest:
         include_sentiment=False,
         include_flow_detail=False,
         include_signal_detail=False,
-        include_risk_detail=False,
-        include_market_detail=False,
         sentiment_verbose=False,
         auto_refresh=False,
         force_refresh=False,
-        with_market_context=False,
-        regime_universe="lq45",
-        benchmark="COMPOSITE",
         db_path=Path("/tmp/does-not-exist.db"),
     )
 
@@ -76,6 +71,7 @@ def _eval_result(
     """Minimal stand-in for AccumulationCandidateEvaluationResult."""
     return SimpleNamespace(
         candidate=SimpleNamespace(ticker="BBRI"),
+        analysis_date=date(2026, 7, 17),
         consumed_candles=(),
         consumed_broker_summaries=(
             (SimpleNamespace(date=broker_summary_date),) if broker_summary_date is not None else ()
@@ -111,7 +107,6 @@ def _collector_for_availability_tests(
         build_flow_detail=lambda **kwargs: None,
         build_broker_detail=lambda **kwargs: None,
         build_accumulation_candidate_evaluation=lambda **kwargs: accumulation_evaluation,
-        evaluate_market_context=None,
         session_resolver=SimpleNamespace(
             resolve=lambda **kwargs: _fake_effective_session(today, latest_completed_session)
         ),
@@ -355,7 +350,6 @@ def test_accumulation_builder_receives_request_today():
         build_flow_detail=lambda **kwargs: None,
         build_broker_detail=lambda **kwargs: None,
         build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
-        evaluate_market_context=None,
         session_resolver=SimpleNamespace(resolve=lambda **kwargs: None),
         signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
             trading_session_calendar_loader=None
@@ -396,7 +390,6 @@ def test_collector_stores_exact_context_object_from_builder():
         build_flow_detail=lambda **kwargs: None,
         build_broker_detail=lambda **kwargs: None,
         build_accumulation_candidate_evaluation=recording_accumulation_candidate_builder,
-        evaluate_market_context=None,
         session_resolver=SimpleNamespace(resolve=lambda **kwargs: fake_session),
         signal_evidence_context_builder=builder_spy,
     )
@@ -432,7 +425,6 @@ def _collector_with_accumulation_callback(
         build_flow_detail=lambda **kwargs: None,
         build_broker_detail=lambda **kwargs: None,
         build_accumulation_candidate_evaluation=build_accumulation_candidate_evaluation,
-        evaluate_market_context=None,
         session_resolver=SimpleNamespace(resolve=lambda **kwargs: fake_session),
         signal_evidence_context_builder=SignalEvidenceExecutionContextBuilder(
             trading_session_calendar_loader=None

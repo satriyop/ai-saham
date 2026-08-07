@@ -13,7 +13,7 @@ Verb dictionary (ADR-050): first token is the behavior contract.
 |--------|------|---------------------|---------------------|
 | **`screen`** | Live discovery **and** single-ticker judgment (`screen accum`; ADR-054) | **No** | Action on single-ticker judgment; provisional on board |
 | **`inspect`** | Live single-subject diagnostic capability lens (ADR-057) | **No** | **No** |
-| **`plan`** | Trade structure for a chosen candidate (`plan swing`; ADR-054) | **No** | inherits screen Action by default |
+| **`plan`** | Trade structure for a chosen candidate (`plan swing`; ADR-054) | **No** | references the exact screen Action or reports unavailable |
 | **`assess`** | Frozen-plan confirmation (`assess pre-open`) | **No** | relative to frozen plan |
 | **`research`** | Learning corpus (capture/labels/evaluate/…) | **Yes** | no |
 | **`backtest`** | Offline historical performance sim | **No** | no live action |
@@ -763,8 +763,12 @@ evidence belongs on `screen accum TICKER --full` / flow / sentiment / setup.
 Output leads with a **Structure** panel (entry/stop/target/lots when
 `--capital` is set). Compact context strip only.
 
-Complete geometry writes `swing_trade_plan` under `journals/plans/` for
-`saham trade accum log --ticker TICKER --from-plan`.
+Every completed workflow writes a schema-2 `swing_trade_plan` under
+`journals/plans/`, including a typed unavailable screen-judgment reason when
+needed. `saham trade accum log --ticker TICKER --from-plan` is enabled only
+when geometry is complete and the referenced screen judgment is `AVAILABLE`.
+Schema-1 files remain historical/display-only and are rejected; rerun
+`screen accum TICKER`, then `plan swing TICKER`, to create schema 2.
 
 ```
 saham screen accum BBRI                         # judgment first

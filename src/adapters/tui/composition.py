@@ -1003,16 +1003,10 @@ class _LocalPlanStructureRunner:
                     include_sentiment=False,
                     include_flow_detail=False,
                     include_signal_detail=False,
-                    include_risk_detail=False,
-                    include_market_detail=False,
                     sentiment_verbose=False,
                     auto_refresh=False,
                     force_refresh=False,
-                    with_market_context=False,
-                    regime_universe=str(self._config.analysis.regime_universe or "lq45"),
-                    benchmark=str(self._config.analysis.benchmark or "IHSG"),
                     db_path=PathType(self._db_path),
-                    with_technical_gate=False,
                 )
             )
         except PlanSwingDataUnavailable:
@@ -1038,7 +1032,7 @@ class _LocalPlanStructureRunner:
         plan = build_swing_trade_plan(
             ticker=ticker_u,
             as_of=response.today,
-            trade_setup=trade_setup,
+            judgment_ref=response.judgment_ref,
             setup_eval=response.setup_eval,
             setup_name=None,
             sizing=response.sizing,
@@ -1048,15 +1042,11 @@ class _LocalPlanStructureRunner:
             take_profit_pct=response.take_profit_pct,
             stop_loss_pct=response.stop_loss_pct,
             max_hold_days=cmd_cfg.swing_backtest_config.max_hold_days,
-            with_market_context=False,
-            with_technical_gate=False,
             latest_close=response.latest_close,
         )
-        plan_id_short = ""
-        if plan.is_complete:
-            plans_dir = plans_dir_from_journal_path(PathType(self._config.storage.accum_journal))
-            save_swing_trade_plan(plan, plans_dir)
-            plan_id_short = plan.plan_id[:8]
+        plans_dir = plans_dir_from_journal_path(PathType(self._config.storage.accum_journal))
+        save_swing_trade_plan(plan, plans_dir)
+        plan_id_short = plan.plan_id[:8]
 
         chosen = response.setup_sizing or response.sizing
         entry_s = stop_s = target_s = lots_s = "—"
@@ -1073,6 +1063,13 @@ class _LocalPlanStructureRunner:
                 + (f" · plan {plan_id_short}" if plan_id_short else "")
                 + " · no order"
             )
+            if not plan.judgment_available:
+                incomplete = (
+                    f"Screen judgment unavailable; run saham screen accum {ticker_u}, "
+                    f"then rerun saham plan swing {ticker_u}."
+                )
+            elif not plan.handoff_ready:
+                incomplete = plan.incomplete_reason or "plan geometry incomplete"
         elif capital is None:
             incomplete = "no capital · set swing.capital in user.yaml or CLI --capital"
             summary = f"structure {action} · {incomplete} · no order"
@@ -1175,10 +1172,16 @@ class _LocalPaperLogFromPlanRunner:
                 ticker_u,
                 f"plan ticker {plan.ticker} does not match focus {ticker_u}",
             )
-        if not plan.is_complete:
+        if not plan.geometry_complete:
             return refuse_paper_log(
                 ticker_u,
                 plan.incomplete_reason or "plan geometry incomplete · need entry/stop/target/lots",
+            )
+        if not plan.handoff_ready:
+            return refuse_paper_log(
+                ticker_u,
+                f"Screen judgment unavailable; run saham screen accum {ticker_u}, "
+                f"then rerun saham plan swing {ticker_u}.",
             )
 
         setup = plan.setup_name or FOREIGN_BOUNCE_SETUP

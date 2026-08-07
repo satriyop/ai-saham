@@ -22,9 +22,7 @@ from src.adapters.composition.plan_swing_candidate_builder import (
 from src.adapters.composition.plan_swing_dependency_factory import (
     create_broker_detail_builder,
     create_corporate_action_risk_use_case,
-    create_execution_gates,
     create_setup_evaluator,
-    create_structural_gates,
     create_workflow_registry,
 )
 from src.adapters.composition.screen_accum_workflow_factory import (
@@ -55,7 +53,6 @@ from src.application.use_case.plan_swing_workflow_use_case import PlanSwingWorkf
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
 )
-from src.infrastructure.config.market_context_factory import evaluate_market_context
 from src.infrastructure.config.plan_swing_config import PlanSwingConfig
 from src.infrastructure.persistence.ihsg_trading_session_calendar_provider import (
     IHSGTradingSessionCalendarProvider,
@@ -127,11 +124,7 @@ def create_plan_swing_workflow(
         load_swing_policy_config=lambda: swing_policy,
         resolve_setup_targets=resolve_setup_targets,
         rules_loader=deps.rules_loader_factory(),
-        evaluate_market_context=evaluate_market_context,
-        structural_gates=create_structural_gates(),
-        execution_gates=create_execution_gates(),
         signal_engine=signal_engine,
-        risk_engine=deps.create_risk_engine(),
         candidate_observations_repository=deps.learning_artifact_repository,
         setup_phase_history_repository=SQLiteSetupPhaseLedgerRepository(db_path),
         accum_score_policy=accumulation_config.accum_score_policy,

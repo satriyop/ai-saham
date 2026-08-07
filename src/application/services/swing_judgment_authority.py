@@ -1,43 +1,105 @@
-"""Authoritative TradeSetup Action for plan vs screen (ADR-054 S3, ADR-067 §3).
+"""Resolve the screen-owned judgment consumed by ``saham plan swing``.
 
-Screen-composed ``AccumulationCandidate.trade_setup`` is the operator judgment
-owner. Plan never recomputes Action — it carries the screen verdict forward
-verbatim, and only composes a TradeSetup of its own when screen produced none
-(a ticker that was never screened has no verdict to inherit).
-
-Layer: Application
-Pure: no IO, no engines.
+Layer: Application. Pure: no IO, engines, reconstruction, or fallback.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from src.application.dto.accumulation_screen import AccumulationCandidateEvaluationResult
+from src.application.dto.plan_swing import (
+    ScreenJudgmentReference,
+    ScreenJudgmentSource,
+    ScreenJudgmentStatus,
+    ScreenJudgmentUnavailableReason,
+)
 
-if TYPE_CHECKING:
-    from src.domain.value_objects.trade_setup import TradeSetup
 
-SCREEN_JUDGMENT_WARNING = "Action from screen judgment (ADR-054 S3)"
+class ScreenJudgmentInvariantError(ValueError):
+    """Raised when a present screen judgment has conflicting provenance."""
 
 
-def resolve_authoritative_trade_setup(
-    candidate: Any | None,
+def resolve_screen_judgment(
+    evaluation: AccumulationCandidateEvaluationResult | None,
     *,
-    plan_recomputed: "TradeSetup | None",
-) -> tuple["TradeSetup | None", str | None]:
-    """Pick authoritative TradeSetup for plan verdict.
+    expected_ticker: str,
+    expected_snapshot_date,
+) -> ScreenJudgmentReference:
+    """Return the exact screen judgment or a typed observable missing state."""
 
-    Returns ``(setup, optional_warning)``.
+    ticker = expected_ticker.strip().upper()
+    if not ticker:
+        raise ScreenJudgmentInvariantError("expected ticker is required")
 
-    Rules:
-    1. Screen ``candidate.trade_setup`` present → screen, always.
-    2. No screen setup → fall back to ``plan_recomputed``.
+    if evaluation is None:
+        return _unavailable(
+            ticker,
+            expected_snapshot_date,
+            ScreenJudgmentUnavailableReason.NO_SCREEN_CANDIDATE,
+        )
 
-    There is deliberately no flag that lets plan override rule 1: ADR-067 §3
-    retired plan-side judgment entirely.
-    """
-    screen_setup = getattr(candidate, "trade_setup", None) if candidate is not None else None
+    candidate = evaluation.candidate
+    if evaluation.analysis_date != expected_snapshot_date:
+        raise ScreenJudgmentInvariantError(
+            "screen evaluation date does not match the plan request: "
+            f"{evaluation.analysis_date!s} != {expected_snapshot_date!s}"
+        )
+    if candidate.ticker != ticker:
+        raise ScreenJudgmentInvariantError(
+            f"screen candidate ticker does not match the plan request: "
+            f"{candidate.ticker!r} != {ticker!r}"
+        )
 
-    if screen_setup is not None:
-        return screen_setup, SCREEN_JUDGMENT_WARNING
+    trade_setup = candidate.trade_setup
+    signal_assessment = candidate.signal_assessment
+    risk_assessment = candidate.risk_assessment
 
-    return plan_recomputed, None
+    if trade_setup is None:
+        if signal_assessment is None:
+            reason = ScreenJudgmentUnavailableReason.NO_SCREEN_SIGNAL_ASSESSMENT
+        elif risk_assessment is None:
+            reason = ScreenJudgmentUnavailableReason.NO_SCREEN_RISK_ASSESSMENT
+        else:
+            reason = ScreenJudgmentUnavailableReason.NO_SCREEN_TRADE_SETUP
+        return _unavailable(ticker, evaluation.analysis_date, reason)
+
+    if signal_assessment is None:
+        raise ScreenJudgmentInvariantError(
+            "screen trade_setup is present without screen signal_assessment"
+        )
+    if risk_assessment is None:
+        raise ScreenJudgmentInvariantError(
+            "screen trade_setup is present without screen risk_assessment"
+        )
+    if trade_setup.ticker != ticker:
+        raise ScreenJudgmentInvariantError(
+            f"screen trade_setup ticker does not match the plan request: "
+            f"{trade_setup.ticker!r} != {ticker!r}"
+        )
+    if trade_setup.snapshot_date != evaluation.analysis_date:
+        raise ScreenJudgmentInvariantError(
+            "screen trade_setup date does not match the screen evaluation: "
+            f"{trade_setup.snapshot_date!s} != {evaluation.analysis_date!s}"
+        )
+
+    return ScreenJudgmentReference(
+        status=ScreenJudgmentStatus.AVAILABLE,
+        source=ScreenJudgmentSource.SCREEN_ACCUM,
+        ticker=ticker,
+        snapshot_date=evaluation.analysis_date,
+        trade_setup=trade_setup,
+    )
+
+
+def _unavailable(
+    ticker: str,
+    snapshot_date,
+    reason: ScreenJudgmentUnavailableReason,
+) -> ScreenJudgmentReference:
+    return ScreenJudgmentReference(
+        status=ScreenJudgmentStatus.UNAVAILABLE,
+        source=ScreenJudgmentSource.SCREEN_ACCUM,
+        ticker=ticker,
+        snapshot_date=snapshot_date,
+        trade_setup=None,
+        unavailable_reason=reason,
+    )

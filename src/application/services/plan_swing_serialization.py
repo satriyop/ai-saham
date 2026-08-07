@@ -84,29 +84,6 @@ def object_to_dict(value: Any | None) -> Any | None:
     return value
 
 
-def risk_response_to_dict(response: Any | None) -> dict[str, Any] | None:
-    if response is None:
-        return None
-    assessment = response.assessment
-    return {
-        "risk_status": assessment.risk_level_name,
-        "confidence": assessment.confidence,
-        "sma20": float(assessment.indicators.sma),
-        "ema20": float(assessment.indicators.ema),
-        "rsi14": float(assessment.indicators.rsi),
-        "gate_triggered": assessment.gate_triggered,
-    }
-
-
-def risk_response_to_preview_dict(response: Any | None) -> dict[str, Any] | None:
-    if response is None:
-        return None
-    return {
-        "level": response.assessment.risk_level_name,
-        "gate_triggered": response.assessment.gate_triggered,
-    }
-
-
 def candidate_accumulation_to_dict(candidate: Any | None) -> dict[str, Any]:
     if candidate is None:
         return {

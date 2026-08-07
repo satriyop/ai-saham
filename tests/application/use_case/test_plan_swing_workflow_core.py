@@ -55,7 +55,8 @@ def test_swing_workflow_runs_without_auto_refresh():
     assert response.diagnostics.flow_detail is None
     assert response.diagnostics.broker_detail is None
     assert response.verdict.trade_setup is None
-    assert response.evidence.accumulation_candidate == {"ticker": "BBCA"}
+    assert response.evidence.accumulation_candidate is response.accumulation_candidate
+    assert response.evidence.accumulation_candidate.ticker == "BBCA"
 
 
 def test_swing_workflow_raises_when_candles_are_missing():

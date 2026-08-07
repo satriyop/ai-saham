@@ -1,4 +1,4 @@
-"""ADR-054 S3 / ADR-067 §3: screen TradeSetup is authoritative, always."""
+"""RC-04 screen judgment authority and missing-state contract."""
 
 from __future__ import annotations
 
@@ -6,20 +6,28 @@ import inspect
 from datetime import date
 from types import SimpleNamespace
 
+import pytest
+
+from src.application.dto.plan_swing import (
+    ScreenJudgmentStatus,
+    ScreenJudgmentUnavailableReason,
+)
 from src.application.services import swing_judgment_authority
 from src.application.services.swing_judgment_authority import (
-    SCREEN_JUDGMENT_WARNING,
-    resolve_authoritative_trade_setup,
+    ScreenJudgmentInvariantError,
+    resolve_screen_judgment,
 )
 from src.domain.value_objects.signal_assessment import SignalStrength
 from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
 
+SNAP = date(2026, 8, 7)
 
-def _setup(action: SetupAction, *, ticker: str = "BBCA") -> TradeSetup:
+
+def _setup(*, ticker: str = "BBCA", snapshot_date: date = SNAP) -> TradeSetup:
     return TradeSetup(
         ticker=ticker,
-        snapshot_date=date(2026, 7, 28),
-        action=action,
+        snapshot_date=snapshot_date,
+        action=SetupAction.WATCH,
         signal_score=70,
         signal_score_raw=70,
         signal_strength=SignalStrength.STRONG,
@@ -27,51 +35,85 @@ def _setup(action: SetupAction, *, ticker: str = "BBCA") -> TradeSetup:
         regime=None,
         signal_multiplier=1.0,
         gate_tightening=False,
-        rationale="test",
+        rationale="screen",
     )
 
 
-def test_inherits_screen_setup_when_screen_judged() -> None:
-    screen = _setup(SetupAction.WATCH)
-    plan = _setup(SetupAction.ENTER)
-    candidate = SimpleNamespace(trade_setup=screen)
-    resolved, note = resolve_authoritative_trade_setup(candidate, plan_recomputed=plan)
-    assert resolved is screen
-    assert resolved is not None
-    assert resolved.action == SetupAction.WATCH
-    assert note == SCREEN_JUDGMENT_WARNING
+def _evaluation(*, signal=object(), risk=object(), setup=None, ticker: str = "BBCA", day=SNAP):
+    return SimpleNamespace(
+        analysis_date=day,
+        candidate=SimpleNamespace(
+            ticker=ticker,
+            signal_assessment=signal,
+            risk_assessment=risk,
+            trade_setup=setup,
+        ),
+    )
 
 
-def test_no_flag_can_make_plan_override_screen() -> None:
-    """ADR-067 §3 negative: the recompute escape hatch is gone for good.
+@pytest.mark.parametrize(
+    ("evaluation", "reason"),
+    [
+        (None, ScreenJudgmentUnavailableReason.NO_SCREEN_CANDIDATE),
+        (
+            _evaluation(signal=None, risk=None),
+            ScreenJudgmentUnavailableReason.NO_SCREEN_SIGNAL_ASSESSMENT,
+        ),
+        (
+            _evaluation(risk=None),
+            ScreenJudgmentUnavailableReason.NO_SCREEN_RISK_ASSESSMENT,
+        ),
+        (_evaluation(), ScreenJudgmentUnavailableReason.NO_SCREEN_TRADE_SETUP),
+    ],
+)
+def test_missing_screen_judgment_has_closed_reason_precedence(evaluation, reason) -> None:
+    result = resolve_screen_judgment(
+        evaluation,
+        expected_ticker="bbca",
+        expected_snapshot_date=SNAP,
+    )
+    assert result.status is ScreenJudgmentStatus.UNAVAILABLE
+    assert result.trade_setup is None
+    assert result.unavailable_reason is reason
 
-    `resolve_authoritative_trade_setup` must expose no keyword that lets a
-    caller substitute a plan-computed Action for the screen verdict.
-    """
-    signature = inspect.signature(resolve_authoritative_trade_setup)
-    assert set(signature.parameters) == {"candidate", "plan_recomputed"}
+
+def test_available_preserves_exact_screen_trade_setup() -> None:
+    setup = _setup()
+    result = resolve_screen_judgment(
+        _evaluation(setup=setup),
+        expected_ticker="BBCA",
+        expected_snapshot_date=SNAP,
+    )
+    assert result.status is ScreenJudgmentStatus.AVAILABLE
+    assert result.trade_setup is setup
+    assert result.unavailable_reason is None
+
+
+@pytest.mark.parametrize(
+    "evaluation",
+    [
+        _evaluation(ticker="BBRI"),
+        _evaluation(day=date(2026, 8, 6)),
+        _evaluation(setup=_setup(ticker="BBRI")),
+        _evaluation(setup=_setup(snapshot_date=date(2026, 8, 6))),
+        _evaluation(signal=None, setup=_setup()),
+        _evaluation(risk=None, setup=_setup()),
+    ],
+)
+def test_conflicting_present_screen_authority_fails_closed(evaluation) -> None:
+    with pytest.raises(ScreenJudgmentInvariantError):
+        resolve_screen_judgment(
+            evaluation,
+            expected_ticker="BBCA",
+            expected_snapshot_date=SNAP,
+        )
+
+
+def test_resolver_has_no_fallback_or_recompute_input() -> None:
+    assert set(inspect.signature(resolve_screen_judgment).parameters) == {
+        "evaluation",
+        "expected_ticker",
+        "expected_snapshot_date",
+    }
+    assert not hasattr(swing_judgment_authority, "resolve_authoritative_trade_setup")
     assert not hasattr(swing_judgment_authority, "allow_action_recompute")
-
-    screen = _setup(SetupAction.WATCH)
-    plan = _setup(SetupAction.ENTER)
-    resolved, _ = resolve_authoritative_trade_setup(
-        SimpleNamespace(trade_setup=screen), plan_recomputed=plan
-    )
-    assert resolved is screen
-
-
-def test_fallback_to_plan_when_screen_missing() -> None:
-    plan = _setup(SetupAction.BLOCKED_STRUCTURAL)
-    resolved, note = resolve_authoritative_trade_setup(
-        SimpleNamespace(trade_setup=None),
-        plan_recomputed=plan,
-    )
-    assert resolved is plan
-    assert note is None
-
-
-def test_none_candidate_falls_back_to_plan() -> None:
-    plan = _setup(SetupAction.ENTER)
-    resolved, note = resolve_authoritative_trade_setup(None, plan_recomputed=plan)
-    assert resolved is plan
-    assert note is None

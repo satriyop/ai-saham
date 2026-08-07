@@ -29,6 +29,9 @@ def test_plan_swing_workflow_can_emit_breakout_confirmation_with_local_volume_so
         vwap_discount_pct=3.0,
         vwap_pct=1.0,
         latest_candle_date=date(2026, 6, 18),
+        signal_assessment=None,
+        risk_assessment=None,
+        trade_setup=None,
     )
     setup_eval = SetupEvaluation(
         name="foreign-bounce",
@@ -53,6 +56,7 @@ def test_plan_swing_workflow_can_emit_breakout_confirmation_with_local_volume_so
             consumed_candles=(),
             consumed_broker_summaries=(),
             consumed_broker_daily_flows=(),
+            analysis_date=date(2026, 6, 18),
         ),
         evaluate_setup=lambda candidate, broker_detail: setup_eval,
         build_broker_quality_note=lambda **kwargs: None,

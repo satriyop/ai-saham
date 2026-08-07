@@ -56,10 +56,9 @@ def create_accumulation_candidate_builder(
         *,
         execution_context: SignalEvidenceExecutionContext,
     ) -> AccumulationCandidateEvaluationResult | None:
-        # ADR-054 S3: plan must load the same screen risk funnel so
-        # candidate.trade_setup matches `saham screen accum TICKER` Action.
-        # Without risk_use_case, trade_setup is None and plan falls back to a
-        # recomposed Action while still labeling it "screen_judgment".
+        # ADR-054 S3 / RC-04: plan runs the exact screen risk funnel once and
+        # may only reference its TradeSetup. Missing screen judgment remains a
+        # typed unavailable state; plan has no fallback Action producer.
         risk_use_case = create_accumulation_assess_risk_use_case(
             market_repository=deps.market_repository,
         )

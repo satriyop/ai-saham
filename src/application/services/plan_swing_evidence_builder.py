@@ -430,9 +430,8 @@ class PlanSwingEvidenceBuilder:
             except Exception as exc:
                 warnings.append(f"Company quality context evidence unavailable: {exc}")
 
-        # Corporate calendar event-risk context — display/diagnostics only. Never
-        # consumed by SignalEngine, RiskEngine, or AssessTradeSetupUseCase; the
-        # verdict chain remains exclusively SignalEngine + RiskEngine -> TradeSetup.
+        # Corporate calendar event-risk context is display/diagnostics only.
+        # It is never consumed by the referenced screen judgment or structure.
         corporate_action_risk = None
         if self._corporate_action_risk_use_case is not None:
             try:

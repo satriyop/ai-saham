@@ -22,10 +22,9 @@
     divergence in consumed-row transport or evidence assembly between the two
     workflows would be caught here.
 
-    ADR-067 §3 narrowed this: swing has no canonical/scoring boundary any
-    more. `PlanSwingDecisionComposer.carry_forward_screen_verdict()` is still
-    executed by the fixture, but now to assert the *negative* — that it calls
-    no SignalEngine scoring entry point and assembles no canonical evidence.
+    RC-04 narrows this further: plan has no post-evidence judgment composer.
+    This test therefore compares screen evidence with the diagnostic builder
+    directly; Action-authority absence is covered by the plan boundary tests.
 """
 
 from __future__ import annotations
@@ -37,7 +36,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.application.dto import plan_swing as plan_swing_dto
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationCandidateEvaluationResult,
@@ -45,9 +43,6 @@ from src.application.dto.accumulation_screen import (
 )
 from src.application.dto.assess_signal import AssessSignalResponse
 from src.application.dto.built_evidence import BuiltSetupEvidence
-from src.application.dto.signal_evidence_execution_context import (
-    SignalEvidenceExecutionContext,
-)
 from src.application.services.accumulation_candidate_signal_assessor import (
     AccumulationCandidateSignalAssessor,
 )
@@ -60,14 +55,8 @@ from src.application.services.evidence_source_availability_assembler import (
 from src.application.services.flow_confirmation_evidence_builder import (
     FlowConfirmationEvidenceBuilder,
 )
-from src.application.services.plan_swing_decision_composer import (
-    PlanSwingDecisionComposer,
-)
 from src.application.services.plan_swing_evidence_builder import (
     PlanSwingEvidenceBuilder,
-)
-from src.application.services.plan_swing_workflow_state import (
-    PlanSwingWorkflowState,
 )
 from src.application.services.signal_engine import SignalEngine
 from src.application.use_case.assess_source_availability_use_case import (
@@ -521,26 +510,6 @@ class _EmptyBrokerRepository:
         return []
 
 
-class _RecordingRiskTradeSetupComposer:
-    """Strict fake that records any post-re-score recomposition attempt.
-
-    ADR-067 §3 retired the plan re-score, so `calls` must stay empty; the
-    method survives here only so the assertion can distinguish "never invoked"
-    from "the method no longer exists"."""
-
-    def __init__(self) -> None:
-        self.calls: list[dict] = []
-
-    def recompose_after_signal_rescore(self, **kwargs):
-        self.calls.append(kwargs)
-        return (
-            kwargs["fallback_trade_setup"],
-            kwargs["fallback_market_context_signal_preview"],
-            kwargs["fallback_market_context_trade_setup_preview"],
-            [],
-        )
-
-
 def _signal_response(score: int = 72) -> AssessSignalResponse:
     assessment = SignalAssessment(
         identity=SWING_TRADE_SETUP_IDENTITY,
@@ -569,9 +538,7 @@ class _ParityBoundaryResult:
     recording_candidate_evidence_builder: _RecordingCandidateEvidenceBuilder
     flow_builder: _RecordingFlowConfirmationEvidenceBuilder
     swing_evidence_result: object
-    swing_signal_engine: _CanonicalInputRecordingSignalEngine
     swing_flow: object
-    risk_composer: _RecordingRiskTradeSetupComposer
 
 
 @pytest.fixture(scope="module")
@@ -673,42 +640,6 @@ def parity_boundaries() -> _ParityBoundaryResult:
         swing_policy=None,
     )
 
-    # --- Swing post-evidence boundary: carry_forward_screen_verdict() ---
-    # ADR-067 §3: this boundary produces no canonical evidence and no score;
-    # it is executed here so the parity test can assert exactly that.
-    execution_context = SignalEvidenceExecutionContext(
-        effective_session=effective_session,
-        source_availability_use_case=source_availability_use_case,
-    )
-    state = PlanSwingWorkflowState()
-    state.accumulation_evaluation = evaluation_result
-    state.signal_evidence_execution_context = execution_context
-    state.built_setup_evidence = None
-    state.built_flow_evidence = swing_evidence_result.built_flow_evidence
-    state.signal_assessment = _signal_response()
-    state.risk_response = None
-    state.trade_setup = None
-    state.market_context_signal_preview = None
-    state.market_context_risk_preview = None
-    state.market_context_trade_setup_preview = None
-    state.market_regime = None
-    state.verdict = plan_swing_dto.SwingVerdict(
-        trade_setup=None,
-        signal_assessment=state.signal_assessment,
-        risk_response=None,
-        market_regime=None,
-        signal_assessment_availability=plan_swing_dto.SignalAssessmentAvailability(
-            status=plan_swing_dto.SignalAssessmentStatus.AVAILABLE
-        ),
-    )
-
-    swing_signal_engine = _CanonicalInputRecordingSignalEngine()
-    risk_composer = _RecordingRiskTradeSetupComposer()
-    composer = PlanSwingDecisionComposer(
-        risk_trade_setup_composer=risk_composer,
-        signal_engine=swing_signal_engine,
-    )
-    composer.carry_forward_screen_verdict(state)
     swing_flow = swing_evidence_result.built_flow_evidence
 
     return _ParityBoundaryResult(
@@ -723,9 +654,7 @@ def parity_boundaries() -> _ParityBoundaryResult:
         recording_candidate_evidence_builder=recording_candidate_evidence_builder,
         flow_builder=flow_builder,
         swing_evidence_result=swing_evidence_result,
-        swing_signal_engine=swing_signal_engine,
         swing_flow=swing_flow,
-        risk_composer=risk_composer,
     )
 
 
@@ -770,11 +699,8 @@ def test_screen_and_swing_boundaries_build_equivalent_flow_evidence(
         == expected_source_families
     )
 
-    # ADR-067 §3: only screen scores. Swing's post-evidence boundary called no
-    # SignalEngine entry point and attempted no trade-setup recomposition.
+    # Only screen scores. Plan has no post-evidence scorer or setup recomposer.
     assert len(b.screen_signal_engine.calls) == 1
-    assert b.swing_signal_engine.calls == []
-    assert b.risk_composer.calls == []
     assert len(b.recording_candidate_evidence_builder.calls) == 1
 
     # Lineage: both boundaries pass FlowConfirmationEvidenceBuilder.build()

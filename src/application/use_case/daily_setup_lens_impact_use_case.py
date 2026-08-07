@@ -69,8 +69,6 @@ class SwingLensRequestDefaults:
     risk_pct: float
     atr_mult: float
     rr: float
-    regime_universe: str
-    benchmark: str
     db_path: Path
 
 
@@ -204,16 +202,10 @@ class DailySetupLensImpactUseCase:
             include_sentiment=False,
             include_flow_detail=False,
             include_signal_detail=False,
-            include_risk_detail=False,
-            include_market_detail=False,
             sentiment_verbose=False,
             auto_refresh=False,
             force_refresh=False,
-            with_market_context=False,
-            regime_universe=d.regime_universe,
-            benchmark=d.benchmark,
             db_path=d.db_path,
-            with_technical_gate=False,
         )
 
     def _map_response(

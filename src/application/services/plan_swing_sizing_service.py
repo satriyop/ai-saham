@@ -82,7 +82,7 @@ class PlanSwingSizingService:
         state: PlanSwingWorkflowState,
     ) -> PlanSwingWorkflowState:
         swing_policy = self._load_swing_policy_config()
-        regime_label = state.market_regime.regime.value if state.market_regime else None
+        regime_label = None
         take_profit_pct, stop_loss_pct = self._resolve_setup_targets(
             regime_label,
             swing_policy,

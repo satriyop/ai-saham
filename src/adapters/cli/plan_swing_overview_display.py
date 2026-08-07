@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.application.dto.accumulation_screen import AccumulationCandidate
-    from src.application.dto.plan_swing import SignalAssessmentAvailability
+    from src.application.dto.plan_swing import ScreenJudgmentReference
     from src.application.services.position_sizer import SizingResult
     from src.application.services.swing_data_freshness import SwingDataFreshness
 
@@ -31,22 +31,16 @@ from src.adapters.cli.plan_swing_formatters import (
 )
 from src.adapters.cli.plan_swing_overview_panels import (
     _build_data_panel,
-    _build_market_context_panel,
-    _build_risk_panel,
     _build_signal_panel,
     _build_structure_panel,
-    _market_label,
-    _risk_label,
     _signal_label,
 )
 from src.adapters.cli.rich_display import compact_table, console, panel
-from src.application.dto.plan_swing import SignalAssessmentAvailability
+from src.application.dto.plan_swing import ScreenJudgmentReference
 from src.application.dto.swing_broker_detail import (
     BrokerDetail,
     BrokerQualityNote,
 )
-from src.domain.value_objects.market_context import MarketContext
-from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
 
 
 def _trade_action_label(trade_setup: Any | None) -> tuple[str, str, str]:
@@ -151,61 +145,6 @@ def _refresh_text(data_freshness: Any) -> str:
     if not actions:
         return "not reported"
     return ", ".join(str(action) for action in actions)
-
-
-def _modules_text(
-    setup_eval: Any | None,
-    capital: int | None,
-    include_strategy: bool,
-    include_sentiment: bool,
-    include_flow_detail: bool,
-    include_signal_detail: bool,
-    include_risk_detail: bool,
-    include_market_detail: bool,
-    market_regime: MarketContext | None,
-) -> str:
-    modules = [
-        f"Market Context {'on' if market_regime is not None else 'off'}",
-        f"setup {'on' if setup_eval is not None else 'off'}",
-        f"sizing {'on' if capital is not None else 'off'}",
-        f"strategy {'on' if include_strategy else 'off'}",
-        f"sentiment {'on' if include_sentiment else 'off'}",
-        f"flow-detail {'on' if include_flow_detail else 'off'}",
-    ]
-    detail_bits = []
-    if include_signal_detail:
-        detail_bits.append("signal")
-    if include_risk_detail:
-        detail_bits.append("risk")
-    if include_market_detail:
-        detail_bits.append("market")
-    modules.append(f"detail {','.join(detail_bits) if detail_bits else 'off'}")
-    return " | ".join(modules)
-
-
-def _top_findings(
-    setup_eval: Any | None,
-    risk_resp: Any | None,
-    broker_quality_note: BrokerQualityNote | None,
-    data_freshness: Any,
-    trade_setup: Any | None,
-) -> list[Text]:
-    findings: list[Text] = []
-    if trade_setup is not None and trade_setup.action.value.startswith("BLOCKED"):
-        findings.append(Text(f"- Action blocked: {trade_setup.rationale}", style="red"))
-    if setup_eval is not None and setup_eval.failed_reasons:
-        for reason in setup_eval.failed_reasons[:2]:
-            findings.append(Text(f"- Setup gate: {reason}", style="yellow"))
-    if risk_resp is not None and risk_resp.assessment.gate_triggered:
-        findings.append(Text(f"- Risk gate: {risk_resp.assessment.gate_triggered}", style="red"))
-    if broker_quality_note is not None:
-        style = "yellow" if broker_quality_note.level == "warning" else "cyan"
-        findings.append(Text(f"- Broker: {broker_quality_note.message}", style=style))
-    for warning in data_freshness.warnings[:2]:
-        findings.append(Text(f"- Data: {warning}", style="yellow"))
-    if not findings:
-        findings.append(Text("- No blocking issues surfaced in displayed checks.", style="green"))
-    return findings[:5]
 
 
 def _gate_meaning(label: str) -> str:
@@ -346,40 +285,24 @@ def swing_plan_text(
 def print_swing_rich_overview(
     ticker: str,
     today: date,
-    strategy_name: str,
     data_freshness: SwingDataFreshness,
     broker_detail: BrokerDetail | None,
     accum: AccumulationCandidate | None,
-    risk_resp,
     atr_value: Decimal | None,
     sizing: SizingResult | None,
     setup_eval: Any | None,
     setup_sizing: Any | None,
     broker_quality_note: BrokerQualityNote | None,
-    market_regime: MarketContext | None,
     capital: int | None,
-    backtest_result,
-    sentiment_resp,
-    sentiment_warning: str | None,
     config: SwingDisplayConfig,
-    signal_assessment_availability: SignalAssessmentAvailability,
-    include_strategy: bool = False,
-    include_sentiment: bool = False,
-    include_flow_detail: bool = False,
+    screen_judgment: ScreenJudgmentReference,
     include_signal_detail: bool = False,
-    include_risk_detail: bool = False,
-    include_market_detail: bool = False,
     signal_assessment=None,
     trade_setup=None,
-    market_context_signal_preview=None,
-    market_context_risk_preview=None,
-    market_context_trade_setup_preview=None,
-    with_technical_gate: bool = False,
-    sector_context_evidence: "SectorContextEvidence | None" = None,
     effective_session=None,
 ) -> None:
-    if not isinstance(signal_assessment_availability, SignalAssessmentAvailability):
-        raise TypeError("signal_assessment_availability must be a SignalAssessmentAvailability")
+    if not isinstance(screen_judgment, ScreenJudgmentReference):
+        raise TypeError("screen_judgment must be a ScreenJudgmentReference")
 
     signal_source = signal_assessment or getattr(accum, "signal_assessment", None)
 
@@ -399,22 +322,15 @@ def print_swing_rich_overview(
     setup_value, setup_style = _setup_match_label(setup_eval)
     price = _price_text(accum, sizing, setup_sizing)
 
-    signal_value, signal_style, _ = _signal_label(signal_source, signal_assessment_availability)
-    risk_value, risk_style, _ = _risk_label(risk_resp)
-    market_value, market_style, _ = _market_label(market_regime)
-
+    signal_value, signal_style, _ = _signal_label(signal_source, screen_judgment)
     chosen_sizing = setup_sizing or sizing
 
-    # Compact context strip (secondary to Structure — ADR-054 S4)
+    # The only judgment context shown here is the referenced screen output.
     context = compact_table()
     context.add_column("Signal")
-    context.add_column("Risk")
-    context.add_column("Market")
     context.add_column("Setup")
     context.add_row(
         Text(signal_value, style=signal_style),
-        Text(risk_value, style=risk_style),
-        Text(market_value, style=market_style),
         Text(setup_value, style=setup_style),
     )
 
@@ -438,27 +354,16 @@ def print_swing_rich_overview(
                 Text(
                     "\nContext only — deep judgment: "
                     f"saham screen accum {ticker}. "
-                    "Detail panels: --full (or market-context when enabled).",
+                    "Signal detail: --full.",
                     style="dim",
                 ),
             ),
             title="Context (judgment)",
         ),
     ]
-    # Optional compact engine summaries only when detail flags request them
+    # Signal detail is a view of the exact embedded screen result.
     if include_signal_detail:
-        sections.append(_build_signal_panel(signal_source, signal_assessment_availability))
-    if include_risk_detail:
-        sections.append(_build_risk_panel(risk_resp, with_technical_gate))
-    if market_regime is not None and include_market_detail:
-        sections.append(
-            _build_market_context_panel(
-                market_regime,
-                market_context_signal_preview,
-                market_context_risk_preview,
-                canonical_signal=signal_source,
-            )
-        )
+        sections.append(_build_signal_panel(signal_source, screen_judgment))
     sections.append(
         _build_data_panel(data_freshness, broker_detail, broker_quality_note, accum),
     )

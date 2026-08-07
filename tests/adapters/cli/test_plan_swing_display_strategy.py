@@ -30,9 +30,10 @@ from src.adapters.cli.plan_swing_display import (
     print_swing_output,
 )
 from src.application.dto.plan_swing import (
-    SignalAssessmentAvailability,
-    SignalAssessmentStatus,
-    SignalAssessmentUnavailableReason,
+    ScreenJudgmentReference,
+    ScreenJudgmentSource,
+    ScreenJudgmentStatus,
+    ScreenJudgmentUnavailableReason,
     SwingDiagnostics,
     SwingEvidence,
     SwingVerdict,
@@ -114,14 +115,16 @@ def _call_print(
         strategy_name="foreign-accumulation",
         window=7,
         verdict=SwingVerdict(
-            trade_setup=None,
-            signal_assessment=None,
-            risk_response=None,
-            market_regime=None,
-            signal_assessment_availability=SignalAssessmentAvailability(
-                status=SignalAssessmentStatus.UNAVAILABLE,
-                unavailable_reason=SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
+            judgment_ref=ScreenJudgmentReference(
+                status=ScreenJudgmentStatus.UNAVAILABLE,
+                source=ScreenJudgmentSource.SCREEN_ACCUM,
+                ticker="BBCA",
+                snapshot_date=date(2026, 7, 1),
+                trade_setup=None,
+                unavailable_reason=ScreenJudgmentUnavailableReason.NO_SCREEN_CANDIDATE,
             ),
+            signal_assessment=None,
+            risk_assessment=None,
         ),
         evidence=SwingEvidence(
             accumulation_candidate=None,
@@ -146,8 +149,6 @@ def _call_print(
             include_sentiment=False,
             include_flow_detail=False,
             include_signal_detail=False,
-            include_risk_detail=False,
-            include_market_detail=False,
         ),
     )
     print_swing_output(ctx)

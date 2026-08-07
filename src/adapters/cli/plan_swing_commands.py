@@ -178,9 +178,9 @@ def swing(
     Action always inherits screen judgment (policy A: market regime stays
     display-only on screen; plan never recomputes Action).
 
-    On a complete structure, writes a ``swing_trade_plan`` under
-    ``journals/plans/`` for paper logging via
-    ``saham trade accum log --ticker TICKER --from-plan``.
+    Every completed workflow writes a schema-2 ``swing_trade_plan`` under
+    ``journals/plans/``. Paper logging is offered only when both geometry and
+    the referenced screen judgment make that artifact handoff-ready.
 
     Recommended path:
         saham screen accum BBRI
@@ -199,10 +199,6 @@ def swing(
     risk_pct = risk_pct if risk_pct is not None else app_cfg.swing.risk_pct
     atr_mult = atr_mult if atr_mult is not None else app_cfg.swing.atr_mult
     rr = rr if rr is not None else app_cfg.swing.rr
-    # Workflow request still carries regime fields for engine defaults; plan CLI
-    # never opts into MCE/TechnicalGate Action recompute (policy A).
-    regime_universe = app_cfg.analysis.regime_universe
-    benchmark = app_cfg.analysis.benchmark
     output_format = output_format or app_cfg.analysis.format
     ticker_upper = ticker.upper()
     today = parse_as_of_option(as_of) or date.today()
@@ -224,16 +220,12 @@ def swing(
         )
         raise typer.Exit(1)
 
-    # Structure-only CLI: no diagnostic evidence suite, no Action recompute.
+    # Structure-only CLI: no plan-owned judgment or market-context decision path.
     strategy_evidence_name = None
     include_sentiment = False
     include_flow_detail = False
     include_signal_detail = False
-    include_risk_detail = False
-    include_market_detail = False
     sentiment_verbose = False
-    with_market_context = False
-    with_technical_gate = False
 
     smart_money_brokers = set(cfg.swing_policy.smart_money_brokers)
     noise_brokers = set(cfg.swing_policy.noise_brokers)
@@ -268,16 +260,10 @@ def swing(
                 include_sentiment=include_sentiment,
                 include_flow_detail=include_flow_detail,
                 include_signal_detail=include_signal_detail,
-                include_risk_detail=include_risk_detail,
-                include_market_detail=include_market_detail,
                 sentiment_verbose=sentiment_verbose,
                 auto_refresh=auto_refresh,
                 force_refresh=force_refresh,
-                with_market_context=with_market_context,
-                regime_universe=regime_universe,
-                benchmark=benchmark,
                 db_path=resolved_db,
-                with_technical_gate=with_technical_gate,
             )
         )
     except PlanSwingDataUnavailable:
@@ -309,8 +295,6 @@ def swing(
         risk_pct=risk_pct,
         setup_name=setup_name,
         max_hold_days=cfg.swing_backtest_config.max_hold_days,
-        with_market_context=with_market_context,
-        with_technical_gate=with_technical_gate,
     )
 
     if output_format == "json":
@@ -349,9 +333,6 @@ def swing(
             include_sentiment=False,
             include_flow_detail=False,
             include_signal_detail=False,
-            include_risk_detail=False,
-            include_market_detail=False,
-            with_technical_gate=False,
             sentiment_verbose=False,
         ),
         config=display_config,
@@ -367,8 +348,10 @@ def swing(
         capital=capital,
         setup_name=setup_name,
         output_format=output_format or "table",
-        plan_path=plan_file if trade_plan.is_complete else None,
+        plan_path=plan_file,
         plan_id=trade_plan.plan_id,
+        judgment_available=trade_plan.judgment_available,
+        handoff_ready=trade_plan.handoff_ready,
     )
 
 
@@ -381,8 +364,6 @@ def _build_and_persist_swing_trade_plan(
     risk_pct: float | None,
     setup_name: str | None,
     max_hold_days: int | None,
-    with_market_context: bool,
-    with_technical_gate: bool,
 ):
     """Build ADR-054 S5 artifact and persist latest plan file for --from-plan."""
     from src.application.services.swing_trade_plan_builder import build_swing_trade_plan
@@ -396,8 +377,7 @@ def _build_and_persist_swing_trade_plan(
     plan = build_swing_trade_plan(
         ticker=ticker,
         as_of=today,
-        trade_setup=workflow_response.trade_setup
-        or (workflow_response.verdict.trade_setup if workflow_response.verdict else None),
+        judgment_ref=workflow_response.judgment_ref,
         setup_eval=workflow_response.setup_eval,
         setup_name=setup_name,
         sizing=workflow_response.sizing,
@@ -407,8 +387,6 @@ def _build_and_persist_swing_trade_plan(
         take_profit_pct=workflow_response.take_profit_pct,
         stop_loss_pct=workflow_response.stop_loss_pct,
         max_hold_days=max_hold_days,
-        with_market_context=with_market_context,
-        with_technical_gate=with_technical_gate,
         latest_close=workflow_response.latest_close,
     )
     plans_dir = plans_dir_from_journal_path(Path(cfg.storage.accum_journal))
@@ -424,6 +402,8 @@ def _echo_structure_desk_footer(
     output_format: str,
     plan_path=None,
     plan_id: str | None = None,
+    judgment_available: bool = True,
+    handoff_ready: bool = False,
 ) -> None:
     """ADR-054: structure desk footer + S5 plan handoff."""
     if output_format == "json":
@@ -435,9 +415,14 @@ def _echo_structure_desk_footer(
         "(no plan recompute; regime display-only on screen — policy A)."
     )
     typer.echo(f"  Judgment / evidence:  saham screen accum {ticker} [--full …]")
-    if capital is None:
+    if not judgment_available:
         typer.echo(
-            f"  Structure sizing:    saham plan swing {ticker} --capital <IDR>"
+            f"  Screen judgment unavailable; run saham screen accum {ticker}, "
+            f"then rerun saham plan swing {ticker}."
+        )
+    elif not handoff_ready:
+        typer.echo(
+            f"  Structure incomplete; rerun saham plan swing {ticker} --capital <IDR>"
             + (f" --setup {setup_name}" if setup_name else "")
         )
     else:

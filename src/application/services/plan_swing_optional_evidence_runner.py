@@ -2,13 +2,9 @@
 
 Layer: Application
 
-Owns setup evaluation, broker quality note, strategy backtest, sentiment
-fetch, and the evidence builder call (including `SwingEvidence`
-construction). Each section is independent and best-effort: a failure
-appends a warning and does not abort the workflow. Signal re-scoring is
-not performed here — that belongs to the decision composer, which runs
-after evidence exists. Extracted from `PlanSwingWorkflowUseCase` to
-keep the use case as orchestration only.
+Owns setup evaluation, broker quality note, strategy backtest, and sentiment
+fetch plus diagnostic evidence assembly. These structure-adjacent sections are
+independent and best-effort and never produce Action.
 """
 
 from __future__ import annotations
@@ -26,9 +22,7 @@ from src.application.use_case.backtest_use_case import BacktestRequest, Backtest
 
 if TYPE_CHECKING:
     from src.application.ports.rules_loader import RulesLoader
-    from src.application.services.plan_swing_evidence_builder import (
-        PlanSwingEvidenceBuilder,
-    )
+    from src.application.services.plan_swing_evidence_builder import PlanSwingEvidenceBuilder
     from src.domain.ports.market_data_repository import MarketDataRepository
 
 
@@ -115,6 +109,8 @@ class PlanSwingOptionalEvidenceRunner:
         request: plan_swing_dto.PlanSwingWorkflowRequest,
         state: PlanSwingWorkflowState,
     ) -> PlanSwingWorkflowState:
+        from src.domain.value_objects.benchmark_symbol import CANONICAL_BENCHMARK_TICKER
+
         as_of_fetched_at = (
             state.effective_session.decision_at.isoformat()
             if state.effective_session is not None
@@ -123,7 +119,7 @@ class PlanSwingOptionalEvidenceRunner:
         evidence_build = self._evidence_builder.build(
             ticker=request.ticker,
             snapshot_date=request.today,
-            benchmark=request.benchmark,
+            benchmark=CANONICAL_BENCHMARK_TICKER,
             candles=state.candles,
             accumulation_evaluation=state.accumulation_evaluation,
             setup_eval=state.setup_eval,
@@ -135,7 +131,6 @@ class PlanSwingOptionalEvidenceRunner:
         state.warnings.extend(evidence_build.warnings)
         state.built_setup_evidence = evidence_build.built_setup_evidence
         state.built_flow_evidence = evidence_build.built_flow_evidence
-
         state.evidence = plan_swing_dto.SwingEvidence(
             accumulation_candidate=state.accumulation_candidate,
             setup_eval=state.setup_eval,

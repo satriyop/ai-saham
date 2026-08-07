@@ -15,42 +15,67 @@ from src.application.services.effective_market_session_resolver import (
 from src.application.services.plan_swing_serialization import (
     candidate_accumulation_to_dict,
     object_to_dict,
-    risk_response_to_dict,
-    risk_response_to_preview_dict,
     signal_response_to_dict,
     volatility_context_to_dict,
 )
 from src.application.services.position_sizer import PercentSizingResult, SizingResult
 
 
-class SignalAssessmentStatus(str, Enum):
+class ScreenJudgmentStatus(str, Enum):
     AVAILABLE = "AVAILABLE"
     UNAVAILABLE = "UNAVAILABLE"
 
 
-class SignalAssessmentUnavailableReason(str, Enum):
-    NO_PRODUCTION_SIGNAL_EVIDENCE = "no_production_signal_evidence"
-    SIGNAL_ENGINE_UNAVAILABLE = "signal_engine_unavailable"
-    ASSESSMENT_FAILED = "assessment_failed"
+class ScreenJudgmentSource(str, Enum):
+    SCREEN_ACCUM = "screen_accum"
+
+
+class ScreenJudgmentUnavailableReason(str, Enum):
+    NO_SCREEN_CANDIDATE = "no_screen_candidate"
+    NO_SCREEN_SIGNAL_ASSESSMENT = "no_screen_signal_assessment"
+    NO_SCREEN_RISK_ASSESSMENT = "no_screen_risk_assessment"
+    NO_SCREEN_TRADE_SETUP = "no_screen_trade_setup"
 
 
 @dataclass(frozen=True)
-class SignalAssessmentAvailability:
-    status: SignalAssessmentStatus
-    unavailable_reason: SignalAssessmentUnavailableReason | None = None
+class ScreenJudgmentReference:
+    """Exact screen-owned judgment consumed by the structure workflow."""
+
+    status: ScreenJudgmentStatus
+    source: ScreenJudgmentSource
+    ticker: str
+    snapshot_date: date
+    trade_setup: "TradeSetup | None"
+    unavailable_reason: ScreenJudgmentUnavailableReason | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.status, SignalAssessmentStatus):
-            raise TypeError("status must be a SignalAssessmentStatus")
+        if not isinstance(self.status, ScreenJudgmentStatus):
+            raise TypeError("status must be a ScreenJudgmentStatus")
+        if not isinstance(self.source, ScreenJudgmentSource):
+            raise TypeError("source must be a ScreenJudgmentSource")
+        if self.source != ScreenJudgmentSource.SCREEN_ACCUM:
+            raise ValueError("plan judgment source must be screen_accum")
+        if not self.ticker or self.ticker != self.ticker.upper():
+            raise ValueError("ticker must be a non-empty canonical uppercase ticker")
+        if not isinstance(self.snapshot_date, date):
+            raise TypeError("snapshot_date must be a date")
         if self.unavailable_reason is not None and not isinstance(
-            self.unavailable_reason, SignalAssessmentUnavailableReason
+            self.unavailable_reason, ScreenJudgmentUnavailableReason
         ):
-            raise TypeError("unavailable_reason must be a SignalAssessmentUnavailableReason")
+            raise TypeError("unavailable_reason must be a ScreenJudgmentUnavailableReason")
 
-        if self.status == SignalAssessmentStatus.AVAILABLE:
+        if self.status == ScreenJudgmentStatus.AVAILABLE:
+            if self.trade_setup is None:
+                raise ValueError("AVAILABLE requires the screen trade_setup")
             if self.unavailable_reason is not None:
                 raise ValueError("AVAILABLE requires no unavailable reason.")
-        elif self.status == SignalAssessmentStatus.UNAVAILABLE:
+            if self.trade_setup.ticker != self.ticker:
+                raise ValueError("screen trade_setup ticker does not match judgment reference")
+            if self.trade_setup.snapshot_date != self.snapshot_date:
+                raise ValueError("screen trade_setup date does not match judgment reference")
+        elif self.status == ScreenJudgmentStatus.UNAVAILABLE:
+            if self.trade_setup is not None:
+                raise ValueError("UNAVAILABLE requires trade_setup to be None")
             if self.unavailable_reason is None:
                 raise ValueError("UNAVAILABLE requires a reason.")
 
@@ -67,7 +92,6 @@ if TYPE_CHECKING:
     from src.domain.value_objects.institutional_accumulation_evidence import (
         InstitutionalAccumulationEvidence,
     )
-    from src.domain.value_objects.market_context import MarketContext
     from src.domain.value_objects.sector_context_evidence import SectorContextEvidence
     from src.domain.value_objects.sector_macro_context_evidence import (
         SectorMacroContextEvidence,
@@ -95,81 +119,47 @@ class PlanSwingWorkflowRequest:
     include_sentiment: bool
     include_flow_detail: bool
     include_signal_detail: bool
-    include_risk_detail: bool
-    include_market_detail: bool
     sentiment_verbose: bool
     auto_refresh: bool
     force_refresh: bool
-    with_market_context: bool
-    regime_universe: str
-    benchmark: str
     db_path: Path
-    with_technical_gate: bool = False
 
 
 @dataclass(frozen=True)
 class SwingVerdict:
-    """Decision-producing outputs for swing analysis."""
+    """Referenced screen judgment shown beside plan-owned structure."""
 
-    trade_setup: "TradeSetup | None"
+    judgment_ref: ScreenJudgmentReference
     signal_assessment: "AssessSignalResponse | None"
-    risk_response: Any | None
-    market_regime: "MarketContext | None"
-    signal_assessment_availability: SignalAssessmentAvailability
-    market_context_signal_preview: "AssessSignalResponse | None" = None
-    market_context_risk_preview: Any | None = None
-    market_context_trade_setup_preview: "TradeSetup | None" = None
+    risk_assessment: Any | None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.signal_assessment_availability, SignalAssessmentAvailability):
-            raise TypeError("signal_assessment_availability must be a SignalAssessmentAvailability")
+        if not isinstance(self.judgment_ref, ScreenJudgmentReference):
+            raise TypeError("judgment_ref must be a ScreenJudgmentReference")
+        if self.judgment_ref.status == ScreenJudgmentStatus.AVAILABLE:
+            if self.signal_assessment is None or self.risk_assessment is None:
+                raise ValueError("AVAILABLE screen judgment requires screen signal and risk")
 
-        status = self.signal_assessment_availability.status
-        if status == SignalAssessmentStatus.AVAILABLE:
-            if self.signal_assessment is None:
-                raise ValueError("AVAILABLE requires signal_assessment to be present.")
-        elif status == SignalAssessmentStatus.UNAVAILABLE:
-            if self.signal_assessment is not None:
-                raise ValueError("UNAVAILABLE requires signal_assessment to be None.")
-            if self.trade_setup is not None:
-                raise ValueError("UNAVAILABLE requires trade_setup to be None.")
-            if self.market_context_signal_preview is not None:
-                raise ValueError("UNAVAILABLE requires market_context_signal_preview to be None.")
-            if self.market_context_trade_setup_preview is not None:
-                raise ValueError(
-                    "UNAVAILABLE requires market_context_trade_setup_preview to be None."
-                )
+    @property
+    def trade_setup(self) -> "TradeSetup | None":
+        return self.judgment_ref.trade_setup
 
     def to_dict(self) -> dict[str, Any]:
+        trade_setup = self.judgment_ref.trade_setup
         return {
-            "trade_setup": self.trade_setup.to_dict() if self.trade_setup else None,
+            "status": self.judgment_ref.status.value,
+            "source": self.judgment_ref.source.value,
+            "ticker": self.judgment_ref.ticker,
+            "snapshot_date": self.judgment_ref.snapshot_date.isoformat(),
+            "action": trade_setup.action.value if trade_setup is not None else None,
+            "trade_setup": trade_setup.to_dict() if trade_setup is not None else None,
+            "unavailable_reason": (
+                self.judgment_ref.unavailable_reason.value
+                if self.judgment_ref.unavailable_reason is not None
+                else None
+            ),
             "signal_assessment": signal_response_to_dict(self.signal_assessment),
-            "risk_assessment": risk_response_to_dict(self.risk_response),
-            "market_context": (self.market_regime.to_dict() if self.market_regime else None),
-            "signal_assessment_status": (
-                self.signal_assessment_availability.status.value
-                if self.signal_assessment_availability
-                else None
-            ),
-            "signal_assessment_unavailable_reason": (
-                self.signal_assessment_availability.unavailable_reason.value
-                if self.signal_assessment_availability
-                and self.signal_assessment_availability.unavailable_reason
-                else None
-            ),
-            "market_context_preview": (
-                {
-                    "signal_preview": signal_response_to_dict(self.market_context_signal_preview),
-                    "risk_preview": risk_response_to_preview_dict(self.market_context_risk_preview),
-                    "trade_setup_preview": (
-                        self.market_context_trade_setup_preview.to_dict()
-                        if self.market_context_trade_setup_preview
-                        else None
-                    ),
-                }
-                if self.market_regime
-                else None
-            ),
+            "risk_assessment": object_to_dict(self.risk_assessment),
         }
 
 
@@ -335,7 +325,6 @@ class PlanSwingWorkflowResponse:
     candles: list[Any]
     latest_close: Decimal
     accumulation_candidate: Any | None
-    risk_response: Any | None
     atr_value: Decimal | None
     sizing: SizingResult | None
     setup_eval: Any | None
@@ -344,17 +333,11 @@ class PlanSwingWorkflowResponse:
     backtest_result: Any | None
     sentiment_response: Any | None
     sentiment_warning: str | None
-    market_regime: "MarketContext | None"
     take_profit_pct: Decimal
     stop_loss_pct: Decimal
     regime_label: str | None
-    signal_assessment_availability: SignalAssessmentAvailability
-    signal_assessment: "AssessSignalResponse | None" = None
-    trade_setup: "TradeSetup | None" = None
-    market_context_signal_preview: "AssessSignalResponse | None" = None
-    market_context_risk_preview: Any | None = None
-    market_context_trade_setup_preview: "TradeSetup | None" = None
-    verdict: SwingVerdict | None = None
+    judgment_ref: ScreenJudgmentReference
+    verdict: SwingVerdict
     evidence: SwingEvidence | None = None
     diagnostics: SwingDiagnostics | None = None
     modules: dict[str, bool] | None = None
@@ -362,24 +345,20 @@ class PlanSwingWorkflowResponse:
     effective_session: EffectiveMarketSession | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.signal_assessment_availability, SignalAssessmentAvailability):
-            raise TypeError("signal_assessment_availability must be a SignalAssessmentAvailability")
+        if self.judgment_ref is not self.verdict.judgment_ref:
+            raise ValueError("response and verdict must share the exact judgment reference")
 
-        status = self.signal_assessment_availability.status
-        if status == SignalAssessmentStatus.AVAILABLE:
-            if self.signal_assessment is None:
-                raise ValueError("AVAILABLE requires signal_assessment to be present.")
-        elif status == SignalAssessmentStatus.UNAVAILABLE:
-            if self.signal_assessment is not None:
-                raise ValueError("UNAVAILABLE requires signal_assessment to be None.")
+    @property
+    def trade_setup(self) -> "TradeSetup | None":
+        return self.judgment_ref.trade_setup
 
-        if self.verdict is not None:
-            if self.signal_assessment_availability != self.verdict.signal_assessment_availability:
-                raise ValueError("Response availability must match verdict availability.")
-            if self.signal_assessment is not self.verdict.signal_assessment:
-                raise ValueError("Response signal_assessment must match verdict signal_assessment.")
-            if self.trade_setup is not self.verdict.trade_setup:
-                raise ValueError("Response trade_setup must match verdict trade_setup.")
+    @property
+    def signal_assessment(self) -> "AssessSignalResponse | None":
+        return self.verdict.signal_assessment
+
+    @property
+    def screen_risk_assessment(self) -> Any | None:
+        return self.verdict.risk_assessment
 
     def to_dict(
         self,
@@ -388,16 +367,7 @@ class PlanSwingWorkflowResponse:
         max_hold_days: int | None = None,
         include_sentiment: bool = True,
     ) -> dict[str, Any]:
-        verdict = self.verdict or SwingVerdict(
-            trade_setup=self.trade_setup,
-            signal_assessment=self.signal_assessment,
-            risk_response=self.risk_response,
-            market_regime=self.market_regime,
-            market_context_signal_preview=self.market_context_signal_preview,
-            market_context_risk_preview=self.market_context_risk_preview,
-            market_context_trade_setup_preview=self.market_context_trade_setup_preview,
-            signal_assessment_availability=self.signal_assessment_availability,
-        )
+        verdict = self.verdict
         evidence = self.evidence or SwingEvidence(
             accumulation_candidate=self.accumulation_candidate,
             setup_eval=self.setup_eval,
@@ -417,8 +387,6 @@ class PlanSwingWorkflowResponse:
             warnings=self.warnings,
         )
         diagnostics_out = diagnostics.to_dict()
-        if isinstance(diagnostics_out.get("data"), dict) and verdict.market_regime is not None:
-            diagnostics_out["data"]["regime_as_of"] = verdict.market_regime.as_of_date.isoformat()
         diagnostics_out["volatility_context"] = volatility_context_to_dict(
             atr_value=self.atr_value,
             latest_close=self.latest_close,
@@ -431,7 +399,7 @@ class PlanSwingWorkflowResponse:
             evidence_out["sentiment"] = None
 
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "artifact_type": "plan_swing",
             "json_contract": {
                 "canonical": ("verdict", "evidence", "diagnostics"),

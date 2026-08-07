@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+
+from src.application.dto.plan_swing import (
+    ScreenJudgmentReference,
+    ScreenJudgmentSource,
+    ScreenJudgmentStatus,
+)
 from src.application.services.swing_trade_plan_builder import build_swing_trade_plan
 from src.application.services.swing_trade_plan_store import (
     latest_plan_path,
@@ -41,7 +49,13 @@ def test_build_and_save_round_trip(tmp_path) -> None:
     plan = build_swing_trade_plan(
         ticker="bbca",
         as_of=date(2026, 7, 28),
-        trade_setup=setup,
+        judgment_ref=ScreenJudgmentReference(
+            status=ScreenJudgmentStatus.AVAILABLE,
+            source=ScreenJudgmentSource.SCREEN_ACCUM,
+            ticker="BBCA",
+            snapshot_date=date(2026, 7, 28),
+            trade_setup=setup,
+        ),
         setup_eval=SimpleNamespace(match=SimpleNamespace(value="MATCH")),
         setup_name="foreign-bounce",
         sizing=sizing,
@@ -51,11 +65,10 @@ def test_build_and_save_round_trip(tmp_path) -> None:
         take_profit_pct=Decimal("5"),
         stop_loss_pct=Decimal("5"),
         max_hold_days=10,
-        with_market_context=False,
-        with_technical_gate=False,
     )
-    assert plan.is_complete
-    assert plan.action_source == "screen_judgment"
+    assert plan.geometry_complete
+    assert plan.handoff_ready
+    assert plan.judgment_ref.action is SetupAction.WATCH
     journal = tmp_path / "journals" / "accumulation.csv"
     journal.parent.mkdir(parents=True)
     plans_dir = plans_dir_from_journal_path(journal)
@@ -64,3 +77,11 @@ def test_build_and_save_round_trip(tmp_path) -> None:
     loaded = load_swing_trade_plan(path)
     assert loaded.plan_id == plan.plan_id
     assert loaded.lots == 12
+    assert loaded.handoff_ready
+
+
+def test_loader_rejects_wrapped_schema_v2_payload(tmp_path) -> None:
+    path = tmp_path / "wrapped.json"
+    path.write_text(json.dumps({"swing_trade_plan": {"schema_version": 2}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="artifact_type"):
+        load_swing_trade_plan(path)

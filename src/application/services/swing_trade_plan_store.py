@@ -9,7 +9,6 @@ import json
 from pathlib import Path
 
 from src.domain.value_objects.swing_trade_plan import (
-    SWING_TRADE_PLAN_ARTIFACT_TYPE,
     SwingTradePlan,
 )
 
@@ -37,15 +36,10 @@ def save_swing_trade_plan(plan: SwingTradePlan, plans_dir: Path) -> Path:
 
 
 def load_swing_trade_plan(path: Path) -> SwingTradePlan:
-    """Load a swing_trade_plan JSON file (full artifact or wrapped)."""
+    """Load one strict schema-2 swing_trade_plan artifact."""
     raw = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("plan file must contain a JSON object")
-    # Allow full plan-swing response with nested swing_trade_plan key
-    if raw.get("artifact_type") != SWING_TRADE_PLAN_ARTIFACT_TYPE and isinstance(
-        raw.get("swing_trade_plan"), dict
-    ):
-        raw = raw["swing_trade_plan"]
     return SwingTradePlan.from_dict(raw)
 
 

@@ -132,7 +132,7 @@ read-only post-open assess of the frozen plan.
 saham screen accum --universe lq45 --multi
 saham screen accum TICKER
 saham plan swing TICKER --capital 10000000
-saham plan swing TICKER --with-market-context
+saham trade accum log --ticker TICKER --from-plan
 saham policy accum backtest --help
 saham trade accum log --ticker TICKER --from-analysis
 ```
@@ -140,6 +140,12 @@ saham trade accum log --ticker TICKER --from-analysis
 The accumulation score and SignalEngine score are separate 0–100 systems. The
 former measures foreign-flow discovery quality; the latter evaluates canonical
 signal evidence. Neither bypasses RiskEngine.
+
+`plan swing` consumes the exact single-ticker screen judgment and adds only
+structure. Every run saves a schema-2 plan artifact. Paper handoff is available
+only when that artifact has complete geometry and an `AVAILABLE` screen
+judgment. Historical schema-1 plan files are display-only; rerun screen, then
+plan, to create a current handoff-ready artifact.
 
 ### Guarded swing tuning
 
@@ -216,7 +222,7 @@ The live top-level groups are registered in `src/adapters/cli/main.py`:
 | `saham research pre-open` | Pre-open learning lifecycle | capture, track, labels, evaluate, status |
 | `saham view` | Cached-data inspection | ticker, universe, broker, market context |
 | `saham indicator` | Indicator/formula operations | compute, snapshot, create, list, show, delete |
-| `saham inspect` / `plan` / `assess` | Live lenses, TradeSetup plan, frozen assess | inspect risk/signal/…; plan swing; assess pre-open |
+| `saham inspect` / `plan` / `assess` | Live lenses, swing structure, frozen assess | inspect risk/signal/…; plan swing; assess pre-open |
 | `saham strategy` | Strategy lifecycle | initialize, validate, create, backtest, skill docs |
 | `saham trade` | Paper trading and calibration | log/review (pre-open + swing), outcome, sizing, backtests, guarded swing tuning |
 

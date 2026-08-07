@@ -53,9 +53,6 @@ class SwingOutputDisplayOptions:
     include_sentiment: bool
     include_flow_detail: bool
     include_signal_detail: bool
-    include_risk_detail: bool
-    include_market_detail: bool
-    with_technical_gate: bool = False
     sentiment_verbose: bool = False
 
 

@@ -11,9 +11,10 @@ from src.adapters.cli.plan_swing_display import (
     print_swing_output,
 )
 from src.application.dto.plan_swing import (
-    SignalAssessmentAvailability,
-    SignalAssessmentStatus,
-    SignalAssessmentUnavailableReason,
+    ScreenJudgmentReference,
+    ScreenJudgmentSource,
+    ScreenJudgmentStatus,
+    ScreenJudgmentUnavailableReason,
     SwingDiagnostics,
     SwingEvidence,
     SwingVerdict,
@@ -49,14 +50,16 @@ def test_swing_output_renders_rich_decision_overview(capsys):
         strategy_name="foreign-accumulation",
         window=7,
         verdict=SwingVerdict(
-            trade_setup=None,
-            signal_assessment=None,
-            risk_response=None,
-            market_regime=None,
-            signal_assessment_availability=SignalAssessmentAvailability(
-                status=SignalAssessmentStatus.UNAVAILABLE,
-                unavailable_reason=SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
+            judgment_ref=ScreenJudgmentReference(
+                status=ScreenJudgmentStatus.UNAVAILABLE,
+                source=ScreenJudgmentSource.SCREEN_ACCUM,
+                ticker="BBCA",
+                snapshot_date=date(2026, 6, 19),
+                trade_setup=None,
+                unavailable_reason=ScreenJudgmentUnavailableReason.NO_SCREEN_CANDIDATE,
             ),
+            signal_assessment=None,
+            risk_assessment=None,
         ),
         evidence=SwingEvidence(
             accumulation_candidate=_candidate(score=70.0, trend="DOWN"),
@@ -87,8 +90,6 @@ def test_swing_output_renders_rich_decision_overview(capsys):
             include_sentiment=False,
             include_flow_detail=False,
             include_signal_detail=False,
-            include_risk_detail=False,
-            include_market_detail=False,
         ),
     )
     print_swing_output(ctx)
@@ -168,14 +169,16 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
         strategy_name="foreign-accumulation",
         window=7,
         verdict=SwingVerdict(
-            trade_setup=None,
-            signal_assessment=signal_assessment,
-            risk_response=risk_resp,
-            market_regime=None,
-            signal_assessment_availability=SignalAssessmentAvailability(
-                status=SignalAssessmentStatus.AVAILABLE
+            judgment_ref=ScreenJudgmentReference(
+                status=ScreenJudgmentStatus.UNAVAILABLE,
+                source=ScreenJudgmentSource.SCREEN_ACCUM,
+                ticker="BBCA",
+                snapshot_date=date(2026, 6, 19),
+                trade_setup=None,
+                unavailable_reason=ScreenJudgmentUnavailableReason.NO_SCREEN_TRADE_SETUP,
             ),
-            market_context_trade_setup_preview=None,
+            signal_assessment=signal_assessment,
+            risk_assessment=risk_resp,
         ),
         evidence=SwingEvidence(
             accumulation_candidate=_candidate(score=82.0, trend="SIDE"),
@@ -206,8 +209,6 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
             include_sentiment=True,
             include_flow_detail=True,
             include_signal_detail=True,
-            include_risk_detail=True,
-            include_market_detail=False,
         ),
     )
     print_swing_output(ctx)
@@ -217,7 +218,8 @@ def test_swing_output_renders_optional_evidence_as_separate_panels(capsys):
     assert "Explains the Signal column in Verdict" in out
     assert "Scale: SignalEngine 0-100. Used in final TradeSetup: yes." in out
     assert "Setup Quality" in out
-    assert "RISK DETAIL" in out
+    assert "RISK DETAIL" not in out
+    assert "MARKET CONTEXT PREVIEW" not in out
     assert "FLOW / BROKER DETAIL" in out
     assert "Composite Foreign Flow Score (7 broker sessions)" in out
     assert "ENTER-ZONE / FLOW POSITIVE" in out
@@ -311,14 +313,16 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
         strategy_name=None,
         window=7,
         verdict=SwingVerdict(
-            trade_setup=None,
-            signal_assessment=signal_assessment,
-            risk_response=risk_resp,
-            market_regime=None,
-            signal_assessment_availability=SignalAssessmentAvailability(
-                status=SignalAssessmentStatus.AVAILABLE
+            judgment_ref=ScreenJudgmentReference(
+                status=ScreenJudgmentStatus.UNAVAILABLE,
+                source=ScreenJudgmentSource.SCREEN_ACCUM,
+                ticker="ASII",
+                snapshot_date=date(2026, 6, 27),
+                trade_setup=None,
+                unavailable_reason=ScreenJudgmentUnavailableReason.NO_SCREEN_TRADE_SETUP,
             ),
-            market_context_trade_setup_preview=None,
+            signal_assessment=signal_assessment,
+            risk_assessment=risk_resp,
         ),
         evidence=SwingEvidence(
             accumulation_candidate=accum,
@@ -349,8 +353,6 @@ def test_swing_flow_detail_calls_out_conflicted_negative_flow(capsys):
             include_sentiment=False,
             include_flow_detail=True,
             include_signal_detail=True,
-            include_risk_detail=False,
-            include_market_detail=False,
         ),
     )
     print_swing_output(ctx)
@@ -379,17 +381,22 @@ def test_cli_rendering_of_unavailable_reasons():
     from src.adapters.cli.plan_swing_overview_panels import _build_signal_panel, _signal_label
 
     reasons_map = [
+        (ScreenJudgmentUnavailableReason.NO_SCREEN_CANDIDATE, "no screen candidate"),
         (
-            SignalAssessmentUnavailableReason.NO_PRODUCTION_SIGNAL_EVIDENCE,
-            "no production signal evidence",
+            ScreenJudgmentUnavailableReason.NO_SCREEN_SIGNAL_ASSESSMENT,
+            "no screen signal assessment",
         ),
-        (SignalAssessmentUnavailableReason.SIGNAL_ENGINE_UNAVAILABLE, "signal engine unavailable"),
-        (SignalAssessmentUnavailableReason.ASSESSMENT_FAILED, "assessment failed"),
+        (ScreenJudgmentUnavailableReason.NO_SCREEN_RISK_ASSESSMENT, "no screen risk assessment"),
+        (ScreenJudgmentUnavailableReason.NO_SCREEN_TRADE_SETUP, "no screen trade setup"),
     ]
 
     for reason, expected_text in reasons_map:
-        availability = SignalAssessmentAvailability(
-            status=SignalAssessmentStatus.UNAVAILABLE,
+        availability = ScreenJudgmentReference(
+            status=ScreenJudgmentStatus.UNAVAILABLE,
+            source=ScreenJudgmentSource.SCREEN_ACCUM,
+            ticker="BBCA",
+            snapshot_date=date(2026, 6, 19),
+            trade_setup=None,
             unavailable_reason=reason,
         )
 

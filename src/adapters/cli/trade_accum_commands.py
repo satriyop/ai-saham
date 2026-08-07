@@ -71,11 +71,19 @@ def run_accumulation_log_command(
                 err=True,
             )
             raise typer.Exit(1)
-        if not plan.is_complete:
+        if not plan.geometry_complete:
             typer.echo(
                 "Error: plan geometry incomplete "
                 f"({plan.incomplete_reason or 'missing entry/stop/target/lots'}). "
                 "Re-run: saham plan swing TICKER --capital …",
+                err=True,
+            )
+            raise typer.Exit(1)
+        if not plan.handoff_ready:
+            typer.echo(
+                "Error: screen judgment unavailable for this plan. "
+                f"Run saham screen accum {ticker.upper()}, then rerun "
+                f"saham plan swing {ticker.upper()}.",
                 err=True,
             )
             raise typer.Exit(1)

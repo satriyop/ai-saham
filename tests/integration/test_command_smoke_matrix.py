@@ -101,7 +101,7 @@ def test_plan_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     assert js.exit_code == 0, js.output
     payload = _json_stdout(js)
     assert payload["artifact_type"] == "plan_swing"
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     assert payload["json_contract"]["canonical"] == ["verdict", "evidence", "diagnostics"]
     assert "compatibility_aliases" not in payload["json_contract"]
     for old_key in (
@@ -120,7 +120,13 @@ def test_plan_swing_table_and_json_contracts(temp_workspace, monkeypatch):
     ):
         assert old_key not in payload
     risk = payload["verdict"]["risk_assessment"]
-    assert "risk_status" in risk
+    assert payload["verdict"]["source"] == "screen_accum"
+    assert payload["verdict"]["status"] == "AVAILABLE"
+    assert "risk_response" not in payload["verdict"]
+    assert "market_regime" not in payload["verdict"]
+    assert risk["snapshot_date"] == "2026-06-29"
+    assert "gate_triggered" in risk
+    assert "risk_status" not in risk
     assert "status" not in risk
     assert "level" not in risk
     accumulation = payload["evidence"]["accumulation"]

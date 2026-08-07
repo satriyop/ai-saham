@@ -3,7 +3,7 @@
 Layer: Application
 
 Owns auto-refresh, data freshness, optional flow/broker detail, candle
-loading, accumulation-candidate build, and market-context evaluation.
+loading, and the canonical accumulation-screen candidate build.
 Extracted from `PlanSwingWorkflowUseCase` to keep the use case as
 orchestration only.
 """
@@ -20,7 +20,6 @@ from src.application.services.effective_market_session_resolver import (
 from src.application.services.plan_swing_workflow_state import (
     PlanSwingWorkflowState,
 )
-from src.domain.value_objects.benchmark_symbol import canonicalize_ticker
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 
 if TYPE_CHECKING:
@@ -33,7 +32,6 @@ if TYPE_CHECKING:
     )
     from src.domain.ports.broker_data_repository import BrokerDataRepository
     from src.domain.ports.market_data_repository import MarketDataRepository
-    from src.domain.value_objects.market_context import MarketContext
 
 
 class PlanSwingDataUnavailable(Exception):
@@ -59,7 +57,6 @@ class PlanSwingInputCollector:
             ..., "AccumulationCandidateEvaluationResult | None"
         ],
         signal_evidence_context_builder: "SignalEvidenceExecutionContextBuilder",
-        evaluate_market_context: Callable[..., "MarketContext"] | None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
         live_signal_evidence_context_use_case: Any | None = None,
     ) -> None:
@@ -71,7 +68,6 @@ class PlanSwingInputCollector:
         self._build_broker_detail = build_broker_detail
         self._build_accumulation_candidate_evaluation = build_accumulation_candidate_evaluation
         self._signal_evidence_context_builder = signal_evidence_context_builder
-        self._evaluate_market_context = evaluate_market_context
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
             market_repository
         )
@@ -181,20 +177,6 @@ class PlanSwingInputCollector:
         except Exception as exc:
             warnings.append(f"Accumulation unavailable: {exc}")
 
-        market_regime = None
-        if request.with_market_context:
-            try:
-                if self._evaluate_market_context is None:
-                    raise RuntimeError("Market context evaluator is not configured.")
-                market_regime = self._evaluate_market_context(
-                    db_path=request.db_path,
-                    as_of_date=request.today,
-                    universe=request.regime_universe,
-                    benchmark=canonicalize_ticker(request.benchmark),
-                )
-            except Exception as exc:
-                warnings.append(f"Market regime unavailable: {exc}")
-
         return PlanSwingWorkflowState(
             warnings=warnings,
             refresh_actions=refresh_actions,
@@ -204,6 +186,5 @@ class PlanSwingInputCollector:
             candles=candles,
             latest_close=latest_close,
             accumulation_evaluation=accumulation_evaluation,
-            market_regime=market_regime,
             signal_evidence_execution_context=execution_context,
         )

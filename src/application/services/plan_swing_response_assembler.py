@@ -26,10 +26,24 @@ class PlanSwingResponseAssembler:
         verdict = state.verdict
         if verdict is None:
             raise ValueError("state.verdict is missing")
-        if state.signal_assessment_availability is None:
-            raise ValueError("state.signal_assessment_availability is missing")
-        if state.signal_assessment_availability != verdict.signal_assessment_availability:
-            raise ValueError("state and verdict signal assessment availability differ")
+        judgment_ref = state.judgment_ref
+        if judgment_ref is None:
+            raise ValueError("state.judgment_ref is missing")
+        if judgment_ref is not verdict.judgment_ref:
+            raise ValueError("state and verdict must share the exact judgment reference")
+        evidence = state.evidence
+        if evidence is None:
+            evidence = plan_swing_dto.SwingEvidence(
+                accumulation_candidate=state.accumulation_candidate,
+                setup_eval=state.setup_eval,
+                backtest_result=state.backtest_result,
+                sentiment_response=state.sentiment_response,
+                sentiment_warning=state.sentiment_warning,
+                take_profit_pct=state.take_profit_pct,
+                stop_loss_pct=state.stop_loss_pct,
+                regime_label=state.regime_label,
+            )
+            state.evidence = evidence
         diagnostics = plan_swing_dto.SwingDiagnostics(
             data_freshness=state.data_freshness,
             flow_detail=state.flow_detail,
@@ -50,7 +64,6 @@ class PlanSwingResponseAssembler:
             candles=state.candles,
             latest_close=state.latest_close,
             accumulation_candidate=state.accumulation_candidate,
-            risk_response=state.risk_response,
             atr_value=state.atr_value,
             sizing=state.sizing,
             setup_eval=state.setup_eval,
@@ -59,19 +72,13 @@ class PlanSwingResponseAssembler:
             backtest_result=state.backtest_result,
             sentiment_response=state.sentiment_response,
             sentiment_warning=state.sentiment_warning,
-            market_regime=state.market_regime,
             take_profit_pct=state.take_profit_pct,
             stop_loss_pct=state.stop_loss_pct,
             regime_label=state.regime_label,
-            signal_assessment=verdict.signal_assessment,
-            trade_setup=verdict.trade_setup,
-            market_context_signal_preview=verdict.market_context_signal_preview,
-            market_context_risk_preview=state.market_context_risk_preview,
-            market_context_trade_setup_preview=verdict.market_context_trade_setup_preview,
+            judgment_ref=judgment_ref,
             verdict=verdict,
-            evidence=state.evidence,
+            evidence=evidence,
             diagnostics=diagnostics,
-            signal_assessment_availability=verdict.signal_assessment_availability,
             modules={
                 "setup": request.setup_name is not None,
                 "sizing": request.capital is not None,
@@ -79,10 +86,6 @@ class PlanSwingResponseAssembler:
                 "sentiment": request.include_sentiment,
                 "flow_detail": request.include_flow_detail,
                 "signal_detail": request.include_signal_detail,
-                "risk_detail": request.include_risk_detail,
-                "market_detail": request.include_market_detail,
-                "market_context": request.with_market_context,
-                "technical_gate": request.with_technical_gate,
             },
             warnings=tuple(state.warnings),
             effective_session=state.effective_session,

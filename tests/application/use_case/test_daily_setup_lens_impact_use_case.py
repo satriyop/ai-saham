@@ -27,8 +27,6 @@ DEFAULTS = SwingLensRequestDefaults(
     risk_pct=1.0,
     atr_mult=2.0,
     rr=2.0,
-    regime_universe="lq45",
-    benchmark="COMPOSITE",
     db_path=Path("/tmp/does-not-exist.db"),
 )
 
@@ -320,4 +318,4 @@ def test_requests_are_read_only_no_fetch_dependency():
             assert req.force_refresh is False
             assert req.strategy_name is None
             assert req.include_sentiment is False
-            assert req.with_market_context is False
+            assert not hasattr(req, "with_market_context")

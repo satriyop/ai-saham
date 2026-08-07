@@ -200,16 +200,10 @@ def _request(**overrides) -> PlanSwingWorkflowRequest:
         "include_sentiment": False,
         "include_flow_detail": False,
         "include_signal_detail": False,
-        "include_risk_detail": False,
-        "include_market_detail": False,
         "sentiment_verbose": False,
         "auto_refresh": False,
         "force_refresh": False,
-        "with_market_context": False,
-        "regime_universe": "idx80",
-        "benchmark": "IHSG",
         "db_path": Path("data.db"),
-        "with_technical_gate": False,
     }
     values.update(overrides)
     return PlanSwingWorkflowRequest(**values)
@@ -220,7 +214,13 @@ def _fake_evaluation_result(ticker: str) -> SimpleNamespace:
     `.candidate` plus the empty consumed-row tuples these tests' fake
     repositories always return."""
     return SimpleNamespace(
-        candidate={"ticker": ticker},
+        candidate=SimpleNamespace(
+            ticker=ticker,
+            signal_assessment=None,
+            risk_assessment=None,
+            trade_setup=None,
+        ),
+        analysis_date=date(2026, 6, 18),
         consumed_candles=(),
         consumed_broker_summaries=(),
         consumed_broker_daily_flows=(),

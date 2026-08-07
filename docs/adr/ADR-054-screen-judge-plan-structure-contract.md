@@ -23,7 +23,7 @@ Operators currently experience two overlapping “analysis” surfaces for swing
 ```text
 saham screen accum --universe …   # discovery board
 saham screen accum TICKER         # already deepens, but not full plan depth
-saham plan swing TICKER           # full Signal+Risk→TradeSetup + evidence + sizing
+saham plan swing TICKER           # at adoption: analysis + structure overlapped
 ```
 
 That makes `plan` read as **another analysis focus**, not a distinct product job.
@@ -245,9 +245,9 @@ saham trade accum log …                    # paper notebook
 | **S0** (this ADR) | Done |
 | **S1** judgment desk | **Complete 2026-07-29** — baseline (Judgment strip, `trade_setup`, pattern board, refresh) + **analysis merge**: explicit-ticker `--setup` / `--with-flow-detail` / `--with-sentiment` / `--full` via shared deep-evidence service (no Action mutation; structure stays plan-only); universe/multi hard-reject deep flags |
 | **S2** plan messaging | **Shipped 2026-07-28** — structure-desk help/footers/docs |
-| **S3** judgment authority | **Shipped 2026-07-28** — default plan Action inherits screen `candidate.trade_setup`; recompute only with explicit flags |
-| **S4** structure-first UI | **Shipped 2026-07-29** — Structure panel first; detail with `--full` |
-| **S5** swing_trade_plan | **Shipped 2026-07-29** — typed `swing_trade_plan` artifact on plan swing (JSON + `journals/plans/TICKER_latest.json`); `trade accum log --from-plan` freezes geometry |
+| **S3** judgment authority | **Clean break 2026-08-07** — plan carries the exact typed screen judgment; no plan Action fallback, risk pass, MCE preview, or technical-gate path remains; missing screen judgment is explicit `UNAVAILABLE` |
+| **S4** structure-first UI | **Clean break 2026-08-07** — Structure panel plus the referenced screen judgment; plan-owned risk/MCE/technical detail panels removed; deeper judgment remains on `screen accum TICKER --full` |
+| **S5** swing_trade_plan | **Schema 2 on 2026-08-07** — every plan run saves typed judgment plus geometry; handoff requires `geometry_complete` and `handoff_ready`; schema 1 is historical and rejected |
 | **Policy A** (MCE) | **Locked** — screen MCE remains **display-only**; plan never recomputes Action via MCE/TechnicalGate; plan CLI is **structure-only** (analysis flags stripped). B-MCE into DecisionPolicy is a separate future task if wanted. |
 
 **Trust this ADR for product contract; trust live `--help` and code for shipped depth.**
