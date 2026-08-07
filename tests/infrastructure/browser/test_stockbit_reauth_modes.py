@@ -1,4 +1,4 @@
-"""Unit tests for Stockbit reauth headless/headed modes and lock cleanup."""
+"""Unit tests for Stockbit reauth modes and Chromium lock ownership preservation."""
 
 from __future__ import annotations
 
@@ -6,46 +6,87 @@ from pathlib import Path
 
 import pytest
 
+import src.infrastructure.browser.stockbit_session_actions as session_mod
 from src.infrastructure.browser.stockbit_session_actions import (
     StockbitReauthResult,
-    _clear_stale_chromium_profile_locks,
     reauth_stockbit_session,
 )
 
 
-def test_clear_stale_locks_removes_dead_pid_singleton(tmp_path: Path) -> None:
+class _FakeSyncPlaywright:
+    def __enter__(self) -> object:
+        return object()
+
+    def __exit__(self, *_args: object) -> bool:
+        return False
+
+
+def _profile_marker_snapshot(profile: Path) -> dict[str, tuple[str, str | bytes]]:
+    snapshot: dict[str, tuple[str, str | bytes]] = {}
+    for relative in (
+        "SingletonLock",
+        "SingletonCookie",
+        "SingletonSocket",
+        "RunningChromeVersion",
+        "Default/Lock",
+    ):
+        path = profile / relative
+        if path.is_symlink():
+            snapshot[relative] = ("symlink", str(path.readlink()))
+        elif path.is_dir():
+            snapshot[relative] = ("directory", "")
+        elif path.exists():
+            snapshot[relative] = ("file", path.read_bytes())
+    return snapshot
+
+
+@pytest.mark.parametrize(
+    ("marker_kind", "marker_value"),
+    (
+        ("symlink", "malformed-owner"),
+        ("symlink", "host-99999999"),
+        ("symlink", "remote-host-99999999"),
+        ("file", ""),
+        ("file", "host-99999999"),
+        ("directory", ""),
+    ),
+)
+def test_reauth_never_mutates_chromium_profile_markers_before_launch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    marker_kind: str,
+    marker_value: str,
+) -> None:
     profile = tmp_path / "profile"
     profile.mkdir()
+    lock = profile / "SingletonLock"
+    if marker_kind == "symlink":
+        lock.symlink_to(marker_value)
+    elif marker_kind == "directory":
+        lock.mkdir()
+    else:
+        lock.write_text(marker_value)
     (profile / "Default").mkdir()
-    # Unreachable PID — treat as dead lock owner.
-    (profile / "SingletonLock").symlink_to("host-99999999")
     (profile / "SingletonCookie").symlink_to("cookie")
+    (profile / "SingletonSocket").symlink_to("socket")
     (profile / "RunningChromeVersion").symlink_to("1.0:1")
-    (profile / "Default" / "Lock").write_text("")
+    (profile / "Default" / "Lock").write_bytes(b"default-lock")
+    before = _profile_marker_snapshot(profile)
 
-    _clear_stale_chromium_profile_locks(profile)
+    monkeypatch.setattr(session_mod, "_require_playwright", lambda: _FakeSyncPlaywright)
 
-    assert not (profile / "SingletonLock").exists()
-    assert not (profile / "SingletonCookie").exists()
-    assert not (profile / "RunningChromeVersion").exists()
-    assert not (profile / "Default" / "Lock").exists()
+    def fail_profile_launch(_pw: object, launched_profile: Path, *, headless: bool):
+        assert launched_profile == profile
+        assert headless is True
+        assert _profile_marker_snapshot(profile) == before
+        raise RuntimeError("Failed to create a ProcessSingleton: profile is already in use")
 
+    monkeypatch.setattr(session_mod, "_persistent_context", fail_profile_launch)
 
-def test_clear_stale_locks_keeps_live_pid_singleton(tmp_path: Path) -> None:
-    import os
+    with pytest.raises(RuntimeError, match="ProcessSingleton"):
+        reauth_stockbit_session(profile_dir=profile, mode="headless")
 
-    profile = tmp_path / "profile"
-    profile.mkdir()
-    live_pid = os.getpid()
-    (profile / "SingletonLock").symlink_to(f"host-{live_pid}")
-    (profile / "token.json").write_text("{}")
-
-    _clear_stale_chromium_profile_locks(profile)
-
-    # SingletonLock targets "host-<pid>" (not a real path), so exists() is False
-    # unless follow_symlinks=False — the symlink itself must remain.
-    assert (profile / "SingletonLock").exists(follow_symlinks=False)
-    assert (profile / "token.json").exists()
+    assert _profile_marker_snapshot(profile) == before
 
 
 def test_reauth_rejects_unknown_mode(tmp_path: Path) -> None:

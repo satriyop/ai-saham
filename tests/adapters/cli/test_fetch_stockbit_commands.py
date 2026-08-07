@@ -110,6 +110,29 @@ def test_reauth_command_failure_exit_one(monkeypatch):
     assert result.exit_code == 1
 
 
+def test_reauth_command_surfaces_profile_in_use_without_token_leak(monkeypatch):
+    def _raise_profile_in_use(timeout=180, mode="headless"):
+        raise RuntimeError("Failed to create a ProcessSingleton: profile is already in use")
+
+    monkeypatch.setattr(
+        playwright_stockbit_provider,
+        "reauth_stockbit_session",
+        _raise_profile_in_use,
+    )
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
+        lambda: None,
+    )
+
+    result = runner.invoke(app, ["fetch", "stockbit", "reauth"])
+
+    combined = result.stdout + result.stderr
+    assert result.exit_code == 1
+    assert "Reauth failed:" in combined
+    assert "profile is already in use" in combined
+    assert "eyJ" not in combined
+
+
 def test_reauth_command_passes_headed_mode(monkeypatch):
     from src.infrastructure.browser.stockbit_session_actions import StockbitReauthResult
 

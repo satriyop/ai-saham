@@ -1,7 +1,7 @@
 # Refactor Code Review — Findings Requiring Further Vetting
 
-Status: `NEEDS_VETTING` — this is a review record, not an implementation-ready
-task and not authorization to apply any proposed fix.
+Status: `VETTED / IMPLEMENTATION_PENDING` — every finding has been independently
+vetted. This review record is not authorization to apply the remaining fixes.
 
 Review date: 2026-08-07
 
@@ -15,9 +15,8 @@ refactor.
 Spike / Research followed by separately approved bugfix tasks.
 
 **Priority**
-High. RC-01A and RC-03 are fixed and verified; RC-01B is now vetted into an
-implementation-ready design. The remaining unvetted findings include unsafe
-browser-profile lock cleanup and plan-owned Action authority.
+High. RC-01A, RC-02, RC-03, and RC-04 are fixed and verified. RC-01B remains
+vetted and ready for implementation.
 
 **Reviewed range**
 
@@ -31,21 +30,20 @@ browser-profile lock cleanup and plan-owned Action authority.
 
 ## 2. Review Conclusion
 
-The review remains open. RC-01A and RC-03 are fixed and vertically verified;
-RC-01B is confirmed and design-vetted. RC-02 and RC-04 remain for one-by-one
-vetting:
+The review remains open for RC-01B implementation, not discovery. RC-01A,
+RC-02, RC-03, and RC-04 are fixed and vertically verified:
 
 | ID | Severity | Status | Finding / result |
 |---|---|---|---|
 | RC-01A | P1 | `FIXED / VERIFIED` | Active v4/nine binds the complete resolved `DecisionPolicyConfig`; the original Action-changing counterexample now forks `compatibility_id` |
 | RC-01B | P1 challenge/corpus | `VETTED / READY_FOR_IMPLEMENTATION` | Purpose-specific schema-14 producer bindings and fail-closed consumer contract selected; code not implemented |
-| RC-02 | P1 | `NEEDS_VETTING` | Stockbit stale-lock cleanup fails open when lock ownership is unparseable |
+| RC-02 | P1 | `FIXED / VERIFIED` | Implicit lock cleanup removed; Chromium is the sole profile-ownership arbiter and adversarial markers remain untouched |
 | RC-03 | P2 | `FIXED / VERIFIED` | Readiness output and validation now source the same active v4 descriptor |
 | RC-04 | P2 | `FIXED / VERIFIED` | Plan consumes the exact typed screen judgment; v2 plan artifacts separate geometry from handoff readiness and fail closed |
 
-Passing tests do not invalidate RC-02. RC-04 is fixed and verified by the
-implementation evidence below. RC-01B characterization tests preserve its
-current identity gaps; its vetted design is not implemented yet.
+Passing tests do not invalidate the remaining RC-01B finding; its
+characterization tests preserve the current identity gaps. Its vetted design is
+not implemented yet.
 
 ## 3. Verification Evidence
 
@@ -267,6 +265,9 @@ Settled classification: ai-saham `OBSERVATION_SCHEMA` plus diagnostic
 
 ### RC-02 — Stockbit profile-lock cleanup deletes on unproven ownership
 
+Vetting status: `FIXED / VERIFIED` on 2026-08-07. Exact task:
+`tasks/backlog/rc02_remove_implicit_chromium_profile_lock_cleanup.md`.
+
 #### Problem statement
 
 `_clear_stale_chromium_profile_locks()` says an unparseable marker is a safe
@@ -287,45 +288,40 @@ read failures, host disagreement, or permission-related ambiguity.
   profile.
 - The docstring's safety guarantee is false on the highest-ambiguity branch.
 
-#### Proposed fix — requires further vetting
+#### Vetted fix
 
-Fail closed. Automatic cleanup may occur only when all of the following are
-proven:
+Remove `_clear_stale_chromium_profile_locks()` and its unconditional reauth call
+without replacement. Do not retain a stricter parser, explicit unlock command,
+PID/hostname policy, retry, or automatic deletion. Chromium/Playwright owns the
+singleton protocol and launch decision; the existing CLI already surfaces the
+upstream failure and exits non-zero.
 
-1. The marker format is recognized and parsed completely.
-2. The recorded hostname is proven local under Chromium's actual platform
-   format; cross-host/NFS ownership is never treated as stale merely because a
-   local PID is absent.
-3. PID liveness checking returns `ProcessLookupError`, which is the positive
-   proof used for dead ownership.
-4. Every deletion target is the exact, expected lock-family path inside the
-   resolved profile directory and has the expected file/symlink type.
+This is stronger than the initial fail-closed parser proposal. A reproduced
+check-to-unlink race replaced the checked dead marker with a new live-owner
+marker before deletion; the helper deleted the new live lock. Parser and
+liveness improvements cannot close that ownership race.
 
-Any parse, read, permission, hostname, type, or liveness ambiguity should leave
-all locks untouched and surface an actionable recovery message. Further vet
-whether automatic deletion should exist at all; a safer design may report the
-stale-lock diagnosis and require an explicit operator recovery command.
+Installed full-Chromium probes showed that a second live-profile launch was
+rejected without changing the first owner's lock, normal owner close removed
+the lock, and Chromium independently recovered both a dead-local and malformed
+stale lock. Current Chromium cleanup owns `SingletonLock`, `SingletonCookie`,
+and `SingletonSocket`; the application has no basis to additionally delete
+`RunningChromeVersion` or `Default/Lock`.
 
-#### Questions that must be answered before implementation
+Required tests assert zero application mutation for every marker shape at the
+browser-launch seam, exception propagation for profile-in-use, CLI exit 1, and
+unchanged headed/headless success behavior. Classification is `NON_SEMANTIC`
+for market-analysis identity: operational recovery changes, but Signal, Risk,
+TradeSetup, Action, evidence, persistence, and compatibility do not.
 
-- What lock encodings does the installed Chromium/Playwright stack actually
-  use on supported macOS and Linux environments?
-- Is a hostname-qualified marker sufficient proof for local ownership, and how
-  are renamed hosts or shared profiles handled?
-- Should cleanup remain implicit in reauthentication or move behind an explicit
-  command/confirmation?
-- Which lock objects are safe to remove together after dead ownership is
-  proven?
+#### Implemented result
 
-#### Required negative tests
-
-- Malformed and empty marker; non-numeric PID; unexpected separator.
-- `readlink()`/`read_text()` failure and permission denial.
-- Local live PID, local dead PID, cross-host marker, and PID-reuse adversarial
-  case.
-- Unexpected regular-file/symlink/directory types for every target.
-- On every ambiguous case, assert zero unlink calls across the entire lock
-  family.
+The helper and unconditional call are gone without replacement. Six adversarial
+marker cases prove the complete lock family is unchanged at the browser-launch
+seam and after failure. The existing CLI error boundary now has a profile-in-use
+regression proving exit 1 and no token leakage. Focused tests passed 50/50;
+whole-repository Ruff and format passed; full pytest passed with 6,641 tests and
+41 skips; production grep and `git diff --check` passed.
 
 ### RC-03 — Readiness report names v2 while validating v3
 
@@ -467,22 +463,22 @@ compose a setup. Tests currently preserve the fallback.
 
 ## 5. Architecture Impact Assessment
 
-This review file changes no product layer. The likely implementation blast
-radius is provisional and must be replaced by a precise file/contract inventory
-in each implementation task.
+This review file changes no product layer. Each remaining implementation task
+contains its precise file/contract inventory.
 
 ```md
 Layer plan:
-- Domain: RC-04 may require a non-authority structure/missing-verdict type
-- Application: RC-01, RC-03, and RC-04 policy/workflow ownership
-- Infrastructure: RC-02 browser-profile lock handling; RC-01 persistence only if identity transport changes
-- Adapter: RC-03 and RC-04 output mapping only; no policy may move here
+- Domain: RC-04 v2 SwingTradePlan reference/readiness invariants
+- Application: RC-01B identity transport and RC-04 screen-reference/workflow ownership
+- Infrastructure: RC-01B persistence only; RC-04 does not touch SQLite
+- Adapter: RC-04 typed output/wiring only; no policy may move here
 ```
 
 - New dependencies: none expected.
 - Determinism: must remain deterministic and local-first.
-- Persistence: RC-01 and RC-04 may require contract/schema treatment after
-  vetting; RC-02 and RC-03 should not change stored learning data.
+- Persistence: RC-01B requires a separately approved observation-contract
+  cutover; RC-04 changes filesystem plan artifacts only. Neither task may
+  reinterpret existing stored data.
 - Adapter policy: forbidden. Adapters remain thin format/wiring boundaries.
 - AI usage: none.
 
@@ -515,10 +511,8 @@ Layer plan:
    completed and classified fixed.
 2. RC-01B design vet: completed. Implement only after explicit approval, then
    vertically re-vet the coordinated cross-repository cutover.
-3. Vet and implement RC-02 independently; it is infrastructure safety and does
-   not depend on corpus identity.
-4. Vet RC-04 as a separate authority-contract task. Resolve missing-state and
-   transport ownership before touching the composer.
+3. RC-02 implementation and vertical verification: completed.
+4. RC-04 authority-contract implementation and vertical re-vet: completed.
 5. After each approved implementation, rerun focused tests, relevant
    architecture/contract tests, the whole-repository Ruff gate, full pytest
    where required by impact, and `git diff --check` on the exact final state.
@@ -528,9 +522,9 @@ Layer plan:
 This review record is not complete merely because code changes compile. It may
 move to done only when:
 
-- [ ] Each finding is independently re-vetted against then-current code and
+- [x] Each finding is independently re-vetted against then-current code and
       classified as confirmed, qualified, stale, fixed, or remaining.
-- [ ] Every confirmed finding has its own Task-Template-complete implementation
+- [x] Every confirmed finding has its own Task-Template-complete implementation
       contract with exact missing/failure states, transport owner, composition
       roots, negative tests, and close gates.
 - [x] RC-01A includes a completed authority matrix and real canonical producer
@@ -539,8 +533,8 @@ move to done only when:
 - [x] RC-01B inventories every cross-repository diagnostic consumer before an
       identity transport is selected.
 - [x] Semantic-change classifications and corpus blast radius are explicit for
-      RC-01A, RC-01B, and RC-03; RC-02 and RC-04 remain unvetted.
-- [ ] No proposed fix weakens deterministic-first behavior, risk/signal
+      RC-01A, RC-01B, RC-02, RC-03, and RC-04.
+- [x] No proposed fix weakens deterministic-first behavior, risk/signal
       guardrails, clean-break rules, or adapter thinness.
 - [ ] The final implementations pass all required focused/full tests, the
       whole-repo Ruff check and format gate, and `git diff --check` on their

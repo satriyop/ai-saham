@@ -106,56 +106,6 @@ def _mark_profile_logged_in(profile_dir: Path) -> None:
     (profile_dir / ".logged_in_at").write_text(str(time.time()))
 
 
-def _clear_stale_chromium_profile_locks(profile_dir: Path) -> None:
-    """Drop Singleton* locks left by a crashed Chromium when the lock pid is dead.
-
-    Safe no-op when the lock owner process is still alive or the marker is
-    unparseable. Never touches cookies / Local Storage / token.json.
-    """
-    lock = profile_dir / "SingletonLock"
-    if not lock.exists() and not lock.is_symlink():
-        return
-    owner_pid: int | None = None
-    try:
-        target = str(lock.readlink()) if lock.is_symlink() else lock.read_text(encoding="utf-8")
-        # Chromium writes "hostname-pid" (symlink target or file contents).
-        tail = target.strip().rsplit("-", 1)[-1]
-        if tail.isdigit():
-            owner_pid = int(tail)
-    except OSError:
-        owner_pid = None
-    if owner_pid is not None:
-        try:
-            import os
-
-            os.kill(owner_pid, 0)
-            # Process still exists — leave locks alone.
-            return
-        except ProcessLookupError:
-            pass
-        except PermissionError:
-            # Alive but not ours to signal; leave locks.
-            return
-        except OSError:
-            return
-    for name in (
-        "SingletonLock",
-        "SingletonCookie",
-        "SingletonSocket",
-        "RunningChromeVersion",
-    ):
-        path = profile_dir / name
-        try:
-            path.unlink(missing_ok=True)
-        except OSError:
-            logger.debug("Could not remove stale profile lock %s", path, exc_info=True)
-    default_lock = profile_dir / "Default" / "Lock"
-    try:
-        default_lock.unlink(missing_ok=True)
-    except OSError:
-        logger.debug("Could not remove Default/Lock", exc_info=True)
-
-
 def _try_click_role_button(page: Any, name_pattern: re.Pattern[str], *, timeout_ms: int) -> bool:
     """Click first visible role=button whose accessible name matches pattern."""
     try:
@@ -449,7 +399,6 @@ def reauth_stockbit_session(
     profile_dir = profile_dir or default_stockbit_profile_dir()
     cfg = stockbit_config or load_stockbit_config()
     _require_existing_profile(profile_dir)
-    _clear_stale_chromium_profile_locks(profile_dir)
 
     if mode == "headless":
         return _reauth_headless_jwt_refresh(profile_dir=profile_dir, cfg=cfg)
