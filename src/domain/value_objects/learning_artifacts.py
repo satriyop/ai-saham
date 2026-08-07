@@ -106,11 +106,13 @@ class LearningContractId(str, Enum):
     PRODUCTION_POLICY_SNAPSHOT_V1 = "production_policy_snapshot.v1"
     PRODUCTION_POLICY_SNAPSHOT_V2 = "production_policy_snapshot.v2"
     PRODUCTION_POLICY_SNAPSHOT_V3 = "production_policy_snapshot.v3"
+    PRODUCTION_POLICY_SNAPSHOT_V4 = "production_policy_snapshot.v4"
 
 
 # Closed accumulation export sets (ADR-059). Artifact contract and policy versions
 # are separate: v2 gains a seventh policy_id while unchanged policies stay v1, and
-# v3 gains an eighth (the aggregate unevaluable-gate policy) on the same terms.
+# v3 gains an eighth (the aggregate unevaluable-gate policy), and v4 gains the
+# resolved signal decision policy on the same terms.
 PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS = "screener.accum.score_weights"
 PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS = "signal.accum.evidence_group_weights"
 PRODUCTION_POLICY_ID_SIGNAL_FLAGS = "signal.accum.flags"
@@ -119,6 +121,7 @@ PRODUCTION_POLICY_ID_RISK_HARD_GATES = "risk.accum.hard_gates"
 PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE = "signal.accum.raw_score"
 PRODUCTION_POLICY_ID_HARD_FILTERS = "screener.accum.hard_filters"
 PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY = "risk.accum.unevaluable_policy"
+PRODUCTION_POLICY_ID_SIGNAL_DECISION_POLICY = "signal.accum.decision_policy"
 
 ACCUMULATION_PRODUCTION_POLICY_IDS_V1: tuple[str, ...] = (
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
@@ -139,8 +142,13 @@ ACCUMULATION_PRODUCTION_POLICY_IDS_V3: tuple[str, ...] = (
     PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY,
 )
 
-# Active producer closed set (v3 cutover).
-ACCUMULATION_PRODUCTION_POLICY_IDS: tuple[str, ...] = ACCUMULATION_PRODUCTION_POLICY_IDS_V3
+ACCUMULATION_PRODUCTION_POLICY_IDS_V4: tuple[str, ...] = (
+    *ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
+    PRODUCTION_POLICY_ID_SIGNAL_DECISION_POLICY,
+)
+
+# Active producer closed set (v4 cutover).
+ACCUMULATION_PRODUCTION_POLICY_IDS: tuple[str, ...] = ACCUMULATION_PRODUCTION_POLICY_IDS_V4
 
 PRODUCTION_POLICY_VERSION_V1 = "v1"
 
@@ -149,6 +157,7 @@ _ALLOWED_PRODUCTION_POLICY_SNAPSHOT_CONTRACTS: frozenset[LearningContractId] = f
         LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
         LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
         LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
+        LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V4,
     }
 )
 
@@ -1356,7 +1365,8 @@ class ProductionPolicySnapshot:
         if contract_id not in _ALLOWED_PRODUCTION_POLICY_SNAPSHOT_CONTRACTS:
             raise LearningContractError(
                 "contract_id must be production_policy_snapshot.v1, "
-                "production_policy_snapshot.v2, or production_policy_snapshot.v3, "
+                "production_policy_snapshot.v2, production_policy_snapshot.v3, "
+                "or production_policy_snapshot.v4, "
                 f"got {contract_id!r}"
             )
         for name, value in (

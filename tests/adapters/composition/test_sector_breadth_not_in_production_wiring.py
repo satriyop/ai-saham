@@ -33,11 +33,11 @@ from src.domain.value_objects.signal_semantic_contract import ACCUMULATION_DISCO
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_active_closed_set_is_exactly_eight_v3_ids_without_sector_breadth() -> None:
-    assert len(ACCUMULATION_PRODUCTION_POLICY_IDS) == 8
+def test_active_closed_set_is_exactly_nine_v4_ids_without_sector_breadth() -> None:
+    assert len(ACCUMULATION_PRODUCTION_POLICY_IDS) == 9
     assert "screener.accum.sector_breadth" not in ACCUMULATION_PRODUCTION_POLICY_IDS
-    assert LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3.value == (
-        "production_policy_snapshot.v3"
+    assert LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V4.value == (
+        "production_policy_snapshot.v4"
     )
     values = {m.value for m in LearningContractId}
     # ADR-068 retired the lean compatibility contract family outright; no v3 of

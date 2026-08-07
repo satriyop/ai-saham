@@ -12,6 +12,7 @@ from src.application.services.accumulation_screen_hard_filter_policy import (
     AccumulationScreenHardFilterPolicy,
 )
 from src.application.services.signal_engine_config import (
+    DecisionPolicyConfig,
     EvidenceGroupsConfig,
     SignalClassificationConfig,
     SignalEngineConfig,
@@ -32,6 +33,7 @@ from src.domain.value_objects.learning_artifacts import (
     PRODUCTION_POLICY_ID_HARD_FILTERS,
     PRODUCTION_POLICY_ID_RISK_HARD_GATES,
     PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION,
+    PRODUCTION_POLICY_ID_SIGNAL_DECISION_POLICY,
     PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
     PRODUCTION_POLICY_ID_SIGNAL_FLAGS,
     PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE,
@@ -54,6 +56,8 @@ UNEVALUABLE_GATE_POLICY_SEMANTIC_CONTRACT_ID = "risk.unevaluable_gate.accum.v1"
 UNEVALUABLE_GATE_POLICY_FORMULA_ID = "assess_risk_gate_evaluator.evaluate.unevaluable_aggregate.v1"
 HARD_FILTERS_SEMANTIC_CONTRACT_ID = "screen.accum.hard_filters.v1"
 HARD_FILTERS_FORMULA_ID = "accumulation_screen.first_match_hard_filters.v1"
+SIGNAL_DECISION_POLICY_SEMANTIC_CONTRACT_ID = "signal.decision_policy.accum.v1"
+SIGNAL_DECISION_POLICY_FORMULA_ID = "decision_policy_service.resolve.v1"
 # Must name the method that actually computes the base score. Kept as a
 # constant so the declared formula and its test cannot drift apart silently.
 EVIDENCE_GROUP_BASE_SCORE_FORMULA_ID = "signal_evidence_group_scorer.base_score_from_flow_group.v1"
@@ -70,6 +74,20 @@ ACCUM_CANONICAL_WINDOW = 7
 
 RAW_EXACT_SCORE_FIELD = f"features_by_window.{ACCUM_CANONICAL_WINDOW}.signal.raw_exact_score"
 ASSESSMENT_SCORE_FIELD = f"features_by_window.{ACCUM_CANONICAL_WINDOW}.signal.assessment.score"
+ASSESSMENT_ENTRY_QUALITY_FIELD = (
+    f"features_by_window.{ACCUM_CANONICAL_WINDOW}.signal.assessment.entry_quality"
+)
+ASSESSMENT_DECISION_CONSTRAINTS_FIELD = (
+    f"features_by_window.{ACCUM_CANONICAL_WINDOW}.signal.assessment.decision_constraints"
+)
+
+_DECISION_POLICY_REGIMES: tuple[str, ...] = (
+    "NEUTRAL",
+    "RISK_OFF",
+    "RISK_ON",
+    "VOLATILE",
+)
+_DECISION_POLICY_DECISIONS: tuple[str, ...] = ("AVOID", "ENTER", "WATCH")
 
 
 def _component(
@@ -513,6 +531,58 @@ def build_unevaluable_gate_policy_payload(policy: UnevaluableGatePolicy) -> dict
     }
 
 
+def build_signal_decision_policy_payload(policy: DecisionPolicyConfig) -> dict[str, Any]:
+    """Project the complete resolved canonical ACCUM decision policy.
+
+    The caller supplies the same typed object used by ``DecisionPolicyService``.
+    This function performs no config read and applies no defaults.
+    """
+
+    return {
+        "policy_id": PRODUCTION_POLICY_ID_SIGNAL_DECISION_POLICY,
+        "policy_version": PRODUCTION_POLICY_VERSION_V1,
+        "decision_type": "gate",
+        "semantic_engine_contract_id": SIGNAL_DECISION_POLICY_SEMANTIC_CONTRACT_ID,
+        "formula_id": SIGNAL_DECISION_POLICY_FORMULA_ID,
+        "scope": "canonical_accum_signal_entry_quality_and_constraints",
+        "regime_policy": {
+            regime: {
+                "enter_allowed": policy.regime_policy[regime].enter_allowed,
+                "max_decision": policy.regime_policy[regime].max_decision,
+                "regime_size_multiplier": policy.regime_policy[regime].regime_size_multiplier,
+                "enter_threshold": policy.regime_policy[regime].enter_threshold,
+                "watch_threshold": policy.regime_policy[regime].watch_threshold,
+                "min_signal_authority_coverage": policy.regime_policy[
+                    regime
+                ].min_signal_authority_coverage,
+            }
+            for regime in _DECISION_POLICY_REGIMES
+        },
+        "setup_regime_policy": {
+            family: {regime: by_regime[regime] for regime in sorted(by_regime)}
+            for family, by_regime in sorted(policy.setup_regime_policy.items())
+        },
+        "setup_regime_actions": {
+            action: {"max_decision": config.max_decision}
+            for action, config in sorted(policy.setup_regime_actions.items())
+        },
+        "regime_confidence_min_enter": policy.regime_confidence_min_enter,
+        "regime_transitioning_cap_enter": policy.regime_transitioning_cap_enter,
+        "closed_vocabularies": {
+            "regimes": list(_DECISION_POLICY_REGIMES),
+            "decisions": list(_DECISION_POLICY_DECISIONS),
+        },
+        "missing_data": {
+            "absent_setup_family": "no_setup_specific_action",
+            "absent_market_context_regime": "RISK_ON",
+        },
+        "observation_result_fields": {
+            "entry_quality": ASSESSMENT_ENTRY_QUALITY_FIELD,
+            "decision_constraints": ASSESSMENT_DECISION_CONSTRAINTS_FIELD,
+        },
+    }
+
+
 def build_all_accumulation_policy_payloads(
     *,
     accum_score_policy: AccumScorePolicy,
@@ -522,7 +592,7 @@ def build_all_accumulation_policy_payloads(
     hard_filter_policy: AccumulationScreenHardFilterPolicy,
     unevaluable_gate_policy: UnevaluableGatePolicy,
 ) -> Mapping[str, Mapping[str, Any]]:
-    """Return mapping policy_id -> canonical payload for the closed v3 set."""
+    """Return mapping policy_id -> canonical payload for the closed v4 set."""
 
     return {
         PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS: build_accum_score_weights_payload(
@@ -542,5 +612,8 @@ def build_all_accumulation_policy_payloads(
         PRODUCTION_POLICY_ID_HARD_FILTERS: build_hard_filters_payload(hard_filter_policy),
         PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY: build_unevaluable_gate_policy_payload(
             unevaluable_gate_policy
+        ),
+        PRODUCTION_POLICY_ID_SIGNAL_DECISION_POLICY: build_signal_decision_policy_payload(
+            signal_engine_config.decision_policy
         ),
     }

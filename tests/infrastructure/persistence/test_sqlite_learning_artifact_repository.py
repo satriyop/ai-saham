@@ -26,6 +26,7 @@ from src.domain.value_objects.learning_artifacts import (
 from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
     _POLICY_SNAPSHOT_COLUMNS,
     _POLICY_SNAPSHOT_CREATE_V3,
+    _POLICY_SNAPSHOT_CREATE_V4,
     SQLiteLearningArtifactRepository,
     connect_learning_database,
 )
@@ -512,7 +513,7 @@ def test_policy_snapshot_atomic_batch_all_or_nothing(tmp_path: Path) -> None:
         == ()
     )
 
-    # Happy path: closed eight-row v3 set in one transaction.
+    # Happy path: closed nine-row v4 set in one transaction.
     inserted, reused = repo.add_policy_snapshots_atomic([first, *rest])
     assert inserted == len(ACCUMULATION_PRODUCTION_POLICY_IDS)
     assert reused == 0
@@ -822,3 +823,80 @@ def test_policy_snapshot_v4_migration_preserves_v1_v2_and_accepts_v3(tmp_path: P
     loaded = reopened.get_policy_snapshot(v3.snapshot_id)
     assert loaded is not None
     assert loaded.contract_id is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3
+
+
+def test_policy_snapshot_v5_migration_preserves_v1_v2_v3_and_accepts_v4(
+    tmp_path: Path,
+) -> None:
+    """Migration 5 widens only the contract CHECK and preserves historical rows."""
+    import sqlite3
+
+    from src.infrastructure.persistence.sqlite_learning_artifact_repository import (
+        LEARNING_MIGRATION_NAMESPACE,
+        ensure_learning_schema,
+    )
+
+    db_path = tmp_path / "migration5_check.db"
+    repo = SQLiteLearningArtifactRepository(db_path)
+    historical = [
+        _policy_snapshot(
+            contract_id=contract,
+            compatibility_id="sha256:" + (token * 32),
+            weight=weight,
+        )
+        for contract, token, weight in (
+            (LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1, "aa", 10.0),
+            (LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2, "bb", 11.0),
+            (LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3, "cc", 12.0),
+        )
+    ]
+    for snap in historical:
+        assert repo.add_policy_snapshot(snap) is True
+
+    with connect_learning_database(db_path) as connection:
+        connection.execute(
+            "DELETE FROM _schema_migrations WHERE namespace = ? AND version = 5",
+            (LEARNING_MIGRATION_NAMESPACE,),
+        )
+        connection.execute(_POLICY_SNAPSHOT_CREATE_V4)
+        cols = ", ".join(_POLICY_SNAPSHOT_COLUMNS)
+        connection.execute(
+            f"INSERT INTO learning_policy_snapshots__v4 ({cols}) "  # noqa: S608
+            f"SELECT {cols} FROM learning_policy_snapshots"
+        )
+        connection.execute("DROP TABLE learning_policy_snapshots")
+        connection.execute(
+            "ALTER TABLE learning_policy_snapshots__v4 RENAME TO learning_policy_snapshots"
+        )
+        connection.commit()
+
+    with sqlite3.connect(str(db_path)) as raw, pytest.raises(sqlite3.IntegrityError):
+        raw.execute(
+            """
+            INSERT INTO learning_policy_snapshots (
+                snapshot_id, schema_version, contract_id, purpose,
+                learning_observation_contract_id, producer_observation_contract,
+                compatibility_id, policy_id, policy_version, decision_type,
+                semantic_engine_contract_id, material_config_hash,
+                canonical_payload_json, payload_digest, source_revision,
+                created_at, artifact_json
+            ) VALUES (?, 1, 'production_policy_snapshot.v4', 'ACCUMULATION_DISCOVERY',
+                      'c', 'p', 'compat', 'pid', 'v1', 'gate', 's', 'h', '{}',
+                      ?, 'rev', '2026-01-01T00:00:00+00:00', '{}')
+            """,
+            ("probe", "0" * 64),
+        )
+
+    ensure_learning_schema(db_path)
+
+    reopened = SQLiteLearningArtifactRepository(db_path)
+    for snap in historical:
+        assert reopened.get_policy_snapshot(snap.snapshot_id) == snap
+
+    v4 = _policy_snapshot(
+        contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V4,
+        compatibility_id="sha256:" + ("dd" * 32),
+        weight=13.0,
+    )
+    assert reopened.add_policy_snapshot(v4) is True
+    assert reopened.get_policy_snapshot(v4.snapshot_id) == v4

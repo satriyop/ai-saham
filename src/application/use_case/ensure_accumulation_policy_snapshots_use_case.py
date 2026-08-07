@@ -13,7 +13,7 @@ from src.application.services.accumulation_policy_snapshot_payloads import (
     build_all_accumulation_policy_payloads,
 )
 from src.application.services.accumulation_production_policy_descriptors import (
-    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3,
+    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4,
 )
 from src.application.services.accumulation_screen_hard_filter_policy import (
     AccumulationScreenHardFilterPolicy,
@@ -65,13 +65,13 @@ class EnsureAccumulationPolicySnapshotsResponse:
 
 
 class EnsureAccumulationPolicySnapshotsUseCase:
-    """Materialize the closed v3 set of production policy snapshots for a cohort.
+    """Materialize the closed v4 set of production policy snapshots for a cohort.
 
     Must run before any accumulation observation write. Recomputes the ADR-068
     behavioural cohort identity from the payloads it is about to write and fails
     closed on mismatch with the identity the caller already stamped on its
-    observations. Writes only ``production_policy_snapshot.v3`` (eight rows). No
-    dual-write of v1 or v2.
+    observations. Writes only ``production_policy_snapshot.v4`` (nine rows). No
+    dual-write of v1, v2, or v3.
 
     ADR-068 removed the config-byte double-read this use case used to perform.
     The guarantee it bought is now structural rather than checked: identity is
@@ -106,7 +106,7 @@ class EnsureAccumulationPolicySnapshotsUseCase:
         )
         if set(payloads) != set(ACCUMULATION_PRODUCTION_POLICY_IDS):
             raise LearningContractError(
-                "payload builder must emit exactly the closed v3 policy set"
+                "payload builder must emit exactly the closed v4 policy set"
             )
 
         identity = resolve_accumulation_cohort_identity_from_payloads(
@@ -131,10 +131,10 @@ class EnsureAccumulationPolicySnapshotsUseCase:
         learning_observation_contract_id = LearningContractId.ACCUMULATION_OBSERVATION.value
         snapshots: list[ProductionPolicySnapshot] = []
         for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS:
-            descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3[policy_id]
+            descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4[policy_id]
             snapshots.append(
                 ProductionPolicySnapshot.create(
-                    contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
+                    contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V4,
                     purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
                     learning_observation_contract_id=learning_observation_contract_id,
                     producer_observation_contract=ACCUMULATION_DISCOVERY_OBSERVATION_CONTRACT,

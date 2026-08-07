@@ -1,4 +1,4 @@
-"""Authoritative production-policy snapshot descriptors (ADR-059 v3).
+"""Authoritative production-policy snapshot descriptors (ADR-059 v4).
 
 Layer: Application (pure). Single source of truth for decision_type,
 semantic_engine_contract_id, and policy_version per closed-set policy_id.
@@ -14,15 +14,18 @@ from src.application.services.accumulation_policy_snapshot_payloads import (
     ACCUM_SCORE_SEMANTIC_CONTRACT_ID,
     HARD_FILTERS_SEMANTIC_CONTRACT_ID,
     RISK_HARD_GATES_SEMANTIC_CONTRACT_ID,
+    SIGNAL_DECISION_POLICY_SEMANTIC_CONTRACT_ID,
     SIGNAL_SEMANTIC_CONTRACT_ID,
     UNEVALUABLE_GATE_POLICY_SEMANTIC_CONTRACT_ID,
 )
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V4,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     PRODUCTION_POLICY_ID_HARD_FILTERS,
     PRODUCTION_POLICY_ID_RISK_HARD_GATES,
     PRODUCTION_POLICY_ID_SIGNAL_CLASSIFICATION,
+    PRODUCTION_POLICY_ID_SIGNAL_DECISION_POLICY,
     PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
     PRODUCTION_POLICY_ID_SIGNAL_FLAGS,
     PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE,
@@ -41,8 +44,8 @@ class ProductionPolicyDescriptor:
     policy_version: str = PRODUCTION_POLICY_VERSION_V1
 
 
-# Closed active set descriptors (production_policy_snapshot.v3).
-ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3: Mapping[str, ProductionPolicyDescriptor] = {
+# Closed active set descriptors (production_policy_snapshot.v4).
+ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4: Mapping[str, ProductionPolicyDescriptor] = {
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS: ProductionPolicyDescriptor(
         policy_id=PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
         decision_type="score",
@@ -83,24 +86,35 @@ ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3: Mapping[str, ProductionPolicyDesc
         decision_type="gate",
         semantic_engine_contract_id=UNEVALUABLE_GATE_POLICY_SEMANTIC_CONTRACT_ID,
     ),
+    PRODUCTION_POLICY_ID_SIGNAL_DECISION_POLICY: ProductionPolicyDescriptor(
+        policy_id=PRODUCTION_POLICY_ID_SIGNAL_DECISION_POLICY,
+        decision_type="gate",
+        semantic_engine_contract_id=SIGNAL_DECISION_POLICY_SEMANTIC_CONTRACT_ID,
+    ),
 }
 
-# Ordered closed set must match ACCUMULATION_PRODUCTION_POLICY_IDS_V3 exactly.
-assert tuple(ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3) == tuple(
+# Immutable historical descriptor set retained for audit/tests only.
+ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3: Mapping[str, ProductionPolicyDescriptor] = {
+    policy_id: ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4[policy_id]
+    for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS_V3
+}
+
+# Ordered closed set must match ACCUMULATION_PRODUCTION_POLICY_IDS_V4 exactly.
+assert tuple(ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4) == tuple(
     # Mapping preserves insertion order (3.7+); lock against set drift.
     pid
-    for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V3
-), "descriptor map keys must match closed v3 policy order/set"
+    for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V4
+), "descriptor map keys must match closed v4 policy order/set"
 
 
 def decision_type_by_policy() -> dict[str, str]:
     return {
-        pid: d.decision_type for pid, d in ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3.items()
+        pid: d.decision_type for pid, d in ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4.items()
     }
 
 
 def semantic_contract_by_policy() -> dict[str, str]:
     return {
         pid: d.semantic_engine_contract_id
-        for pid, d in ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3.items()
+        for pid, d in ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4.items()
     }

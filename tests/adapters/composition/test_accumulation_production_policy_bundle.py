@@ -34,6 +34,7 @@ from src.application.services.accumulation_production_policy_bundle import (
 from src.application.services.accumulation_screen_hard_filter_policy import (
     AccumulationScreenHardFilterPolicy,
 )
+from src.application.services.signal_engine import SignalEngine
 from src.application.services.signal_engine_config import SignalEngineConfig
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.rules.bandar_gate import BandarGate
@@ -115,15 +116,42 @@ def _bare_default_payloads() -> Mapping[str, Mapping[str, Any]]:
 
 
 def test_real_production_config_builds_the_closed_policy_set() -> None:
-    """Real repo config must build all eight rows without raising.
+    """Real repo config must build all nine rows without raising.
 
     Row count and the policy-id set are pinned deliberately: the closed set is
-    a contract (ADR-059 ``production_policy_snapshot.v3``), not a config value.
+    a contract (ADR-059 ``production_policy_snapshot.v4``), not a config value.
     """
     payloads = _payloads_from(_resolve_real_bundle())
 
     assert set(payloads) == set(ACCUMULATION_PRODUCTION_POLICY_IDS)
-    assert len(payloads) == 8
+    assert len(payloads) == 9
+
+
+def test_signal_engine_and_snapshot_builder_share_the_resolved_decision_policy_object(
+    monkeypatch,
+) -> None:
+    """No second parse/default may split Action policy from cohort identity."""
+    import src.application.services.accumulation_policy_snapshot_payloads as payload_module
+
+    bundle = _resolve_real_bundle()
+    seen: list[object] = []
+    original = payload_module.build_signal_decision_policy_payload
+
+    def record(policy):
+        seen.append(policy)
+        return original(policy)
+
+    monkeypatch.setattr(payload_module, "build_signal_decision_policy_payload", record)
+    _payloads_from(bundle)
+    engine = SignalEngine(config=bundle.signal_engine_config)
+
+    assert seen == [bundle.signal_engine_config.decision_policy]
+    assert seen[0] is bundle.signal_engine_config.decision_policy
+    assert engine._config.decision_policy is bundle.signal_engine_config.decision_policy
+    assert (
+        engine._evidence_use_case._config.decision_policy
+        is bundle.signal_engine_config.decision_policy
+    )
 
 
 def test_real_production_config_payloads_are_deterministic() -> None:

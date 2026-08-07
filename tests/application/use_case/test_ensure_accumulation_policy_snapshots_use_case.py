@@ -1,4 +1,4 @@
-"""Tests for EnsureAccumulationPolicySnapshotsUseCase (ADR-059 v3 + ADR-068)."""
+"""Tests for EnsureAccumulationPolicySnapshotsUseCase (ADR-059 v4 + ADR-068)."""
 
 from __future__ import annotations
 
@@ -165,23 +165,23 @@ def _request(
     )
 
 
-def test_ensure_writes_exactly_eight_closed_v3_policy_ids() -> None:
+def test_ensure_writes_exactly_nine_closed_v4_policy_ids() -> None:
     repo = _MemoryPolicySnapshotRepo()
     response = EnsureAccumulationPolicySnapshotsUseCase(repo).execute(_request())
 
-    assert response.inserted_count == 8
+    assert response.inserted_count == 9
     assert response.reused_count == 0
     assert response.required_policy_ids == ACCUMULATION_PRODUCTION_POLICY_IDS
-    assert len(repo.rows) == 8
+    assert len(repo.rows) == 9
     assert len(repo.batch_calls) == 1
-    assert len(repo.batch_calls[0]) == 8
+    assert len(repo.batch_calls[0]) == 9
     written_ids = {r.policy_id for r in repo.rows.values()}
     assert written_ids == set(ACCUMULATION_PRODUCTION_POLICY_IDS)
     assert PRODUCTION_POLICY_ID_HARD_FILTERS in written_ids
     assert PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY in written_ids
     for snap in repo.rows.values():
         assert snap.source_revision == SOURCE_REVISION
-        assert snap.contract_id is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3
+        assert snap.contract_id is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V4
 
 
 def test_ensure_hard_filter_payload_is_pre_neutralization_policy() -> None:
@@ -210,10 +210,10 @@ def test_ensure_is_idempotent_for_same_cohort_content() -> None:
     first = use_case.execute(_request())
     second = use_case.execute(_request())
 
-    assert first.inserted_count == 8
+    assert first.inserted_count == 9
     assert second.inserted_count == 0
-    assert second.reused_count == 8
-    assert len(repo.rows) == 8
+    assert second.reused_count == 9
+    assert len(repo.rows) == 9
     assert len(repo.batch_calls) == 2
 
 
@@ -253,7 +253,7 @@ def test_ensure_rejects_empty_source_revision() -> None:
 
 
 def test_mismatched_identity_writes_nothing() -> None:
-    """Fail closed *before* any row lands, not part-way through the eight."""
+    """Fail closed *before* any row lands, not part-way through the nine."""
     repo = _MemoryPolicySnapshotRepo()
     request = _request()
     bad = replace(
@@ -291,7 +291,7 @@ def test_typed_material_change_forks_the_cohort_instead_of_colliding() -> None:
 
     assert first.compatibility_id != second.compatibility_id
     assert set(first.snapshot_ids).isdisjoint(second.snapshot_ids)
-    assert len(repo.rows) == 16
+    assert len(repo.rows) == 18
 
 
 def test_declared_policy_change_forks_compatibility_id() -> None:
@@ -301,14 +301,37 @@ def test_declared_policy_change_forks_compatibility_id() -> None:
     a = use_case.execute(_request())
     b = use_case.execute(_request(hard_filter=replace(_default_hard_filters(), min_piotroski=7)))
     assert a.compatibility_id != b.compatibility_id
-    assert len(repo.rows) == 16
+    assert len(repo.rows) == 18
+
+
+def test_resolved_decision_policy_change_forks_compatibility_id() -> None:
+    """RC-01A counterexample: Action policy must move the declared-policy axis."""
+    base = SignalEngineConfig()
+    risk_on = base.decision_policy.regime_policy["RISK_ON"]
+    mutated_decision_policy = replace(
+        base.decision_policy,
+        regime_policy={
+            **base.decision_policy.regime_policy,
+            "RISK_ON": replace(risk_on, enter_allowed=False),
+        },
+    )
+    mutated = replace(base, decision_policy=mutated_decision_policy)
+
+    repo = _MemoryPolicySnapshotRepo()
+    use_case = EnsureAccumulationPolicySnapshotsUseCase(repo)
+    permitted = use_case.execute(_request(signal=base))
+    capped = use_case.execute(_request(signal=mutated))
+
+    assert permitted.compatibility_id != capped.compatibility_id
+    assert set(permitted.snapshot_ids).isdisjoint(capped.snapshot_ids)
+    assert len(repo.rows) == 18
 
 
 def test_material_config_hash_is_the_resolved_policy_fold() -> None:
     """The row column and the cohort must never describe different policy.
 
     ADR-068 repoints ``material_config_hash`` from a hash of raw config bytes to
-    the same eight-row payload fold that feeds the declared-policy axis of the
+    the same nine-row payload fold that feeds the declared-policy axis of the
     cohort id, so the two can no longer drift apart.
     """
     repo = _MemoryPolicySnapshotRepo()
@@ -337,11 +360,11 @@ def test_created_at_change_does_not_affect_digest() -> None:
         )
     )
     assert response.inserted_count == 0
-    assert response.reused_count == 8
+    assert response.reused_count == 9
 
 
 def test_unevaluable_gate_policy_change_forks_the_cohort() -> None:
-    """The eighth row is real identity, not decoration.
+    """The historical eighth row remains real identity, not decoration.
 
     ``surface`` and ``block`` reject different candidates on missing gate input
     (``assess_risk_gate_evaluator.evaluate``), so two deployments that differ
@@ -361,7 +384,7 @@ def test_unevaluable_gate_policy_change_forks_the_cohort() -> None:
 
     assert surfacing.compatibility_id != blocking.compatibility_id
     assert set(surfacing.snapshot_ids).isdisjoint(blocking.snapshot_ids)
-    assert len(repo.rows) == 16
+    assert len(repo.rows) == 18
     by_compat = {
         r.compatibility_id
         for r in repo.rows.values()

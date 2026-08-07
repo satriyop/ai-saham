@@ -9,14 +9,14 @@ import pytest
 
 from src.application.services.accumulation_producer_readiness import ProducerReadinessStatus
 from src.application.services.accumulation_production_policy_descriptors import (
-    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3,
+    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4,
 )
 from src.application.use_case.get_accumulation_producer_readiness_use_case import (
     GetAccumulationProducerReadinessUseCase,
 )
 from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
-    ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V4,
     AccumPopulationBinding,
     AssessmentPurpose,
     LabelAvailability,
@@ -211,9 +211,9 @@ def _label(observation: LearningObservation) -> LearningOutcomeLabel:
 
 
 def _snapshot(policy_id: str, compatibility_id: str) -> ProductionPolicySnapshot:
-    descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3[policy_id]
+    descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4[policy_id]
     return ProductionPolicySnapshot.create(
-        contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
+        contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V4,
         purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
         learning_observation_contract_id=OBS_CONTRACT,
         producer_observation_contract=PRODUCER_CONTRACT,
@@ -236,7 +236,7 @@ def _snapshot(policy_id: str, compatibility_id: str) -> ProductionPolicySnapshot
 
 
 def _seed_full_active_set(repo: SQLiteLearningArtifactRepository, compatibility_id: str) -> None:
-    for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V3:
+    for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V4:
         assert repo.add_policy_snapshot(_snapshot(pid, compatibility_id))
 
 
@@ -318,14 +318,16 @@ def test_use_case_reports_legacy_and_ready_cohorts_without_writes(tmp_path) -> N
     assert spy.write_calls == []
     assert report.observation_count == 4
     assert report.cohort_count == 2
+    assert report.active_snapshot_binding_contract == "production_policy_snapshot.v4"
     by_id = {c.compatibility_id: c for c in report.cohorts}
     assert by_id[COMPAT_A].producer_status is ProducerReadinessStatus.LEGACY_RAW_ONLY
     assert by_id[COMPAT_B].producer_status is ProducerReadinessStatus.CHALLENGE_INPUT_READY
-    assert by_id[COMPAT_B].snapshot.verified_count == 8
+    assert by_id[COMPAT_B].snapshot.verified_count == 9
     assert by_id[COMPAT_B].labels_by_horizon["H10"].available == 2
 
     payload = report.to_dict()
     assert payload["artifact_type"] == "accumulation_producer_readiness"
+    assert payload["active_snapshot_binding_contract"] == "production_policy_snapshot.v4"
     assert payload["cohort_count"] == 2
     assert {c["producer_status"] for c in payload["cohorts"]} == {
         "LEGACY_RAW_ONLY",

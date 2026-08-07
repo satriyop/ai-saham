@@ -154,8 +154,8 @@ _ROOT = Path(__file__).resolve().parents[3]
 # authoring notes were all still outside it. Both changes hashed more of the same
 # frozen inputs; neither changed probe data or engine behaviour, which is why the
 # behavioural digest below is untouched by them.
-_FROZEN_CORE_BEHAVIORAL_DIGEST = "85ce36cc91adcb23a0afbdb22e01843b760c28000cc01064055877005efcf4b1"
-_FROZEN_CORE_INPUT_DIGEST = "503e5ea13714334d8de1a4c4a91b351a5a4545b492a3a114485436b595076d4e"
+_FROZEN_CORE_BEHAVIORAL_DIGEST = "913ab690547eba19e95f509f281ce4d1afe15ffdaaae3d242795b18c2f5b4ad8"
+_FROZEN_CORE_INPUT_DIGEST = "7676eec17f62bce9a2f569e9c88a658936a92e9e340573d4b965d7cbb8662c04"
 
 
 # ── Coverage scope and floors ───────────────────────────────────────────────
@@ -687,14 +687,6 @@ _SURVIVING_MUTANTS: dict[str, str] = {
         "missing-data action applies. Closing this needs a core probe with "
         "candles but no market cap."
     ),
-    "signal.decision_policy.regime_confidence_min_enter:0.35->0.99": (
-        "PROBE-INPUT HOLE. The ENTER cap compares MarketContext."
-        "regime_confidence (decision_policy.py A2), a field BehavioralProbe "
-        "does not model — probes set regime, conviction, signal multiplier and "
-        "gate tightening only, so regime_confidence is always None and the "
-        "comparison is skipped. Closing this needs BehavioralProbe to carry a "
-        "regime_confidence value and a core probe that sets it."
-    ),
     # ── Equivalent mutants (no probe input can close these) ─────────────────
     "signal.evidence_groups.flow_confirmation.weight:x3": (
         "EQUIVALENT MUTANT, created deliberately by ADR-067 slice 3. This "
@@ -780,6 +772,7 @@ def test_gap_closing_core_probes_are_present_and_identity_material() -> None:
         "phase_compression_bb_width_band",
         "phase_breakout_volume_dry_up_expansion",
         "signal_flag_valuation_stretched",
+        "regime_confidence_threshold_boundary",
     }
     assert expected <= core_ids, f"missing gap-closing core probes: {expected - core_ids}"
     assert not (expected & {probe.probe_id for probe in extended_probe_set()})

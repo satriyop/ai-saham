@@ -23,7 +23,7 @@ from src.application.services.accumulation_producer_readiness import (
     project_cohort_readiness as _project_cohort_readiness_impl,
 )
 from src.application.services.accumulation_production_policy_descriptors import (
-    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3,
+    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4,
 )
 from src.domain.services.trading_calendar import (
     first_weekday_session_after,
@@ -32,7 +32,7 @@ from src.domain.services.trading_calendar import (
 )
 from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
 from src.domain.value_objects.learning_artifacts import (
-    ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V4,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     PRODUCTION_POLICY_ID_HARD_FILTERS,
     AccumPopulationBinding,
@@ -433,15 +433,15 @@ def _rehash_label(label: LearningOutcomeLabel) -> LearningOutcomeLabel:
 def _snapshot(
     policy_id: str,
     *,
-    contract: LearningContractId = LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
+    contract: LearningContractId = LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V4,
     compatibility_id: str = COMPAT,
     corrupt_digest: bool = False,
     material: str = MATERIAL,
     semantic_override: str | None = None,
     decision_override: str | None = None,
 ) -> ProductionPolicySnapshot:
-    descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3.get(policy_id)
-    if descriptor is not None and contract is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3:
+    descriptor = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4.get(policy_id)
+    if descriptor is not None and contract is LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V4:
         decision_type = decision_override or descriptor.decision_type
         semantic = semantic_override or descriptor.semantic_engine_contract_id
         policy_version = descriptor.policy_version
@@ -480,7 +480,7 @@ def _full_active_set(
 ) -> tuple[ProductionPolicySnapshot, ...]:
     return tuple(
         _snapshot(pid, compatibility_id=compatibility_id, material=material)
-        for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V3
+        for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V4
     )
 
 
@@ -488,12 +488,12 @@ def test_classify_legacy_when_active_set_not_verified() -> None:
     from src.application.services.accumulation_producer_readiness import SnapshotBindingReport
 
     snap = SnapshotBindingReport(
-        binding_contract="production_policy_snapshot.v3",
-        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
-        required_count=7,
+        binding_contract="production_policy_snapshot.v4",
+        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V4),
+        required_count=9,
         verified_count=0,
         verified_policy_ids=(),
-        missing_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
+        missing_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V4),
         extra_policy_ids=(),
         invalid_policy_ids=(),
         observed_contract_ids=(),
@@ -527,15 +527,15 @@ def test_classify_blocked_on_observation_corruption() -> None:
     from src.application.services.accumulation_producer_readiness import SnapshotBindingReport
 
     snap = SnapshotBindingReport(
-        binding_contract="production_policy_snapshot.v3",
-        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
-        required_count=7,
-        verified_count=8,
-        verified_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
+        binding_contract="production_policy_snapshot.v4",
+        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V4),
+        required_count=9,
+        verified_count=9,
+        verified_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V4),
         missing_policy_ids=(),
         extra_policy_ids=(),
         invalid_policy_ids=(),
-        observed_contract_ids=("production_policy_snapshot.v3",),
+        observed_contract_ids=("production_policy_snapshot.v4",),
         material_config_hashes=(MATERIAL,),
         active_set_verified=True,
         has_corruption=False,
@@ -566,15 +566,15 @@ def test_classify_collecting_and_ready() -> None:
     from src.application.services.accumulation_producer_readiness import SnapshotBindingReport
 
     snap = SnapshotBindingReport(
-        binding_contract="production_policy_snapshot.v3",
-        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
-        required_count=7,
-        verified_count=8,
-        verified_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V3),
+        binding_contract="production_policy_snapshot.v4",
+        required_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V4),
+        required_count=9,
+        verified_count=9,
+        verified_policy_ids=tuple(ACCUMULATION_PRODUCTION_POLICY_IDS_V4),
         missing_policy_ids=(),
         extra_policy_ids=(),
         invalid_policy_ids=(),
-        observed_contract_ids=("production_policy_snapshot.v3",),
+        observed_contract_ids=("production_policy_snapshot.v4",),
         material_config_hashes=(MATERIAL,),
         active_set_verified=True,
         has_corruption=False,
@@ -662,7 +662,7 @@ def test_verify_accepts_authoritative_full_set() -> None:
     )
     assert report.active_set_verified is True
     assert report.material_config_hashes == (MATERIAL,)
-    assert report.verified_count == 8
+    assert report.verified_count == 9
 
 
 def test_verify_zero_snapshots_is_legacy_not_blocked() -> None:
@@ -676,8 +676,8 @@ def test_verify_zero_snapshots_is_legacy_not_blocked() -> None:
     assert report.claims_active_binding is False
 
 
-def test_verify_partial_v2_claims_active_and_lists_missing() -> None:
-    snaps = tuple(_snapshot(pid) for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V3[:5])
+def test_verify_partial_v4_claims_active_and_lists_missing() -> None:
+    snaps = tuple(_snapshot(pid) for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V4[:5])
     report = verify_snapshot_binding(
         snaps,
         purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
@@ -890,7 +890,7 @@ def test_missing_session_date_does_not_count_sessions_via_cutoff() -> None:
 
 def test_project_blocked_on_partial_snapshots() -> None:
     obs = [_observation(day=1), _observation(day=2, ticker="BBRI")]
-    snaps = tuple(_snapshot(pid) for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V3[:6])
+    snaps = tuple(_snapshot(pid) for pid in ACCUMULATION_PRODUCTION_POLICY_IDS_V4[:6])
     cohort = project_cohort_readiness(
         compatibility_id=COMPAT,
         observations=obs,

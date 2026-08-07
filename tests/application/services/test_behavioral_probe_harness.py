@@ -594,6 +594,8 @@ _PROBE_FIELD_MUTATIONS: dict[str, object] = {
     "regime_conviction": 0.55,
     "regime_signal_multiplier": 0.8,
     "regime_gate_tightening": True,
+    "regime_confidence": 0.25,
+    "regime_stability": "TRANSITIONING",
     "enrichment_providers_enabled": False,
     "source_availability_enabled": False,
     "swing_setup_families_enabled": True,

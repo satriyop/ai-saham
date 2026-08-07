@@ -277,6 +277,8 @@ class BehavioralProbe:
     regime_conviction: float = 0.7
     regime_signal_multiplier: float = 1.0
     regime_gate_tightening: bool = False
+    regime_confidence: float | None = None
+    regime_stability: str | None = None
     # When False, no fundamentals/shareholding/bandar stub is wired at all, so
     # the missing-evidence branches of the real gates are exercised.
     enrichment_providers_enabled: bool = True
@@ -984,6 +986,14 @@ _CORE_PROBES: tuple[BehavioralProbe, ...] = (
         regime_conviction=0.25,
         regime_signal_multiplier=0.4,
         regime_gate_tightening=True,
+    ),
+    BehavioralProbe(
+        probe_id="regime_confidence_threshold_boundary",
+        surface="RISK_ON regime confidence between default and mutant ENTER floors",
+        tickers=_MIXED_GATE_UNIVERSE,
+        regime="RISK_ON",
+        regime_confidence=0.50,
+        regime_stability="STABLE",
     ),
     BehavioralProbe(
         probe_id="accum_score_threshold_rejection",

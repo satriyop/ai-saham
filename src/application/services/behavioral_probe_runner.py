@@ -408,6 +408,8 @@ def _market_context(probe: BehavioralProbe) -> MarketContext | None:
         signal_multiplier=probe.regime_signal_multiplier,
         gate_tightening=probe.regime_gate_tightening,
         as_of_date=probe.as_of_date,
+        regime_confidence=probe.regime_confidence,
+        regime_stability=probe.regime_stability,
     )
 
 

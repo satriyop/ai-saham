@@ -10,7 +10,10 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence, TypeVar
 
 from src.domain.value_objects.learning_artifacts import (
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
     ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V4,
     AssessmentPurpose,
     EvaluationMethod,
     EvaluationReadiness,
@@ -225,7 +228,7 @@ LEARNING_SCHEMA_STATEMENTS = (
     )
     """,
     # ADR-059: cohort-bound production policy snapshots
-    # (v1/v2 historical + v3 active).
+    # (v1/v2/v3 historical + v4 active).
     """
     CREATE TABLE IF NOT EXISTS learning_policy_snapshots (
         snapshot_id TEXT PRIMARY KEY,
@@ -234,7 +237,8 @@ LEARNING_SCHEMA_STATEMENTS = (
             contract_id IN (
                 'production_policy_snapshot.v1',
                 'production_policy_snapshot.v2',
-                'production_policy_snapshot.v3'
+                'production_policy_snapshot.v3',
+                'production_policy_snapshot.v4'
             )
         ),
         purpose TEXT NOT NULL,
@@ -297,6 +301,36 @@ CREATE TABLE learning_policy_snapshots__v4 (
             'production_policy_snapshot.v1',
             'production_policy_snapshot.v2',
             'production_policy_snapshot.v3'
+        )
+    ),
+    purpose TEXT NOT NULL,
+    learning_observation_contract_id TEXT NOT NULL,
+    producer_observation_contract TEXT NOT NULL,
+    compatibility_id TEXT NOT NULL,
+    policy_id TEXT NOT NULL,
+    policy_version TEXT NOT NULL,
+    decision_type TEXT NOT NULL,
+    semantic_engine_contract_id TEXT NOT NULL,
+    material_config_hash TEXT NOT NULL,
+    canonical_payload_json TEXT NOT NULL,
+    payload_digest TEXT NOT NULL,
+    source_revision TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    artifact_json TEXT NOT NULL,
+    UNIQUE (purpose, compatibility_id, policy_id)
+)
+"""
+
+_POLICY_SNAPSHOT_CREATE_V5 = """
+CREATE TABLE learning_policy_snapshots__v5 (
+    snapshot_id TEXT PRIMARY KEY,
+    schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+    contract_id TEXT NOT NULL CHECK (
+        contract_id IN (
+            'production_policy_snapshot.v1',
+            'production_policy_snapshot.v2',
+            'production_policy_snapshot.v3',
+            'production_policy_snapshot.v4'
         )
     ),
     purpose TEXT NOT NULL,
@@ -483,6 +517,21 @@ def _migrate_learning_policy_snapshots_v4(connection: sqlite3.Connection) -> Non
     )
 
 
+def _migrate_learning_policy_snapshots_v5(connection: sqlite3.Connection) -> None:
+    """Rebuild learning_policy_snapshots to accept production_policy_snapshot.v4.
+
+    ADR-059 v4 adds the resolved signal decision-policy row and contract id.
+    Historical v1-v3 rows are copied verbatim; only the CHECK is widened.
+    """
+
+    _rebuild_learning_policy_snapshots(
+        connection,
+        version=5,
+        temp_table="learning_policy_snapshots__v5",
+        create_sql=_POLICY_SNAPSHOT_CREATE_V5,
+    )
+
+
 def create_learning_schema(connection: sqlite3.Connection) -> None:
     """Create the canonical learning tables and their indexes.
 
@@ -490,7 +539,8 @@ def create_learning_schema(connection: sqlite3.Connection) -> None:
     ``learning_policy_snapshots``) apply on existing databases that already
     recorded migration version 1. Migration version 3 rebuilds the snapshots
     table CHECK to accept production_policy_snapshot.v2; version 4 widens it
-    again for production_policy_snapshot.v3 (ADR-059 v3 eight-row closed set).
+    again for production_policy_snapshot.v3 (ADR-059 v3 eight-row closed set),
+    and version 5 widens it for production_policy_snapshot.v4 (nine rows).
     """
 
     connection.execute("""
@@ -536,6 +586,16 @@ def create_learning_schema(connection: sqlite3.Connection) -> None:
             """
             INSERT OR IGNORE INTO _schema_migrations(namespace, version)
             VALUES (?, 4)
+            """,
+            (LEARNING_MIGRATION_NAMESPACE,),
+        )
+    if 5 not in applied:
+        # Real rebuild required for DBs that still have the v1/v2/v3-only CHECK.
+        _migrate_learning_policy_snapshots_v5(connection)
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO _schema_migrations(namespace, version)
+            VALUES (?, 5)
             """,
             (LEARNING_MIGRATION_NAMESPACE,),
         )
@@ -1436,12 +1496,25 @@ def expected_policy_snapshot_ids(
     if not compatibility_id:
         return ()
     out: list[str] = []
-    for contract in (
-        LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
-        LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
-        LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
+    for contract, policy_ids in (
+        (
+            LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V4,
+            ACCUMULATION_PRODUCTION_POLICY_IDS_V4,
+        ),
+        (
+            LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
+            ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
+        ),
+        (
+            LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V2,
+            ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
+        ),
+        (
+            LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V1,
+            ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
+        ),
     ):
-        for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS_V3:
+        for policy_id in policy_ids:
             out.append(
                 stable_learning_id(
                     contract,

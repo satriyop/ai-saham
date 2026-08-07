@@ -11,12 +11,10 @@ from dataclasses import dataclass
 from typing import Any, Protocol, Sequence
 
 from src.application.services.accumulation_producer_readiness import (
+    ACTIVE_SNAPSHOT_BINDING_CONTRACT,
     CohortProducerReadiness,
     cohort_to_dict,
     project_cohort_readiness,
-)
-from src.application.services.lean_observation_identity import (
-    POLICY_SNAPSHOT_BINDING_CONTRACT_V2,
 )
 from src.domain.ports.learning_artifact_repositories import (
     LearningObservationRepository,
@@ -141,7 +139,7 @@ class GetAccumulationProducerReadinessUseCase:
 
         return AccumulationProducerReadinessReport(
             purpose=purpose,
-            active_snapshot_binding_contract=POLICY_SNAPSHOT_BINDING_CONTRACT_V2,
+            active_snapshot_binding_contract=ACTIVE_SNAPSHOT_BINDING_CONTRACT,
             observation_count=len(observations),
             cohort_count=len(cohorts),
             cohorts=tuple(cohorts),

@@ -107,7 +107,7 @@ Replace the proxies with a direct measurement. Cohort identity for
 | Part | Job | Source |
 |---|---|---|
 | **Behavioral probe digest** | "does the engine answer the same?" | frozen probe set, run offline |
-| **ADR-059 snapshot payload digest** | "is the declared policy the same?" | existing closed-set projection (seven-row v2 at the time of writing; eight-row v3 since the ADR-059 2026-08-06 amendment) |
+| **ADR-059 snapshot payload digest** | "is the declared policy the same?" | active closed-set projection (nine-row v4 since the ADR-059 2026-08-07 amendment) |
 | **Payload schema version** | "is the stored record the same shape?" | `ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION` |
 
 Nothing else. No config bytes, no hand-typed engine versions.
@@ -194,11 +194,12 @@ Clean break, no shims, no aliases, no dual-identity path:
   digest. It is a *curated projection of resolved typed policy*, not a YAML
   re-parse, so a comment cannot move it. This is the correct granularity for
   "declared policy changed" and it already exists. It was the seven-row v2 set
-  when this ADR was written; the ADR-059 2026-08-06 amendment grew it to the
-  eight-row v3 set by adding `risk.accum.unevaluable_policy`, a declared risk
-  posture the engines already acted on but the cohort could not see. The fold
-  here is unchanged — it consumes whatever `ACCUMULATION_PRODUCTION_POLICY_IDS`
-  names, so growing the closed set forks the cohort with no hand-typed bump.
+  when this ADR was written; ADR-059 later grew it to v3/eight by adding the
+  unevaluable-gate posture and to v4/nine by adding the complete resolved
+  `signal.accum.decision_policy`. The fold here is unchanged — it consumes
+  whatever `ACCUMULATION_PRODUCTION_POLICY_IDS` names, so growing the closed set
+  forks the cohort with no hand-typed bump. Runtime config stays on this
+  snapshot axis and is not injected into the behavioral probe.
 - **`ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION`** — record shape is
   orthogonal to behaviour. A new payload field can leave answers identical while
   breaking a consumer, so it stays in the material.

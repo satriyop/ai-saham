@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import fields as dataclass_fields
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -27,6 +28,8 @@ from src.application.services.accumulation_policy_snapshot_payloads import (
     MISSING_ACTION_RAISE_CONTRACT_ERROR,
     MISSING_ACTION_REJECTED_FLOW,
     MISSING_ACTION_REJECTED_SIGNAL,
+    SIGNAL_DECISION_POLICY_FORMULA_ID,
+    SIGNAL_DECISION_POLICY_SEMANTIC_CONTRACT_ID,
     SIGNAL_SEMANTIC_CONTRACT_ID,
     UNEVALUABLE_GATE_POLICY_FORMULA_ID,
     UNEVALUABLE_GATE_POLICY_SEMANTIC_CONTRACT_ID,
@@ -36,12 +39,17 @@ from src.application.services.accumulation_policy_snapshot_payloads import (
     build_hard_filters_payload,
     build_raw_score_identity_payload,
     build_risk_hard_gates_payload,
+    build_signal_decision_policy_payload,
     build_unevaluable_gate_policy_payload,
 )
 from src.application.services.accumulation_screen_hard_filter_policy import (
     AccumulationScreenHardFilterPolicy,
 )
-from src.application.services.signal_engine_config import SignalEngineConfig
+from src.application.services.signal_engine_config import (
+    DecisionPolicyConfig,
+    SetupRegimeActionConfig,
+    SignalEngineConfig,
+)
 from src.application.services.signal_evidence_group_scorer import SignalEvidenceGroupScorer
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.rules.bandar_gate import BandarGate
@@ -52,12 +60,18 @@ from src.domain.value_objects.learning_artifacts import (
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     PRODUCTION_POLICY_ID_HARD_FILTERS,
     PRODUCTION_POLICY_ID_RISK_HARD_GATES,
+    PRODUCTION_POLICY_ID_SIGNAL_DECISION_POLICY,
     PRODUCTION_POLICY_ID_SIGNAL_EVIDENCE_GROUPS,
     PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE,
     PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY,
     canonical_json,
 )
-from src.domain.value_objects.signal_assessment import SignalStrength
+from src.domain.value_objects.signal_assessment import (
+    ACCUMULATION_DISCOVERY_IDENTITY,
+    EntryQuality,
+    SignalAssessment,
+    SignalStrength,
+)
 from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
 
 
@@ -123,6 +137,21 @@ def _probe_session_observation() -> dict[str, Any]:
     producers actually emit rather than against a second copy of the string.
     """
     candidate = _probe_candidate()
+    candidate.signal_assessment = AssessSignalResponse(
+        ticker=candidate.ticker,
+        assessment=SignalAssessment(
+            identity=ACCUMULATION_DISCOVERY_IDENTITY,
+            ticker=candidate.ticker,
+            score=60,
+            strength=SignalStrength.MODERATE,
+            entry_quality=EntryQuality.WATCH,
+            breakdown=(),
+            rationale=("probe",),
+            snapshot_date=_PROBE_DATE,
+            signal_authority_coverage=1.0,
+        ),
+        signal_authority_coverage=1.0,
+    )
     pack = build_candidate_observation_payload(
         candidate,
         screen_result="pass",
@@ -176,7 +205,7 @@ def test_closed_set_payloads_are_byte_stable() -> None:
         unevaluable_gate_policy=UnevaluableGatePolicy(),
     )
     assert set(payloads) == set(ACCUMULATION_PRODUCTION_POLICY_IDS)
-    assert len(payloads) == 8
+    assert len(payloads) == 9
     again = build_all_accumulation_policy_payloads(
         accum_score_policy=AccumScorePolicy(),
         signal_engine_config=SignalEngineConfig(),
@@ -187,6 +216,78 @@ def test_closed_set_payloads_are_byte_stable() -> None:
     )
     for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS:
         assert canonical_json(payloads[policy_id]) == canonical_json(again[policy_id])
+
+
+def test_signal_decision_policy_payload_is_complete_and_uses_real_observation_paths() -> None:
+    policy = DecisionPolicyConfig(setup_regime_policy={"foreign_bounce": {"RISK_ON": "allowed"}})
+    payload = build_signal_decision_policy_payload(policy)
+
+    assert payload["policy_id"] == PRODUCTION_POLICY_ID_SIGNAL_DECISION_POLICY
+    assert payload["semantic_engine_contract_id"] == SIGNAL_DECISION_POLICY_SEMANTIC_CONTRACT_ID
+    assert payload["formula_id"] == SIGNAL_DECISION_POLICY_FORMULA_ID
+    assert set(payload["regime_policy"]) == {"NEUTRAL", "RISK_OFF", "RISK_ON", "VOLATILE"}
+    assert payload["regime_policy"]["RISK_OFF"]["enter_threshold"] is None
+    assert payload["setup_regime_policy"] == {"foreign_bounce": {"RISK_ON": "allowed"}}
+    assert payload["missing_data"] == {
+        "absent_setup_family": "no_setup_specific_action",
+        "absent_market_context_regime": "RISK_ON",
+    }
+    _assert_declared_paths_resolve(payload, _probe_session_observation())
+
+
+def test_each_decision_policy_field_family_moves_canonical_payload() -> None:
+    base = DecisionPolicyConfig(setup_regime_policy={"foreign_bounce": {"RISK_ON": "allowed"}})
+    risk_on = base.regime_policy["RISK_ON"]
+    mutations = (
+        replace(
+            base,
+            regime_policy={**base.regime_policy, "RISK_ON": replace(risk_on, enter_allowed=False)},
+        ),
+        replace(
+            base,
+            regime_policy={**base.regime_policy, "RISK_ON": replace(risk_on, max_decision="WATCH")},
+        ),
+        replace(
+            base,
+            regime_policy={
+                **base.regime_policy,
+                "RISK_ON": replace(risk_on, regime_size_multiplier=0.8),
+            },
+        ),
+        replace(
+            base,
+            regime_policy={**base.regime_policy, "RISK_ON": replace(risk_on, enter_threshold=71)},
+        ),
+        replace(
+            base,
+            regime_policy={**base.regime_policy, "RISK_ON": replace(risk_on, watch_threshold=46)},
+        ),
+        replace(
+            base,
+            regime_policy={
+                **base.regime_policy,
+                "RISK_ON": replace(risk_on, min_signal_authority_coverage=0.8),
+            },
+        ),
+        replace(base, setup_regime_policy={"foreign_bounce": {"RISK_ON": "enter_disabled"}}),
+        replace(
+            base,
+            setup_regime_actions={
+                **base.setup_regime_actions,
+                "allowed": SetupRegimeActionConfig(max_decision="WATCH"),
+            },
+        ),
+        replace(base, regime_confidence_min_enter=0.4),
+        replace(base, regime_transitioning_cap_enter=False),
+    )
+    base_json = canonical_json(build_signal_decision_policy_payload(base))
+
+    assert len({canonical_json(build_signal_decision_policy_payload(m)) for m in mutations}) == len(
+        mutations
+    )
+    assert all(
+        canonical_json(build_signal_decision_policy_payload(m)) != base_json for m in mutations
+    )
 
 
 def test_accum_score_payload_excludes_sector_breadth() -> None:

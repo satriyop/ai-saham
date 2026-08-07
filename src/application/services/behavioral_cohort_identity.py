@@ -94,7 +94,7 @@ class AccumulationCohortIdentity:
 def compute_policy_snapshot_set_digest(
     policy_snapshot_payloads: Mapping[str, Mapping[str, Any]],
 ) -> str:
-    """Fold the closed ADR-059 v3 eight-row payload set into one digest.
+    """Fold the closed ADR-059 v4 nine-row payload set into one digest.
 
     Consumes the existing per-row ``policy_snapshot_payload_digest`` rather than
     inventing a second hashing scheme, so a row's identity digest and its
@@ -106,7 +106,7 @@ def compute_policy_snapshot_set_digest(
     """
     if set(policy_snapshot_payloads) != set(ACCUMULATION_PRODUCTION_POLICY_IDS):
         raise LearningContractError(
-            "cohort identity requires exactly the closed v3 policy set "
+            "cohort identity requires exactly the closed v4 policy set "
             f"{sorted(ACCUMULATION_PRODUCTION_POLICY_IDS)}, got "
             f"{sorted(policy_snapshot_payloads)}"
         )

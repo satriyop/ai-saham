@@ -8,7 +8,7 @@ from pathlib import Path
 
 from src.application.services.accumulation_producer_readiness import ProducerReadinessStatus
 from src.application.services.accumulation_production_policy_descriptors import (
-    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3,
+    ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4,
 )
 from src.application.services.trading_session_calendar_selection import (
     select_calendar_snapshot,
@@ -29,7 +29,7 @@ from src.domain.ports.trading_session_calendar_repository import (
     TradingSessionCalendarSnapshotReadError,
 )
 from src.domain.value_objects.learning_artifacts import (
-    ACCUMULATION_PRODUCTION_POLICY_IDS_V3,
+    ACCUMULATION_PRODUCTION_POLICY_IDS_V4,
     AccumPopulationBinding,
     AssessmentPurpose,
     LearningContractId,
@@ -167,11 +167,11 @@ def _observation(*, day: int, ticker: str = "BBCA") -> LearningObservation:
 
 
 def _seed_policy(repo: SQLiteLearningArtifactRepository) -> None:
-    for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS_V3:
-        d = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V3[policy_id]
+    for policy_id in ACCUMULATION_PRODUCTION_POLICY_IDS_V4:
+        d = ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4[policy_id]
         repo.add_policy_snapshot(
             ProductionPolicySnapshot.create(
-                contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V3,
+                contract_id=LearningContractId.PRODUCTION_POLICY_SNAPSHOT_V4,
                 purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
                 learning_observation_contract_id=LearningContractId.ACCUMULATION_OBSERVATION.value,
                 producer_observation_contract="accumulation-discovery.v2",

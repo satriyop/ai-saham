@@ -1,7 +1,7 @@
 """ADR-068 §1 — the authoritative accumulation cohort identity fold.
 
 Covers the three-part composition itself: that identity is exactly the
-behavioural probe digest, the ADR-059 seven-row snapshot payload digest, and
+behavioural probe digest, the ADR-059 nine-row snapshot payload digest, and
 ``ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION`` — nothing else — that each
 axis moves it on its own, that the fold is deterministic, that it fails closed
 rather than degrading, and that pre-open identity is untouched by any of it.
@@ -195,12 +195,12 @@ def test_incomplete_policy_set_fails_closed() -> None:
     """A cohort measured over the wrong policy set is worse than no cohort."""
     short = _payloads()
     short.pop(ACCUMULATION_PRODUCTION_POLICY_IDS[0])
-    with pytest.raises(LearningContractError, match="closed v3 policy set"):
+    with pytest.raises(LearningContractError, match="closed v4 policy set"):
         resolve_accumulation_cohort_identity_from_payloads(policy_snapshot_payloads=short)
 
     extra = _payloads()
     extra["unexpected.policy"] = {"anything": 1}
-    with pytest.raises(LearningContractError, match="closed v3 policy set"):
+    with pytest.raises(LearningContractError, match="closed v4 policy set"):
         resolve_accumulation_cohort_identity_from_payloads(policy_snapshot_payloads=extra)
 
 
