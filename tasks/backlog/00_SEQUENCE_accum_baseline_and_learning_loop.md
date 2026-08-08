@@ -82,16 +82,13 @@ those paths into two ADR-059 snapshot payloads and teaches ml-saham to consume
 them. Snapshot payload changes move the ADR-068 compatibility ID, so task 09 is
 now part of the pre-rebuild identity batch.
 
-**2026-08-08 task-04 re-vet (read-only; no purge).** Task 04 is rewritten in
-`04_rebuild_accum_corpus_single_deep_cohort.md`. Material corrections: target
-snapshot contract is **v4 / nine rows** (not v2 / seven); observation schema
-**15** (DB currently has zero schema-15 accum rows); post–task-09 live
-`compatibility_id` does not match any of the six stored cohorts; purge script
-today deletes only accum obs + labels (+ empty evaluations) and must be hardened
-for orphaned `learning_policy_snapshots` and phase-ledger policy; honest rebuild
-start remains **2026-07-08** with only ~26 candle sessions through 2026-08-07, so
-immediate promotion-grade WIN is not promised—seed the single cohort, then freeze
-and accumulate.
+**2026-08-08 task-04 executed.** Single deep cohort rebuilt under
+`sha256:355e5b59600dbdc9f762f7b373e8879b7cda9a1e55e18bd590461315cfe1e091`
+(schema **15**, `production_policy_snapshot.v4` ×9, task-09 risk-audit bindings).
+Range `2026-07-08`→`2026-08-07`, 23 sessions, 1035 observations. ml-saham health
+is **BLOCKED_DATA** (cannot form time folds / short embargo depth), not
+BLOCKED_POLICY. **Config freeze is now in effect** until a deliberate
+identity-moving batch.
 
 ---
 

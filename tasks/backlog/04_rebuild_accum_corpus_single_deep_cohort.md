@@ -1,8 +1,8 @@
 # Rebuild The Accum Corpus As One Deep, Snapshot-Bound Cohort
 
-Status: `VETTED / READY FOR IMPLEMENTATION` — re-vetted **2026-08-08** after
-task 09 (`ai-saham@6d9099af`, `ml-saham@e1a5fac`). **Do not purge until this
-document’s acceptance criteria and slice-1 plan are followed.**
+Status: `IMPLEMENTED` — re-vetted and executed **2026-08-08** after task 09
+(`ai-saham@6d9099af`, `ml-saham@e1a5fac`). Slices 1–5 complete; config freeze
+applies until a deliberate identity-moving change.
 
 > **Mandatory, not optional.** The config-edit batch (ADR-068, ADR-067, task 03
 > risk/PIT, task 09 snapshot binding) is identity-moving. Every existing accum
@@ -294,29 +294,29 @@ labels, app config, candles, fundamentals.
 
 ### Pre-execute (slice 1–2)
 
-- [ ] This re-vet document is the execution brief (stale v2/seven-row language gone).
-- [ ] Purge script extended or companion cleanup covers **policy snapshots** for
+- [x] This re-vet document is the execution brief (stale v2/seven-row language gone).
+- [x] Purge script extended or companion cleanup covers **policy snapshots** for
       accum-related superseded cohorts and documents phase-ledger handling.
-- [ ] Dry-run counts re-measured on the execute-day DB and pasted.
-- [ ] Backup path + byte size recorded **before** `--execute`.
-- [ ] Trading-session calendar coverage plan for 2026-07-08 → end documented.
+- [x] Dry-run counts re-measured on the execute-day DB and pasted.
+- [x] Backup path + byte size recorded **before** `--execute`.
+- [x] Trading-session calendar coverage plan for 2026-07-08 → end documented.
 
 ### Post-execute
 
-- [ ] `SELECT COUNT(DISTINCT compatibility_id) FROM learning_observations WHERE purpose='ACCUMULATION_DISCOVERY'` = **1**.
-- [ ] That id matches live ADR-068 identity at rebuild time (schema **15**).
-- [ ] Exactly **9** `learning_policy_snapshots` rows for that id with
+- [x] `SELECT COUNT(DISTINCT compatibility_id) FROM learning_observations WHERE purpose='ACCUMULATION_DISCOVERY'` = **1**.
+- [x] That id matches live ADR-068 identity at rebuild time (schema **15**).
+- [x] Exactly **9** `learning_policy_snapshots` rows for that id with
       `contract_id='production_policy_snapshot.v4'`.
-- [ ] Snapshot payloads for `risk.accum.hard_gates` and
+- [x] Snapshot payloads for `risk.accum.hard_gates` and
       `risk.accum.unevaluable_policy` include task-09
       `observation_result_fields` paths.
-- [ ] Zero accum observations with `schema_version != 15`.
-- [ ] PRE_OPEN observation count unchanged across purge (29 → 29, or execute-day baseline).
-- [ ] Zero rows with risk PIT violation `risk.snapshot_date > session_date` (guard from prior clean break).
-- [ ] Label maturity distribution recorded per horizon.
-- [ ] `ml-saham challenge health --scenario accum --compatibility-id <new>`
+- [x] Zero accum observations with `schema_version != 15`.
+- [x] PRE_OPEN observation count unchanged across purge (29 → 29, or execute-day baseline).
+- [x] Zero rows with risk PIT violation `risk.snapshot_date > session_date` (guard from prior clean break).
+- [x] Label maturity distribution recorded per horizon.
+- [x] `ml-saham challenge health --scenario accum --compatibility-id <new>`
       output pasted; not BLOCKED_POLICY for missing/wrong snapshot set.
-- [ ] Cron scripts still correct; config freeze called out in SEQUENCE/ops notes.
+- [x] Cron scripts still correct; config freeze called out in SEQUENCE/ops notes.
 
 ---
 
@@ -397,19 +397,21 @@ Commit: `docs(corpus): record ml-saham verdict on rebuilt accum cohort`
 
 ## 14. Completion Record
 
-- Completed date: (in progress — slice 3 executed 2026-08-08)
+- Completed date: **2026-08-08**
 - Re-vet commits: `831d5659`
 - Slice commits:
   - Slice 1: `831d5659` docs re-vet
   - Slice 2: `788786ff` purge harden + tests
-  - Slice 3: (this commit) purge executed
+  - Slice 3: `c54cc91a` purge executed
+  - Slice 4: rebuild ops (this series)
+  - Slice 5: ml-saham verify + closeout
 - Backup path / size:
   - `data/db/backups/data.db.pre-task04-purge-20260808_212307`
   - 1.2G; sha256 `bbfb38d91ebcb9aa649389266dd67243baaf7cd27cd7ffabd5fc0105ba211c33`
   - dry-run JSON: `data/db/backups/purge-dry-run-20260808_212307.json`
 - Execute-day dry-run counts vs §7.2:
 
-  | Target | Count | After |
+  | Target | Count | After purge |
   |---|---:|---:|
   | accum observations | 2678 | 0 |
   | labels (accum) | 5232 | 0 |
@@ -421,10 +423,48 @@ Commit: `docs(corpus): record ml-saham verdict on rebuilt accum cohort`
   | non-accum labels | 22 | **22** |
 
 - Rebuild range + session depth:
-- Final observation / label counts per horizon:
-- Single `compatibility_id` (must match live ADR-068 at rebuild):
-- Snapshot contract + policy count:
-- Fundamentals-horizon decision + reasoning:
-- `ml-saham challenge health` output:
-- Known depth gap vs WIN criteria (if any):
+  - Calendar sync: `2026-07-08` → `2026-08-07`, **23** sessions inserted
+  - Backfill: `saham research accum backfill --universe lq45 --start 2026-07-08 --end 2026-08-07`
+  - Processed dates: 23; saved observations: **1035**; universe size 45 (`lq45@pit`)
+- Final observation / label counts per horizon (post `labels --all-label-contracts`):
+
+  | contract | AVAILABLE |
+  |---|---:|
+  | `price_path.accum_3d.v1` | 900 |
+  | `price_path.accum_10d.v1` | 585 |
+  | `price_path.accum_20d.v1` | 135 |
+  | total label rows | 1620 |
+
+  Phase ledger backfill: observations_seen=1035, rows_identical=1026, skipped=9.
+- Single `compatibility_id`:
+  `sha256:355e5b59600dbdc9f762f7b373e8879b7cda9a1e55e18bd590461315cfe1e091`
+  (matches live ADR-068 triple at rebuild: probe
+  `913ab690…`, snapshot digest `57bd394b…`, schema **15**)
+- Snapshot contract + policy count: **production_policy_snapshot.v4**, **9** rows;
+  task-09 `observation_result_fields` present on `risk.accum.hard_gates` and
+  `risk.accum.unevaluable_policy`
+- Fundamentals-horizon decision + reasoning: start **2026-07-08** (honest
+  piotroski/market_cap floor); do not mix pre-cutoff sessions
+- Risk PIT violations (`risk.snapshot_date > session_date`): **0**
+- Schema ≠ 15 accum rows: **0**
+- `ml-saham challenge health --scenario accum --compatibility-id <id>`:
+  - **BLOCKED_DATA** for `screener.accum.score_weights`, **n=585** (not
+    BLOCKED_POLICY — snapshot set verified)
+  - Artifact: `ml-saham/artifacts/challenge/health/20260808_213341`
+- Representative challenge runs (same id, `--no-artifact`):
+  - `screener.accum.score_weights --against equal_sleeves` → `BLOCKED_DATA: could not form time folds`
+  - `risk.accum.hard_gates --against gate_off` → `BLOCKED_DATA: could not form time folds`
+- Known depth gap vs WIN criteria: **23 sessions** with `embargo_sessions=20` and
+  `min_folds_for_win=2` cannot form multi-fold time splits yet. Keep identity
+  frozen and accumulate nightly captures until ~40+ sessions.
+- ai-saham `research accum status` note: reports
+  `observation_contract_corruption` / `BLOCKED_POLICY` on
+  `shared.current_price` string validation for many rows even though payload
+  schema is 15 and snapshots are complete. Labels and ml-saham panel extraction
+  still work (n=585). Treat as a **status-readiness follow-up**, not a rebuild
+  identity failure; do not re-purge solely for that flag.
+- Config freeze: no further identity-moving config/payload changes until a new
+  deliberate batch + purge is planned.
 - Test / Lint result:
+  - `tests/infrastructure/persistence/test_purge_accum_learning_corpus.py` 4 passed
+  - ruff check/format on purge module + tests: pass
