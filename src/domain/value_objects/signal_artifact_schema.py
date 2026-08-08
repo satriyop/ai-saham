@@ -43,6 +43,13 @@ constant. Record shape changes, so schema-12 rows stay historical.
 Older schema (1-9) rows are outside the current canonical contract — they are
 never mutated, migrated, or reinterpreted here, and their raw payloads are not
 validated by the current-contract validator below.
+
+v13 -> v14 (ADR-069): purpose-specific diagnostic producer bindings are
+persisted at the observation root.
+v14 -> v15 (structural-filter provenance): every per-window engine pack carries
+the exact typed structural-filter outcome. Missing fields and genuine numeric
+threshold failures are distinct, and an enabled filter without a provider is a
+configuration failure rather than an unrecorded pass.
 """
 
 from __future__ import annotations
@@ -56,14 +63,10 @@ from src.domain.value_objects.alpha_trigger_score import (
 )
 
 # Purpose-specific observation payload versions (do not silent-share bumps).
-# Accumulation current: ADR-068 behavioural cohort identity.
-# Schema 13 drops the write-only ``config_hash`` payload field (both the shared
-# decision-payload key and the per-window engine pack key). Its only reader was
-# an audit branch guarded on the ``candidate_observations`` table dropped
-# 2026-07-27, and the material identity it approximated is now measured by the
-# behavioural probe digest. Live scoring is unchanged; record shape is not, so
-# this is an OBSERVATION_SCHEMA bump and schema-12 rows stay historical.
-ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 14
+# Accumulation current: schema 15 adds the exact per-window structural-filter
+# decision. Schema-14 diagnostic bindings remain immutable historical contract
+# material and are never reinterpreted as schema 15.
+ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 15
 # Pre-open remains on the pre-attested-ticker shared era; accumulation-only
 # population fields must not fork pre-open compatibility by accident.
 PRE_OPEN_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 10

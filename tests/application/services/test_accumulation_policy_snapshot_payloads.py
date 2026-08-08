@@ -12,6 +12,7 @@ from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
 )
+from src.application.dto.accumulation_structural_filter import StructuralFilterDecision
 from src.application.dto.assess_signal import AssessSignalResponse
 from src.application.services.accumulation_observation_fingerprint import (
     build_candidate_observation_payload,
@@ -23,8 +24,8 @@ from src.application.services.accumulation_policy_snapshot_payloads import (
     EVIDENCE_GROUP_BASE_SCORE_FORMULA_ID,
     HARD_FILTERS_FORMULA_ID,
     HARD_FILTERS_SEMANTIC_CONTRACT_ID,
-    MISSING_ACTION_PASS_WITHOUT_EVALUATION,
     MISSING_ACTION_PROPAGATE_PROVIDER_ERROR,
+    MISSING_ACTION_RAISE_CONFIGURATION_ERROR,
     MISSING_ACTION_RAISE_CONTRACT_ERROR,
     MISSING_ACTION_REJECTED_FLOW,
     MISSING_ACTION_REJECTED_SIGNAL,
@@ -163,6 +164,7 @@ def _probe_session_observation() -> dict[str, Any]:
         snapshot_date=_PROBE_DATE,
         captured_at=_PROBE_CAPTURED_AT,
         request=AccumulationScreenRequest(tickers=[candidate.ticker]),
+        structural_filter_decision=StructuralFilterDecision.disabled(),
     )
     return build_session_observation_payload(
         ticker=candidate.ticker,
@@ -424,6 +426,10 @@ def test_hard_filters_payload_matches_typed_default_policy() -> None:
     assert payload["decision_type"] == "gate"
     assert payload["semantic_engine_contract_id"] == HARD_FILTERS_SEMANTIC_CONTRACT_ID
     assert payload["formula_id"] == HARD_FILTERS_FORMULA_ID
+    _assert_declared_paths_resolve(payload, _probe_session_observation())
+    assert payload["observation_result_fields"] == {
+        "structural_filter": "features_by_window.7.structural_filter"
+    }
     assert payload["first_match_order"] == [
         "market_cap",
         "piotroski",
@@ -435,7 +441,7 @@ def test_hard_filters_payload_matches_typed_default_policy() -> None:
     assert payload["filters"]["market_cap"]["missing_action"] == MISSING_ACTION_REJECTED_FLOW
     assert (
         payload["filters"]["market_cap"]["provider_unavailable_action"]
-        == MISSING_ACTION_PASS_WITHOUT_EVALUATION
+        == MISSING_ACTION_RAISE_CONFIGURATION_ERROR
     )
     assert (
         payload["filters"]["market_cap"]["provider_exception_action"]

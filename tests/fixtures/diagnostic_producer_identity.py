@@ -27,5 +27,5 @@ def valid_accumulation_diagnostic_bindings():
     )
     return build_accumulation_diagnostic_bindings(
         snapshots,
-        observation_schema_version=14,
+        observation_schema_version=15,
     )

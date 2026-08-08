@@ -174,7 +174,15 @@ _BRANCH_COVERAGE_FLOOR: dict[str, tuple[int, int]] = {
     "src/application/services/accumulation_candidate_enricher.py": (17, 32),
     "src/application/services/accumulation_candidate_evaluator.py": (23, 28),
     "src/application/services/accumulation_candidate_signal_assessor.py": (8, 12),
-    "src/application/services/accumulation_candidate_structural_filter.py": (8, 10),
+    # 8/11: schema-15 adds one fail-closed branch for an invalid composition:
+    # an enabled fundamentals filter with no fundamentals provider. Probe runs
+    # deliberately construct valid production graphs, so making an extended
+    # probe enter this branch would abort the whole run instead of producing a
+    # decision projection. The branch is covered directly by
+    # test_accumulation_candidate_structural_filter.py, and its posture is bound
+    # by the screener.accum.hard_filters snapshot row. Valid-composition branch
+    # coverage is unchanged at 8/10.
+    "src/application/services/accumulation_candidate_structural_filter.py": (8, 11),
     "src/application/services/accumulation_risk_funnel.py": (0, 0),
     "src/application/services/accumulation_technical_features.py": (26, 34),
     "src/application/services/alpha_trigger_aggregator.py": (24, 40),

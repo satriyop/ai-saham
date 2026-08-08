@@ -14,6 +14,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from src.application.dto import accumulation_screen as accumulation_dto
+from src.application.dto.accumulation_structural_filter import (
+    StructuralFilterDecision,
+    StructuralFilterField,
+    StructuralFilterRejectionReason,
+)
 
 if TYPE_CHECKING:
     from src.domain.ports.fundamentals_provider import FundamentalsProvider
@@ -27,6 +32,11 @@ class StructuralFilterResult:
     fundamentals_fetched: bool
     rejected: bool
     screen_result: str | None
+    decision: StructuralFilterDecision
+
+
+class StructuralFilterConfigurationError(RuntimeError):
+    """An enabled structural filter has no provider capable of evaluating it."""
 
 
 class AccumulationCandidateStructuralFilter:
@@ -52,10 +62,20 @@ class AccumulationCandidateStructuralFilter:
         ``screen_result="rejected_flow"`` when either the market-cap floor
         or the Piotroski F-Score floor is not met.
         """
-        if self._fundamentals_provider is None or (
-            request.min_market_cap_idr <= 0 and request.min_piotroski <= 0
-        ):
-            return StructuralFilterResult(candidate, False, False, None)
+        filters_disabled = request.min_market_cap_idr <= 0 and request.min_piotroski <= 0
+        if filters_disabled:
+            return StructuralFilterResult(
+                candidate,
+                False,
+                False,
+                None,
+                StructuralFilterDecision.disabled(),
+            )
+        if self._fundamentals_provider is None:
+            raise StructuralFilterConfigurationError(
+                "accumulation structural fundamentals filter is enabled but no "
+                "fundamentals provider is configured"
+            )
 
         candidate.fundamentals = self._fundamentals_provider.get_fundamentals(
             ticker=candidate.ticker,
@@ -64,16 +84,13 @@ class AccumulationCandidateStructuralFilter:
         fundamentals_fetched = True
 
         if request.min_market_cap_idr > 0:
-            if (
-                candidate.fundamentals is None
-                or candidate.fundamentals.market_cap_idr is None
-                or candidate.fundamentals.market_cap_idr < request.min_market_cap_idr
-            ):
-                cap_b = (
-                    candidate.fundamentals.market_cap_idr // 1_000_000_000
-                    if candidate.fundamentals and candidate.fundamentals.market_cap_idr
-                    else None
-                )
+            market_cap = (
+                candidate.fundamentals.market_cap_idr
+                if candidate.fundamentals is not None
+                else None
+            )
+            if market_cap is None or market_cap < request.min_market_cap_idr:
+                cap_b = market_cap // 1_000_000_000 if market_cap is not None else None
                 logger.debug(
                     "Skip %s: market_cap %sB IDR < floor %dB IDR",
                     candidate.ticker,
@@ -81,7 +98,20 @@ class AccumulationCandidateStructuralFilter:
                     request.min_market_cap_idr // 1_000_000_000,
                 )
                 return StructuralFilterResult(
-                    candidate, fundamentals_fetched, True, "rejected_flow"
+                    candidate,
+                    fundamentals_fetched,
+                    True,
+                    "rejected_flow",
+                    StructuralFilterDecision.rejected(
+                        field=StructuralFilterField.MARKET_CAP_IDR,
+                        reason=(
+                            StructuralFilterRejectionReason.MISSING_VALUE
+                            if market_cap is None
+                            else StructuralFilterRejectionReason.BELOW_THRESHOLD
+                        ),
+                        observed_value=market_cap,
+                        threshold=request.min_market_cap_idr,
+                    ),
                 )
 
         if request.min_piotroski > 0:
@@ -92,7 +122,26 @@ class AccumulationCandidateStructuralFilter:
             )
             if fscore is None or fscore < request.min_piotroski:
                 return StructuralFilterResult(
-                    candidate, fundamentals_fetched, True, "rejected_flow"
+                    candidate,
+                    fundamentals_fetched,
+                    True,
+                    "rejected_flow",
+                    StructuralFilterDecision.rejected(
+                        field=StructuralFilterField.PIOTROSKI_F_SCORE,
+                        reason=(
+                            StructuralFilterRejectionReason.MISSING_VALUE
+                            if fscore is None
+                            else StructuralFilterRejectionReason.BELOW_THRESHOLD
+                        ),
+                        observed_value=fscore,
+                        threshold=request.min_piotroski,
+                    ),
                 )
 
-        return StructuralFilterResult(candidate, fundamentals_fetched, False, None)
+        return StructuralFilterResult(
+            candidate,
+            fundamentals_fetched,
+            False,
+            None,
+            StructuralFilterDecision.passed(),
+        )

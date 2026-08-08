@@ -275,6 +275,11 @@ class AccumulationCandidateObservationPersister:
     ) -> dict[str, Any]:
         """Full per-window engine pack (candidate + signal + risk + contexts)."""
         c, screen_result, flow_ev = oc.candidate, oc.screen_result, oc.flow_evidence
+        structural_filter_decision = oc.structural_filter_decision
+        if structural_filter_decision is None:
+            raise ValueError(
+                "schema-15 observation candidate requires the exact structural-filter decision"
+            )
         setup_phase = c.setup_phase
         setup_family_result = c.setup_family_result
         strategy_evidence = self._candidate_evidence_builder.build_candidate_strategy_evidence(
@@ -315,6 +320,7 @@ class AccumulationCandidateObservationPersister:
             snapshot_date=snapshot_date,
             captured_at=captured_at,
             request=request,
+            structural_filter_decision=structural_filter_decision,
         )
         if c.risk_assessment is not None:
             pack["risk"] = build_risk_assessment_capture_dict(

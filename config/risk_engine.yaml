@@ -44,11 +44,9 @@ risk_engine:
     #
     # Anything else fails closed at config resolve time.
     #
-    # NOTE: `surface` leaves canonical output identical to before this key
-    # existed, so it is deliberately NOT part of the accumulation production
-    # policy snapshot identity. Switching to `block` changes what can produce
-    # ENTER/WATCH/AVOID and MUST add this policy to that snapshot first,
-    # otherwise two different cohorts would share one compatibility identity.
+    # This resolved policy is identity-material in the active
+    # `risk.accum.unevaluable_policy` production-policy snapshot row. Switching
+    # either value forks the accumulation compatibility cohort automatically.
     unevaluable_policy: surface
     unevaluable_block_confidence: 0
 

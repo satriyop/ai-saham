@@ -6,6 +6,10 @@ from decimal import Decimal
 from src.application.dto.accumulation_screen import (
     AccumulationScreenRequest,
 )
+from src.application.dto.accumulation_structural_filter import (
+    StructuralFilterField,
+    StructuralFilterRejectionReason,
+)
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.signal_engine import SignalEngine
 from src.application.services.signal_engine_config import SignalEngineConfig
@@ -58,6 +62,10 @@ def test_min_piotroski_excludes_below_threshold():
         execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert len(response.candidates) == 0
+    decision = response.observation_candidates[0].structural_filter_decision
+    assert decision is not None
+    assert decision.field is StructuralFilterField.PIOTROSKI_F_SCORE
+    assert decision.reason is StructuralFilterRejectionReason.BELOW_THRESHOLD
 
 
 def test_min_piotroski_includes_at_threshold():
@@ -88,6 +96,10 @@ def test_min_piotroski_excludes_when_no_fundamentals():
         execution_context=make_signal_evidence_execution_context(as_of),
     )
     assert len(response.candidates) == 0
+    decision = response.observation_candidates[0].structural_filter_decision
+    assert decision is not None
+    assert decision.field is StructuralFilterField.PIOTROSKI_F_SCORE
+    assert decision.reason is StructuralFilterRejectionReason.MISSING_VALUE
 
 
 def test_min_piotroski_passes_when_no_fundamentals_and_gate_disabled():
@@ -252,5 +264,12 @@ def test_screen_persists_rejected_candidates_with_filter_outcome():
     payload = spy_repo.saved[0].decision_payload
     assert payload["ticker"] == "BBCA"
     assert payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+    assert payload["features_by_window"]["7"]["structural_filter"] == {
+        "outcome": "disabled",
+        "field": None,
+        "reason": None,
+        "observed_value": None,
+        "threshold": None,
+    }
     by_window = payload.get("screen_results_by_window") or {}
     assert by_window.get("7") == "rejected_flow"

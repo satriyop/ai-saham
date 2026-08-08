@@ -55,7 +55,7 @@ UNEVALUABLE_GATE_POLICY_SEMANTIC_CONTRACT_ID = "risk.unevaluable_gate.accum.v1"
 # method rather than a callable that does not exist.
 UNEVALUABLE_GATE_POLICY_FORMULA_ID = "assess_risk_gate_evaluator.evaluate.unevaluable_aggregate.v1"
 HARD_FILTERS_SEMANTIC_CONTRACT_ID = "screen.accum.hard_filters.v1"
-HARD_FILTERS_FORMULA_ID = "accumulation_screen.first_match_hard_filters.v1"
+HARD_FILTERS_FORMULA_ID = "accumulation_screen.first_match_hard_filters.v2"
 SIGNAL_DECISION_POLICY_SEMANTIC_CONTRACT_ID = "signal.decision_policy.accum.v1"
 SIGNAL_DECISION_POLICY_FORMULA_ID = "decision_policy_service.resolve.v1"
 # Must name the method that actually computes the base score. Kept as a
@@ -67,6 +67,7 @@ MISSING_ACTION_PASS_WITHOUT_EVALUATION = "pass_without_evaluation"
 MISSING_ACTION_REJECTED_FLOW = "rejected_flow"
 MISSING_ACTION_REJECTED_SIGNAL = "rejected_signal"
 MISSING_ACTION_RAISE_CONTRACT_ERROR = "raise_contract_error"
+MISSING_ACTION_RAISE_CONFIGURATION_ERROR = "raise_configuration_error"
 MISSING_ACTION_PROPAGATE_PROVIDER_ERROR = "propagate_provider_error"
 
 # Canonical observation window used by accumulation session capture.
@@ -80,6 +81,7 @@ ASSESSMENT_ENTRY_QUALITY_FIELD = (
 ASSESSMENT_DECISION_CONSTRAINTS_FIELD = (
     f"features_by_window.{ACCUM_CANONICAL_WINDOW}.signal.assessment.decision_constraints"
 )
+STRUCTURAL_FILTER_RESULT_FIELD = f"features_by_window.{ACCUM_CANONICAL_WINDOW}.structural_filter"
 
 _DECISION_POLICY_REGIMES: tuple[str, ...] = (
     "NEUTRAL",
@@ -431,6 +433,9 @@ def build_hard_filters_payload(
         "semantic_engine_contract_id": HARD_FILTERS_SEMANTIC_CONTRACT_ID,
         "formula_id": HARD_FILTERS_FORMULA_ID,
         "scope": "canonical_default_screen_accum",
+        "observation_result_fields": {
+            "structural_filter": STRUCTURAL_FILTER_RESULT_FIELD,
+        },
         "first_match_order": [
             "market_cap",
             "piotroski",
@@ -442,7 +447,7 @@ def build_hard_filters_payload(
                 "enabled": policy.market_cap_enabled,
                 "floor_idr": policy.min_market_cap_idr,
                 "missing_action": MISSING_ACTION_REJECTED_FLOW,
-                "provider_unavailable_action": MISSING_ACTION_PASS_WITHOUT_EVALUATION,
+                "provider_unavailable_action": MISSING_ACTION_RAISE_CONFIGURATION_ERROR,
                 "provider_exception_action": MISSING_ACTION_PROPAGATE_PROVIDER_ERROR,
                 "disabled_action": MISSING_ACTION_PASS_WITHOUT_EVALUATION,
             },
@@ -450,7 +455,7 @@ def build_hard_filters_payload(
                 "enabled": policy.piotroski_enabled,
                 "floor": policy.min_piotroski,
                 "missing_action": MISSING_ACTION_REJECTED_FLOW,
-                "provider_unavailable_action": MISSING_ACTION_PASS_WITHOUT_EVALUATION,
+                "provider_unavailable_action": MISSING_ACTION_RAISE_CONFIGURATION_ERROR,
                 "provider_exception_action": MISSING_ACTION_PROPAGATE_PROVIDER_ERROR,
                 "disabled_action": MISSING_ACTION_PASS_WITHOUT_EVALUATION,
             },

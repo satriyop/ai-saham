@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from src.application.dto.accumulation_structural_filter import StructuralFilterDecision
 from src.application.services.accumulation_producer_readiness import (
     ProducerReadinessStatus,
     count_labels_by_horizon,
@@ -140,9 +141,24 @@ def _observation(*, day: int, ticker: str = "BBCA") -> LearningObservation:
                 },
             },
             "features_by_window": {
-                "7": {"trade_setup": {"action": "WATCH"}, "signal": {}, "candidate": {}},
-                "30": {"trade_setup": {"action": "WATCH"}, "signal": {}, "candidate": {}},
-                "90": {"trade_setup": {"action": "WATCH"}, "signal": {}, "candidate": {}},
+                "7": {
+                    "structural_filter": StructuralFilterDecision.disabled().to_dict(),
+                    "trade_setup": {"action": "WATCH"},
+                    "signal": {},
+                    "candidate": {},
+                },
+                "30": {
+                    "structural_filter": StructuralFilterDecision.disabled().to_dict(),
+                    "trade_setup": {"action": "WATCH"},
+                    "signal": {},
+                    "candidate": {},
+                },
+                "90": {
+                    "structural_filter": StructuralFilterDecision.disabled().to_dict(),
+                    "trade_setup": {"action": "WATCH"},
+                    "signal": {},
+                    "candidate": {},
+                },
             },
             "population_binding": binding.to_dict(),
         },

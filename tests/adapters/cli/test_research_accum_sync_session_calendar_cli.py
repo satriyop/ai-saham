@@ -11,6 +11,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
+from src.application.dto.accumulation_structural_filter import StructuralFilterDecision
 from src.application.services.accumulation_production_policy_descriptors import (
     ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4,
 )
@@ -95,9 +96,24 @@ def _observation(db_day: int = 1, ticker: str = "BBCA") -> LearningObservation:
                 },
             },
             "features_by_window": {
-                "7": {"trade_setup": {"action": "WATCH"}, "signal": {}, "candidate": {}},
-                "30": {"trade_setup": {"action": "WATCH"}, "signal": {}, "candidate": {}},
-                "90": {"trade_setup": {"action": "WATCH"}, "signal": {}, "candidate": {}},
+                "7": {
+                    "structural_filter": StructuralFilterDecision.disabled().to_dict(),
+                    "trade_setup": {"action": "WATCH"},
+                    "signal": {},
+                    "candidate": {},
+                },
+                "30": {
+                    "structural_filter": StructuralFilterDecision.disabled().to_dict(),
+                    "trade_setup": {"action": "WATCH"},
+                    "signal": {},
+                    "candidate": {},
+                },
+                "90": {
+                    "structural_filter": StructuralFilterDecision.disabled().to_dict(),
+                    "trade_setup": {"action": "WATCH"},
+                    "signal": {},
+                    "candidate": {},
+                },
             },
             "population_binding": binding.to_dict(),
         },

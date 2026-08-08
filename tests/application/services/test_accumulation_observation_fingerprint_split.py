@@ -10,6 +10,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
+from src.application.dto.accumulation_structural_filter import StructuralFilterDecision
 from src.application.services.accumulation_observation_fingerprint import (
     build_candidate_observation_payload,
 )
@@ -27,6 +28,7 @@ TOP_LEVEL_KEYS = frozenset(
         "captured_at",
         "workflow",
         "screen_result",
+        "structural_filter",
         "request",
         "sub_signal_fingerprint",
         "candidate",
@@ -90,6 +92,7 @@ class TestTopLevelKeysPreserved:
             snapshot_date=date(2026, 7, 1),
             captured_at=datetime(2026, 7, 1, 10, 30, 0),
             request=request,
+            structural_filter_decision=StructuralFilterDecision.disabled(),
         )
         assert set(payload.keys()) == TOP_LEVEL_KEYS, (
             f"Top-level keys mismatch. "
@@ -108,6 +111,7 @@ class TestTopLevelKeysPreserved:
             snapshot_date=date(2026, 7, 1),
             captured_at=datetime(2026, 7, 1, 10, 30, 0),
             request=request,
+            structural_filter_decision=StructuralFilterDecision.disabled(),
         )
         assert payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
         assert payload["artifact_type"] == "candidate_observation"
@@ -135,6 +139,7 @@ class TestTopLevelKeysPreserved:
             snapshot_date=date(2026, 7, 1),
             captured_at=datetime(2026, 7, 1, 10, 30, 0),
             request=request,
+            structural_filter_decision=StructuralFilterDecision.disabled(),
         )
         req = payload["request"]
         assert req["window_days"] == 30
@@ -152,6 +157,7 @@ class TestTopLevelKeysPreserved:
             snapshot_date=date(2026, 7, 1),
             captured_at=datetime(2026, 7, 1, 10, 30, 0),
             request=request,
+            structural_filter_decision=StructuralFilterDecision.disabled(),
         )
         assert payload["candidate"] == {"ticker": "BBCA"}
 
@@ -332,6 +338,7 @@ class TestSubSignalFingerprintSections:
             snapshot_date=date(2026, 7, 1),
             captured_at=datetime(2026, 7, 1, 10, 30, 0),
             request=request,
+            structural_filter_decision=StructuralFilterDecision.disabled(),
         )
 
 
@@ -368,6 +375,7 @@ def test_real_producer_payload_is_schema_4_with_sector_context_only():
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 10, 30, 0),
         request=_minimal_request(),
+        structural_filter_decision=StructuralFilterDecision.disabled(),
         sc_evidence=_sector_context("BULLISH"),
     )
 
@@ -416,6 +424,7 @@ def test_real_producer_schema_4_fingerprint_parses_to_sector_context_route_only(
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 10, 30, 0),
         request=_minimal_request(),
+        structural_filter_decision=StructuralFilterDecision.disabled(),
         sc_evidence=_sector_context("BULLISH"),
     )
 

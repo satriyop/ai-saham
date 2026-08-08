@@ -1,11 +1,109 @@
 # Make Risk-Gate Skips Explicit And Close The Fundamentals PIT Coverage Hole
 
-Status: `READY`
+Status: `FIXED / VERIFIED` — RiskEngine unknown-gate handling and the
+fundamentals PIT limit remain verified; the separately re-vetted accumulation
+hard-filter defect now has a coordinated schema-15 producer/consumer fix.
 Sequence: **3 of 8** — see `tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`
 
 > **In the config-edit batch.** This task touches `config/risk_engine.yaml`,
 > which is identity-material, so it must land **before the config freeze**
 > alongside tasks 1 and 2 — not during the corpus accumulation window.
+
+## Independent Re-vet — 2026-08-08
+
+Vetted against current code at `081de41c`; documentation was treated as backup.
+The five recorded slice commits exist, but the original task combined two different
+decision paths and its completion record overstates closure.
+
+### Verdict by scope
+
+| Scope | Verdict | Current evidence |
+|---|---|---|
+| Risk-gate missing input | `FIXED / VERIFIED` | `GateOutcome.UNEVALUABLE` is typed in domain; every configured gate emits it deliberately; `AssessRiskGateEvaluator` records ordered unknown gates and applies the typed aggregate policy |
+| Config-driven aggregate policy | `FIXED / VERIFIED` | `surface` and `block` are validated; invalid values fail closed; production composition roots inject the same resolved policy |
+| Cohort identity | `FIXED / VERIFIED BY LATER WORK` | Contrary to the historical completion note and stale YAML comment, active snapshot v4 includes `risk.accum.unevaluable_policy`; mutating it forks `compatibility_id` |
+| Operator visibility | `FIXED / VERIFIED` | Shared decision display feeds CLI and TUI; OPEN/BLOCKED output names unknown gates |
+| Fundamentals PIT backfill | `HONESTLY UNAVAILABLE / VERIFIED` | Existing Stockbit path still exposes only a current F-score/current market cap; historical rows contain only derived NPM/revenue growth and no historical inputs needed to reconstruct either field safely |
+| Accumulation hard filter | `FIXED / VERIFIED` | Active threshold without a provider raises an explicit configuration error; typed schema-15 provenance distinguishes disabled, passed, missing-value rejection, and below-threshold rejection |
+| Aggregate-policy observation provenance | `OPEN / TRACKED AS TASK 09` | The raw risk audit preserves per-gate unknowns, but the aggregate policy declares no own `observation_result_fields`; an unevaluable-policy block is not directly distinguished in the canonical candidate/trade-setup fields |
+
+### Live read-only evidence
+
+`company_fundamentals` remains unchanged in the relevant dimensions:
+
+- 9,014 rows; 8,541 rows have null `piotroski_f_score` and null
+  `market_cap_idr`.
+- 473 complete live-snapshot rows cover all 303 tickers.
+- First honest complete coverage is 2026-07-08 for 273 tickers and 2026-07-09
+  for the remaining 30.
+- No shares-outstanding series or historical F-score component set exists in
+  the current source tree. Re-fetching cannot create honest pre-cutoff values.
+
+Current `--window all` risk-audit totals grew to 8,034 window-observations while
+the historical missing-input counts stayed fixed:
+
+| Gate | pass | triggered | skipped | not evaluated | unknown rate |
+|---|---:|---:|---:|---:|---:|
+| FundamentalGate | 3,606 | 129 | 4,299 | 0 | 53.5% |
+| FreeFloatGate | 3,858 | 612 | 2,280 | 1,284 | 28.4% |
+| BandarGate | 3,075 | 1,626 | 1,437 | 1,896 | 17.9% |
+| LiquidityGate | 6,750 | 1,155 | 0 | 129 | 0.0% |
+
+### Pre-fix hard-filter counterexamples
+
+Current code and tests explicitly preserve both counterexamples:
+
+1. `fundamentals_provider=None` plus `min_market_cap_idr > 0` returns
+   `rejected=False`, `screen_result=None`, and no typed explanation. The active
+   filter is silently not evaluated and the candidate is admitted.
+2. A present provider returning no market cap or no Piotroski value returns the
+   same `rejected_flow` as a genuine numeric threshold failure. The observation
+   cannot tell data absence from an evaluated rejection.
+
+This violates the task's acceptance criteria that no path turns missing data into
+an unrecorded pass and that the structural filter record unknown separately. It
+does not currently affect the shipped default because both hard-filter thresholds
+are zero, but enabling either threshold activates the ambiguity.
+
+### Vetted fix contract — implemented 2026-08-08
+
+The implementation follows the vetted hard-filter contract and its
+identity/persistence blast radius:
+
+1. An active filter with no wired provider raises
+   `StructuralFilterConfigurationError`; provider exceptions propagate. Neither
+   becomes ticker-level missing data or an admitted candidate.
+2. `StructuralFilterDecision` is the typed application contract. It distinguishes
+   disabled, evaluated pass, missing-value rejection, and below-threshold
+   rejection while retaining `screen_result` as the existing coarse inclusion
+   result.
+3. The exact decision is transported through the use case and persisted in every
+   7/30/90 window pack. Accumulation observation schema 15 is a clean break;
+   schema 14 remains immutable historical material.
+4. `screener.accum.hard_filters` formula v2 declares the persisted result path and
+   the provider-unavailable configuration-error posture. The active compatibility
+   identity therefore forks through both snapshot material and observation schema.
+5. ml-saham independently accepts only schema 15, validates the exact structural
+   decision in every window, recomputes purpose-specific diagnostic IDs with
+   schema 15, and gives schema 14 no alias or reinterpretation.
+
+The structural-filter prerequisite for task 04 is settled. Task 09 remains a
+separate aggregate-policy provenance change and should still land before the
+one-time corpus rebuild.
+
+### Re-vet verification
+
+```text
+focused risk/filter/identity/PIT/display suite: 115 passed
+ruff check src/ tests/: passed
+ruff format --check src/ tests/: 1769 files already formatted
+git diff --check: passed before this documentation edit
+data manifest: exit 0, no warnings
+source contracts: exit 0, WARN (including the same optional fundamentals nulls)
+source reconciliation: exit 0, WARN; company_fundamentals PIT coverage PASS
+database SHA-256 before/after audits:
+bbfb38d91ebcb9aa649389266dd67243baaf7cd27cd7ffabd5fc0105ba211c33
+```
 
 ## 1. Task Metadata
 
@@ -166,16 +264,16 @@ answer determines whether cohort identity forks.
 
 ## 9. Acceptance Criteria
 
-- [ ] An unevaluable gate is a distinct outcome in the domain VO, the payload,
+- [x] An unevaluable gate is a distinct outcome in the domain VO, the payload,
       and operator output.
-- [ ] No code path converts "no data" into `pass` without recording it.
-- [ ] Skip policy is config-driven with a documented default.
-- [ ] Fundamentals backfill either lands with honest PIT dates, or a written
+- [x] No code path converts "no data" into `pass` without recording it.
+- [x] Skip policy is config-driven with a documented default.
+- [x] Fundamentals backfill either lands with honest PIT dates, or a written
       finding records why it cannot and what depth is achievable.
-- [ ] Gate skip rates re-measured after the backfill and recorded.
-- [ ] Deterministic; works without AI; no non-goals violated.
-- [ ] ADR-024 (signal/risk engines) considered.
-- [ ] **Lint Gate** passes.
+- [x] Gate skip rates re-measured after the backfill and recorded.
+- [x] Deterministic; works without AI; no non-goals violated.
+- [x] ADR-024 (signal/risk engines) considered.
+- [x] **Lint Gate** passes.
 
 ---
 
@@ -249,6 +347,10 @@ Offline. `pytest -m "not tui"`. Ruff before close.
 
 ## 15. Completion Record
 
+The 2026-08-05 record below is the original five-slice completion record. Its
+hard-filter closure and identity comment were superseded by the independent
+2026-08-08 re-vet and completion amendment in section 16.
+
 - **Completed date:** 2026-08-05
 
 - **Slice commits:**
@@ -311,3 +413,51 @@ Offline. `pytest -m "not tui"`. Ruff before close.
   `source-contracts` and `reconcile-sources` report WARN, every
   `company_fundamentals` finding is pre-existing `NULLS_IN_OPTIONAL_FIELD`, no
   FAIL, no schema change.
+
+---
+
+## 16. Completion Amendment — Structural Filter (2026-08-08)
+
+Semantic classifications: `SEMANTIC_ENGINE`, `EVIDENCE_CONTRACT`,
+`OBSERVATION_SCHEMA`, and `CONFIG_MATERIAL`. The live defaults remain disabled,
+but enabling either fundamentals threshold can no longer silently admit a
+candidate when composition omitted the provider.
+
+The clean-break implementation is coordinated across ai-saham and ml-saham:
+
+- ai-saham emits and strictly validates typed structural-filter provenance in
+  accumulation observation schema 15, binds the policy posture in hard-filter
+  snapshot formula v2, and preserves schema 14 as historical.
+- ml-saham independently requires schema 15, validates every 7/30/90 structural
+  decision, recomputes the purpose-specific diagnostic compatibility ID with
+  schema 15, and keeps diagnostic artifacts report-only/non-promotable.
+- No production SQLite row was inserted, migrated, rewritten, repaired, or
+  backfilled. All test writes used temporary databases.
+- Task 09 remains separate; this amendment does not claim aggregate
+  unevaluable-policy observation provenance is fixed.
+
+Final verification on the exact uncommitted implementation state:
+
+```text
+ai-saham focused structural/filter/identity/readiness suite: 247 passed
+ai-saham readiness regression slice: 7 passed
+ai-saham full pytest: 6644 passed, 41 skipped
+ai-saham Ruff check: passed
+ai-saham Ruff format check: 1771 files already formatted
+ai-saham git diff --check: passed
+
+ml-saham compileall with external pycache: passed
+ml-saham focused diagnostic/payload/acceptance suite: 53 passed
+ml-saham challenge contract gate: 39 passed
+ml-saham git diff --check: passed
+ml-saham broad suite: 417 passed, 11 failed; eight are the existing unrelated
+  curriculum baseline failures, and three are sibling-workspace sandbox writes
+  (two Numba cache attempts and one export). No changed challenge test failed.
+
+data manifest: exit 0, no warnings
+source contracts: exit 0, WARN (pre-existing optional-field coverage)
+source reconciliation: exit 0, WARN (pre-existing partial-source and duplicate
+  market-context/regime identity findings); company_fundamentals PIT PASS
+database SHA-256 before/after audits:
+bbfb38d91ebcb9aa649389266dd67243baaf7cd27cd7ffabd5fc0105ba211c33
+```

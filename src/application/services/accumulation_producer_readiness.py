@@ -16,6 +16,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any, Mapping, Sequence
 
+from src.application.dto.accumulation_structural_filter import StructuralFilterDecision
 from src.application.services.accumulation_production_policy_descriptors import (
     ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4,
 )
@@ -756,6 +757,20 @@ def _production_payload_semantic_reasons(
         keys = {str(k) for k in features}
         if keys != ACTIVE_FEATURES_WINDOWS:
             reasons.append(f"features_by_window_keys:{sorted(keys)}")
+        elif require_current_payload_schema and payload_schema == ACTIVE_PAYLOAD_SCHEMA_VERSION:
+            for window in sorted(ACTIVE_FEATURES_WINDOWS):
+                pack = features.get(window)
+                if not isinstance(pack, Mapping):
+                    reasons.append(f"features_by_window.{window}:not_mapping")
+                    continue
+                raw_decision = pack.get("structural_filter")
+                if not isinstance(raw_decision, Mapping):
+                    reasons.append(f"features_by_window.{window}.structural_filter:missing")
+                    continue
+                try:
+                    StructuralFilterDecision.from_mapping(raw_decision)
+                except ValueError as exc:
+                    reasons.append(f"features_by_window.{window}.structural_filter:invalid:{exc}")
 
     # Payload captured_at must equal outer captured_at exactly (PIT capture authority).
     outer_captured = observation.captured_at

@@ -10,6 +10,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from src.application.dto.accumulation_screen import AccumulationCandidate
+from src.application.dto.accumulation_structural_filter import StructuralFilterDecision
 from src.application.services.accumulation_observation_fingerprint import (
     build_candidate_observation_payload,
 )
@@ -67,7 +68,7 @@ def _catalog_match_coiled() -> SwingSetupCatalogConfig:
 
 def test_candidate_observation_schema_version_pin():
     """ADR-068 schema 13: the write-only ``config_hash`` payload field is gone."""
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 14
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 15
 
 
 def test_fingerprint_serializes_named_setup_evaluations_lean_dict():
@@ -133,6 +134,7 @@ def test_fingerprint_serializes_named_setup_evaluations_lean_dict():
         snapshot_date=date(2026, 7, 1),
         captured_at=datetime(2026, 7, 1, 10, 30, 0),
         request=request,
+        structural_filter_decision=StructuralFilterDecision.disabled(),
     )
     assert payload["schema_version"] == CANDIDATE_OBSERVATION_SCHEMA_VERSION
     lean = payload["sub_signal_fingerprint"]["named_setup_evaluations"]

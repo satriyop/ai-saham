@@ -397,6 +397,7 @@ class AccumulationScreenUseCase:
                         evaluation_result=eval_result,
                         screen_result=filter_result.screen_result,
                         flow_evidence=None,
+                        structural_filter_decision=filter_result.decision,
                     )
                 )
                 skipped += 1
@@ -429,6 +430,7 @@ class AccumulationScreenUseCase:
                     evaluation_result=eval_result,
                     screen_result=assessment.screen_result,
                     flow_evidence=assessment.flow_evidence,
+                    structural_filter_decision=filter_result.decision,
                 )
             )
             if assessment.passes:

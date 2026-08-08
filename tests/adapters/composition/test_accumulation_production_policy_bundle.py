@@ -173,17 +173,18 @@ def test_real_production_config_declared_observation_paths_resolve() -> None:
 
     This is the regression guard for the defect class fixed in 503afeb8 and
     746111e9: an ``observation_result_fields`` entry naming a key no producer
-    ever writes. Only these two rows are checked because they are the only ones
+    ever writes. These three rows are checked because they are the ones
     whose declared paths land on the candidate/trade-setup part of a session
     observation; the four ``signal.*`` rows point into the signal pack, which a
-    candidate-only probe leaves empty, and ``screener.accum.hard_filters`` /
-    ``risk.accum.unevaluable_policy`` declare no observation fields at all.
+    candidate-only probe leaves empty. ``risk.accum.unevaluable_policy`` still
+    declares no observation fields of its own.
     """
     payloads = _payloads_from(_resolve_real_bundle())
     observation = _probe_session_observation()
 
     for policy_id in (
         PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
+        PRODUCTION_POLICY_ID_HARD_FILTERS,
         PRODUCTION_POLICY_ID_RISK_HARD_GATES,
     ):
         _assert_declared_paths_resolve(dict(payloads[policy_id]), observation)

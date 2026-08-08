@@ -18,6 +18,9 @@ from src.domain.value_objects.learning_artifacts import (
     LearningContractError,
     canonical_json,
 )
+from src.domain.value_objects.signal_artifact_schema import (
+    CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+)
 
 DIAGNOSTIC_PRODUCER_SNAPSHOT_CONTRACT = "diagnostic_producer_snapshot.v1"
 DIAGNOSTIC_BINDING_CONTRACT = "diagnostic_binding.accum.v1"
@@ -162,9 +165,10 @@ class AccumulationDiagnosticBinding:
         required = ACCUMULATION_DIAGNOSTIC_REQUIRED_PRODUCERS.get(diagnostic_id)
         if required is None:
             raise LearningContractError(f"unknown diagnostic_id: {diagnostic_id!r}")
-        if observation_schema_version != 14:
+        if observation_schema_version != CANDIDATE_OBSERVATION_SCHEMA_VERSION:
             raise LearningContractError(
-                "diagnostic bindings require accumulation observation schema 14"
+                "diagnostic bindings require current accumulation observation schema "
+                f"{CANDIDATE_OBSERVATION_SCHEMA_VERSION}"
             )
         by_id: dict[str, DiagnosticProducerSnapshot] = {}
         for snapshot in snapshots:

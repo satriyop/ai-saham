@@ -34,7 +34,7 @@ The review is closed. All findings are fixed and vertically verified:
 | ID | Severity | Status | Finding / result |
 |---|---|---|---|
 | RC-01A | P1 | `FIXED / VERIFIED` | Active v4/nine binds the complete resolved `DecisionPolicyConfig`; the original Action-changing counterexample now forks `compatibility_id` |
-| RC-01B | P1 challenge/corpus | `FIXED / VERIFIED` | Purpose-specific schema-14 producer bindings, strict dual-ID read-only consumer verification, exact extraction, and sealed non-promotable artifact v4 implemented |
+| RC-01B | P1 challenge/corpus | `FIXED / VERIFIED` | Purpose-specific producer bindings, strict dual-ID read-only consumer verification, exact extraction, and sealed non-promotable artifact v4 implemented; active binding is schema 15 and schema 14 remains historical |
 | RC-02 | P1 | `FIXED / VERIFIED` | Implicit lock cleanup removed; Chromium is the sole profile-ownership arbiter and adversarial markers remain untouched |
 | RC-03 | P2 | `FIXED / VERIFIED` | Readiness output and validation now source the same active v4 descriptor |
 | RC-04 | P2 | `FIXED / VERIFIED` | Plan consumes the exact typed screen judgment; v2 plan artifacts separate geometry from handoff readiness and fail closed |
@@ -42,6 +42,11 @@ The review is closed. All findings are fixed and vertically verified:
 RC-01B's prior counterexamples are now negative contract tests: historical,
 missing, mixed, extra, digest-invalid, alias, and noncanonical-window inputs
 cannot acquire current diagnostic authority.
+
+Post-review amendment (2026-08-08): task 03 added typed structural-filter
+provenance and cleanly moved the active accumulation observation/diagnostic
+binding from schema 14 to schema 15. Both repositories reject schema 14 as
+historical; the original RC-01B producer sets and dual-ID boundary are unchanged.
 
 ## 3. Verification Evidence
 

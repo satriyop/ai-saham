@@ -4,12 +4,20 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+import pytest
+
 from src.application.dto.accumulation_screen import (
     AccumulationCandidate,
     AccumulationScreenRequest,
 )
+from src.application.dto.accumulation_structural_filter import (
+    StructuralFilterField,
+    StructuralFilterOutcome,
+    StructuralFilterRejectionReason,
+)
 from src.application.services.accumulation_candidate_structural_filter import (
     AccumulationCandidateStructuralFilter,
+    StructuralFilterConfigurationError,
 )
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
 
@@ -82,6 +90,7 @@ def test_no_fundamentals_fetch_when_both_gates_disabled():
     assert result.fundamentals_fetched is False
     assert result.rejected is False
     assert result.screen_result is None
+    assert result.decision.outcome is StructuralFilterOutcome.DISABLED
     provider.get_fundamentals.assert_not_called()
 
 
@@ -94,6 +103,7 @@ def test_fetch_when_market_cap_gate_enabled():
     provider.get_fundamentals.assert_called_once()
     assert result.fundamentals_fetched is True
     assert result.rejected is False
+    assert result.decision.outcome is StructuralFilterOutcome.PASSED
 
 
 def test_none_fundamentals_when_missing_market_cap_rejected_as_flow():
@@ -104,6 +114,10 @@ def test_none_fundamentals_when_missing_market_cap_rejected_as_flow():
 
     assert result.rejected is True
     assert result.screen_result == "rejected_flow"
+    assert result.decision.field is StructuralFilterField.MARKET_CAP_IDR
+    assert result.decision.reason is StructuralFilterRejectionReason.MISSING_VALUE
+    assert result.decision.observed_value is None
+    assert result.decision.threshold == 100_000_000_000
 
 
 def test_low_market_cap_rejects_as_flow():
@@ -114,6 +128,9 @@ def test_low_market_cap_rejects_as_flow():
 
     assert result.rejected is True
     assert result.screen_result == "rejected_flow"
+    assert result.decision.field is StructuralFilterField.MARKET_CAP_IDR
+    assert result.decision.reason is StructuralFilterRejectionReason.BELOW_THRESHOLD
+    assert result.decision.observed_value == 50_000_000_000
 
 
 def test_missing_piotroski_rejects_as_flow():
@@ -124,6 +141,9 @@ def test_missing_piotroski_rejects_as_flow():
 
     assert result.rejected is True
     assert result.screen_result == "rejected_flow"
+    assert result.decision.field is StructuralFilterField.PIOTROSKI_F_SCORE
+    assert result.decision.reason is StructuralFilterRejectionReason.MISSING_VALUE
+    assert result.decision.observed_value is None
 
 
 def test_low_piotroski_rejects_as_flow():
@@ -134,6 +154,9 @@ def test_low_piotroski_rejects_as_flow():
 
     assert result.rejected is True
     assert result.screen_result == "rejected_flow"
+    assert result.decision.field is StructuralFilterField.PIOTROSKI_F_SCORE
+    assert result.decision.reason is StructuralFilterRejectionReason.BELOW_THRESHOLD
+    assert result.decision.observed_value == 3
 
 
 def test_accepted_candidate_returns_fundamentals_fetched_true():
@@ -148,17 +171,26 @@ def test_accepted_candidate_returns_fundamentals_fetched_true():
     assert result.fundamentals_fetched is True
     assert result.rejected is False
     assert result.screen_result is None
+    assert result.decision.outcome is StructuralFilterOutcome.PASSED
     assert result.candidate.fundamentals is not None
 
 
-def test_no_provider_no_fetch():
-    """When provider is None, no fetch occurs even with gates enabled."""
+def test_active_filter_without_provider_fails_as_configuration_error():
+    """An active filter cannot silently pass when composition omitted its provider."""
     filter_obj = AccumulationCandidateStructuralFilter(fundamentals_provider=None)
-    result = filter_obj.apply(
-        _candidate(),
-        _request(min_market_cap_idr=100_000_000_000),
-    )
+    with pytest.raises(StructuralFilterConfigurationError, match="no fundamentals provider"):
+        filter_obj.apply(
+            _candidate(),
+            _request(min_market_cap_idr=100_000_000_000),
+        )
 
-    assert result.fundamentals_fetched is False
-    assert result.rejected is False
-    assert result.screen_result is None
+
+def test_provider_exception_propagates() -> None:
+    provider = MagicMock()
+    provider.get_fundamentals.side_effect = RuntimeError("provider failed")
+
+    with pytest.raises(RuntimeError, match="provider failed"):
+        AccumulationCandidateStructuralFilter(provider).apply(
+            _candidate(),
+            _request(min_piotroski=5),
+        )

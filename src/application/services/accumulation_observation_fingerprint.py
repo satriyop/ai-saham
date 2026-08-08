@@ -6,6 +6,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Mapping
 
 from src.application.dto import accumulation_screen as accumulation_dto
+from src.application.dto.accumulation_structural_filter import StructuralFilterDecision
 from src.application.services.accumulation_observation_institutional_fingerprint import (
     _ia_evidence_fingerprint,
 )
@@ -77,6 +78,7 @@ def build_candidate_observation_payload(
     snapshot_date: date,
     captured_at: datetime,
     request: "accumulation_dto.AccumulationScreenRequest",
+    structural_filter_decision: "StructuralFilterDecision",
     strategy_evidence: "StrategyEvidence | None" = None,
     ia_evidence: "InstitutionalAccumulationEvidence | None" = None,
     tp_snapshot: "TickerProfileSnapshot | None" = None,
@@ -146,6 +148,7 @@ def build_candidate_observation_payload(
         "captured_at": captured_at.isoformat(),
         "workflow": "screen_accum",
         "screen_result": screen_result,
+        "structural_filter": structural_filter_decision.to_dict(),
         "request": {
             "window_days": request.window_days,
             "min_net_buy_days": request.min_net_buy_days,
@@ -179,7 +182,9 @@ def build_session_observation_payload(
     ``features_by_window`` keys are string window sizes (\"7\", \"30\", \"90\").
     Each value is a full engine pack (candidate + signal + risk + contexts).
     ``shared`` must include ``current_price`` (session close) for path labels.
-    Schema-10 requires ``population_binding`` (Option A typed population authority).
+    Current schema requires ``population_binding`` (Option A typed population
+    authority), diagnostic bindings, and a typed structural-filter result in
+    every window pack.
     """
     required = {"7", "30", "90"}
     keys = set(features_by_window)
@@ -202,7 +207,7 @@ def build_session_observation_payload(
     if not isinstance(population_binding, Mapping) or not population_binding:
         raise ValueError("population_binding must be a non-empty mapping")
     if diagnostic_bindings is None:
-        raise ValueError("schema-14 session observation requires diagnostic_bindings")
+        raise ValueError("schema-15 session observation requires diagnostic_bindings")
     if set(diagnostic_bindings) != set(ACCUMULATION_DIAGNOSTIC_REQUIRED_PRODUCERS):
         raise ValueError("diagnostic_bindings must contain the exact closed diagnostic set")
     for diagnostic_id, binding in diagnostic_bindings.items():
@@ -215,6 +220,16 @@ def build_session_observation_payload(
                 f"diagnostic binding key/id mismatch: {diagnostic_id!r} != "
                 f"{binding.diagnostic_id!r}"
             )
+    for window, pack in features_by_window.items():
+        structural_filter = pack.get("structural_filter")
+        if not isinstance(structural_filter, Mapping):
+            raise ValueError(f"schema-15 features_by_window[{window!r}] requires structural_filter")
+        try:
+            StructuralFilterDecision.from_mapping(structural_filter)
+        except ValueError as exc:
+            raise ValueError(
+                f"schema-15 features_by_window[{window!r}] structural_filter invalid: {exc}"
+            ) from exc
     return {
         "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
         "artifact_type": "accumulation_session_observation",

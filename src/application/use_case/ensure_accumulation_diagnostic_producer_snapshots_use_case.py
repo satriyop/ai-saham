@@ -44,7 +44,7 @@ class EnsureAccumulationDiagnosticProducerSnapshotsResponse:
 
 
 class EnsureAccumulationDiagnosticProducerSnapshotsUseCase:
-    """Persist the exact producer set and return its schema-14 bindings."""
+    """Persist the exact producer set and return current-schema bindings."""
 
     def __init__(self, repository: LearningDiagnosticProducerSnapshotRepository) -> None:
         self._repository = repository

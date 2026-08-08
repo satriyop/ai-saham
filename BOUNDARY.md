@@ -96,7 +96,7 @@ Full mirror of this contract: [`ml-saham/BOUNDARY.md`](../ml-saham/BOUNDARY.md) 
 | Policy snapshots (ADR-059) | ai-saham write | Active: nine closed `production_policy_snapshot.v4` rows per behavioral `compatibility_id` before observation writes, including the unevaluable-gate and resolved signal decision policies. Historical v1-v3 sets remain immutable and ineligible. `ml-saham` verifies digests with no fallback |
 | Cohort evaluate | **dropped** | Scoring → ml-saham challenge |
 | Challenge panel | ml-saham | Features from observations; protocol y from candles (excess vs IHSG) by default |
-| Diagnostic producer snapshots/bindings (ADR-069) | ai-saham write | Six immutable typed producer snapshots; four purpose-specific root bindings in observation schema 14 |
+| Diagnostic producer snapshots/bindings (ADR-069) | ai-saham write | Six immutable typed producer snapshots; four purpose-specific root bindings in current observation schema 15; schema 14 remains historical |
 
 ### ADR-059 production policy snapshots
 
@@ -147,7 +147,8 @@ Full mirror of this contract: [`ml-saham/BOUNDARY.md`](../ml-saham/BOUNDARY.md) 
   exact four-entry `diagnostic_bindings` root before observation persistence.
 - ml-saham selects one explicit Action ID plus one explicit diagnostic ID,
   verifies both independently in SQLite read-only mode, and counts only
-  schema-14 rows sharing both identities.
+  current schema-15 rows sharing both identities. Schema-14 rows remain
+  historical and receive no binding reinterpretation.
 - Product features use window 7 and frozen observation context only. Historical
   rows receive no binding synthesis, alias, or current-producer interpretation.
 - Diagnostic artifact schema 4 is sealed and non-promotable; upstream identity

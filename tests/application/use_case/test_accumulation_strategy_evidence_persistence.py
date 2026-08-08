@@ -3,6 +3,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from src.application.dto.accumulation_screen import AccumulationScreenRequest
+from src.application.dto.accumulation_structural_filter import StructuralFilterDecision
 from src.application.services.accumulation_observation_fingerprint import (
     build_candidate_observation_payload,
 )
@@ -45,6 +46,7 @@ def test_candidate_observation_payload_persists_strategy_evidence_fields():
             tickers=["BBCA"],
             strategy_name="price-breakout",
         ),
+        structural_filter_decision=StructuralFilterDecision.disabled(),
     )
 
     fp = payload["sub_signal_fingerprint"]

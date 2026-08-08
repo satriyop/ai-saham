@@ -11,6 +11,9 @@ from src.domain.value_objects.accum_score_breakdown import AccumScoreBreakdown
 from src.domain.value_objects.foreign_flow_evidence import ForeignFlowEvidence
 
 if TYPE_CHECKING:
+    from src.application.dto.accumulation_structural_filter import (
+        StructuralFilterDecision,
+    )
     from src.application.dto.assess_signal import AssessSignalResponse
     from src.application.services.primary_setup_family_resolver import (
         PrimarySetupFamilyResult,
@@ -485,6 +488,7 @@ class AccumulationScreenObservationCandidate:
     evaluation_result: AccumulationCandidateEvaluationResult
     screen_result: str
     flow_evidence: "FlowConfirmationEvidence | None"
+    structural_filter_decision: "StructuralFilterDecision | None" = None
 
     @property
     def candidate(self) -> AccumulationCandidate:

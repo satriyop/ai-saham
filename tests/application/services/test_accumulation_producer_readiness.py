@@ -10,6 +10,7 @@ from src.application.services.accumulation_producer_readiness import (
     LabelHorizonCounts,
     ObservationCohortValidation,
     ProducerReadinessStatus,
+    _production_payload_semantic_reasons,
     classify_producer_status,
     extract_action_from_payload,
     extract_setup_readiness_status_from_payload,
@@ -169,6 +170,19 @@ def _payload(
         schema_version = CANDIDATE_OBSERVATION_SCHEMA_VERSION
     if with_population_binding is None:
         with_population_binding = schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+    structural_filter = (
+        {
+            "structural_filter": {
+                "outcome": "disabled",
+                "field": None,
+                "reason": None,
+                "observed_value": None,
+                "threshold": None,
+            }
+        }
+        if schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+        else {}
+    )
     trade_setup = {"action": action} if action is not None else None
     signal = {"setup_readiness": {"status": readiness}} if readiness is not None else {}
     shared: dict = {"current_price": 100.0}
@@ -198,6 +212,7 @@ def _payload(
         "shared": shared,
         "features_by_window": {
             "7": {
+                **structural_filter,
                 "trade_setup": trade_setup,
                 "signal": signal,
                 "candidate": {},
@@ -205,8 +220,18 @@ def _payload(
                     "setup_readiness_status": "READY",  # diagnostic only; must not count
                 },
             },
-            "30": {"trade_setup": trade_setup, "signal": {}, "candidate": {}},
-            "90": {"trade_setup": trade_setup, "signal": {}, "candidate": {}},
+            "30": {
+                **structural_filter,
+                "trade_setup": trade_setup,
+                "signal": {},
+                "candidate": {},
+            },
+            "90": {
+                **structural_filter,
+                "trade_setup": trade_setup,
+                "signal": {},
+                "candidate": {},
+            },
         },
     }
     if session_date is not None:
@@ -2332,7 +2357,7 @@ def _rehash_snapshot(snap: ProductionPolicySnapshot) -> ProductionPolicySnapshot
     return snap
 
 
-def test_candidate_observation_schema_version_is_14_with_diagnostic_bindings() -> None:
+def test_candidate_observation_schema_version_is_15_with_structural_filter_provenance() -> None:
     from src.domain.value_objects.learning_artifacts import (
         ACCUM_POPULATION_BINDING_SCHEMA_VERSION,
         LEGACY_ACCUM_POPULATION_BINDING_SCHEMA_VERSION,
@@ -2342,14 +2367,14 @@ def test_candidate_observation_schema_version_is_14_with_diagnostic_bindings() -
         INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     )
 
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 14
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 15
     assert HISTORICAL_GROUP_BREADTH_ERA_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 11
     assert INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 10
     assert LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 9
     assert ACCUM_POPULATION_BINDING_SCHEMA_VERSION == 2
     assert LEGACY_ACCUM_POPULATION_BINDING_SCHEMA_VERSION == 1
     o = _observation(day=1)
-    assert o.decision_payload["schema_version"] == 14
+    assert o.decision_payload["schema_version"] == 15
     assert set(o.decision_payload["diagnostic_bindings"]) == {
         "mce.screen_display",
         "sector.peer_context",
@@ -2370,7 +2395,18 @@ def test_build_session_observation_payload_requires_population_binding() -> None
         build_session_observation_payload,
     )
 
-    features = {"7": {}, "30": {}, "90": {}}
+    structural_filter = {
+        "outcome": "disabled",
+        "field": None,
+        "reason": None,
+        "observed_value": None,
+        "threshold": None,
+    }
+    features = {
+        "7": {"structural_filter": structural_filter},
+        "30": {"structural_filter": structural_filter},
+        "90": {"structural_filter": structural_filter},
+    }
     shared = {"current_price": "100"}
     try:
         build_session_observation_payload(
@@ -2395,11 +2431,23 @@ def test_build_session_observation_payload_requires_population_binding() -> None
         population_binding=_binding_for_session("2026-07-01"),
         diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
     )
-    assert payload["schema_version"] == 14
+    assert payload["schema_version"] == 15
     assert payload["population_binding"]["membership_session"] == "2026-07-01"
     assert payload["population_binding"]["schema_version"] == 2
     assert "membership_tickers" in payload["population_binding"]
     assert "named_universe_tickers" in payload["population_binding"]
+
+
+def test_current_observation_missing_structural_filter_provenance_fails_closed() -> None:
+    observation = _observation(day=1)
+    del observation.decision_payload["features_by_window"]["7"]["structural_filter"]
+
+    reasons = _production_payload_semantic_reasons(
+        observation,
+        session=date(2026, 7, 1),
+    )
+
+    assert "features_by_window.7.structural_filter:missing" in reasons
 
 
 def test_overlong_h10_label_window_rejected_not_challenge_input_ready() -> None:

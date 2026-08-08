@@ -159,7 +159,7 @@ def run_signal_observation_corpus_write(
 
     if named_tickers is None:
         typer.echo(
-            "[error] population binding (schema-14) requires a named universe "
+            "[error] population binding (current ACCUM schema) requires a named universe "
             "(e.g. lq45); 'cached' board-wide mode is not challenge-corpus authority.",
             err=True,
         )

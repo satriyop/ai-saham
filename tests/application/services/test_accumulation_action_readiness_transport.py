@@ -6,6 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
+from src.application.dto.accumulation_structural_filter import StructuralFilterDecision
 from src.application.services.accumulation_observation_fingerprint import (
     build_candidate_observation_payload,
 )
@@ -140,6 +141,7 @@ def test_payload_preserves_computed_readiness_and_action() -> None:
         snapshot_date=date(2026, 7, 31),
         captured_at=datetime(2026, 7, 31, 12, 0, 0),
         request=_minimal_request(),
+        structural_filter_decision=StructuralFilterDecision.disabled(),
     )
     assert payload["trade_setup"]["action"] == "AVOID"
     assert payload["signal"]["setup_readiness"]["status"] == "INELIGIBLE"
@@ -163,6 +165,7 @@ def test_payload_preserves_null_readiness_without_synthesis() -> None:
         snapshot_date=date(2026, 7, 31),
         captured_at=datetime(2026, 7, 31, 12, 0, 0),
         request=_minimal_request(),
+        structural_filter_decision=StructuralFilterDecision.disabled(),
     )
     assert payload["signal"]["setup_readiness"] is None
     session_like = {

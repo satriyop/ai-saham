@@ -7,6 +7,7 @@ from typing import Sequence
 
 import pytest
 
+from src.application.dto.accumulation_structural_filter import StructuralFilterDecision
 from src.application.services.accumulation_producer_readiness import ProducerReadinessStatus
 from src.application.services.accumulation_production_policy_descriptors import (
     ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4,
@@ -94,6 +95,11 @@ def _payload(
 ) -> dict:
     t = ticker.upper()
     cap = captured_at or datetime.fromisoformat(f"{session_date}T12:00:00+00:00")
+    structural_filter = (
+        {"structural_filter": StructuralFilterDecision.disabled().to_dict()}
+        if schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+        else {}
+    )
     body = {
         "schema_version": schema_version,
         "artifact_type": "accumulation_session_observation",
@@ -117,12 +123,23 @@ def _payload(
         },
         "features_by_window": {
             "7": {
+                **structural_filter,
                 "trade_setup": {"action": action},
                 "signal": {},
                 "candidate": {},
             },
-            "30": {"trade_setup": {"action": action}, "signal": {}, "candidate": {}},
-            "90": {"trade_setup": {"action": action}, "signal": {}, "candidate": {}},
+            "30": {
+                **structural_filter,
+                "trade_setup": {"action": action},
+                "signal": {},
+                "candidate": {},
+            },
+            "90": {
+                **structural_filter,
+                "trade_setup": {"action": action},
+                "signal": {},
+                "candidate": {},
+            },
         },
     }
     if with_binding and schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION:
