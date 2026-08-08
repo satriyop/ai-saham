@@ -38,19 +38,20 @@ Measurements). Doing it two months from now costs two months.
 | 1 | `01_implement_adr_068_behavioral_engine_identity.md` (**DONE** → `tasks/done/`) | **Yes** | none — ADR-068 accepted 2026-08-04; implemented 2026-08-05 |
 | 2 | `02_implement_adr_067_retire_setup_quality.md` (**DONE** → `tasks/done/`) | **Yes** (snapshot payload) | none — completed 2026-08-06, docs closeout 2026-08-07 |
 | 3 | `03_fix_risk_gate_silent_skip_and_fundamentals_pit_hole.md` | **Yes** (snapshot payload) | needs 1 |
+| 9 | `09_expose_unevaluable_gate_block_provenance.md` | **Yes** (snapshot payload binding) | needs 3; vetted 2026-08-08 |
 | — | **── PURGE + REBUILD (task 4), then CONFIG FREEZE ──** | | |
-| 4 | `04_rebuild_accum_corpus_single_deep_cohort.md` | No | needs 1, 2, 3 — **mandatory** |
+| 4 | `04_rebuild_accum_corpus_single_deep_cohort.md` | No | needs 1, 2, 3, 9 — **mandatory; re-vet after 9** |
 | 5 | `05_fix_preopen_directional_score_resolution.md` | pre-open only | independent |
 | 6 | `06_implement_accum_policy_proposal_lifecycle.md` | No | needs 4 + depth |
 | 7 | `07_improve_screen_accum_progressive_disclosure.md` | No | independent |
 | 8 | `08_fix_cli_error_taxonomy_and_exit_codes.md` | No | independent |
-| 9 | `09_expose_unevaluable_gate_block_provenance.md` | No | independent |
 
 ```
 ┌─ config-edit batch (one identity move, together) ──┐
 │  1  ADR-068 behavioural identity  ← must be first  │
 │  2  ADR-067 retire setup_quality                   │
 │  3  risk gate skips + fundamentals PIT             │
+│  9  bind persisted gate audit to snapshots + ML    │
 └─────────────────────────┬──────────────────────────┘
                           │  ONE purge + rebuild (task 4)
                           │  then FREEZE CONFIG
@@ -60,7 +61,6 @@ Measurements). Doing it two months from now costs two months.
   5 pre-open score  ─── independent (pre-open purpose, own mechanism)
   7 compact output  ─── independent
   8 error taxonomy  ─── independent
-  9 unevaluable-gate block provenance ─── independent
 ```
 
 **Why ADR-068 goes first.** It deletes `SEMANTIC_ENGINE_VERSION` and
@@ -74,6 +74,14 @@ ADR-068 does. Task 4 is the single purge for the whole batch.
 
 Tasks 5, 7, 8 do not move accum identity and may run at any time, including
 during the freeze.
+
+**2026-08-08 task-09 re-vet.** The original draft incorrectly said the risk
+audit was absent from storage. Current canonical observations already persist
+`risk.unevaluable_gates` and `risk.gate_evaluations`; the remaining fix binds
+those paths into two ADR-059 snapshot payloads and teaches ml-saham to consume
+them. Snapshot payload changes move the ADR-068 compatibility ID, so task 09 is
+now part of the pre-rebuild identity batch. The task-04 draft predates schema 15
+and this ordering correction and must be re-vetted before execution.
 
 ---
 
