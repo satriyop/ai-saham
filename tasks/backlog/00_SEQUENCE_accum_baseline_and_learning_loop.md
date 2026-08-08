@@ -102,9 +102,17 @@ now part of the pre-rebuild identity batch.
 `sha256:355e5b59600dbdc9f762f7b373e8879b7cda9a1e55e18bd590461315cfe1e091`
 (schema **15**, `production_policy_snapshot.v4` ×9, task-09 risk-audit bindings).
 Range `2026-07-08`→`2026-08-07`, 23 sessions, 1035 observations. ml-saham health
-is **BLOCKED_DATA** (cannot form time folds / short embargo depth), not
-BLOCKED_POLICY. **Config freeze is now in effect** until a deliberate
-identity-moving batch.
+is **BLOCKED_DATA** (cannot form time folds / short embargo depth). **Config
+freeze is now in effect** until a deliberate identity-moving batch.
+
+**2026-08-09 corpus-growth re-vet.** ai-saham's independent producer status is
+currently **`BLOCKED_POLICY`**: the canonical writer persists
+`shared.current_price` as decimal text, while readiness accepts only JSON
+int/float, rejecting all 1,035 rows. The cron wrapper also emits
+`COMPLETION_OK` because status exits 0 for the blocked report. Fix those two
+producer-contract defects without schema/identity movement or row rewriting
+before calling the cohort `CODE_COMPLETE_AWAITING_DATA`. ml-saham's separate
+`BLOCKED_DATA` result does not override this upstream block.
 
 ---
 

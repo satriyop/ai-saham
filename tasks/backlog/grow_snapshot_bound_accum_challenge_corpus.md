@@ -1,8 +1,227 @@
 # Grow The Snapshot-Bound Accum Challenge Corpus
 
-Status: `IN_PROGRESS_CONTRACT_HARDENING`
+Status: `VETTED / BLOCKED_CONTRACT_FIX` — independent code-first re-vet on
+2026-08-09 found a live producer/readiness type mismatch and a cron false-positive
+completion path. This task is **not** `CODE_COMPLETE_AWAITING_DATA`.
 
-## ADR-067 / ADR-068 interaction review (2026-08-04)
+## Independent Re-Vet — 2026-08-09
+
+Documentation was treated as backup. The current capture writer, session-payload
+builder, label generator, readiness projection, read-only repositories, cron
+wrapper/installer, focused mutation tests, live SQLite corpus, and ml-saham
+consumer were traced directly.
+
+### Verdict
+
+Most of the task's architecture is implemented correctly under the current
+contracts:
+
+- accumulation observation schema **15**;
+- `production_policy_snapshot.v4`, exactly **nine** verified rows;
+- ADR-068 identity = behavioral probe digest + snapshot-set payload digest +
+  observation schema version;
+- one shared capture/backfill composition path;
+- typed Option-A population binding;
+- immutable Stockbit session-calendar-bound H3/H10/H20 labels;
+- read-only status repositories using SQLite `mode=ro` + `query_only=ON`;
+- bounded ACCUM label discovery with explicit PRE_OPEN isolation;
+- one installed fail-closed shell wrapper in cron;
+- ml-saham remains a read-only, separately governed challenge consumer.
+
+However, the current producer and readiness consumer disagree on the exact JSON
+type of the frozen entry price. This makes every live observation fail readiness.
+The installed wrapper then reports `COMPLETION_OK` because the status command
+returns exit 0 even for `BLOCKED_POLICY`.
+
+The task therefore has two code gates before prospective corpus growth can be
+called operationally healthy.
+
+### GROW-01 — current writer output is rejected by current readiness
+
+Status: `VETTED / FIX REQUIRED`.
+
+The canonical writer in
+`AccumulationCandidateObservationPersister.persist_session_multi_window()`
+stores:
+
+```python
+shared["current_price"] = str(candidate.current_price)
+```
+
+The session payload builder accepts a positive float-coercible value, and the
+canonical label generator deliberately parses that value through `Decimal`.
+Existing producer and label tests use decimal text such as `"1000"`.
+
+The readiness validator independently requires an exact JSON `int` or `float`
+and rejects every string. This is not a hypothetical edge:
+
+| Live fact | Value |
+|---|---:|
+| Schema-15 ACCUM observations | 1,035 |
+| `json_type(shared.current_price) = text` | 1,035 |
+| Readiness-valid observations | **0** |
+| Readiness-invalid observations | **1,035** |
+| Producer status | **`BLOCKED_POLICY`** |
+
+Representative reason:
+`shared.current_price:'2510'`.
+
+The snapshot set still verifies 9/9. Observation identity/digest reconciliation,
+label linkage, and risk PIT checks pass. The failure is solely the incompatible
+field-type contract.
+
+#### Proposed fix contract — requires implementation vet
+
+Preserve the writer's precision-safe decimal-text representation. Do **not**
+convert the writer to JSON float, bump schema 15, or rebuild/rewrite the corpus
+merely to satisfy the reader.
+
+Implement one pure canonical positive-decimal-text parser/validator and use it
+symmetrically at:
+
+1. `build_session_observation_payload()` validation;
+2. readiness observation validation;
+3. path-label entry-reference extraction;
+4. label entry-reference equality validation.
+
+The exact accepted value must be a JSON string that is:
+
+- non-empty and unpadded;
+- exactly representable by `Decimal`;
+- finite and strictly positive;
+- canonical under the chosen normalizer (reject signs/leading-zero aliases and
+  other value-equivalent spellings the producer cannot emit).
+
+Use the real persister in a vertical regression. The regression must persist,
+reload through `SQLiteLearningArtifactReadRepository`, and project readiness;
+hand-built float fixtures are insufficient. Add negative cases for JSON
+int/float, bool, whitespace, non-finite values, non-positive values, and
+non-canonical decimal aliases.
+
+Classification:
+
+- engine decisions: `NON_SEMANTIC`;
+- persisted observation shape: unchanged schema 15;
+- cohort identity: unchanged;
+- data/readiness contract: corrected to match the existing canonical producer;
+- historical rows: no rewrite or reinterpretation is needed because the sole
+  schema-15 cohort already carries the intended writer shape.
+
+After the fix, the existing 1,035 observations must validate without mutation,
+and status must recover the 23 economic sessions plus current H3/H10/H20 label
+counts.
+
+### GROW-02 — cron emits completion for `BLOCKED_POLICY`
+
+Status: `VETTED / FIX REQUIRED`.
+
+The installed cron invokes `scripts/cron_accum_challenge_corpus.sh` at 19:15 on
+weekdays. The wrapper uses `set -euo pipefail`, but `research accum status`
+returns exit 0 after printing a `BLOCKED_POLICY` report. The wrapper consequently
+prints `status ok` and `COMPLETION_OK` for a semantically failed producer run.
+Current tests assert source-code ordering only and explicitly allow the blocked
+status command to exit 0; they do not execute the wrapper against a blocked
+report.
+
+#### Proposed fix contract — requires implementation vet
+
+Keep ordinary `research accum status` useful as a read-only diagnostic. Add an
+explicit operational gate owned by the application report and exposed through a
+thin CLI flag used by the cron wrapper.
+
+Operational gate behavior:
+
+- any cohort classified `BLOCKED_POLICY` -> non-zero;
+- no active cohort classified `COLLECTING` or `CHALLENGE_INPUT_READY` ->
+  non-zero;
+- historical `LEGACY_RAW_ONLY` cohorts may coexist with one healthy active
+  cohort and do not alone fail the run;
+- `COLLECTING` and `CHALLENGE_INPUT_READY` are successful producer states;
+- the wrapper emits `COMPLETION_OK` only after this gate passes.
+
+Test the actual CLI/wrapper behavior, not only string ordering. A synthetic
+blocked report must prevent `COMPLETION_OK`; collecting and ready reports must
+permit it. No scoring or readiness policy may be recomputed in Bash or the CLI.
+
+Classification: `NON_SEMANTIC` engine behavior; CLI/operations contract only.
+No compatibility or observation identity movement.
+
+### Bounded-anchor readiness decision — accepted with explicit scope
+
+The §6.1.1 bounded label-discovery exception is independently accepted for
+**ACCUM readiness only**:
+
+- requested parent identity, expected label identity, and ACCUM label contract
+  are the three surviving anchors;
+- every discovered candidate is fully validated before parent filtering;
+- invalid ACCUM labels fail closed;
+- corrupt PRE_OPEN labels do not abort ACCUM readiness;
+- simultaneous corruption of all three anchors is honestly outside this
+  readiness projection.
+
+Closing that final blind spot would require a new immutable inventory/purpose
+binding or a separately governed corpus-wide integrity audit. A whole-table
+label scan on the hot status path would violate purpose isolation and is not an
+acceptable shortcut. This acceptance is not a claim that the whole corpus is
+all-anchor tamper-proof.
+
+### Live evidence
+
+Read-only evidence on `data/db/data.db`:
+
+- one ACCUM cohort:
+  `sha256:355e5b59600dbdc9f762f7b373e8879b7cda9a1e55e18bd590461315cfe1e091`;
+- 1,035 schema-15 observations, all with text `shared.current_price`;
+- nine valid v4 policy snapshots;
+- AVAILABLE labels: H3=900, H10=585, H20=135;
+- ai-saham producer status: `BLOCKED_POLICY`, zero authoritative sessions due to
+  GROW-01;
+- ml-saham health: `BLOCKED_DATA`, n=585, because it independently consumes
+  observation/candle panels and still cannot form the required time folds.
+
+The two statuses are not contradictory. They prove why producer handoff and ML
+protocol readiness must remain separate axes. `BLOCKED_DATA` in ml-saham must
+not be used to overrule ai-saham's `BLOCKED_POLICY`.
+
+Data Audit Gate:
+
+| Command | Exit | Overall | Task-relevant result |
+|---|---:|---|---|
+| `audit data manifest` | 0 | no manifest warnings | 1,035 observations, 1,620 labels, 9 policy snapshots |
+| `audit data source-contracts` | 0 | `WARN` | optional-field coverage warnings; no readiness type check |
+| `audit data reconcile-sources` | 0 | `WARN` | observation identity, label linkage, and risk PIT pass; unrelated market-context/regime duplicate-identity warnings remain |
+
+The audit commands do not currently detect GROW-01, so their green learning
+identity/linkage checks cannot substitute for `research accum status`.
+
+Focused verification: **120 passed** across readiness mutation tests, vertical
+producer/label/calendar tests, capture/backfill composition, and cron contracts.
+That suite still missed the live mismatch because the readiness fixtures use
+float prices while real persister tests merely float-coerce the emitted string.
+
+### Current gate and required order
+
+1. Vet and implement GROW-01.
+2. Re-run focused tests and all three data audits.
+3. Run live read-only status; require 1,035 valid observations and recovered
+   session/label counts without rewriting rows.
+4. Vet and implement GROW-02; prove blocked wrapper execution is non-zero.
+5. Only then set this task to `CODE_COMPLETE_AWAITING_DATA` and resume/confirm
+   scheduled growth.
+6. Keep task 06 blocked until ml-saham records at least two valid post-embargo
+   OOS folds for this exact compatibility ID.
+
+No config/policy changes, schema bump, corpus purge, observation rewrite,
+threshold relaxation, fold relaxation, or auto-promotion is authorized.
+
+## Historical Design Record — Superseded Where It Conflicts With The Re-Vet
+
+The remainder preserves the 2026-08-01 through 2026-08-04 design history. Its
+schema-11, snapshot-v2/seven-row, pre-task-09, and pre-rebuild measurements are
+not executable instructions. Current authority is schema 15, snapshot v4/nine,
+the re-vet above, current code, and current tests.
+
+### ADR-067 / ADR-068 interaction review (2026-08-04)
 
 Checked whether [ADR-067](../../docs/adr/ADR-067-retire-setup-quality-and-fix-judgment-authority-by-surface.md)
 invalidates anything this task locked.
@@ -681,8 +900,8 @@ contract after product-owner approval.
 ## 13. Completion Record
 
 ```text
-Completed date (code gate): REOPENED 2026-08-02 (still open)
-Task status: IN_PROGRESS_CONTRACT_HARDENING
+Last independent re-vet: 2026-08-09
+Task status: VETTED / BLOCKED_CONTRACT_FIX
 
 Authority locks recorded this cycle (required before any CODE_COMPLETE claim):
   - § Locked design decision — lookback Option A (producer attestation)
@@ -690,16 +909,15 @@ Authority locks recorded this cycle (required before any CODE_COMPLETE claim):
   - § 6.1.1 ACCUM label readiness discovery (v1 authority lock table)
   These are task authority, not implementation-only comments.
 
-CODE_COMPLETE_AWAITING_DATA eligibility rule for this reopen:
-  - May be claimed only after independent review accepts the locked bounded-anchor
-    exception (above) as intentional task authority AND remaining code gates pass.
-  - Must NOT be claimed solely because the implementation already matches the rule.
-  - Operational multi-session growth + ml-saham ≥2 OOS folds remain separate
-    (operational DONE / move to tasks/done/).
+Bounded-anchor authority review:
+  - ACCEPTED for ACCUM readiness only on 2026-08-09.
+  - The simultaneous all-three-anchor mutation blind spot remains explicitly
+    outside readiness and is not represented as corpus-wide integrity.
 
 Open before CODE_COMPLETE_AWAITING_DATA:
-  - Independent review acceptance of §6.1.1 bounded-anchor ACCUM label discovery
-  - Operational AWAITING_DATA (live multi-session cohort + companion OOS folds)
+  - GROW-01: canonical decimal-text current_price producer/readiness symmetry
+  - GROW-02: cron operational gate must reject BLOCKED_POLICY before COMPLETION_OK
+  - Live status recovery without corpus rewrite
 
 Closed under the bounded-anchor model (implementation + tests; authority now explicit):
   - ACCUM/PRE_OPEN label purpose isolation (e1fae445)
@@ -711,6 +929,6 @@ Closed under the bounded-anchor model (implementation + tests; authority now exp
 
 P2 configured-but-unwired finding recorded: YES (no v3)
 
-CODE_COMPLETE_AWAITING_DATA: NOT claimed until §6.1.1 authority is accepted by review
+CODE_COMPLETE_AWAITING_DATA: NOT claimed; GROW-01 and GROW-02 are open
 Operational DONE: still requires live multi-session growth + ml-saham OOS folds
 ```
