@@ -103,12 +103,17 @@ declared by `risk.accum.hard_gates`. Its payload records `action`
 row is cohort identity, not documentation: before v3 two deployments with
 opposite settings shared one `compatibility_id`.
 
-The row declares **no** `observation_result_fields`. No stored observation field
-carries this policy's own output — `RiskAssessment.to_dict()` has
-`unevaluable_gates` but `AccumulationCandidate.to_dict()` never copies it, and
-the persisted risk fields (`candidate.risk_status`, `candidate.risk_gate`,
-`trade_setup.blocking_gates`) are already declared by `risk.accum.hard_gates`
-and cannot distinguish an unevaluable-block from an ordinary gate trigger.
+The row declares schema-15 risk-audit `observation_result_fields`:
+
+- `features_by_window.7.risk.unevaluable_gates`
+- `features_by_window.7.risk.gate_evaluations`
+
+Those paths are written by
+`AccumulationCandidateObservationPersister._build_engine_pack` via
+`build_risk_assessment_capture_dict`. Coarse `candidate.risk_status` /
+`trade_setup.blocking_gates` remain companions on `risk.accum.hard_gates` and
+cannot alone distinguish an aggregate unevaluable-policy block from a genuine
+gate trigger; the typed audit outcomes are authoritative for that distinction.
 
 ### Active v4 closed set
 

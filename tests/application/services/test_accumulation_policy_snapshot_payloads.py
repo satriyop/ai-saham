@@ -55,7 +55,8 @@ from src.application.services.signal_evidence_group_scorer import SignalEvidence
 from src.application.use_case.score_accum_use_case import AccumScorePolicy
 from src.domain.rules.bandar_gate import BandarGate
 from src.domain.rules.fundamental_gate import FundamentalGate
-from src.domain.rules.risk_gate import UnevaluableGateAction, UnevaluableGatePolicy
+from src.domain.rules.risk_gate import GateResult, UnevaluableGateAction, UnevaluableGatePolicy
+from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS,
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
@@ -66,6 +67,11 @@ from src.domain.value_objects.learning_artifacts import (
     PRODUCTION_POLICY_ID_SIGNAL_RAW_SCORE,
     PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY,
     canonical_json,
+)
+from src.domain.value_objects.risk_assessment import RiskAssessment
+from src.domain.value_objects.risk_gate_audit import (
+    GateEvaluationRecord,
+    build_risk_assessment_capture_dict,
 )
 from src.domain.value_objects.signal_assessment import (
     ACCUMULATION_DISCOVERY_IDENTITY,
@@ -165,6 +171,33 @@ def _probe_session_observation() -> dict[str, Any]:
         captured_at=_PROBE_CAPTURED_AT,
         request=AccumulationScreenRequest(tickers=[candidate.ticker]),
         structural_filter_decision=StructuralFilterDecision.disabled(),
+    )
+    # Schema-15 risk audit enrichment (same shape the observation persister writes).
+    indicators = IndicatorSnapshot(
+        date=_PROBE_DATE,
+        sma=Decimal("1000"),
+        ema=Decimal("1000"),
+        rsi=Decimal("50"),
+    )
+    risk_assessment = RiskAssessment(
+        rationale=("probe",),
+        snapshot_date=_PROBE_DATE,
+        indicators=indicators,
+        gate_triggered="FundamentalGate",
+        gate_is_structural=True,
+        gate_confidence=80,
+        unevaluable_gates=(),
+    )
+    pack["risk"] = build_risk_assessment_capture_dict(
+        risk_assessment,
+        gate_evaluations=(
+            GateEvaluationRecord.from_result(
+                gate_name="FundamentalGate",
+                tier="structural",
+                order=0,
+                result=GateResult(triggered=True, reason="f-score below floor", confidence=80),
+            ),
+        ),
     )
     return build_session_observation_payload(
         ticker=candidate.ticker,
@@ -324,13 +357,11 @@ def test_accum_score_payload_declares_the_real_producer_field() -> None:
 
 
 def test_risk_hard_gates_payload_declares_the_real_producer_fields() -> None:
-    """``blocking_gates`` is on the trade setup; ``risk_status`` is not.
+    """Per-gate authority is ``risk.gate_evaluations``; coarse fields remain companions.
 
-    ``TradeSetup.to_dict()`` emits ``blocking_gates`` (and ``gate_triggered``),
-    but the risk level name is only ever serialized by
-    ``AccumulationCandidate.to_dict()`` as ``risk_status`` — so the two outputs
-    of this one policy land under two different keys of the window pack, which
-    is exactly what the stale declaration got wrong.
+    ``TradeSetup.to_dict()`` emits ``blocking_gates``; ``risk_status`` is only
+    on ``AccumulationCandidate.to_dict()``. Schema-15 also stores the typed
+    risk audit under ``risk.gate_evaluations`` via the observation persister.
     """
     payload = build_risk_hard_gates_payload([FundamentalGate()], [BandarGate()])
 
@@ -338,6 +369,7 @@ def test_risk_hard_gates_payload_declares_the_real_producer_fields() -> None:
     observation = _probe_session_observation()
     _assert_declared_paths_resolve(payload, observation)
     assert payload["observation_result_fields"] == {
+        "gate_evaluations": "features_by_window.7.risk.gate_evaluations",
         "blocking_gates": "features_by_window.7.trade_setup.blocking_gates",
         "risk_status": "features_by_window.7.candidate.risk_status",
     }
@@ -345,6 +377,7 @@ def test_risk_hard_gates_payload_declares_the_real_producer_fields() -> None:
     pack = observation["features_by_window"]["7"]
     assert "risk_status" not in pack["trade_setup"]
     assert "blocking_gates" not in pack["candidate"]
+    assert isinstance(pack["risk"]["gate_evaluations"], list)
 
 
 def test_evidence_group_payload_declares_one_production_basis() -> None:
@@ -530,26 +563,26 @@ def test_unevaluable_gate_policy_formula_id_names_a_real_callable() -> None:
     assert callable(getattr(AssessRiskGateEvaluator, "evaluate", None))
 
 
-def test_unevaluable_gate_policy_payload_declares_no_observation_fields() -> None:
-    """Omission is deliberate and evidence-based, not an oversight.
+def test_unevaluable_gate_policy_payload_declares_schema15_risk_audit_fields() -> None:
+    """Binds the risk audit the observation persister already writes.
 
-    A session observation built by the real producers carries no field that
-    reports this policy's own output: ``RiskAssessment.to_dict()`` has
-    ``unevaluable_gates`` but ``AccumulationCandidate.to_dict()`` never copies
-    it, and the risk fields that *are* persisted
-    (``candidate.risk_status`` / ``candidate.risk_gate`` /
-    ``trade_setup.blocking_gates``) are already declared by
-    ``risk.accum.hard_gates`` and cannot distinguish an unevaluable-block from
-    an ordinary gate trigger. Borrowing one of them would repeat the defect
-    fixed in 746111e9.
+    Coarse candidate/trade_setup fields cannot distinguish an aggregate-policy
+    block from a genuine gate trigger; ``risk.unevaluable_gates`` and
+    ``risk.gate_evaluations`` can.
     """
     payload = build_unevaluable_gate_policy_payload(UnevaluableGatePolicy())
-    assert "observation_result_fields" not in payload
+    observation = _probe_session_observation()
+    _assert_declared_paths_resolve(payload, observation)
+    assert payload["observation_result_fields"] == {
+        "unevaluable_gates": "features_by_window.7.risk.unevaluable_gates",
+        "gate_evaluations": "features_by_window.7.risk.gate_evaluations",
+    }
 
-    pack = _probe_session_observation()["features_by_window"]["7"]
+    pack = observation["features_by_window"]["7"]
     assert "unevaluable_gates" not in pack["candidate"]
     assert "unevaluable_gates" not in pack["trade_setup"]
-    assert "unevaluable_gates" not in pack
+    assert "unevaluable_gates" in pack["risk"]
+    assert "gate_evaluations" in pack["risk"]
 
 
 def test_closed_set_row_for_unevaluable_policy_tracks_the_argument() -> None:
@@ -570,3 +603,198 @@ def test_closed_set_row_for_unevaluable_policy_tracks_the_argument() -> None:
     assert build(UnevaluableGatePolicy()) != build(
         UnevaluableGatePolicy(action=UnevaluableGateAction.BLOCK, block_confidence=70)
     )
+
+
+def test_corrected_policy_payload_bindings_move_snapshot_set_digest_only() -> None:
+    """Task 09 bindings are CONFIG_MATERIAL: snapshot digest moves, probe does not.
+
+    Declaring observation_result_fields changes the ADR-059 row payload and
+    therefore the snapshot-set digest folded into ADR-068 compatibility_id.
+    Schema version stays 15; behavioural probe is untouched by field binding.
+    """
+    from src.application.services.behavioral_cohort_identity import (
+        resolve_accumulation_cohort_identity_from_payloads,
+    )
+    from src.domain.value_objects.signal_artifact_schema import (
+        CANDIDATE_OBSERVATION_SCHEMA_VERSION,
+    )
+
+    payloads = build_all_accumulation_policy_payloads(
+        accum_score_policy=AccumScorePolicy(),
+        signal_engine_config=SignalEngineConfig(),
+        structural_gates=[FundamentalGate()],
+        execution_gates=[BandarGate()],
+        hard_filter_policy=_default_hard_filters(),
+        unevaluable_gate_policy=UnevaluableGatePolicy(),
+    )
+    identity = resolve_accumulation_cohort_identity_from_payloads(policy_snapshot_payloads=payloads)
+    assert identity.observation_payload_schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 15
+
+    # Mutating either corrected policy's result-field binding moves identity.
+    hard_mutated = dict(payloads)
+    hard_row = dict(payloads[PRODUCTION_POLICY_ID_RISK_HARD_GATES])
+    hard_fields = dict(hard_row["observation_result_fields"])
+    hard_fields["gate_evaluations"] = "features_by_window.7.risk.mutated"
+    hard_row["observation_result_fields"] = hard_fields
+    hard_mutated[PRODUCTION_POLICY_ID_RISK_HARD_GATES] = hard_row
+    hard_identity = resolve_accumulation_cohort_identity_from_payloads(
+        policy_snapshot_payloads=hard_mutated
+    )
+    assert hard_identity.policy_snapshot_payload_digest != identity.policy_snapshot_payload_digest
+    assert hard_identity.semantic_compatibility_id != identity.semantic_compatibility_id
+    assert hard_identity.behavioral_probe_digest == identity.behavioral_probe_digest
+    assert hard_identity.observation_payload_schema_version == 15
+
+    uneval_mutated = dict(payloads)
+    uneval_row = dict(payloads[PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY])
+    uneval_fields = dict(uneval_row["observation_result_fields"])
+    uneval_fields["unevaluable_gates"] = "features_by_window.7.risk.mutated"
+    uneval_row["observation_result_fields"] = uneval_fields
+    uneval_mutated[PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY] = uneval_row
+    uneval_identity = resolve_accumulation_cohort_identity_from_payloads(
+        policy_snapshot_payloads=uneval_mutated
+    )
+    assert uneval_identity.policy_snapshot_payload_digest != identity.policy_snapshot_payload_digest
+    assert uneval_identity.behavioral_probe_digest == identity.behavioral_probe_digest
+
+
+def test_persister_risk_audit_distinguishes_trigger_from_unevaluable_block() -> None:
+    """Vertical: canonical pack enrichment preserves distinct risk audit shapes.
+
+    Both cases may put ``FundamentalGate`` in ``gate_triggered`` / coarse
+    blocking lists; only ``gate_evaluations`` + ``unevaluable_gates`` separate a
+    genuine trigger from an aggregate unevaluable-policy block.
+    """
+    from types import SimpleNamespace
+
+    from src.application.dto.accumulation_screen import (
+        AccumulationCandidateEvaluationResult,
+        AccumulationScreenObservationCandidate,
+    )
+    from src.application.services.accumulation_candidate_observation_persister import (
+        AccumulationCandidateObservationPersister,
+    )
+    from src.domain.value_objects.idx_market import IDX_TIMEZONE
+
+    indicators = IndicatorSnapshot(
+        date=_PROBE_DATE,
+        sma=Decimal("1000"),
+        ema=Decimal("1000"),
+        rsi=Decimal("50"),
+    )
+
+    def _pack_for(
+        *,
+        gate_triggered: str | None,
+        unevaluable_gates: tuple[str, ...],
+        evaluations: tuple[GateEvaluationRecord, ...],
+        confidence: int | None,
+    ) -> dict[str, Any]:
+        candidate = _probe_candidate()
+        candidate.risk_assessment = RiskAssessment(
+            rationale=("vertical",),
+            snapshot_date=_PROBE_DATE,
+            indicators=indicators,
+            gate_triggered=gate_triggered,
+            gate_is_structural=True if gate_triggered else None,
+            gate_confidence=confidence,
+            unevaluable_gates=unevaluable_gates,
+        )
+        candidate.risk_gate_evaluations = evaluations
+        evaluation_result = AccumulationCandidateEvaluationResult(
+            candidate=candidate,
+            consumed_candles=(),
+            consumed_broker_summaries=(),
+            consumed_broker_daily_flows=(),
+            analysis_date=_PROBE_DATE,
+        )
+        oc = AccumulationScreenObservationCandidate(
+            evaluation_result=evaluation_result,
+            screen_result="pass",
+            flow_evidence=None,
+            structural_filter_decision=StructuralFilterDecision.disabled(),
+        )
+        evidence = SimpleNamespace(
+            build_candidate_strategy_evidence=lambda *a, **k: None,
+            build_candidate_institutional_accumulation_evidence=lambda *a, **k: None,
+            build_candidate_ticker_profile=lambda *a, **k: None,
+            build_candidate_sector_context=lambda *a, **k: None,
+            build_candidate_sector_macro_context=lambda *a, **k: None,
+            build_candidate_company_quality_context=lambda *a, **k: None,
+            build_candidate_volatility_context=lambda *a, **k: None,
+        )
+        persister = AccumulationCandidateObservationPersister(
+            candidate_observations_repository=None,
+            candidate_evidence_builder=evidence,  # type: ignore[arg-type]
+            setup_family_resolver=None,  # type: ignore[arg-type]
+            swing_setup_catalog=None,
+        )
+        request = AccumulationScreenRequest(tickers=[candidate.ticker], window_days=7)
+        session = SimpleNamespace(
+            decision_at=datetime(2026, 8, 5, 16, 0, tzinfo=IDX_TIMEZONE),
+            latest_completed_session=_PROBE_DATE,
+            analysis_as_of=_PROBE_DATE,
+        )
+        return persister._build_engine_pack(
+            oc,
+            snapshot_date=_PROBE_DATE,
+            request=request,
+            captured_at=_PROBE_CAPTURED_AT,
+            effective_session=session,  # type: ignore[arg-type]
+        )
+
+    genuine = _pack_for(
+        gate_triggered="FundamentalGate",
+        unevaluable_gates=(),
+        evaluations=(
+            GateEvaluationRecord.from_result(
+                gate_name="FundamentalGate",
+                tier="structural",
+                order=0,
+                result=GateResult(triggered=True, reason="f-score below floor", confidence=80),
+            ),
+        ),
+        confidence=80,
+    )
+    aggregate_block = _pack_for(
+        gate_triggered="FundamentalGate",
+        unevaluable_gates=("FundamentalGate",),
+        evaluations=(
+            GateEvaluationRecord.from_result(
+                gate_name="FundamentalGate",
+                tier="structural",
+                order=0,
+                result=GateResult.unevaluable(
+                    reason="piotroski missing", confidence=0, blocks=False
+                ),
+            ),
+        ),
+        confidence=70,
+    )
+
+    assert genuine["risk"]["gate_triggered"] == "FundamentalGate"
+    assert aggregate_block["risk"]["gate_triggered"] == "FundamentalGate"
+    assert genuine["risk"]["unevaluable_gates"] == []
+    assert aggregate_block["risk"]["unevaluable_gates"] == ["FundamentalGate"]
+    assert genuine["risk"]["gate_evaluations"][0]["outcome"] == "triggered"
+    assert genuine["risk"]["gate_evaluations"][0]["triggered"] is True
+    assert aggregate_block["risk"]["gate_evaluations"][0]["outcome"] == "skipped"
+    assert aggregate_block["risk"]["gate_evaluations"][0]["triggered"] is False
+
+    # Declared policy paths resolve against the canonical persister pack.
+    session_obs = build_session_observation_payload(
+        ticker="BBCA",
+        session_date=_PROBE_DATE,
+        captured_at=_PROBE_CAPTURED_AT,
+        canonical_window=ACCUM_CANONICAL_WINDOW,
+        features_by_window={"7": genuine, "30": genuine, "90": genuine},
+        shared={"current_price": "1010"},
+        population_binding={"population_id": "probe"},
+        screen_results_by_window={"7": "pass", "30": "pass", "90": "pass"},
+        diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
+    )
+    hard = build_risk_hard_gates_payload([FundamentalGate()], [BandarGate()])
+    uneval = build_unevaluable_gate_policy_payload(UnevaluableGatePolicy())
+    _assert_declared_paths_resolve(hard, session_obs)
+    _assert_declared_paths_resolve(uneval, session_obs)

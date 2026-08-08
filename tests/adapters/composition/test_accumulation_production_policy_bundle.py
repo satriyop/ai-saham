@@ -45,6 +45,7 @@ from src.domain.value_objects.learning_artifacts import (
     PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
     PRODUCTION_POLICY_ID_HARD_FILTERS,
     PRODUCTION_POLICY_ID_RISK_HARD_GATES,
+    PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY,
     canonical_json,
 )
 from src.infrastructure.config.accumulation_screener_config import (
@@ -173,11 +174,8 @@ def test_real_production_config_declared_observation_paths_resolve() -> None:
 
     This is the regression guard for the defect class fixed in 503afeb8 and
     746111e9: an ``observation_result_fields`` entry naming a key no producer
-    ever writes. These three rows are checked because they are the ones
-    whose declared paths land on the candidate/trade-setup part of a session
-    observation; the four ``signal.*`` rows point into the signal pack, which a
-    candidate-only probe leaves empty. ``risk.accum.unevaluable_policy`` still
-    declares no observation fields of its own.
+    ever writes. Risk rows bind the schema-15 risk audit under
+    ``features_by_window.7.risk.*``; signal rows still need a signal pack.
     """
     payloads = _payloads_from(_resolve_real_bundle())
     observation = _probe_session_observation()
@@ -186,6 +184,7 @@ def test_real_production_config_declared_observation_paths_resolve() -> None:
         PRODUCTION_POLICY_ID_ACCUM_SCORE_WEIGHTS,
         PRODUCTION_POLICY_ID_HARD_FILTERS,
         PRODUCTION_POLICY_ID_RISK_HARD_GATES,
+        PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY,
     ):
         _assert_declared_paths_resolve(dict(payloads[policy_id]), observation)
 

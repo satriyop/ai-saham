@@ -391,6 +391,11 @@ def build_risk_hard_gates_payload(
         },
         "components": gates,
         "observation_result_fields": {
+            # Authoritative per-gate audit for ML attribution (schema-15 risk pack).
+            "gate_evaluations": (
+                f"features_by_window.{ACCUM_CANONICAL_WINDOW}.risk.gate_evaluations"
+            ),
+            # Coarse action/presentation companions — not sole per-gate authority.
             "blocking_gates": (
                 f"features_by_window.{ACCUM_CANONICAL_WINDOW}.trade_setup.blocking_gates"
             ),
@@ -496,18 +501,19 @@ def build_unevaluable_gate_policy_payload(policy: UnevaluableGatePolicy) -> dict
     ``UnevaluableGatePolicy`` has no ``to_dict``; its two fields are serialized
     here so the declared row stays a projection of the resolved typed object.
 
-    No ``observation_result_fields``. Verified against the real producers
-    (``build_candidate_observation_payload`` -> ``build_session_observation_payload``):
-    a session observation records ``candidate.risk_status`` /
-    ``candidate.risk_gate`` / ``trade_setup.blocking_gates``, all of which
-    ``risk.accum.hard_gates`` already declares, and none of which distinguish an
-    unevaluable-block from an ordinary gate trigger. ``unevaluable_gates`` lives
-    on ``RiskAssessment.to_dict()`` but ``AccumulationCandidate.to_dict()`` never
-    copies it into the payload, so this policy's own output is not observable in
-    the corpus at all. Declaring a borrowed path would be the same defect class
-    corrected in 503afeb8 / 746111e9.
+    Observation result paths bind the schema-15 risk audit that
+    ``AccumulationCandidateObservationPersister._build_engine_pack`` writes via
+    ``build_risk_assessment_capture_dict``:
+
+    - ``features_by_window.7.risk.unevaluable_gates``
+    - ``features_by_window.7.risk.gate_evaluations``
+
+    Coarse ``trade_setup.blocking_gates`` / ``candidate.risk_status`` cannot
+    alone distinguish an aggregate-policy block from a genuine gate trigger;
+    the typed audit outcomes are authoritative for that distinction.
     """
 
+    risk_root = f"features_by_window.{ACCUM_CANONICAL_WINDOW}.risk"
     return {
         "policy_id": PRODUCTION_POLICY_ID_UNEVALUABLE_GATE_POLICY,
         "policy_version": PRODUCTION_POLICY_VERSION_V1,
@@ -529,9 +535,15 @@ def build_unevaluable_gate_policy_payload(policy: UnevaluableGatePolicy) -> dict
             "action": "risk_engine.gates.unevaluable_policy",
             "block_confidence": "risk_engine.gates.unevaluable_block_confidence",
         },
+        "observation_result_fields": {
+            "unevaluable_gates": f"{risk_root}.unevaluable_gates",
+            "gate_evaluations": f"{risk_root}.gate_evaluations",
+        },
         "note": (
-            "Declares no observation_result_fields: no stored observation field "
-            "carries this policy's own output. See the builder docstring."
+            "Binds the schema-15 risk audit already written by the observation "
+            "persister. Identity-only for ML: no standalone challenger; use "
+            "gate_evaluations outcomes to separate aggregate-policy blocks from "
+            "genuine gate triggers."
         ),
     }
 
