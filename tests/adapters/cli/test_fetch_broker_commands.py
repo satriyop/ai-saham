@@ -209,9 +209,10 @@ def test_broker_fetch_default_provider_shown_when_no_provider_flag(
 
 def test_broker_fetch_unknown_provider_prints_available_providers() -> None:
     result = runner.invoke(app, ["fetch", "broker", "BBCA", "--provider", "nonexistent"])
+    out = result.stdout + result.stderr
     assert result.exit_code == 1
-    assert "Unknown provider: nonexistent" in result.stdout
-    assert "Available providers:" in result.stdout
+    assert "Unknown provider: nonexistent" in out
+    assert "Available providers:" in out
 
 
 def test_broker_top_foreign_not_authenticated_shows_login_guidance(
@@ -229,9 +230,10 @@ def test_broker_top_foreign_not_authenticated_shows_login_guidance(
     )
 
     result = runner.invoke(app, ["fetch", "broker-top-foreign"])
-    assert result.exit_code == 1
-    assert "Not authenticated." in result.stdout
-    assert "Run: saham fetch stockbit login" in result.stdout
+    out = result.stdout + result.stderr
+    assert result.exit_code == 2  # data_unavailable (auth)
+    assert "Not authenticated." in out
+    assert "Run: saham fetch stockbit login" in out
 
 
 def test_broker_history_not_authenticated_shows_login_guidance(
@@ -249,9 +251,10 @@ def test_broker_history_not_authenticated_shows_login_guidance(
     )
 
     result = runner.invoke(app, ["fetch", "broker-history", "BBCA"])
-    assert result.exit_code == 1
-    assert "Not authenticated." in result.stdout
-    assert "Run: saham fetch stockbit login" in result.stdout
+    out = result.stdout + result.stderr
+    assert result.exit_code == 2  # data_unavailable (auth)
+    assert "Not authenticated." in out
+    assert "Run: saham fetch stockbit login" in out
 
 
 def test_fetch_broker_commands_facade_has_no_workflow_or_config_imports() -> None:

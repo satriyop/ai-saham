@@ -116,6 +116,11 @@ def view_universe(
         saham view universe lq45 --date 2026-06-20
         saham view universe          # list all configured universes
     """
+    from src.adapters.cli.cli_errors import (
+        raise_data_unavailable,
+        raise_user_error,
+        resolve_cli_db_path,
+    )
     from src.adapters.cli.view_universe_display import (
         display_universe_list,
         display_universe_view,
@@ -128,22 +133,22 @@ def view_universe(
     from src.application.use_case.view_universe_summary_use_case import build_universe_view
     from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 
-    db_path = db_path or Path(load_app_config().storage.db_path)
+    db_path = resolve_cli_db_path(db_path, configured_default=load_app_config().storage.db_path)
     loader = YamlUniverseConfigLoader()
 
     _valid_sorts = {"flow", "change", "volume", "ticker"}
     if sort_by not in _valid_sorts:
-        typer.echo(
-            f"Invalid --sort '{sort_by}'. Choose from: {', '.join(sorted(_valid_sorts))}",
-            err=True,
+        raise_user_error(
+            f"Invalid --sort '{sort_by}'. Choose from: {', '.join(sorted(_valid_sorts))}"
         )
-        raise typer.Exit(1)
 
     if name is None:
         meta = load_universe_meta(loader, UNIVERSE_CONFIG_PATH)
         if not meta:
-            typer.echo("No universe config found. Run: saham fetch universe update")
-            raise typer.Exit(1)
+            raise_data_unavailable(
+                "No universe config found.",
+                tip="Run: saham fetch universe update",
+            )
         display_universe_list(meta)
         return
 
@@ -152,8 +157,7 @@ def view_universe(
         try:
             as_of_date = date.fromisoformat(as_of)
         except ValueError:
-            typer.echo(f"Invalid date format: '{as_of}'. Expected YYYY-MM-DD.", err=True)
-            raise typer.Exit(1)
+            raise_user_error(f"Invalid date format: '{as_of}'. Expected YYYY-MM-DD.")
 
     try:
         from src.infrastructure.persistence.sqlite_universe_summary_provider import (
@@ -168,10 +172,8 @@ def view_universe(
             provider=provider,
         )
     except FileNotFoundError as e:
-        typer.echo(str(e), err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(str(e), tip="Run: saham fetch universe update")
     except UniverseNotFoundError as e:
-        typer.echo(str(e), err=True)
-        raise typer.Exit(1)
+        raise_user_error(str(e), tip="See: saham fetch universe list")
 
     display_universe_view(result, sort_by=sort_by, top_n=top_n)

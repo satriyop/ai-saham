@@ -12,6 +12,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import raise_data_unavailable, resolve_cli_db_path
 from src.domain.value_objects.idx_market import (
     IDX_TIMEZONE,
     NCP_LOCK_TIME,
@@ -59,7 +60,7 @@ def collect_iev(
     from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVRepository
 
     cfg = load_app_config()
-    resolved_db = db_path or Path(cfg.storage.db_path)
+    resolved_db = resolve_cli_db_path(db_path, configured_default=cfg.storage.db_path)
 
     collection_started_at = _current_idx_datetime()
     today = collection_started_at.date()
@@ -78,22 +79,22 @@ def collect_iev(
             api_client=api_client, stockbit_config=stockbit_config
         )
     except Exception as exc:
-        typer.echo(f"Error initialising Stockbit provider: {exc}", err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(
+            f"Error initialising Stockbit provider: {exc}",
+            tip="Run: saham fetch stockbit login",
+        )
 
     typer.echo(f"Fetching IEV snapshot (top {top_n} movers)...", err=True)
     try:
         movers = provider.fetch_iev_snapshot(top_n=top_n)
     except RuntimeError as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(str(exc), tip="Run: saham fetch stockbit login")
 
     if not movers:
-        typer.echo(
-            "No movers returned — session may be expired. Run: saham fetch stockbit login",
-            err=True,
+        raise_data_unavailable(
+            "No movers returned — session may be expired.",
+            tip="Run: saham fetch stockbit login",
         )
-        raise typer.Exit(1)
 
     collected_at = _current_idx_datetime()
     current_time = collected_at.time()

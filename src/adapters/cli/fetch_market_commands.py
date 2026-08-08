@@ -21,6 +21,11 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import (
+    raise_data_unavailable,
+    raise_user_error,
+    resolve_cli_db_path,
+)
 from src.adapters.cli.fetch_market_display import (
     echo_note_group,
     fetch_market_row_color,
@@ -138,15 +143,18 @@ def fetch_market(
     """
     cfg = load_app_config()
     resolved_days = days if days is not None else cfg.fetch.default_days
-    resolved_db = db_path or Path(cfg.storage.db_path)
+    resolved_db = resolve_cli_db_path(db_path, configured_default=cfg.storage.db_path)
     candles_provider = candles_provider or _candle_source()
 
     # Determine broker provider
     try:
         broker_provider_obj, broker_provider_name = create_broker_provider(broker_provider)
     except ValueError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        # Session-required / unknown provider are operator-actionable input/env.
+        msg = str(e)
+        if "session" in msg.lower() or "login" in msg.lower() or "auth" in msg.lower():
+            raise_data_unavailable(msg, tip="Run: saham fetch stockbit login")
+        raise_user_error(msg)
 
     # Build the workflow use case via factory
     workflow_use_case = create_workflow_use_case(
@@ -243,9 +251,15 @@ def fetch_market(
             on_ticker_complete=on_ticker_complete,
             on_start=on_start,
         )
-    except (UniverseNotFoundError, FileNotFoundError, ValueError) as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+    except UniverseNotFoundError as e:
+        raise_user_error(str(e), tip="See: saham fetch universe list")
+    except FileNotFoundError as e:
+        raise_data_unavailable(str(e), tip="Run: saham fetch universe update")
+    except ValueError as e:
+        msg = str(e)
+        if "session" in msg.lower() or "login" in msg.lower() or "auth" in msg.lower():
+            raise_data_unavailable(msg, tip="Run: saham fetch stockbit login")
+        raise_user_error(msg)
 
     response = result.response
 

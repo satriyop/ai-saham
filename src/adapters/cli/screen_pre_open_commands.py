@@ -13,6 +13,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import raise_user_error
 from src.adapters.cli.screen_contract_cli import echo_json, resolve_output_format
 from src.adapters.cli.screen_pre_open_display import (
     display_raw_movers,
@@ -188,18 +189,15 @@ def pre_open(
         try:
             movers_raw = json.loads(movers_json)
             if not isinstance(movers_raw, list):
-                typer.echo("Error: --movers-json must be a JSON array.", err=True)
-                raise typer.Exit(1)
+                raise_user_error("--movers-json must be a JSON array.")
         except json.JSONDecodeError as e:
-            typer.echo(f"Error: Invalid JSON in --movers-json: {e}", err=True)
-            raise typer.Exit(1)
+            raise_user_error(f"Invalid JSON in --movers-json: {e}")
 
         if order_books_json:
             try:
                 order_books_raw = json.loads(order_books_json)
             except json.JSONDecodeError as e:
-                typer.echo(f"Error: Invalid JSON in --order-books-json: {e}", err=True)
-                raise typer.Exit(1)
+                raise_user_error(f"Invalid JSON in --order-books-json: {e}")
 
     browser_plan = resolve_pre_open_browser_plan(
         movers_raw=movers_raw,

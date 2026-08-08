@@ -15,6 +15,12 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import (
+    raise_data_unavailable,
+    raise_internal_error,
+    raise_user_error,
+    resolve_cli_db_path,
+)
 from src.adapters.cli.effective_session_display import parse_as_of_option
 from src.adapters.cli.plan_swing_command_config import (
     PlanSwingCommandConfig,
@@ -194,7 +200,7 @@ def swing(
         saham plan swing BBRI --capital 10000000 --risk-pct 1 --entry 4825 --rr 2.5
     """
     app_cfg = load_app_config()
-    resolved_db = db_path or Path(app_cfg.storage.db_path)
+    resolved_db = resolve_cli_db_path(db_path, configured_default=app_cfg.storage.db_path)
     window = window if window is not None else app_cfg.swing.window
     risk_pct = risk_pct if risk_pct is not None else app_cfg.swing.risk_pct
     atr_mult = atr_mult if atr_mult is not None else app_cfg.swing.atr_mult
@@ -214,11 +220,9 @@ def swing(
 
     setup_name = setup.lower() if setup else None
     if setup_name is not None and setup_name not in AVAILABLE_SWING_SETUPS:
-        typer.echo(
-            f"Unknown swing setup '{setup}'. Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}",
-            err=True,
+        raise_user_error(
+            f"Unknown swing setup '{setup}'. Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}"
         )
-        raise typer.Exit(1)
 
     # Structure-only CLI: no plan-owned judgment or market-context decision path.
     strategy_evidence_name = None
@@ -267,21 +271,18 @@ def swing(
             )
         )
     except PlanSwingDataUnavailable:
-        typer.echo(
-            f"No data for {ticker_upper}. Run: saham fetch market {ticker_upper} --days 365",
-            err=True,
+        raise_data_unavailable(
+            f"No data for {ticker_upper}.",
+            tip=f"Run: saham fetch market {ticker_upper} --days 365",
         )
-        raise typer.Exit(1)
 
     verdict = workflow_response.verdict
     evidence = workflow_response.evidence
     diagnostics = workflow_response.diagnostics
     if verdict is None or evidence is None or diagnostics is None:
-        typer.echo(
-            "Internal error: swing workflow returned an incomplete grouped response.",
-            err=True,
+        raise_internal_error(
+            "swing workflow returned an incomplete grouped response.",
         )
-        raise typer.Exit(1)
 
     atr_value = workflow_response.atr_value
     sizing = workflow_response.sizing

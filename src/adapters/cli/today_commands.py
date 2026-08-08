@@ -75,13 +75,14 @@ from src.infrastructure.persistence.sqlite_market_repository import SQLiteMarket
 
 
 def _parse_date(value: str | None) -> date | None:
+    from src.adapters.cli.cli_errors import raise_user_error
+
     if value is None:
         return None
     try:
         return date.fromisoformat(value)
     except ValueError:
-        typer.echo(f"Invalid date format: {value} (expected YYYY-MM-DD)", err=True)
-        raise typer.Exit(1)
+        raise_user_error(f"Invalid date format: {value} (expected YYYY-MM-DD)")
 
 
 def _action_style(opening_setup) -> tuple[str, str]:

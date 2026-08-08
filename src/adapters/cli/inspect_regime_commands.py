@@ -15,6 +15,11 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import (
+    raise_data_unavailable,
+    raise_user_error,
+    resolve_cli_db_path,
+)
 from src.adapters.cli.view_market_context_display import (
     display_market_context,
     display_market_context_json,
@@ -79,15 +84,14 @@ def regime(
     Sole public MCE/regime CLI (ADR-050 cleanup). Not a TradeSetup decision.
     """
     app_cfg = load_app_config()
-    resolved_db = db_path or Path(app_cfg.storage.db_path)
+    resolved_db = resolve_cli_db_path(db_path, configured_default=app_cfg.storage.db_path)
     benchmark = benchmark or app_cfg.analysis.benchmark
     output_format = output_format or app_cfg.analysis.format
 
     try:
         context_date = date.fromisoformat(as_of) if as_of else date.today()
     except ValueError as e:
-        typer.echo(f"Error: invalid date format: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(f"invalid date format: {e}")
 
     # Breadth universe: --universe flag overrides default; explicit tickers are additive
     resolved_universe = universe or app_cfg.analysis.regime_universe
@@ -99,9 +103,10 @@ def regime(
             loader=YamlUniverseConfigLoader(),
             repository=SQLiteBrokerRepository(resolved_db),
         )
-    except (UniverseNotFoundError, FileNotFoundError) as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+    except UniverseNotFoundError as e:
+        raise_user_error(str(e), tip="See: saham fetch universe list")
+    except FileNotFoundError as e:
+        raise_data_unavailable(str(e), tip="Run: saham fetch universe update")
 
     cfg = load_market_context_config()
     engine = MarketContextEngine(
@@ -116,8 +121,7 @@ def regime(
     try:
         context = engine.evaluate(as_of_date=context_date)
     except Exception as e:
-        typer.echo(f"Error evaluating market context: {e}", err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(f"Error evaluating market context: {e}")
 
     if output_format == "json":
         display_market_context_json(context)

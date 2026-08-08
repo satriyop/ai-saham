@@ -15,6 +15,11 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import (
+    raise_data_unavailable,
+    raise_user_error,
+    resolve_cli_db_path,
+)
 from src.application.services.universe_loader import (
     UniverseNotFoundError,
     resolve_tickers,
@@ -100,21 +105,16 @@ def fetch_financials(
         saham fetch financials BBCA --no-annual
     """
     if not quarterly and not annual:
-        typer.echo("Error: enable at least one of --quarterly or --annual.", err=True)
-        raise typer.Exit(1)
+        raise_user_error("enable at least one of --quarterly or --annual.")
 
     statement_key = statement.strip().lower()
     if statement_key not in _STATEMENT_CHOICES:
-        typer.echo(
-            f"Invalid --statement. Choose from: {', '.join(_STATEMENT_CHOICES)}",
-            err=True,
-        )
-        raise typer.Exit(2)
+        raise_user_error(f"Invalid --statement. Choose from: {', '.join(_STATEMENT_CHOICES)}")
 
     kinds = _resolve_kinds(statement_key)
 
     cfg = load_app_config()
-    resolved_db = db_path or Path(cfg.storage.db_path)
+    resolved_db = resolve_cli_db_path(db_path, configured_default=cfg.storage.db_path)
 
     try:
         ticker_list = resolve_tickers(
@@ -125,18 +125,17 @@ def fetch_financials(
             repository=SQLiteBrokerRepository(resolved_db),
         )
     except UniverseNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
-    except (FileNotFoundError, ValueError) as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(str(e), tip="See: saham fetch universe list")
+    except FileNotFoundError as e:
+        raise_data_unavailable(str(e), tip="Run: saham fetch universe update")
+    except ValueError as e:
+        raise_user_error(str(e))
 
     if not ticker_list:
-        typer.echo(
+        raise_user_error(
             "No tickers to update. Specify --universe or provide ticker arguments.",
-            err=True,
+            tip="Example: saham fetch financials --universe lq45",
         )
-        raise typer.Exit(1)
 
     provider = YahooFinancialsProvider(market_suffix=cfg.market.suffix)
     repository = SQLiteCompanyFinancialsRepository(resolved_db)

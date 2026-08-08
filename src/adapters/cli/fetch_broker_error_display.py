@@ -10,6 +10,13 @@ from typing import Iterable, NoReturn
 
 import typer
 
+from src.adapters.cli.cli_errors import (
+    CliErrorCategory,
+    echo_cli_error,
+    raise_data_unavailable,
+    raise_internal_error,
+    raise_user_error,
+)
 from src.domain.ports.broker_data_provider import (
     BrokerDataAuthError,
     BrokerDataProviderError,
@@ -17,37 +24,36 @@ from src.domain.ports.broker_data_provider import (
 
 
 def echo_unknown_provider(provider_name: str, providers: Iterable[str]) -> None:
-    typer.echo(typer.style(f"Unknown provider: {provider_name}", fg=typer.colors.RED))
-    typer.echo(f"Available providers: {', '.join(providers)}")
+    echo_cli_error(
+        f"Unknown provider: {provider_name}",
+        category=CliErrorCategory.USER_INPUT,
+    )
+    typer.echo(f"Available providers: {', '.join(providers)}", err=True)
 
 
 def exit_value_error(error: ValueError) -> NoReturn:
-    typer.echo(typer.style(str(error), fg=typer.colors.RED))
-    raise typer.Exit(1)
+    raise_user_error(str(error))
 
 
 def exit_broker_auth_error(error: BrokerDataAuthError) -> NoReturn:
-    typer.echo(typer.style(f"Auth error: {error}", fg=typer.colors.RED))
-    typer.echo("Run: saham fetch stockbit login")
-    raise typer.Exit(1)
+    raise_data_unavailable(
+        f"Auth error: {error}",
+        tip="Run: saham fetch stockbit login",
+    )
 
 
 def exit_broker_provider_error(error: BrokerDataProviderError) -> NoReturn:
-    typer.echo(typer.style(f"Error: {error}", fg=typer.colors.RED))
-    raise typer.Exit(1)
+    raise_data_unavailable(str(error))
 
 
 def exit_stockbit_provider_error(error: BrokerDataProviderError) -> NoReturn:
     if "Not authenticated" in str(error):
-        typer.echo(
-            typer.style("Not authenticated.", fg=typer.colors.RED)
-            + " Run: saham fetch stockbit login"
+        raise_data_unavailable(
+            "Not authenticated.",
+            tip="Run: saham fetch stockbit login",
         )
-        raise typer.Exit(1)
-    typer.echo(typer.style(f"Error: {error}", fg=typer.colors.RED), err=True)
-    raise typer.Exit(1)
+    raise_data_unavailable(str(error))
 
 
 def exit_unexpected_error(error: Exception) -> NoReturn:
-    typer.echo(typer.style(f"Error: {error}", fg=typer.colors.RED), err=True)
-    raise typer.Exit(1)
+    raise_internal_error(str(error))

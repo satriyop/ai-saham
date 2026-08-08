@@ -11,6 +11,7 @@ from typing import Any
 
 import typer
 
+from src.adapters.cli.cli_errors import raise_data_unavailable, raise_user_error
 from src.application.dto.view_ticker_contract import (
     ViewResultStatus,
     ViewSubjectKind,
@@ -19,14 +20,10 @@ from src.application.dto.view_ticker_contract import (
 
 
 def resolve_output_format(fmt: str | None, *, default: str = "table") -> str:
-    """Normalize --format; raise Exit(2) on invalid values."""
+    """Normalize --format; raise user exit on invalid values."""
     resolved = (fmt or default).lower()
     if resolved not in {"table", "json"}:
-        typer.echo(
-            typer.style("Invalid --format. Choose from: table, json", fg=typer.colors.RED),
-            err=True,
-        )
-        raise typer.Exit(2)
+        raise_user_error("Invalid --format. Choose from: table, json")
     return resolved
 
 
@@ -39,15 +36,11 @@ def default_desk_fetch_hint() -> str:
 
 
 def exit_missing_desk_data(code: str) -> None:
-    typer.echo(
-        typer.style(
-            f"No tracked desk data for {code.upper()}.\n"
-            f"Source: broker_daily_flow\n"
-            f"Run: {default_desk_fetch_hint()}",
-            fg=typer.colors.YELLOW,
-        )
+    raise_data_unavailable(
+        f"No tracked desk data for {code.upper()}.\n"
+        f"Source: broker_daily_flow\n"
+        f"Run: {default_desk_fetch_hint()}",
     )
-    raise typer.Exit(1)
 
 
 def desk_envelope(

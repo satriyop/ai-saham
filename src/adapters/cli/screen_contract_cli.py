@@ -11,17 +11,14 @@ from typing import Any
 
 import typer
 
+from src.adapters.cli.cli_errors import raise_data_unavailable, raise_user_error
 from src.application.dto.screen_contract import missing_screen_message
 
 
 def resolve_output_format(fmt: str | None, *, default: str = "table") -> str:
     resolved = (fmt or default).lower()
     if resolved not in {"table", "json"}:
-        typer.echo(
-            typer.style("Invalid --format. Choose from: table, json", fg=typer.colors.RED),
-            err=True,
-        )
-        raise typer.Exit(2)
+        raise_user_error("Invalid --format. Choose from: table, json")
     return resolved
 
 
@@ -36,15 +33,11 @@ def exit_missing_screen_data(
     source: str | None = None,
     fetch_hint: str | None = None,
 ) -> None:
-    typer.echo(
-        typer.style(
-            missing_screen_message(
-                what=what,
-                name=name,
-                source=source,
-                fetch_hint=fetch_hint,
-            ),
-            fg=typer.colors.YELLOW,
+    raise_data_unavailable(
+        missing_screen_message(
+            what=what,
+            name=name,
+            source=source,
+            fetch_hint=fetch_hint,
         )
     )
-    raise typer.Exit(1)

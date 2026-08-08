@@ -204,6 +204,8 @@ def test_fetch_market_command_fails_fast_when_stockbit_session_missing(monkeypat
     app = Typer()
     app.command()(fetch_market)
     runner = CliRunner()
+    db = tmp_path / "data.db"
+    db.write_bytes(b"")  # explicit --db must already exist (fail-closed)
 
     result = runner.invoke(
         app,
@@ -214,10 +216,12 @@ def test_fetch_market_command_fails_fast_when_stockbit_session_missing(monkeypat
             "--no-meta",
             "--no-enrichment",
             "--db",
-            str(tmp_path / "data.db"),
+            str(db),
         ],
     )
 
-    assert result.exit_code == 1
-    assert f"Error: {STOCKBIT_SESSION_REQUIRED_ERROR}" in result.output
+    out = result.stdout + result.stderr
+    assert result.exit_code == 2  # data_unavailable (session/auth)
+    assert STOCKBIT_SESSION_REQUIRED_ERROR in out
+    assert "Error [data_unavailable]:" in out
     assert "Updating" not in result.output

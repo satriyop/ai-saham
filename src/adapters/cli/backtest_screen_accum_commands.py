@@ -17,6 +17,10 @@ from src.adapters.cli.backtest_screen_accum_csv_writer import write_accumulation
 from src.adapters.cli.backtest_screen_accum_workflow_factory import (
     create_run_accumulation_audit_workflow,
 )
+from src.adapters.cli.cli_errors import (
+    raise_data_unavailable,
+    raise_user_error,
+)
 from src.application.services.universe_loader import UniverseNotFoundError
 from src.application.use_case.accumulation_audit_use_case import AccumulationAuditResponse
 from src.application.use_case.run_accumulation_audit_workflow_use_case import (
@@ -183,11 +187,13 @@ def screen_accum(
     try:
         result = workflow.execute(request)
     except NoTickersError as e:
-        typer.echo(str(e), err=True)
-        raise typer.Exit(1)
-    except (ValueError, UniverseNotFoundError, FileNotFoundError) as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(str(e))
+    except UniverseNotFoundError as e:
+        raise_user_error(str(e), tip="See: saham fetch universe list")
+    except FileNotFoundError as e:
+        raise_data_unavailable(str(e), tip="Run: saham fetch universe update")
+    except ValueError as e:
+        raise_user_error(str(e))
 
     response = result.response
 

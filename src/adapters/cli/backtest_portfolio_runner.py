@@ -11,6 +11,11 @@ from pathlib import Path
 
 import typer
 
+from src.adapters.cli.cli_errors import (
+    raise_data_unavailable,
+    raise_user_error,
+    resolve_cli_db_path,
+)
 from src.adapters.composition.stock_analysis_workflow_dependencies import (
     StockAnalysisWorkflowDependencies,
     create_stock_analysis_workflow_dependencies,
@@ -103,20 +108,17 @@ def _run_swing_backtest(
 ) -> SwingBacktestResponse:
     setup_name = setup.lower()
     if setup_name not in AVAILABLE_SWING_SETUPS:
-        typer.echo(
-            f"Unknown swing setup '{setup}'. Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}",
-            err=True,
+        raise_user_error(
+            f"Unknown swing setup '{setup}'. Available setups: {', '.join(AVAILABLE_SWING_SETUPS)}"
         )
-        raise typer.Exit(1)
 
     try:
         start_date = date.fromisoformat(start)
         end_date = date.fromisoformat(end) if end else date.today()
     except ValueError as e:
-        typer.echo(f"Error: invalid date format: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(f"invalid date format: {e}")
 
-    resolved_db = db_path or Path(load_app_config().storage.db_path)
+    resolved_db = resolve_cli_db_path(db_path, configured_default=load_app_config().storage.db_path)
     deps = dependencies or create_stock_analysis_workflow_dependencies(resolved_db)
     try:
         ticker_list = resolve_tickers(
@@ -126,22 +128,21 @@ def _run_swing_backtest(
             loader=YamlUniverseConfigLoader(),
             repository=deps.broker_repository,
         )
-    except (UniverseNotFoundError, FileNotFoundError) as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+    except UniverseNotFoundError as e:
+        raise_user_error(str(e), tip="See: saham fetch universe list")
+    except FileNotFoundError as e:
+        raise_data_unavailable(str(e), tip="Run: saham fetch universe update")
 
     if not ticker_list:
-        typer.echo(
+        raise_user_error(
             "No tickers to backtest. Specify --universe or provide ticker arguments.",
-            err=True,
+            tip="Example: saham backtest portfolio swing --universe lq45 --start 2024-01-01",
         )
-        raise typer.Exit(1)
 
     try:
         allowed_regimes = _parse_regime_filter(allow_regimes)
     except typer.BadParameter as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(str(e))
 
     if announce:
         typer.echo(
@@ -192,5 +193,4 @@ def _run_swing_backtest(
             )
         )
     except ValueError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(str(e))

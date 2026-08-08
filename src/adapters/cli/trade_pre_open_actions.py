@@ -8,6 +8,7 @@ from pathlib import Path
 
 import typer
 
+from src.adapters.cli.cli_errors import raise_data_unavailable, raise_user_error
 from src.adapters.cli.trade_pre_open_display import display_pre_open_paper_review
 from src.application.services.pre_open_paper_journal import (
     PreOpenPaperJournalService,
@@ -26,12 +27,10 @@ from src.infrastructure.persistence.sqlite_market_repository import (
 
 def run_pre_open_paper_review(journal_path: Path, db_path: Path) -> None:
     if not journal_path.exists():
-        typer.echo(
-            f"No confirmation journal at '{journal_path}'.\n"
-            "Run `saham trade pre-open log` after analyze first.",
-            err=True,
+        raise_data_unavailable(
+            f"No confirmation journal at '{journal_path}'.",
+            tip="Run `saham trade pre-open log` after analyze first.",
         )
-        raise typer.Exit(1)
     store = PreOpenPaperJournalCsvStore(journal_path)
     repository = SQLiteMarketRepository(db_path=db_path)
     report = PreOpenPaperJournalService(store=store, repository=repository).review()
@@ -52,22 +51,16 @@ def run_pre_open_paper_outcome(
     valid = {"target", "stop", "manual", "breakeven"}
     outcome_result = result.lower()
     if outcome_result not in valid:
-        typer.echo(
-            f"Error: --result must be one of: {', '.join(sorted(valid))}",
-            err=True,
-        )
-        raise typer.Exit(1)
+        raise_user_error(f"--result must be one of: {', '.join(sorted(valid))}")
     if not journal_path.exists():
-        typer.echo(
-            f"No confirmation journal at '{journal_path}'.\nRun `saham trade pre-open log` first.",
-            err=True,
+        raise_data_unavailable(
+            f"No confirmation journal at '{journal_path}'.",
+            tip="Run `saham trade pre-open log` first.",
         )
-        raise typer.Exit(1)
     try:
         target_date = date.fromisoformat(confirmed_date) if confirmed_date else date.today()
     except ValueError:
-        typer.echo("Error: --date must use YYYY-MM-DD format.", err=True)
-        raise typer.Exit(1)
+        raise_user_error("--date must use YYYY-MM-DD format.")
     service = PreOpenPaperJournalService(
         store=PreOpenPaperJournalCsvStore(journal_path),
         repository=SQLiteMarketRepository(db_path=db_path),

@@ -131,7 +131,7 @@ def test_view_ticker_deep_dives_reject_invalid_format(tmp_path: Path):
             str(tmp_path / "x.db"),
         ],
     )
-    assert result.exit_code == 2
+    assert result.exit_code == 1  # user_input
     assert "Invalid --format" in result.stdout or "Invalid --format" in result.stderr
 
 
@@ -291,9 +291,10 @@ def test_view_ticker_distribution_empty(monkeypatch, tmp_path: Path):
         app,
         ["view", "ticker", "distribution", "BBCA", "--db", str(tmp_path / "x.db")],
     )
-    assert result.exit_code == 1
-    assert "No cached broker distribution for BBCA" in result.stdout
-    assert "Run: saham fetch market BBCA" in result.stdout
+    out = result.stdout + result.stderr
+    assert result.exit_code == 2  # data_unavailable
+    assert "No cached broker distribution for BBCA" in out
+    assert "Run: saham fetch market BBCA" in out
 
 
 def test_view_ticker_top_brokers_json_envelope(tmp_path: Path):

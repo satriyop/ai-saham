@@ -178,4 +178,4 @@ def test_view_broker_invalid_format_exits_2(tmp_path: Path):
     result = runner.invoke(
         app, ["view", "broker", "show", "AK", "--db", str(db), "--format", "yaml"]
     )
-    assert result.exit_code == 2
+    assert result.exit_code == 1  # user_input for invalid --format

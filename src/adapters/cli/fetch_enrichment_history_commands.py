@@ -14,6 +14,11 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import (
+    raise_data_unavailable,
+    raise_user_error,
+    resolve_cli_db_path,
+)
 from src.adapters.cli.fetch_market_display import render_enrichment_pit_coverage
 from src.adapters.cli.fetch_market_provider_factory import create_broker_provider
 from src.application.services.universe_loader import (
@@ -68,7 +73,7 @@ def fetch_enrichment_history(
     )
 
     cfg = load_app_config()
-    resolved_db = db_path or Path(cfg.storage.db_path)
+    resolved_db = resolve_cli_db_path(db_path, configured_default=cfg.storage.db_path)
     today = date.today()
 
     try:
@@ -80,27 +85,22 @@ def fetch_enrichment_history(
             repository=SQLiteBrokerRepository(resolved_db),
         )
     except UniverseNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(str(e), tip="See: saham fetch universe list")
     except FileNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(str(e), tip="Run: saham fetch universe update")
 
     if not ticker_list:
-        typer.echo(
+        raise_user_error(
             "No tickers to update. Specify --universe or provide ticker arguments.",
-            err=True,
+            tip="Example: saham fetch enrichment-history --universe lq45",
         )
-        raise typer.Exit(1)
 
     broker_provider, broker_provider_name = create_broker_provider(None)
     if broker_provider_name != "stockbit":
-        typer.echo(
-            "Error: Stockbit session required for enrichment fetch. "
-            "Log in with `saham fetch stockbit login` first.",
-            err=True,
+        raise_data_unavailable(
+            "Stockbit session required for enrichment fetch.",
+            tip="Log in with `saham fetch stockbit login` first.",
         )
-        raise typer.Exit(1)
 
     universe_label = universe or f"{len(ticker_list)} tickers"
     typer.echo(f"\nFetching enrichment snapshot  universe={universe_label}  date={today}")

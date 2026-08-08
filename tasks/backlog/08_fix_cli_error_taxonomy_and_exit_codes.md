@@ -43,9 +43,28 @@ These locks supersede the original aspirational full migration for this pass:
 5. Fix synthetic universe leak: `Universe '1 tickers' not found` on explicit-ticker screen
 6. Docs: exit-code table + troubleshooting alignment for MVP paths
 
-### Deferred (post-MVP)
+### Partial migration (2026-08-09)
 
-- Bulk replace of remaining ~38 bare `Error: {e}` sites
+Migrated daily-path + shared helpers (in addition to MVP high-traffic):
+
+| Area | Modules |
+|---|---|
+| Fetch | `fetch_market`, `fetch_financials`, `fetch_enrichment_history`, `fetch_iev`, `fetch_broker_error_display` |
+| Contracts | `view_ticker_contract_cli`, `view_broker_contract_cli`, `screen_contract_cli` |
+| Desk | `plan_swing`, `screen_pre_open` (JSON flags), `inspect_regime`, `today` date parse, `view universe` |
+| Backtest / paper | `backtest_portfolio_runner`, `backtest_screen_accum`, `trade_pre_open_actions` |
+
+Exit-code alignment notes:
+
+- Invalid `--format` → **1** (user_input; was 2 on some contract helpers)
+- Missing cache / auth / session → **2** (data_unavailable; was often 1)
+- Explicit `--db` missing → **1**, never create
+
+### Still deferred
+
+- Strategy authoring surface (`strategy_*`, AI create, skills)
+- Stockbit diagnostic / spy / session browse
+- Research capture wiring errors
 - `saham today` warning truncation / severity ordering
 - Rich markup escaping for dynamic `[…]` strings
 - Doc-truth test for every historical `Error:` string in `CLI_TROUBLESHOOTING.md`
@@ -214,4 +233,7 @@ Commit: `docs(cli): document exit codes for error taxonomy MVP`
   - `view ticker show` (`--db`, empty cache exit 2)
   - `fetch status` (config path + explicit fail-closed)
   - Application: synthetic universe label ignored for display-only MCE
+- Partial migration (2026-08-09): fetch market/broker/financials/iev/enrichment;
+  contract helpers; plan/screen-preopen/regime/today/view-universe; backtest +
+  pre-open paper helpers. Remaining bare `Error:` sites ~22 (strategy/stockbit diag/research).
 - Test / Lint result: focused pytest green; `ruff check/format` whole-repo green
