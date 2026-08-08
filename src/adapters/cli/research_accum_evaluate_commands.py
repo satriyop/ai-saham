@@ -368,6 +368,16 @@ def accumulation_sync_session_calendar(
 def accumulation_status(
     db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
     fmt: Annotated[str, typer.Option("--format")] = "table",
+    require_operational_success: Annotated[
+        bool,
+        typer.Option(
+            "--require-operational-success",
+            help=(
+                "Exit non-zero when any cohort is BLOCKED_POLICY or no active "
+                "COLLECTING/CHALLENGE_INPUT_READY cohort exists. Intended for cron."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Show database-owned accumulation lifecycle counts."""
 
@@ -375,6 +385,7 @@ def accumulation_status(
         AssessmentPurpose.ACCUMULATION_DISCOVERY,
         db_path=db_path,
         fmt=fmt,
+        require_operational_success=require_operational_success,
     )
 
 

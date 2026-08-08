@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
-WRAPPER = (ROOT / "scripts" / "cron_accum_challenge_corpus.sh").read_text(encoding="utf-8")
+WRAPPER_PATH = ROOT / "scripts" / "cron_accum_challenge_corpus.sh"
+WRAPPER = WRAPPER_PATH.read_text(encoding="utf-8")
 INSTALL = (ROOT / "install_cron.sh").read_text(encoding="utf-8")
 ACTIVE_CRON_LINES = tuple(line for line in INSTALL.splitlines() if line and line[0].isdigit())
 
@@ -20,6 +25,7 @@ def test_wrapper_uses_fail_closed_shell_and_ordered_chain() -> None:
     assert "--universe lq45" in WRAPPER
     assert "--all-label-contracts" in WRAPPER
     assert "--auto" in WRAPPER
+    assert "--require-operational-success" in WRAPPER
     # Completion marker only after the full chain (appears last).
     assert WRAPPER.rindex("COMPLETION_OK") > status_at
 
@@ -51,6 +57,78 @@ def test_install_cron_uses_single_wrapper_entry_not_split_jobs() -> None:
     for line in ACTIVE_CRON_LINES:
         assert not ("research accum capture" in line and "cron_accum_challenge_corpus" not in line)
         assert not ("research accum labels" in line and "cron_accum_challenge_corpus" not in line)
+
+
+def _run_wrapper(tmp_path: Path, *, status: str, status_exit: int) -> subprocess.CompletedProcess:
+    isolated_root = tmp_path / "isolated-repo"
+    scripts_dir = isolated_root / "scripts"
+    bin_dir = isolated_root / ".venv" / "bin"
+    scripts_dir.mkdir(parents=True)
+    bin_dir.mkdir(parents=True)
+    wrapper_copy = scripts_dir / WRAPPER_PATH.name
+    wrapper_copy.write_text(WRAPPER, encoding="utf-8")
+    fake_saham = bin_dir / "saham"
+    fake_saham.write_text(
+        """#!/bin/sh
+case "$*" in
+  *"research accum status"*)
+    case "$*" in
+      *"--require-operational-success"*) ;;
+      *) exit 88 ;;
+    esac
+    printf '{"cohorts":[{"producer_status":"%s"}]}\\n' "$FAKE_STATUS"
+    exit "$FAKE_STATUS_EXIT"
+    ;;
+  *) printf '{}\\n' ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    fake_saham.chmod(0o755)
+    (bin_dir / "activate").write_text(
+        f'PATH="{bin_dir}:$PATH"\nexport PATH\n',
+        encoding="utf-8",
+    )
+    env = os.environ.copy()
+    env.update(
+        {
+            "ACCUM_CORPUS_SESSION": "2026-08-07",
+            "FAKE_STATUS": status,
+            "FAKE_STATUS_EXIT": str(status_exit),
+        }
+    )
+    return subprocess.run(
+        ["/bin/bash", str(wrapper_copy)],
+        cwd=isolated_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_wrapper_execution_stops_before_completion_when_operational_gate_fails(
+    tmp_path: Path,
+) -> None:
+    result = _run_wrapper(tmp_path, status="BLOCKED_POLICY", status_exit=1)
+
+    assert result.returncode == 1
+    assert '"producer_status":"BLOCKED_POLICY"' in result.stdout
+    assert "COMPLETION_OK" not in result.stdout
+    assert "status ok" not in result.stderr
+
+
+@pytest.mark.parametrize("status", ["COLLECTING", "CHALLENGE_INPUT_READY"])
+def test_wrapper_execution_emits_completion_after_operational_gate_passes(
+    tmp_path: Path,
+    status: str,
+) -> None:
+    result = _run_wrapper(tmp_path, status=status, status_exit=0)
+
+    assert result.returncode == 0
+    assert f'"producer_status":"{status}"' in result.stdout
+    assert "COMPLETION_OK session=2026-08-07" in result.stdout
+    assert "status ok" in result.stderr
 
 
 def test_legacy_split_cron_test_expectations_updated() -> None:

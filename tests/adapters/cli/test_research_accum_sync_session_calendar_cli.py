@@ -86,7 +86,7 @@ def _observation(db_day: int = 1, ticker: str = "BBCA") -> LearningObservation:
             "workflow": "research_accum_capture",
             "horizon_primary": "accum_10d",
             "shared": {
-                "current_price": 100.0,
+                "current_price": "100.0",
                 "provenance": {
                     "decision_at": at.isoformat(),
                     "latest_completed_session": sd,
@@ -349,7 +349,16 @@ def test_cli_sync_labels_status_chain(tmp_path: Path, monkeypatch) -> None:
     before = db.stat()
     status = runner.invoke(
         app,
-        ["research", "accum", "status", "--db", str(db), "--format", "json"],
+        [
+            "research",
+            "accum",
+            "status",
+            "--require-operational-success",
+            "--db",
+            str(db),
+            "--format",
+            "json",
+        ],
     )
     after = db.stat()
     assert status.exit_code == 0, status.output
@@ -408,7 +417,16 @@ def test_cli_auto_sync_labels_status_chain(tmp_path: Path, monkeypatch) -> None:
 
     status = runner.invoke(
         app,
-        ["research", "accum", "status", "--db", str(db), "--format", "json"],
+        [
+            "research",
+            "accum",
+            "status",
+            "--require-operational-success",
+            "--db",
+            str(db),
+            "--format",
+            "json",
+        ],
     )
     assert status.exit_code == 0, status.output
     assert json.loads(status.output)["cohorts"][0]["producer_status"] == "CHALLENGE_INPUT_READY"
@@ -614,6 +632,23 @@ def test_status_blocked_on_corrupt_snapshot_json(tmp_path: Path) -> None:
     assert status.exit_code == 0, status.output
     payload = json.loads(status.output)
     assert payload["cohorts"][0]["producer_status"] == "BLOCKED_POLICY"
+
+    gated = runner.invoke(
+        app,
+        [
+            "research",
+            "accum",
+            "status",
+            "--require-operational-success",
+            "--db",
+            str(db),
+            "--format",
+            "json",
+        ],
+    )
+    assert gated.exit_code == 1
+    assert '"producer_status": "BLOCKED_POLICY"' in gated.output
+    assert "accum operational readiness gate failed" in (gated.stderr or "")
 
 
 def test_cron_script_orders_sync_before_labels() -> None:

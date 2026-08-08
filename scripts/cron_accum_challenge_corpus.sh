@@ -46,7 +46,7 @@ saham research accum labels --all-label-contracts --format json
 echo "${LOG_PREFIX} labels ok" >&2
 
 echo "${LOG_PREFIX} status starting" >&2
-saham research accum status --format json
+saham research accum status --require-operational-success --format json
 echo "${LOG_PREFIX} status ok" >&2
 
 echo "COMPLETION_OK session=${SESSION}"

@@ -27,6 +27,9 @@ from src.application.services.accumulation_observation_signal_fingerprint import
     _alpha_trigger_fingerprint,
     _strategy_evidence_fingerprint,
 )
+from src.application.services.accumulation_price_contract import (
+    parse_canonical_positive_decimal_text,
+)
 from src.domain.value_objects.diagnostic_producer_identity import (
     ACCUMULATION_DIAGNOSTIC_REQUIRED_PRODUCERS,
     AccumulationDiagnosticBinding,
@@ -193,12 +196,8 @@ def build_session_observation_payload(
             f"features_by_window must have keys {sorted(required)}, got {sorted(keys)}"
         )
     raw_price = shared.get("current_price")
-    try:
-        price_ok = raw_price is not None and float(raw_price) > 0
-    except (TypeError, ValueError):
-        price_ok = False
-    if not price_ok:
-        raise ValueError("shared.current_price must be a positive session close")
+    if parse_canonical_positive_decimal_text(raw_price) is None:
+        raise ValueError("shared.current_price must be canonical positive decimal text")
     if population_binding is None:
         raise ValueError(
             "schema-10 session observation requires population_binding "

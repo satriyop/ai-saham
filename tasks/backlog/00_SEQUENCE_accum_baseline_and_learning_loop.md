@@ -105,14 +105,16 @@ Range `2026-07-08`→`2026-08-07`, 23 sessions, 1035 observations. ml-saham heal
 is **BLOCKED_DATA** (cannot form time folds / short embargo depth). **Config
 freeze is now in effect** until a deliberate identity-moving batch.
 
-**2026-08-09 corpus-growth re-vet.** ai-saham's independent producer status is
-currently **`BLOCKED_POLICY`**: the canonical writer persists
-`shared.current_price` as decimal text, while readiness accepts only JSON
-int/float, rejecting all 1,035 rows. The cron wrapper also emits
-`COMPLETION_OK` because status exits 0 for the blocked report. Fix those two
-producer-contract defects without schema/identity movement or row rewriting
-before calling the cohort `CODE_COMPLETE_AWAITING_DATA`. ml-saham's separate
-`BLOCKED_DATA` result does not override this upstream block.
+**2026-08-09 corpus-growth re-vet and GROW-01/GROW-02 close.** ai-saham now
+accepts the canonical writer's decimal-text `shared.current_price` through one
+symmetric application contract. Read-only status recovered all 1,035 rows, 23
+sessions, and the existing labels without schema/identity movement or row
+rewriting; producer status is **`CHALLENGE_INPUT_READY`**. The application report
+now owns an explicit operational-success predicate, and the cron wrapper uses
+the CLI's `--require-operational-success` gate so `BLOCKED_POLICY` cannot emit
+`COMPLETION_OK`. The contextual commit is complete and the corpus-growth task is
+now `CODE_COMPLETE_AWAITING_DATA`. ml-saham's separate `BLOCKED_DATA` remains a
+protocol-depth result and does not overrule the producer status.
 
 ---
 

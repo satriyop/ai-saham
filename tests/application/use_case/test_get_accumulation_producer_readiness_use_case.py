@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Sequence
 
 import pytest
@@ -13,6 +14,7 @@ from src.application.services.accumulation_production_policy_descriptors import 
     ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4,
 )
 from src.application.use_case.get_accumulation_producer_readiness_use_case import (
+    AccumulationProducerReadinessReport,
     GetAccumulationProducerReadinessUseCase,
 )
 from src.domain.services.trading_session_calendar import KnownTradingSessionCalendar
@@ -52,6 +54,72 @@ MATERIAL = "sha256:" + ("22" * 32)
 MEMBERSHIP = ["BBCA", "BBRI"]
 NAMED_ROSTER = ["ASII", "BBCA", "BBRI", "BMRI", "TLKM"]
 UNIVERSE_ID = stamp_universe_membership_id(MEMBERSHIP)
+
+
+def _operational_report(
+    *statuses: ProducerReadinessStatus,
+) -> AccumulationProducerReadinessReport:
+    cohorts = tuple(
+        SimpleNamespace(compatibility_id=f"cohort-{index}", producer_status=status)
+        for index, status in enumerate(statuses)
+    )
+    return AccumulationProducerReadinessReport(
+        purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+        active_snapshot_binding_contract="production_policy_snapshot.v4",
+        observation_count=len(cohorts),
+        cohort_count=len(cohorts),
+        cohorts=cohorts,  # type: ignore[arg-type]
+    )
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        ProducerReadinessStatus.COLLECTING,
+        ProducerReadinessStatus.CHALLENGE_INPUT_READY,
+    ],
+)
+def test_operational_gate_accepts_active_producer_status(
+    status: ProducerReadinessStatus,
+) -> None:
+    report = _operational_report(status)
+
+    assert report.is_operationally_successful() is True
+    assert report.operational_failure_reasons() == ()
+
+
+def test_operational_gate_allows_legacy_beside_healthy_active_cohort() -> None:
+    report = _operational_report(
+        ProducerReadinessStatus.LEGACY_RAW_ONLY,
+        ProducerReadinessStatus.CHALLENGE_INPUT_READY,
+    )
+
+    assert report.is_operationally_successful() is True
+
+
+def test_operational_gate_rejects_blocked_even_beside_healthy_active_cohort() -> None:
+    report = _operational_report(
+        ProducerReadinessStatus.CHALLENGE_INPUT_READY,
+        ProducerReadinessStatus.BLOCKED_POLICY,
+    )
+
+    assert report.is_operationally_successful() is False
+    assert report.operational_failure_reasons() == ("blocked_policy:cohort-1",)
+
+
+@pytest.mark.parametrize(
+    "statuses",
+    [(), (ProducerReadinessStatus.LEGACY_RAW_ONLY,)],
+)
+def test_operational_gate_rejects_missing_active_cohort(
+    statuses: tuple[ProducerReadinessStatus, ...],
+) -> None:
+    report = _operational_report(*statuses)
+
+    assert report.is_operationally_successful() is False
+    assert report.operational_failure_reasons() == (
+        "no_active_collecting_or_challenge_input_ready_cohort",
+    )
 
 
 def _weekday_sessions(start: date, end: date) -> tuple[date, ...]:
@@ -110,7 +178,7 @@ def _payload(
         "workflow": "research_accum_capture",
         "horizon_primary": "accum_10d",
         "shared": {
-            "current_price": 100.0,
+            "current_price": "100.0",
             "provenance": {
                 "decision_at": f"{session_date}T12:00:00+00:00",
                 "latest_completed_session": session_date,

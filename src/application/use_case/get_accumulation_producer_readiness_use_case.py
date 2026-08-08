@@ -13,6 +13,7 @@ from typing import Any, Protocol, Sequence
 from src.application.services.accumulation_producer_readiness import (
     ACTIVE_SNAPSHOT_BINDING_CONTRACT,
     CohortProducerReadiness,
+    ProducerReadinessStatus,
     cohort_to_dict,
     project_cohort_readiness,
 )
@@ -54,6 +55,31 @@ class AccumulationProducerReadinessReport:
     observation_count: int
     cohort_count: int
     cohorts: tuple[CohortProducerReadiness, ...]
+
+    def operational_failure_reasons(self) -> tuple[str, ...]:
+        """Explain why a scheduled producer run must not report completion."""
+        blocked_ids = sorted(
+            cohort.compatibility_id
+            for cohort in self.cohorts
+            if cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+        )
+        active_ids = sorted(
+            cohort.compatibility_id
+            for cohort in self.cohorts
+            if cohort.producer_status
+            in (
+                ProducerReadinessStatus.COLLECTING,
+                ProducerReadinessStatus.CHALLENGE_INPUT_READY,
+            )
+        )
+        reasons = [f"blocked_policy:{compatibility_id}" for compatibility_id in blocked_ids]
+        if not active_ids:
+            reasons.append("no_active_collecting_or_challenge_input_ready_cohort")
+        return tuple(reasons)
+
+    def is_operationally_successful(self) -> bool:
+        """Return whether cron may emit its producer completion marker."""
+        return not self.operational_failure_reasons()
 
     def to_dict(self) -> dict[str, Any]:
         return {

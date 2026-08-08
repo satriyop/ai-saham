@@ -1,8 +1,9 @@
 # Give ml-saham Verdicts A Place To Land: Accum Policy Proposal Lifecycle
 
-Status: `BLOCKED` — first requires the corpus-growth producer contract to recover
-from `BLOCKED_POLICY`, then requires at least two valid post-embargo ml-saham OOS
-folds from the exact frozen cohort. Task 4's rebuild alone is insufficient.
+Status: `BLOCKED` — the corpus-growth producer recovered to
+`CHALLENGE_INPUT_READY` on 2026-08-09; this task now requires at least two valid
+post-embargo ml-saham OOS folds from the exact frozen cohort. Task 4's rebuild
+alone is insufficient.
 Sequence: **6 of 8** — see `tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`
 
 ## 1. Task Metadata

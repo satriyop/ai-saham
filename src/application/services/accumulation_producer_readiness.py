@@ -13,10 +13,14 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import Decimal
 from enum import Enum
 from typing import Any, Mapping, Sequence
 
 from src.application.dto.accumulation_structural_filter import StructuralFilterDecision
+from src.application.services.accumulation_price_contract import (
+    parse_canonical_positive_decimal_text,
+)
 from src.application.services.accumulation_production_policy_descriptors import (
     ACCUMULATION_PRODUCTION_POLICY_DESCRIPTORS_V4,
 )
@@ -788,18 +792,8 @@ def _production_payload_semantic_reasons(
         reasons.append("shared_missing")
     else:
         raw_price = shared.get("current_price")
-        # Exact int/float only — reject bool/string/non-finite/non-positive.
-        if type(raw_price) is bool or type(raw_price) not in (int, float):
+        if parse_canonical_positive_decimal_text(raw_price) is None:
             reasons.append(f"shared.current_price:{raw_price!r}")
-        else:
-            try:
-                price_ok = (
-                    raw_price > 0 and raw_price == raw_price and abs(raw_price) != float("inf")
-                )
-            except (TypeError, ValueError):
-                price_ok = False
-            if not price_ok:
-                reasons.append(f"shared.current_price:{raw_price!r}")
 
         # Active ACCUM path always stamps provenance; required for challenge readiness.
         provenance = shared.get("provenance")
@@ -1471,16 +1465,16 @@ def _path_label_semantic_reasons(
                         f"metrics={raw_metric_ticker!r},observation={obs_ticker!r}"
                     )
                 # Entry reference equals frozen shared.current_price (when entry typed).
-                # Label entry must already be exact numeric; frozen is observation truth.
+                # Label entry remains numeric; frozen observation truth is canonical
+                # decimal text from the producer.
                 if entry is not None:
                     payload = observation.decision_payload
                     shared = payload.get("shared") if isinstance(payload, Mapping) else None
                     raw_price = shared.get("current_price") if isinstance(shared, Mapping) else None
-                    if type(raw_price) is bool or type(raw_price) not in (int, float):
+                    frozen_price = parse_canonical_positive_decimal_text(raw_price)
+                    if frozen_price is None:
                         reasons.append(f"entry_reference_no_frozen_price:{raw_price!r}")
-                    elif raw_price <= 0:
-                        reasons.append(f"entry_reference_no_frozen_price:{raw_price!r}")
-                    elif abs(entry - float(raw_price)) > 1e-9:
+                    elif Decimal(str(entry)) != frozen_price:
                         reasons.append(f"entry_reference_mismatch:entry={entry},frozen={raw_price}")
     elif label.availability is LabelAvailability.UNAVAILABLE:
         metrics = label.metrics if isinstance(label.metrics, Mapping) else {}

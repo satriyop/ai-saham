@@ -535,6 +535,54 @@ def test_accumulation_price_path_uses_candidate_current_price_as_entry(
     assert result.labels[0].metrics["entry_reference_price"] == 1000.0
 
 
+def test_accumulation_price_path_rejects_numeric_shared_price_without_legacy_fallback(
+    tmp_path,
+) -> None:
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    at = datetime(2026, 7, 27, 1, 0, tzinfo=timezone.utc)
+    repository.add_observation(
+        LearningObservation.create(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            policy_contract="accumulation_discovery.policy.v1",
+            horizon_contract="accum_10d",
+            compatibility_id="compat-1",
+            cutoff_at=at,
+            universe_id="idx30",
+            window_id="BBCA:2026-07-27:20",
+            decision_payload={
+                "ticker": "BBCA",
+                "shared": {"current_price": 100},
+                "candidate": {"current_price": "100"},
+                "screen_result": "pass",
+            },
+            captured_at=at,
+            producer_source_revision="ai-saham@test",
+        )
+    )
+
+    class Market:
+        def get_candles(self, ticker, start_date=None, end_date=None):
+            return _forward_candles(ticker, date(2026, 7, 27), 20)
+
+    result = _path_label_uc(
+        observations=repository,
+        labels=repository,
+        market_data=Market(),
+        corporate_actions=_CoveredCorporateActions(),
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.ACCUM_10D_LABEL,
+            labeled_at=NOW,
+        )
+    )
+
+    assert result.skipped_count == 1
+    assert result.inserted_count == 0
+    assert result.labels == ()
+
+
 def test_accumulation_price_path_skips_incomplete_forward_window(
     tmp_path,
 ) -> None:

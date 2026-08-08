@@ -1,8 +1,9 @@
 # Grow The Snapshot-Bound Accum Challenge Corpus
 
-Status: `VETTED / BLOCKED_CONTRACT_FIX` — independent code-first re-vet on
-2026-08-09 found a live producer/readiness type mismatch and a cron false-positive
-completion path. This task is **not** `CODE_COMPLETE_AWAITING_DATA`.
+Status: `CODE_COMPLETE_AWAITING_DATA` — GROW-01 and GROW-02 were implemented,
+verified, and committed together on 2026-08-09 without schema, identity, or data
+mutation. Operational completion still requires prospective multi-session
+growth and the separately governed ml-saham OOS-fold evidence.
 
 ## Independent Re-Vet — 2026-08-09
 
@@ -28,17 +29,15 @@ contracts:
 - one installed fail-closed shell wrapper in cron;
 - ml-saham remains a read-only, separately governed challenge consumer.
 
-However, the current producer and readiness consumer disagree on the exact JSON
-type of the frozen entry price. This makes every live observation fail readiness.
-The installed wrapper then reports `COMPLETION_OK` because the status command
-returns exit 0 even for `BLOCKED_POLICY`.
-
-The task therefore has two code gates before prospective corpus growth can be
-called operationally healthy.
+At re-vet time, the producer and readiness consumer disagreed on the exact JSON
+type of the frozen entry price, making every live observation fail readiness.
+The installed wrapper could also report `COMPLETION_OK` when the status command
+printed `BLOCKED_POLICY` and exited 0. GROW-01 and GROW-02 below close both
+defects.
 
 ### GROW-01 — current writer output is rejected by current readiness
 
-Status: `VETTED / FIX REQUIRED`.
+Status: `IMPLEMENTED / VERIFIED` on 2026-08-09.
 
 The canonical writer in
 `AccumulationCandidateObservationPersister.persist_session_multi_window()`
@@ -48,14 +47,15 @@ stores:
 shared["current_price"] = str(candidate.current_price)
 ```
 
-The session payload builder accepts a positive float-coercible value, and the
-canonical label generator deliberately parses that value through `Decimal`.
-Existing producer and label tests use decimal text such as `"1000"`.
+Before GROW-01, the session payload builder accepted a positive float-coercible
+value, while the canonical label generator deliberately parsed that value
+through `Decimal`. Existing producer and label tests used decimal text such as
+`"1000"`.
 
-The readiness validator independently requires an exact JSON `int` or `float`
-and rejects every string. This is not a hypothetical edge:
+The pre-fix readiness validator independently required an exact JSON `int` or
+`float` and rejected every string. This was not a hypothetical edge:
 
-| Live fact | Value |
+| Pre-fix live fact | Value |
 |---|---:|
 | Schema-15 ACCUM observations | 1,035 |
 | `json_type(shared.current_price) = text` | 1,035 |
@@ -70,13 +70,13 @@ The snapshot set still verifies 9/9. Observation identity/digest reconciliation,
 label linkage, and risk PIT checks pass. The failure is solely the incompatible
 field-type contract.
 
-#### Proposed fix contract — requires implementation vet
+#### Implemented contract
 
 Preserve the writer's precision-safe decimal-text representation. Do **not**
 convert the writer to JSON float, bump schema 15, or rebuild/rewrite the corpus
 merely to satisfy the reader.
 
-Implement one pure canonical positive-decimal-text parser/validator and use it
+One pure canonical positive-decimal-text parser/validator is now used
 symmetrically at:
 
 1. `build_session_observation_payload()` validation;
@@ -84,19 +84,19 @@ symmetrically at:
 3. path-label entry-reference extraction;
 4. label entry-reference equality validation.
 
-The exact accepted value must be a JSON string that is:
+The accepted value is a JSON string that is:
 
 - non-empty and unpadded;
 - exactly representable by `Decimal`;
 - finite and strictly positive;
-- canonical under the chosen normalizer (reject signs/leading-zero aliases and
-  other value-equivalent spellings the producer cannot emit).
+- exactly equal to `str(Decimal(value))`, rejecting signs, leading-zero aliases,
+  non-canonical exponent spellings, and other value-equivalent spellings the
+  producer cannot emit.
 
-Use the real persister in a vertical regression. The regression must persist,
-reload through `SQLiteLearningArtifactReadRepository`, and project readiness;
-hand-built float fixtures are insufficient. Add negative cases for JSON
-int/float, bool, whitespace, non-finite values, non-positive values, and
-non-canonical decimal aliases.
+The vertical regression uses the real persister, persists to SQLite, reloads
+through `SQLiteLearningArtifactReadRepository`, and projects readiness. Negative
+tests cover JSON int/float, bool, whitespace, non-finite values, non-positive
+values, non-canonical decimal aliases, and label-generation fallback attempts.
 
 Classification:
 
@@ -107,13 +107,13 @@ Classification:
 - historical rows: no rewrite or reinterpretation is needed because the sole
   schema-15 cohort already carries the intended writer shape.
 
-After the fix, the existing 1,035 observations must validate without mutation,
-and status must recover the 23 economic sessions plus current H3/H10/H20 label
-counts.
+Post-fix read-only status proves all 1,035 existing observations validate
+without mutation, recovers all 23 economic sessions and the existing
+H3/H10/H20 label counts, and reports `CHALLENGE_INPUT_READY`.
 
 ### GROW-02 — cron emits completion for `BLOCKED_POLICY`
 
-Status: `VETTED / FIX REQUIRED`.
+Status: `IMPLEMENTED / VERIFIED` on 2026-08-09.
 
 The installed cron invokes `scripts/cron_accum_challenge_corpus.sh` at 19:15 on
 weekdays. The wrapper uses `set -euo pipefail`, but `research accum status`
@@ -123,7 +123,7 @@ Current tests assert source-code ordering only and explicitly allow the blocked
 status command to exit 0; they do not execute the wrapper against a blocked
 report.
 
-#### Proposed fix contract — requires implementation vet
+#### Implemented contract
 
 Keep ordinary `research accum status` useful as a read-only diagnostic. Add an
 explicit operational gate owned by the application report and exposed through a
@@ -142,6 +142,18 @@ Operational gate behavior:
 Test the actual CLI/wrapper behavior, not only string ordering. A synthetic
 blocked report must prevent `COMPLETION_OK`; collecting and ready reports must
 permit it. No scoring or readiness policy may be recomputed in Bash or the CLI.
+
+`AccumulationProducerReadinessReport` now owns the deterministic operational
+success predicate and stable failure reasons. Ordinary `research accum status`
+remains a diagnostic command with exit 0, while the explicit
+`--require-operational-success` flag renders the same report and then exits
+non-zero when the application-owned gate fails. The cron wrapper uses that flag.
+
+Actual wrapper execution tests prove that `BLOCKED_POLICY` exits non-zero and
+does not emit `COMPLETION_OK`; `COLLECTING` and `CHALLENGE_INPUT_READY` both exit
+zero and permit completion. A blocked cohort also fails when a healthy active
+cohort exists, while a historical `LEGACY_RAW_ONLY` cohort may coexist with a
+healthy active cohort.
 
 Classification: `NON_SEMANTIC` engine behavior; CLI/operations contract only.
 No compatibility or observation identity movement.
@@ -167,21 +179,22 @@ all-anchor tamper-proof.
 
 ### Live evidence
 
-Read-only evidence on `data/db/data.db`:
+Read-only evidence on `data/db/data.db` after GROW-01 and GROW-02:
 
 - one ACCUM cohort:
   `sha256:355e5b59600dbdc9f762f7b373e8879b7cda9a1e55e18bd590461315cfe1e091`;
 - 1,035 schema-15 observations, all with text `shared.current_price`;
 - nine valid v4 policy snapshots;
 - AVAILABLE labels: H3=900, H10=585, H20=135;
-- ai-saham producer status: `BLOCKED_POLICY`, zero authoritative sessions due to
-  GROW-01;
+- ai-saham producer status: `CHALLENGE_INPUT_READY`, 1,035/1,035 valid
+  observations and 23 authoritative sessions;
+- gated status: exit 0 for the live `CHALLENGE_INPUT_READY` cohort;
 - ml-saham health: `BLOCKED_DATA`, n=585, because it independently consumes
   observation/candle panels and still cannot form the required time folds.
 
-The two statuses are not contradictory. They prove why producer handoff and ML
-protocol readiness must remain separate axes. `BLOCKED_DATA` in ml-saham must
-not be used to overrule ai-saham's `BLOCKED_POLICY`.
+The ai-saham `CHALLENGE_INPUT_READY` and ml-saham `BLOCKED_DATA` statuses are not
+contradictory. They prove why producer handoff and ML protocol readiness remain
+separate axes.
 
 Data Audit Gate:
 
@@ -194,20 +207,29 @@ Data Audit Gate:
 The audit commands do not currently detect GROW-01, so their green learning
 identity/linkage checks cannot substitute for `research accum status`.
 
-Focused verification: **120 passed** across readiness mutation tests, vertical
-producer/label/calendar tests, capture/backfill composition, and cron contracts.
-That suite still missed the live mismatch because the readiness fixtures use
-float prices while real persister tests merely float-coerce the emitted string.
+Post-fix focused verification: **201 passed** across the canonical price
+contract, readiness and operational-gate mutation tests, real
+persister→SQLite→read-only readiness, actual cron-wrapper execution,
+producer/label/calendar verticals, policy snapshots, CLI chains, installer
+contract, and architecture boundaries. Whole-repo Ruff check and format check
+pass.
+
+The full suite ran 6,749 tests: the two GROW-01 stale-fixture failures were fixed
+and their module is green. Fourteen unrelated existing CLI/display failures
+remain: twelve explicit-nonexistent-`--db` expectation conflicts plus one BB
+display expectation and one skill exit-code expectation. Their six owning test
+modules reproduce 14 failed / 29 passed independently and are outside GROW-01.
 
 ### Current gate and required order
 
-1. Vet and implement GROW-01.
-2. Re-run focused tests and all three data audits.
-3. Run live read-only status; require 1,035 valid observations and recovered
-   session/label counts without rewriting rows.
-4. Vet and implement GROW-02; prove blocked wrapper execution is non-zero.
-5. Only then set this task to `CODE_COMPLETE_AWAITING_DATA` and resume/confirm
-   scheduled growth.
+1. GROW-01 implemented and verified.
+2. Focused tests and all three data audits re-run.
+3. Live read-only status recovered 1,035 valid observations and all session/label
+   counts without rewriting rows.
+4. GROW-02 implemented and verified; actual blocked wrapper execution is
+   non-zero and cannot emit `COMPLETION_OK`.
+5. The scoped GROW-01/GROW-02 changes are committed contextually; this task is
+   now `CODE_COMPLETE_AWAITING_DATA` while scheduled growth continues.
 6. Keep task 06 blocked until ml-saham records at least two valid post-embargo
    OOS folds for this exact compatibility ID.
 
@@ -901,7 +923,7 @@ contract after product-owner approval.
 
 ```text
 Last independent re-vet: 2026-08-09
-Task status: VETTED / BLOCKED_CONTRACT_FIX
+Task status: CODE_COMPLETE_AWAITING_DATA
 
 Authority locks recorded this cycle (required before any CODE_COMPLETE claim):
   - § Locked design decision — lookback Option A (producer attestation)
@@ -915,9 +937,14 @@ Bounded-anchor authority review:
     outside readiness and is not represented as corpus-wide integrity.
 
 Open before CODE_COMPLETE_AWAITING_DATA:
+  - None
+
+Closed on 2026-08-09:
   - GROW-01: canonical decimal-text current_price producer/readiness symmetry
-  - GROW-02: cron operational gate must reject BLOCKED_POLICY before COMPLETION_OK
-  - Live status recovery without corpus rewrite
+  - GROW-02: application-owned operational status gate wired into the cron wrapper
+  - Blocked wrapper exits non-zero without COMPLETION_OK; collecting/ready pass
+  - Live status: 1,035/1,035 valid, 23 sessions, CHALLENGE_INPUT_READY
+  - No schema bump, identity movement, corpus rewrite, or reinterpretation
 
 Closed under the bounded-anchor model (implementation + tests; authority now explicit):
   - ACCUM/PRE_OPEN label purpose isolation (e1fae445)
@@ -929,6 +956,6 @@ Closed under the bounded-anchor model (implementation + tests; authority now exp
 
 P2 configured-but-unwired finding recorded: YES (no v3)
 
-CODE_COMPLETE_AWAITING_DATA: NOT claimed; GROW-01 and GROW-02 are open
+CODE_COMPLETE_AWAITING_DATA: YES
 Operational DONE: still requires live multi-session growth + ml-saham OOS folds
 ```

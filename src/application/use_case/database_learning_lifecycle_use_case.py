@@ -9,6 +9,9 @@ from decimal import Decimal
 from statistics import mean
 from typing import Any, Protocol, Sequence
 
+from src.application.services.accumulation_price_contract import (
+    parse_canonical_positive_decimal_text,
+)
 from src.domain.ports.learning_artifact_repositories import (
     LearningEvaluationRepository,
     LearningObservationRepository,
@@ -165,15 +168,8 @@ def _entry_reference(payload: dict[str, Any] | Any) -> Decimal | None:
         return None
     shared = payload.get("shared")
     if isinstance(shared, dict):
-        raw = shared.get("current_price")
-        if raw is not None:
-            try:
-                value = Decimal(str(raw))
-            except Exception:
-                value = None
-            else:
-                if value is not None and value > 0:
-                    return value
+        if "current_price" in shared:
+            return parse_canonical_positive_decimal_text(shared.get("current_price"))
     candidate = payload.get("candidate")
     if isinstance(candidate, dict):
         raw = candidate.get("current_price")

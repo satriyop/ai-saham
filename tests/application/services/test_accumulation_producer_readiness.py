@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 
+import pytest
+
 from src.application.services.accumulation_producer_readiness import (
     LabelCohortValidation,
     LabelHorizonCounts,
@@ -185,7 +187,7 @@ def _payload(
     )
     trade_setup = {"action": action} if action is not None else None
     signal = {"setup_readiness": {"status": readiness}} if readiness is not None else {}
-    shared: dict = {"current_price": 100.0}
+    shared: dict = {"current_price": "100.0"}
     cap = captured_at or (
         datetime.fromisoformat(f"{session_date}T12:00:00+00:00") if session_date else NOW
     )
@@ -2438,6 +2440,39 @@ def test_build_session_observation_payload_requires_population_binding() -> None
     assert "named_universe_tickers" in payload["population_binding"]
 
 
+@pytest.mark.parametrize(
+    "raw_price",
+    [100, 100.0, True, " 100", "+100", "0100", "0", "-1", "NaN"],
+)
+def test_build_session_observation_payload_rejects_noncanonical_price(
+    raw_price: object,
+) -> None:
+    from src.application.services.accumulation_observation_fingerprint import (
+        build_session_observation_payload,
+    )
+
+    structural_filter = {
+        "outcome": "disabled",
+        "field": None,
+        "reason": None,
+        "observed_value": None,
+        "threshold": None,
+    }
+    features = {window: {"structural_filter": structural_filter} for window in ("7", "30", "90")}
+
+    with pytest.raises(ValueError, match="canonical positive decimal text"):
+        build_session_observation_payload(
+            ticker="BBCA",
+            session_date=date(2026, 7, 1),
+            captured_at=NOW,
+            canonical_window=7,
+            features_by_window=features,
+            shared={"current_price": raw_price},
+            population_binding=_binding_for_session("2026-07-01"),
+            diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
+        )
+
+
 def test_current_observation_missing_structural_filter_provenance_fails_closed() -> None:
     observation = _observation(day=1)
     del observation.decision_payload["features_by_window"]["7"]["structural_filter"]
@@ -2737,7 +2772,7 @@ def _path_label_for(obs: LearningObservation) -> LearningOutcomeLabel:
     return _label(observation=obs, contract=LearningContractId.ACCUM_10D_LABEL)
 
 
-def test_string_canonical_window_and_price_block_ready() -> None:
+def test_string_canonical_window_blocks_ready() -> None:
     obs = _ready_obs_pair()
     # Mutate first observation payload with string authorities, rehash.
     payload = dict(obs[0].decision_payload)
@@ -2770,6 +2805,40 @@ def test_string_canonical_window_and_price_block_ready() -> None:
     # Invalid obs contributes zero; remaining valid may still be counted
     # diagnostically but cannot unlock READY.
     assert cohort.observation_validation.invalid_observation_count >= 1
+
+
+@pytest.mark.parametrize("raw_price", [100, 100.0, True, " 100", "+100", "0100"])
+def test_noncanonical_current_price_blocks_ready(raw_price: object) -> None:
+    observation = _observation(day=1)
+    payload = dict(observation.decision_payload)
+    shared = dict(payload["shared"])
+    shared["current_price"] = raw_price
+    payload["shared"] = shared
+    mutated = replace(
+        observation,
+        decision_payload=payload,
+        artifact_digest=artifact_digest(
+            _artifact_payload(
+                replace(observation, decision_payload=payload),
+                id_field="observation_id",
+                digest_field="artifact_digest",
+            )
+        ),
+    )
+
+    cohort = project_cohort_readiness(
+        compatibility_id=COMPAT,
+        observations=[mutated],
+        labels=[],
+        snapshots=_full_active_set(),
+        purpose_value=AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
+    )
+
+    assert cohort.producer_status is ProducerReadinessStatus.BLOCKED_POLICY
+    assert cohort.observation_validation.valid_observation_count == 0
+    assert any(
+        "shared.current_price" in reason for reason in cohort.observation_validation.invalid_reasons
+    )
 
 
 def test_population_binding_string_lookback_blocks() -> None:

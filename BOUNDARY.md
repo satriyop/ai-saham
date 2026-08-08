@@ -189,7 +189,8 @@ Horizons **3 / 10 / 20** (primary **10**) align by number.
 # Corpus (this repo) — required
 saham research accum backfill|capture
 saham research accum labels --all-label-contracts
-saham research accum status   # per-cohort LEGACY_RAW_ONLY|BLOCKED_POLICY|COLLECTING|CHALLENGE_INPUT_READY
+saham research accum status   # diagnostic; per-cohort LEGACY_RAW_ONLY|BLOCKED_POLICY|COLLECTING|CHALLENGE_INPUT_READY
+saham research accum status --require-operational-success  # cron/automation gate
 # Nightly (after EOD refresh): scripts/cron_accum_challenge_corpus.sh
 #   capture --universe lq45 → labels --all-label-contracts → status (fail-closed)
 

@@ -157,6 +157,7 @@ def status_cohort(
     *,
     db_path: Path | None,
     fmt: str,
+    require_operational_success: bool = False,
 ) -> None:
     if purpose is AssessmentPurpose.ACCUMULATION_DISCOVERY:
         try:
@@ -179,8 +180,12 @@ def status_cohort(
         payload = report.to_dict()
         if fmt != "json":
             _echo_producer_readiness_table(payload)
-            return
-        echo(payload, fmt)
+        else:
+            echo(payload, fmt)
+        if require_operational_success and not report.is_operationally_successful():
+            reasons = ",".join(report.operational_failure_reasons())
+            typer.echo(f"accum operational readiness gate failed: {reasons}", err=True)
+            raise typer.Exit(1)
         return
 
     _, repo = repository(db_path)

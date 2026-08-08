@@ -131,7 +131,7 @@ def _observation(*, day: int, ticker: str = "BBCA") -> LearningObservation:
             "workflow": "research_accum_capture",
             "horizon_primary": "accum_10d",
             "shared": {
-                "current_price": 100.0,
+                "current_price": "100.0",
                 "provenance": {
                     "decision_at": at.isoformat(),
                     "latest_completed_session": sd,
