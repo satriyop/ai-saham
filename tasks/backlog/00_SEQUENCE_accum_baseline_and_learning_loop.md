@@ -41,7 +41,7 @@ Measurements). Doing it two months from now costs two months.
 | 9 | `09_expose_unevaluable_gate_block_provenance.md` | **Yes** (snapshot payload binding) | needs 3; vetted 2026-08-08 |
 | — | **── PURGE + REBUILD (task 4), then CONFIG FREEZE ──** | | |
 | 4 | `04_rebuild_accum_corpus_single_deep_cohort.md` | No | needs 1, 2, 3, 9 — **mandatory; re-vet after 9** |
-| 5 | `05_fix_preopen_directional_score_resolution.md` | pre-open only | independent |
+| 5 | `05_fix_preopen_directional_score_resolution.md` | pre-open only | independent — **vetted 2026-08-08**; ready when scheduled |
 | 6 | `06_implement_accum_policy_proposal_lifecycle.md` | No | needs 4 + depth |
 | 7 | `07_improve_screen_accum_progressive_disclosure.md` | No | independent |
 | 8 | `08_fix_cli_error_taxonomy_and_exit_codes.md` | No | independent |
@@ -62,6 +62,15 @@ Measurements). Doing it two months from now costs two months.
   7 compact output  ─── independent
   8 error taxonomy  ─── independent
 ```
+
+**2026-08-08 task-05 re-vet.** Discrete six-value lookup is still the scorer;
+live PRE_OPEN corpus (29 rows) shows confidence **always LOW** because
+`iev_intensity` never reaches `min_normalized_iev_intensity=1.0` (100% of scored
+rows). NCP “low fraction” is largely top-50 lock-window ops coverage, not only a
+sticky-flag bug. ml-saham directional n=0 is multi-cause (explicit
+`compatibility_id` + `--baseline static_reference` required). Continuous score
+must not preserve the unreachable intensity boolean; PRE_OPEN clean-break is
+cheap and must not touch the frozen accum cohort.
 
 **Why ADR-068 goes first.** It deletes `SEMANTIC_ENGINE_VERSION` and
 `EVIDENCE_CONTRACT_VERSION`, which task 2 would otherwise bump and then lose. It

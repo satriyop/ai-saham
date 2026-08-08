@@ -1,117 +1,217 @@
 # Give Pre-Open `directional_score` Enough Resolution To Rank And Learn
 
-Status: `READY` — independent of tasks 1–4, can run in parallel.
-Sequence: **5 of 8** — see `tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`
+Status: `VETTED / READY FOR IMPLEMENTATION` — code-first re-vet **2026-08-08**.
+Sequence: **5 of 8** — independent of the accumulation config freeze (PRE_OPEN
+purpose isolation). See `tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`.
 
 ## 1. Task Metadata
 
 **Task Title**
-Replace the six-valued pre-open directional score lookup with a continuous
-score, and fix NCP baseline capture coverage.
+Replace the discrete pre-open directional score lookup with a continuous ranking
+score, fix confidence collapse from the intensity gate, and make NCP baseline
+ops/coverage honest.
 
 **Task Type**
-Bugfix (scoring-material for the PRE_OPEN purpose)
+Bugfix / scoring-material (PRE_OPEN purpose only)
 
 **Priority**
-Medium-High — highest-value pre-open item; blocks any pre-open learning.
+High among remaining backlog — highest-value pre-open item; task 06 stays
+blocked on accum depth.
 
 ---
 
-## 2. Problem Statement
+## 2. Re-Vet Verdict (2026-08-08)
 
-### 2.1 The score cannot rank
+### 2.1 Still true: the ranking score is a six-value lookup
 
-`config/signal_engine.yaml:53-61` maps direction × confidence to a **six-value
-lookup**:
+Canonical scorer: `src/application/services/pre_open_directional_baseline.py`
+(`evaluate_pre_open_directional_baseline` → `_raw_score`).
 
+Config surface: `config/signal_engine.yaml` → `pre_open_directional_baseline`
+(typed as `PreOpenDirectionalBaselineConfig`).
+
+```text
+BULLISH × {HIGH: 80, MEDIUM: 70, LOW: 55}
+NEUTRAL: 45 | CONFLICTED: 35 | BEARISH: 20 | UNKNOWN: 0
 ```
-bullish  { HIGH: 80, MEDIUM: 70, LOW: 55 }
-neutral  45
-conflicted 35
-bearish  20
-unknown  0
-```
 
-`pre_open_directional_baseline.py:210-227` applies it as a cascade. Across a
-universe of ~270 tickers, six distinct scores means the ranking is almost
-entirely ties. Spearman rank IC — the metric `ml-saham` scores this policy on
-(`ml_saham/eval/metrics.py:67-70`) — is close to meaningless under mass ties.
+Continuous inputs are bucketed **before** scoring:
 
-Observed consequence: `screener.pre_open.directional_score` returns **n=0** in
-`ml-saham challenge health`, while `screener.pre_open.iev_rank` — a genuinely
-continuous ranking over the same tickers — returns n=695.
+| Input | Where | Effect |
+|-------|--------|--------|
+| `bid_pressure` | `_book_pressure_state` @ 0.60 / 0.40 | BUY/SELL/BALANCED |
+| `delta_iev_ratio` | `_confidence` / `_participation_state` @ 0.08 / −0.03 | HIGH/MEDIUM/LOW |
+| `iev_intensity` | `_confidence` @ `min_normalized_iev_intensity=1.0` | if &lt; 1.0 → **force LOW** |
 
-The underlying inputs are already continuous and are being discarded:
-- `delta_iev_ratio` → bucketed into HIGH/MEDIUM/LOW at `0.08` / `-0.03`
-- `bid_pressure` → bucketed into BUY/SELL at `0.60` / `0.40`
-- `iev_intensity` → used only as a `>= 1.0` boolean
+Discrete **direction** labels (BULLISH/BEARISH/…) stay correct product language.
+Only the **ranking score** lacks resolution.
 
-### 2.2 The NCP baseline is mostly missing
+Domain VO: `PreOpenBaselineAssessment.raw_score: int` with contract
+`pre_open_directional_baseline.v1`.
 
-`iev_snapshot_history` holds 2,620 rows over 26 distinct dates, of which only
-**620 are NCP-locked**. The 08:56 NCP-locked reading is the highest-signal
-observation of the session (IDX Kep-00003/BEI/04-2025 locks pre-open orders
-08:56–09:00). Without a valid locked baseline, `delta_iev` is MISSING and scores
-neutral — so the confidence axis silently collapses on most days.
+### 2.2 Stronger than the draft: confidence never leaves LOW on live corpus
 
-### 2.3 The corpus is too small to judge either way
+Measured on `data/db/data.db` PRE_OPEN observations with a score (n=17 of 29):
 
-`learning_observations` holds **19** PRE_OPEN observations across 6 dates.
-`learning_evaluations` shows the full history: n=2 → 5 → 10 → 17, latest
-`average_return_pct` **+0.156%** with `{FAILURE: 6, NEUTRAL: 6, SUCCESS: 5}`.
-Nothing can be concluded from n=17.
+| `raw_score` | direction | confidence | n |
+|---:|---|---|---:|
+| 35 | CONFLICTED | LOW | 10 |
+| 55 | BULLISH | LOW | 4 |
+| 20 | BEARISH | LOW | 2 |
+| 45 | NEUTRAL | LOW | 1 |
+
+- **Distinct scores:** 4 (not 6 — HIGH/MEDIUM never appear)
+- **Modal share:** 35 ≈ **59%** of scored rows
+- **`iev_intensity`:** n=17, max ≈ **0.086**, **100% &lt; 1.0**
+
+So production confidence is collapsed by the intensity boolean, not merely by
+the lookup table. A continuous score that still gates confidence on
+`intensity >= 1.0` will keep mass ties among BULLISH names.
+
+Re-vet implication: continuous scoring must **use intensity and
+`delta_iev_ratio` as continuous terms** (with explicit missing handling). Do
+not preserve a hard LOW clamp that real data never clears without first
+proving the intensity formula scale is wrong and recalibrating.
+
+### 2.3 NCP “620/2620” is stale; root cause is ops + top-N, not only a flag bug
+
+Live IEV history (2026-08-08):
+
+| | rows | dates | NCP-locked rows | NCP dates |
+|--|---:|---:|---:|---:|
+| `iev_snapshot_history` | **3170** | 28 | **720** (~23%) | **13** |
+| `iev_snapshots` (canonical) | 1673 | 29 | 653 | 13 |
+
+Recent NCP days almost always store **exactly 50** locked tickers — matching
+`saham fetch iev --top-n` default **50** (`fetch_iev_commands.py`). Days with
+`ncp_pct=0` are discovery-only / pre-NCP fetches (`is_ncp_locked` stays 0 when
+collection start is before 08:56 WIB).
+
+So the defect class is:
+
+1. **Ops coverage:** many sessions never ran a lock-window fetch.
+2. **Universe scope:** NCP baseline exists only for top-N movers, not full board.
+3. **Sticky flag path** in `SQLiteIEVRepository` is already intentional and
+   largely correct when a lock-window fetch runs.
+
+Slice work should measure **per trading day**: “did we write an NCP batch?” and
+“how many tickers?”, improve lock-window capture reliability / diagnostics, and
+document top-N as an explicit population limit — not silently treat
+history-wide NCP fraction as a single code bug.
+
+### 2.4 Corpus size (updated)
+
+| Metric | Draft (old) | Live 2026-08-08 |
+|--------|-------------|-----------------|
+| PRE_OPEN observations | 19 | **29** |
+| Cohorts | — | **1** |
+| Capture calendar days | 6 | **8** (captured_at) |
+| PRE_OPEN labels | — | **22** |
+| PRE_OPEN evaluations | history to n=17 | **8** eval rows |
+
+Still far below `pre_open_session_v1` (`min_n_total=80`, 3 folds, embargo 1).
+Continuous score is necessary for ranking; corpus growth remains necessary for
+WIN/LOSE.
+
+### 2.5 Why ml-saham shows `directional_score` n=0 (multi-cause)
+
+`ml-saham` re-vet (same DB):
+
+- `screener.pre_open.directional_score` health: **BLOCKED_POLICY**, n=0
+- `screener.pre_open.iev_rank` health: **BLOCKED_POLICY**, n=**776** (panel builds)
+
+Blockers are not only ties:
+
+1. Production-facing PRE_OPEN challenges require **explicit**
+   `--compatibility-id` (no largest-cohort auto-select).
+2. `baseline=production` requires verified **production-policy snapshots** and
+   adapters; pre-open specs are **static fixtures** → must pass
+   `--baseline static_reference` (no silent remap).
+3. Thin PRE_OPEN observation density and discrete scores still hurt
+   directional ranking once the panel runs.
+
+Acceptance must use explicit compatibility id + `static_reference` (or a later
+ADR if pre-open joins production snapshots). Do not treat health n=0 alone as
+proof the score table is empty.
+
+### 2.6 Action thresholds that re-derive with the score
+
+`AssessPreOpenDirectionalBaselineUseCase._classify` maps score → strength /
+entry quality using **shared** `classification.strong_min_score=70` /
+`moderate_min_score=45`:
+
+| Old discrete score | Typical class |
+|--------------------|---------------|
+| 80 / 70 (bullish high/medium) | ENTER path (before auction_quality caps) |
+| 55 (bullish low) | WATCH |
+| ≤45 | AVOID |
+
+`auction_quality` remains **cap-only** (CAUTION→max WATCH, UNRELIABLE→AVOID) —
+preserve that (ADR-048).
+
+Any continuous score **must** re-state ENTER/WATCH cutovers for pre-open.
+Prefer **pre-open-local** thresholds on the new scale over silently reusing
+accum classification numbers without justification.
+
+### 2.7 Identity / clean break
+
+PRE_OPEN still uses **config-hash compatibility**
+(`compute_pre_open_semantic_compatibility_id` hashes
+`PreOpenDirectionalBaselineConfig` + classification + iev_min/top_n). Changing
+score formula or coefficients **forks** PRE_OPEN `compatibility_id`.
+
+With only 29 PRE_OPEN rows, clean-break is cheap. **Accum corpus must stay
+untouched** (post–task-04 freeze).
+
+Contract: plan a bump of `pre_open_directional_baseline.v1` → **v2** when the
+score semantics change (clean break, no dual-scale alias).
 
 ---
 
 ## 3. Desired Outcome
 
-- `directional_score` is continuous over its plausible range, monotonic in each
-  input, and produces few ties across a live universe.
-- The discrete `PreOpenDirection` classification is **retained** for operator
-  display and for the action cascade; only the *ranking score* becomes continuous.
-- NCP-locked baseline capture succeeds on effectively every trading day, or the
-  failure reason is recorded per day.
-- Pre-open observation capture accumulates at a rate that can reach
-  `pre_open_session_v1`'s minimum within a knowable number of sessions.
+- Ranking score is continuous on a documented 0–100 (or documented) scale,
+  monotonic in `delta_iev_ratio` and `bid_pressure` when other inputs are held
+  fixed, and uses intensity as a continuous factor (or a recalibrated gate with
+  proof that real NCP rows clear it).
+- Discrete `PreOpenDirection` retained for display and action cascade inputs.
+- `auction_quality` never adds points.
+- NCP lock-window capture: per-day success/failure diagnostics; top-N limit
+  explicit; failure reasons recorded.
+- PRE_OPEN corpus clean-broken under new identity; accum rows unchanged.
+- `ml-saham challenge run screener.pre_open.directional_score` with
+  `--compatibility-id` and `--baseline static_reference` returns **n &gt; 0**
+  extractable rows (protocol depth may still BLOCKED_DATA folds).
 
 ---
 
 ## 4. Non-Goals
 
-- No change to `auction_quality` semantics — it stays an **action cap only** and
-  must never contribute directional points.
-- No change to the BULLISH/BEARISH/CONFLICTED/NEUTRAL classification rules.
-- No change to `iev_rank` (it already works).
-- No change to the accum path or accum corpus (purpose isolation).
+- No accum path / accum corpus / accum identity changes.
+- No change to BULLISH/BEARISH/CONFLICTED/NEUTRAL **classification rules**
+  (direction from IEP × book only), unless a separate ADR says otherwise.
+- No change to `iev_rank` challenge (already dense from IEV history).
 - No new data provider.
-- No lowering of `pre_open_session_v1` protocol thresholds.
+- No lowering `pre_open_session_v1` protocol thresholds.
+- No dual-scale compatibility for old 6-value scores.
+- No giving `auction_quality` directional points.
 
 ---
 
 ## 5. Architecture Impact Assessment
 
-- **Domain:** the score value object / scoring function if it lives in domain.
-- **Application:** `pre_open_directional_baseline.py` — continuous scoring;
-  `pre_open_screen_use_case.py` unchanged in structure.
-- **Infrastructure:** IEV capture path — diagnose and fix NCP-locked write
-  coverage.
-- **Adapter:** display the continuous score; keep the discrete label visible.
-
-New dependency: **No.**
-Determinism: **No** — remains fully deterministic.
-Persistence: **No schema change** expected; confirm `iev_snapshot_history`
-already carries what the fix needs.
-Warm-up: **Yes** — `iev_intensity` needs 20d average volume; already required.
-Policy in adapter: **No.**
-
 ```md
 Layer plan:
-- Domain: continuous scoring function if the score VO is domain-resident
-- Application: pre_open_directional_baseline continuous score; capture-time
-  NCP baseline validation
-- Infrastructure: IEV snapshot capture/write path fix for NCP-locked rows
-- Adapter: render continuous score alongside the discrete direction label
+- Domain: PreOpenBaselineAssessment score type/contract (v2); keep enums
+- Application: continuous score in pre_open_directional_baseline;
+  classification thresholds for pre-open; capture-time NCP diagnostics
+- Infrastructure: IEV fetch/write diagnostics only if needed (flag path OK)
+- Adapter: display continuous score + discrete direction; CLI/TUI labels
 ```
+
+- Determinism: yes.
+- Persistence: no SQL schema change expected; observation **identity** changes.
+- Policy in adapter: no.
 
 ---
 
@@ -121,118 +221,127 @@ Layer plan:
 
 ---
 
-## 7. Risk, Signal, And Evidence Authority Considerations
+## 7. Risk, Signal, And Evidence Authority
 
-Affected: **SignalEngine** (pre-open path only), pre-open `TradeSetup` action.
-RiskEngine on pre-open stays **ANNOTATE**, not BLOCK (`screen_policy.py:42-53`) —
-do not change that here.
-
-**Does this change what can produce ENTER/WATCH/AVOID?** Yes, for pre-open. The
-score becomes continuous, so any threshold expressed against it must be
-re-derived, not carried over numerically. State the mapping explicitly.
-
-**Cohort impact:** this forks the PRE_OPEN `compatibility_id`. With only 19
-observations, a clean break is cheap — take it rather than carrying two
-generations. Purge PRE_OPEN corpus rows only; accum rows are out of scope and
-must be provably untouched.
+- Affects **pre-open SignalEngine** score and thus pre-open TradeSetup actions
+  after classify + auction_quality caps.
+- Pre-open risk remains annotate/non-blocking where already designed — do not
+  promote RiskEngine to hard-block here.
+- **Does this change what can produce ENTER/WATCH/AVOID?** **Yes, PRE_OPEN only.**
 
 ---
 
 ## 8. Data & Persistence
 
-- **Read:** `iev_snapshots`, `iev_snapshot_history`, `candles`.
-- **Written:** IEV snapshots (existing path), fresh PRE_OPEN observations.
-- **Schema change:** No (verify `is_ncp_locked` provenance is sufficient).
-- **Old vs new semantically equivalent?** **No** — the score's range and
-  distribution change. Any persisted or displayed threshold tied to the old
-  6-value scale is invalid. Enumerate and update every one; do not leave an
-  alias or a compatibility shim.
+- **Read:** `iev_snapshots`, `iev_snapshot_history`, candles, PRE_OPEN
+  observations.
+- **Written:** IEV snapshots (existing path), fresh PRE_OPEN observations after
+  clean break.
+- **Schema change:** no table migration; contract/identity bump yes.
+- **Old vs new score equivalent?** **No.**
 
 ---
 
 ## 9. Acceptance Criteria
 
-- [ ] `directional_score` is continuous; a live universe run produces a tie rate
-      below a stated target.
-- [ ] Score is monotonic in `delta_iev_ratio` and in `bid_pressure`, proven by test.
-- [ ] Discrete direction label still rendered; `auction_quality` still cap-only.
-- [ ] Every old-scale threshold identified and re-derived; none left dangling.
-- [ ] NCP-locked capture rate measured before and after; failures logged per day.
-- [ ] PRE_OPEN corpus clean-broken; accum rows provably untouched.
-- [ ] `ml-saham challenge run screener.pre_open.directional_score` returns n > 0.
-- [ ] Deterministic; offline tests; no non-goals violated.
-- [ ] ADR-048 (NCP window) considered.
-- [ ] **Lint Gate** passes.
+- [ ] Continuous ranking score; live or fixture universe shows far lower exact-tie
+      rate than the 6-value table (state target, e.g. unique scores ≥ 50% of n on
+      a top-50 board fixture).
+- [ ] Monotonicity tests: ↑ `delta_iev_ratio` and ↑ `bid_pressure` do not decrease
+      score when direction-consistent and other inputs fixed.
+- [ ] No hard confidence clamp that fails 100% of current corpus intensity values
+      unless intensity formula is recalibrated with measured proof.
+- [ ] Discrete direction label still rendered; auction_quality still cap-only.
+- [ ] Every threshold on the old 6-value scale found and re-derived (at least
+      `classification` cutovers used by
+      `AssessPreOpenDirectionalBaselineUseCase`).
+- [ ] Contract/id: `pre_open_directional_baseline.v2` (or accepted name) + new
+      PRE_OPEN `compatibility_id`; no dual-scale reader.
+- [ ] NCP: before/after per-day lock-window batch metrics; top-N documented.
+- [ ] PRE_OPEN purge only; accum observation count and compatibility_id unchanged.
+- [ ] ml-saham directional challenge with explicit `--compatibility-id` and
+      `--baseline static_reference` extracts n &gt; 0.
+- [ ] Offline tests + whole-repo Lint Gate.
 
 ---
 
-## 10. Slices (each slice = one commit)
+## 10. Slices (each = one commit)
 
-**Slice 1 — Measure.**
-Report the tie rate of the current score on a live universe and the per-day
-NCP-locked capture rate. Pin current scoring behavior with tests.
-Commit: `test(pre-open): pin discrete directional score and measure tie rate`
+**Slice 1 — Measure and pin.**
+Pin current six-value behavior + intensity-forced LOW with tests. Record tie
+rate and intensity distribution on live PRE_OPEN payloads / synthetic board.
+Commit: `test(pre-open): pin discrete directional score and intensity collapse`
 
-**Slice 2 — Fix NCP baseline capture.**
-Diagnose why only 620/2,620 history rows are NCP-locked. Fix capture or record
-the structural reason. This lands first because a continuous confidence axis is
-worthless without the baseline.
-Commit: `fix(pre-open): restore NCP-locked baseline capture coverage`
+**Slice 2 — NCP coverage honesty.**
+Per-day lock-window metrics; improve diagnostics / cron guidance / optional
+fetch fail-closed messaging when run outside 08:56–matching. Do not pretend
+top-50 history is full-universe NCP.
+Commit: `fix(pre-open): make NCP lock-window capture coverage observable`
 
-**Slice 3 — Continuous score.**
-Replace the lookup. Keep the discrete label. Monotonicity tests.
-Commit: `fix(pre-open): make directional score continuous`
+**Slice 3 — Continuous score (contract v2).**
+Replace `_raw_score` lookup with continuous formula; keep direction enums;
+monotonicity tests; float or higher-resolution score as needed with VO update.
+Commit: `fix(pre-open): continuous directional ranking score (baseline v2)`
 
-**Slice 4 — Re-derive thresholds.**
-Update every threshold expressed against the old scale. No aliases, no dual-scale
-support.
-Commit: `fix(pre-open): re-derive action thresholds for continuous score`
+**Slice 4 — Re-derive action cutovers.**
+Pre-open ENTER/WATCH thresholds for the new scale; auction_quality caps
+unchanged; no aliases.
+Commit: `fix(pre-open): re-derive entry cutovers for continuous score`
 
-**Slice 5 — PRE_OPEN corpus clean break.**
-Backup, purge PRE_OPEN rows only, re-capture, verify accum untouched, run
-`ml-saham` and record the verdict.
-Commit: `chore(corpus)!: clean-break pre-open corpus for continuous score`
+**Slice 5 — PRE_OPEN corpus clean break + ml-saham.**
+Backup; purge PRE_OPEN purpose only; recapture when market hours allow or
+document deferred recapture; verify accum untouched; run ml-saham with
+`--baseline static_reference` and record n.
+Commit: `chore(corpus)!: clean-break pre-open corpus for directional v2`
 
 ---
 
 ## 11. Testing Expectations
 
-- Monotonicity in each continuous input, both directions.
-- Boundary behavior at the old bucket edges (`0.08`, `-0.03`, `0.60`, `0.40`) —
-  no discontinuity should remain.
-- `auction_quality` cannot add points (negative test).
-- Missing/MISSING `delta_iev` still resolves neutral and never fabricates confidence.
-- Purge purpose isolation: accum row count unchanged.
-
-Offline. `pytest -m "not tui"`. Ruff before close.
+- Existing `tests/application/services/test_pre_open_directional_baseline.py`
+  updated for v2 (no dual expectation).
+- Monotonicity + missing `delta_iev` → no fabricated confidence.
+- `auction_quality` cannot increase score (negative test).
+- Intensity path: either continuous contribution or recalibrated gate with
+  fixtures drawn from **real intensity scale** (current max ≪ 1.0).
+- Purge purpose isolation if slice 5 touches scripts.
+- `pytest -m "not tui"` focused modules; full Lint Gate on Python changes.
 
 ---
 
 ## 12. Documentation Impact
 
-- README: **No.**
-- New config options: **Yes** — the continuous score's coefficients replace the
-  lookup table in `signal_engine.yaml`.
-- Limitations: **Yes** — state that pre-open evaluation remains underpowered
-  until the corpus grows well past n=17.
+- Config: continuous coefficients replace six score keys (or coexist only during
+  PR then delete old keys in same clean break).
+- Operator: NCP fetch must run in lock window; top-N is population limit.
+- ml-saham docs: directional challenge needs static baseline + compatibility id.
+- Limitations: protocol depth still short until PRE_OPEN corpus grows past ~80
+  labeled rows.
 
 ---
 
 ## 13. Required Reading
 
 - `AGENT_QUICKSTART.md`, `TASK_TEMPLATE.md`
-- `docs/adr/ADR-048-*` (NCP window / capture timing)
-- `config/pre_open_screener.yaml`, `config/signal_engine.yaml:44-61`
+- `docs/adr/ADR-048-pre-open-signal-evidence-and-observation-identity.md`
+- `config/signal_engine.yaml` (`classification`, `pre_open_directional_baseline`)
+- `config/pre_open_screener.yaml`
+- `src/application/services/pre_open_directional_baseline.py`
+- `src/application/use_case/assess_pre_open_directional_baseline_use_case.py`
+- `src/infrastructure/persistence/sqlite_iev_repository.py`
+- `src/adapters/cli/fetch_iev_commands.py`
 - `~/dev/ml-saham/docs/challenge_pre_open_directional_score.md`
-- IDX Kep-00003/BEI/04-2025 NCP rules (08:56–09:00 order lock)
+- `~/dev/ml-saham/src/ml_saham/challenge/protocols.py` (`pre_open_session_v1`)
 
 ---
 
 ## 14. Do Not Interpret This As
 
-- **Not** permission to let `auction_quality` contribute directional points.
-- **Not** permission to keep a dual-scale compatibility path. One scale.
-- **Not** permission to touch the accum corpus.
+- Permission to touch the accum freeze cohort.
+- Permission to keep dual-scale scores.
+- Permission to lower ml-saham protocol floors.
+- Permission to treat history-wide NCP fraction as the only success metric
+  (per-day lock batch + top-N are the real ones).
 
 ---
 
@@ -241,7 +350,10 @@ Offline. `pytest -m "not tui"`. Ruff before close.
 - Completed date:
 - Slice commits:
 - Tie rate before → after:
-- NCP-locked capture rate before → after:
-- Old → new threshold mapping:
-- `ml-saham` verdict + n:
+- Intensity handling decision (continuous vs recalibrated gate) + evidence:
+- NCP per-day lock batch rate before → after:
+- Old → new entry cutover mapping:
+- New PRE_OPEN `compatibility_id`:
+- Accum observation count before/after (must match):
+- `ml-saham` command line + verdict + n:
 - Test / Lint result:
