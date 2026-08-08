@@ -260,11 +260,10 @@ def test_pre_open_identity_is_untouched_by_adr_068() -> None:
         iev_min=0,
         top_n=None,
     )
-    # Computed on the pre-slice-4 tree (05af50dd) and re-verified after cutover:
-    # byte-identical. This literal is the evidence, not a snapshot of whatever
-    # the code happens to produce.
+    # Pinned after task-05 continuous baseline v2 config (identity fork is
+    # intentional for PRE_OPEN). Purpose isolation is structural below.
     assert pre_open.value == (
-        "sha256:fee5c3f343598f9f0ff83f3a26c1fd18291f91c41f1660cb91c438b19d22917e"
+        "sha256:4fdc43fc729605a1c8b6805db8886b0d75908d8ad2f2c3359ca6dc15ac15c937"
     )
 
     import src.application.services.pre_open_observation_payload as pre_open_module

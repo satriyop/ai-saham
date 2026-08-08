@@ -169,7 +169,7 @@ class PreOpenObservationPersister:
             }
             return LearningObservation.create(
                 purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
-                policy_contract="pre_open_directional_baseline.v1",
+                policy_contract="pre_open_directional_baseline.v2",
                 horizon_contract="open_30m",
                 compatibility_id=str(compat),
                 cutoff_at=decision_at,

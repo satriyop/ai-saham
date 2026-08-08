@@ -47,42 +47,61 @@ class SignalClassificationConfig:
 
 @dataclass(frozen=True)
 class PreOpenDirectionalBaselineConfig:
-    contract: str = "pre_open_directional_baseline.v1"
+    """Pre-open directional ranking + display confidence (baseline contract v2).
+
+    v2 ranking score is continuous in pressure / delta_iev_ratio / intensity.
+    Discrete direction labels are unchanged. Entry cutovers are pre-open-local
+    (``enter_min_score`` / ``watch_min_score``), not accum classification.
+    """
+
+    contract: str = "pre_open_directional_baseline.v2"
     buy_pressure_min: float = 0.60
     sell_pressure_max: float = 0.40
     high_confidence_build_min: float = 0.08
     medium_confidence_floor: float = -0.03
-    min_normalized_iev_intensity: float = 1.0
+    # Soft intensity floor for HIGH confidence display only (live max ≪ 1.0).
+    intensity_high_soft: float = 0.02
     reliable_spread_max_pct: float = 1.0
     max_spread_pct: float = 1.5
     large_gap_caution_pct: float = 5.0
     rsi_extension_threshold: float = 75.0
-    bullish_high_score: int = 80
-    bullish_medium_score: int = 70
-    bullish_low_score: int = 55
-    neutral_score: int = 45
-    conflicted_score: int = 35
-    bearish_score: int = 20
-    unknown_score: int = 0
+    # Continuous score anchors + weights (0-100 ranking scale).
+    anchor_bullish: float = 58.0
+    anchor_neutral: float = 45.0
+    anchor_conflicted: float = 35.0
+    anchor_bearish: float = 22.0
+    weight_pressure: float = 18.0
+    weight_delta: float = 22.0
+    weight_intensity: float = 12.0
+    intensity_scale: float = 0.02
+    delta_clamp: float = 0.35
+    # Pre-open entry cutovers on the continuous scale.
+    enter_min_score: float = 62.0
+    watch_min_score: float = 48.0
 
     def __post_init__(self) -> None:
-        if self.contract != "pre_open_directional_baseline.v1":
+        if self.contract != "pre_open_directional_baseline.v2":
             raise ValueError("unsupported pre-open directional baseline contract")
         if not 0.0 <= self.sell_pressure_max < self.buy_pressure_min <= 1.0:
             raise ValueError("pre-open book pressure thresholds must be ordered")
         if self.max_spread_pct < self.reliable_spread_max_pct:
             raise ValueError("max spread must be >= reliable spread")
-        scores = (
-            self.bullish_high_score,
-            self.bullish_medium_score,
-            self.bullish_low_score,
-            self.neutral_score,
-            self.conflicted_score,
-            self.bearish_score,
-            self.unknown_score,
+        if self.delta_clamp <= 0:
+            raise ValueError("delta_clamp must be > 0")
+        if self.intensity_scale <= 0:
+            raise ValueError("intensity_scale must be > 0")
+        if not 0.0 <= self.watch_min_score < self.enter_min_score <= 100.0:
+            raise ValueError("pre-open watch/enter cutovers must be ordered in 0-100")
+        anchors = (
+            self.anchor_bullish,
+            self.anchor_neutral,
+            self.anchor_conflicted,
+            self.anchor_bearish,
         )
-        if any(not 0 <= score <= 100 for score in scores):
-            raise ValueError("pre-open baseline scores must be 0-100")
+        if any(not 0.0 <= a <= 100.0 for a in anchors):
+            raise ValueError("pre-open score anchors must be 0-100")
+        if any(w < 0.0 for w in (self.weight_pressure, self.weight_delta, self.weight_intensity)):
+            raise ValueError("pre-open score weights must be non-negative")
 
 
 # ── Phase 2: input mapping config ──────────────────────────────────────────────

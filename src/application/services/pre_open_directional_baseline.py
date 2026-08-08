@@ -1,10 +1,15 @@
 """Pure deterministic pre-open directional baseline policy.
 
 Layer: Application
+
+Contract ``pre_open_directional_baseline.v2``: discrete direction labels are
+unchanged; ranking ``raw_score`` is continuous in book pressure, delta IEV
+ratio, and IEV intensity (no unreachable intensity boolean clamp).
 """
 
 from __future__ import annotations
 
+import math
 from decimal import Decimal
 
 from src.application.services.signal_engine_config import (
@@ -58,7 +63,13 @@ def evaluate_pre_open_directional_baseline(
         delta_ratio=delta_ratio,
         config=config,
     )
-    raw_score = _raw_score(direction, confidence, config=config)
+    raw_score = _continuous_raw_score(
+        direction,
+        delta_ratio=delta_ratio,
+        pressure=auction.bid_pressure,
+        intensity=intensity,
+        config=config,
+    )
     factors = PreOpenBaselineFactors(
         iep_direction=iep_direction,
         book_pressure_state=pressure_state,
@@ -79,6 +90,7 @@ def evaluate_pre_open_directional_baseline(
         f"iep_direction={iep_direction}",
         f"book_pressure={pressure_state}",
         f"participation={participation_state}",
+        f"raw_score={raw_score:.4f}",
     )
     return PreOpenBaselineAssessment(
         contract=PRE_OPEN_DIRECTIONAL_BASELINE_CONTRACT,
@@ -159,12 +171,17 @@ def _confidence(
     iev_intensity: float | None,
     config: PreOpenDirectionalBaselineConfig,
 ) -> PreOpenDirectionConfidence:
-    if iev_intensity is None or iev_intensity < config.min_normalized_iev_intensity:
-        return PreOpenDirectionConfidence.LOW
+    """Display confidence from delta_ratio; intensity uses a live-scale soft floor.
+
+    Does **not** force LOW solely because intensity &lt; 1.0 (unreachable on current
+    corpus scale). Missing delta still yields LOW.
+    """
     if delta_ratio is None:
         return PreOpenDirectionConfidence.LOW
     if delta_ratio >= config.high_confidence_build_min:
-        return PreOpenDirectionConfidence.HIGH
+        if iev_intensity is None or iev_intensity >= config.intensity_high_soft:
+            return PreOpenDirectionConfidence.HIGH
+        return PreOpenDirectionConfidence.MEDIUM
     if delta_ratio >= config.medium_confidence_floor:
         return PreOpenDirectionConfidence.MEDIUM
     return PreOpenDirectionConfidence.LOW
@@ -207,21 +224,52 @@ def _auction_quality(
     return PreOpenAuctionQuality.RELIABLE, ()
 
 
-def _raw_score(
+def _continuous_raw_score(
     direction: PreOpenDirection,
-    confidence: PreOpenDirectionConfidence,
     *,
+    delta_ratio: float | None,
+    pressure: float | None,
+    intensity: float | None,
     config: PreOpenDirectionalBaselineConfig,
-) -> int:
+) -> float:
+    """Continuous long-only ranking score in [0, 100].
+
+    Monotonic (direction held fixed to BULLISH): higher ``pressure`` and higher
+    ``delta_iev_ratio`` do not decrease the score. Intensity contributes via
+    log1p on the live scale (``intensity_scale`` ≈ corpus median).
+    """
+    if direction is PreOpenDirection.UNKNOWN:
+        return 0.0
+
+    p = 0.5 if pressure is None else float(pressure)
+    d = 0.0 if delta_ratio is None else float(delta_ratio)
+    d = max(-config.delta_clamp, min(config.delta_clamp, d))
+    i = 0.0 if intensity is None else max(0.0, float(intensity))
+
+    pressure_feat = (p - 0.5) * 2.0  # roughly -1..1
+    delta_feat = d / config.delta_clamp  # -1..1
+    intensity_feat = min(math.log1p(i / config.intensity_scale) / 3.0, 1.0)
+
+    attractiveness = (
+        config.weight_pressure * pressure_feat
+        + config.weight_delta * delta_feat
+        + config.weight_intensity * intensity_feat
+    )
+
+    anchors = {
+        PreOpenDirection.BULLISH: config.anchor_bullish,
+        PreOpenDirection.NEUTRAL: config.anchor_neutral,
+        PreOpenDirection.CONFLICTED: config.anchor_conflicted,
+        PreOpenDirection.BEARISH: config.anchor_bearish,
+    }
+    base = anchors[direction]
     if direction is PreOpenDirection.BULLISH:
-        return {
-            PreOpenDirectionConfidence.HIGH: config.bullish_high_score,
-            PreOpenDirectionConfidence.MEDIUM: config.bullish_medium_score,
-            PreOpenDirectionConfidence.LOW: config.bullish_low_score,
-        }[confidence]
-    return {
-        PreOpenDirection.NEUTRAL: config.neutral_score,
-        PreOpenDirection.CONFLICTED: config.conflicted_score,
-        PreOpenDirection.BEARISH: config.bearish_score,
-        PreOpenDirection.UNKNOWN: config.unknown_score,
-    }[direction]
+        score = base + attractiveness
+    elif direction is PreOpenDirection.BEARISH:
+        score = base + attractiveness
+    elif direction is PreOpenDirection.CONFLICTED:
+        score = base + 0.4 * attractiveness
+    else:
+        score = base + 0.5 * attractiveness
+
+    return round(max(0.0, min(100.0, score)), 4)

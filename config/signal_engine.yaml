@@ -39,26 +39,32 @@ signal_engine:
     strong_min_score: 70
     moderate_min_score: 45
 
-  # Long-only pre-open directional champion. Auction quality caps the action;
-  # it never contributes directional points.
+  # Long-only pre-open directional champion (baseline v2 continuous ranking).
+  # Auction quality caps the action; it never contributes directional points.
   pre_open_directional_baseline:
-    contract: pre_open_directional_baseline.v1
+    contract: pre_open_directional_baseline.v2
     buy_pressure_min: 0.60
     sell_pressure_max: 0.40
     high_confidence_build_min: 0.08
     medium_confidence_floor: -0.03
-    min_normalized_iev_intensity: 1.0
+    intensity_high_soft: 0.02
     reliable_spread_max_pct: 1.0
     max_spread_pct: 1.5
     large_gap_caution_pct: 5.0
     rsi_extension_threshold: 75.0
-    bullish_high_score: 80
-    bullish_medium_score: 70
-    bullish_low_score: 55
-    neutral_score: 45
-    conflicted_score: 35
-    bearish_score: 20
-    unknown_score: 0
+    # Continuous score (0-100): anchors + weights on pressure/delta/intensity.
+    anchor_bullish: 58.0
+    anchor_neutral: 45.0
+    anchor_conflicted: 35.0
+    anchor_bearish: 22.0
+    weight_pressure: 18.0
+    weight_delta: 22.0
+    weight_intensity: 12.0
+    intensity_scale: 0.02
+    delta_clamp: 0.35
+    # Pre-open entry cutovers on the continuous scale (not accum classification).
+    enter_min_score: 62.0
+    watch_min_score: 48.0
 
   # Provider lookbacks used by SignalEngine self-fetch mode.
   enrichment:

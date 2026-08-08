@@ -138,7 +138,7 @@ class PreOpenSignalSummary:
     direction: str
     confidence: str
     auction_quality: str
-    raw_score: int
+    raw_score: float
     score: int
     strength: str
     entry_quality: str

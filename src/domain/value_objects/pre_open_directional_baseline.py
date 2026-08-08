@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-PRE_OPEN_DIRECTIONAL_BASELINE_CONTRACT = "pre_open_directional_baseline.v1"
+PRE_OPEN_DIRECTIONAL_BASELINE_CONTRACT = "pre_open_directional_baseline.v2"
 
 
 class PreOpenDirection(str, Enum):
@@ -67,7 +67,7 @@ class PreOpenBaselineAssessment:
     direction: PreOpenDirection
     confidence: PreOpenDirectionConfidence
     auction_quality: PreOpenAuctionQuality
-    raw_score: int
+    raw_score: float
     factors: PreOpenBaselineFactors
     rationale: tuple[str, ...]
     quality_reasons: tuple[str, ...]
@@ -77,7 +77,7 @@ class PreOpenBaselineAssessment:
             raise ValueError(
                 f"pre-open baseline contract must be {PRE_OPEN_DIRECTIONAL_BASELINE_CONTRACT!r}"
             )
-        if not 0 <= self.raw_score <= 100:
+        if not 0.0 <= float(self.raw_score) <= 100.0:
             raise ValueError("pre-open baseline raw_score must be 0-100")
 
     def to_dict(self) -> dict:
@@ -86,7 +86,7 @@ class PreOpenBaselineAssessment:
             "direction": self.direction.value,
             "confidence": self.confidence.value,
             "auction_quality": self.auction_quality.value,
-            "raw_score": self.raw_score,
+            "raw_score": float(self.raw_score),
             "factors": self.factors.to_dict(),
             "rationale": list(self.rationale),
             "quality_reasons": list(self.quality_reasons),

@@ -64,7 +64,7 @@ def _candidate(ticker: str = "BBCA") -> ScreenerCandidate:
 def _signal_summary(*, score: int = 80, entry_quality: str = "ENTER") -> PreOpenSignalSummary:
     return PreOpenSignalSummary(
         identity=PRE_OPEN_AUCTION_DIRECTION_IDENTITY,
-        contract="pre_open_directional_baseline.v1",
+        contract="pre_open_directional_baseline.v2",
         direction="BULLISH",
         confidence="HIGH",
         auction_quality="RELIABLE",

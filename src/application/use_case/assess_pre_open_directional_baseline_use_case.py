@@ -47,8 +47,9 @@ class AssessPreOpenDirectionalBaselineUseCase:
             return None
 
         multiplier = market_context.signal_multiplier if market_context is not None else 1.0
-        score = int(max(0, min(100, round(baseline.raw_score * multiplier))))
-        strength, entry_quality = self._classify(score)
+        scaled = float(baseline.raw_score) * float(multiplier)
+        score = int(max(0, min(100, round(scaled))))
+        strength, entry_quality = self._classify_pre_open(scaled)
         constraint_reasons: list[str] = []
 
         if baseline.auction_quality is PreOpenAuctionQuality.CAUTION:
@@ -116,7 +117,8 @@ class AssessPreOpenDirectionalBaselineUseCase:
         response = AssessSignalResponse(
             ticker=evaluation_input.ticker,
             assessment=assessment,
-            signal_score_raw=baseline.raw_score,
+            # Integer transport for TradeSetup; exact continuous value is raw_exact_score.
+            signal_score_raw=int(max(0, min(100, round(float(baseline.raw_score))))),
             signal_authority_coverage=coverage,
         )
         return PreOpenSignalEvaluationResult(
@@ -124,11 +126,12 @@ class AssessPreOpenDirectionalBaselineUseCase:
             baseline=baseline,
         )
 
-    def _classify(self, score: int) -> tuple[SignalStrength, EntryQuality]:
-        classification = self._config.classification
-        if score >= classification.strong_min_score:
+    def _classify_pre_open(self, score: float) -> tuple[SignalStrength, EntryQuality]:
+        """Map continuous pre-open score using baseline-local cutovers only."""
+        cut = self._config.pre_open_directional_baseline
+        if score >= cut.enter_min_score:
             return SignalStrength.STRONG, EntryQuality.ENTER
-        if score >= classification.moderate_min_score:
+        if score >= cut.watch_min_score:
             return SignalStrength.MODERATE, EntryQuality.WATCH
         return SignalStrength.WEAK, EntryQuality.AVOID
 
