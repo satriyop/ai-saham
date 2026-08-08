@@ -14,6 +14,27 @@ from typing import Any, Literal
 
 ReadinessStyle = Literal["full", "why"]
 
+# Map VO / code tokens → operator language (never print raw identifiers).
+_OPERATOR_TOKENS: dict[str, str] = {
+    "setup_evidence": "setup match inputs",
+    "flow_evidence": "flow evidence",
+    "flow_ev": "flow evidence",
+    "setup_match": "setup match",
+}
+
+
+def _operator_token(token: Any) -> str:
+    """Render a readiness/requirement token without code identifiers."""
+    raw = str(token or "").strip()
+    if not raw:
+        return ""
+    if raw in _OPERATOR_TOKENS:
+        return _OPERATOR_TOKENS[raw]
+    # snake_case identifiers → spaced words (leave human phrases intact)
+    if "_" in raw and raw.replace("_", "").isalpha() and raw == raw.lower():
+        return raw.replace("_", " ")
+    return raw
+
 
 def format_accum_breakdown(candidate: Any, *, accum_display: str = "") -> str:
     """Accum total as sum of component points (AccumScoreBreakdown)."""
@@ -92,13 +113,11 @@ def format_setup_readiness(
         return f"setup readiness READY{family_s}" if style == "full" else ""
 
     if status_s == "UNAVAILABLE":
-        # ADR-067 §4: the detail is rendered verbatim from the VO and is never
-        # labelled "missing". On the accum path UNAVAILABLE is by design (the
-        # setup match is not evaluated there), so the old
-        # `(missing: setup_evidence)` phrasing was wrong twice over — it read as
-        # a wiring defect and it printed a code identifier at the operator.
+        # ADR-067 §4: never invent a wiring-defect "missing:" prefix for
+        # by-design UNAVAILABLE. Map VO tokens to operator language (no
+        # snake_case code identifiers such as setup_evidence).
         if missing:
-            detail = ", ".join(str(m) for m in missing[:5])
+            detail = ", ".join(_operator_token(m) for m in missing[:5])
             if len(missing) > 5:
                 detail += ", …"
             return f"setup readiness UNAVAILABLE{family_s} ({detail})"
@@ -106,13 +125,13 @@ def format_setup_readiness(
 
     if status_s == "INCOMPLETE":
         if failed:
-            fail = ", ".join(str(f) for f in failed[:4])
+            fail = ", ".join(_operator_token(f) for f in failed[:4])
             return f"setup readiness INCOMPLETE{family_s} ({fail})"
         return f"setup readiness INCOMPLETE{family_s}"
 
     if status_s == "INELIGIBLE":
         if failed:
-            fail = ", ".join(str(f) for f in failed[:4])
+            fail = ", ".join(_operator_token(f) for f in failed[:4])
             return f"setup readiness INELIGIBLE{family_s} ({fail})"
         phase = getattr(readiness, "current_phase", None)
         phase_s = getattr(phase, "value", phase) if phase is not None else None

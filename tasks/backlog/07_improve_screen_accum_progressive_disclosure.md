@@ -1,6 +1,6 @@
 # Compact-By-Default Accum Output With Explicit Drill-Down
 
-Status: `VETTED / READY FOR IMPLEMENTATION` — code-first re-vet **2026-08-08**.
+Status: `IMPLEMENTED` — code-first re-vet and shipped **2026-08-08**.
 Sequence: **7 of 8** — independent of the accumulation config freeze (adapter
 presentation only). See `tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`.
 
@@ -302,9 +302,17 @@ Commit: `docs(cli): group screen accum flags and progressive disclosure`
 
 ## 15. Completion Record
 
-- Completed date:
-- Slice commits:
-- Default output panel count before → after (single-window multi + single-ticker):
-- Progressive flag map (flag → sections):
-- Residual identifier tokens removed:
-- Test / Lint result:
+- Completed date: **2026-08-08**
+- Slice commits: progressive disclosure landed in one adapter pass (compact
+  default + tests + Why tokens + help); see git log for `refactor(cli): compact
+  default screen accum` / related.
+- Default output: single-window default → Judgment strip (1 ticker) or Decision
+  board (N tickers); case-file panel wall only with `--detail`
+- Progressive flag map:
+  - default → compact board / Judgment
+  - `--detail` → full case file + Run Context
+  - `--full` / `--setup` / `--with-flow-detail` / `--with-sentiment` → diagnostic bags
+- Residual identifiers: `setup_evidence` / `flow_ev` / snake_case mapped via
+  `_operator_token` in shared `decision_display`
+- Test / Lint: display + decision_display + multi_surface inventory green;
+  whole-repo ruff green

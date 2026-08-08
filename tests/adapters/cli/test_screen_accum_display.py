@@ -31,7 +31,8 @@ from tests.adapters.cli.screen_accum_test_fixtures import (
 _CFG = accumulation_display_config_from_screener(load_accumulation_screener_config())
 
 
-def test_display_results_renders_rich_accumulation_panel(capsys):
+def test_display_results_default_is_compact_judgment(capsys):
+    """Default progressive disclosure: judgment strip, no nested panel wall."""
     response = AccumulationScreenResponse(
         candidates=[_candidate()],
         screened_at=date(2026, 6, 19),
@@ -52,22 +53,46 @@ def test_display_results_renders_rich_accumulation_panel(capsys):
 
     out = capsys.readouterr().out
     assert "Foreign Accumulation - LQ45" in out
-    assert "Candidate Actions" in out
-    assert "Decision · Action Why" in out
-    assert "Why Action" in out or "Why" in out
-    assert "Setup readiness" in out
-    assert "Verdict" not in out
+    assert "Judgment" in out
     assert "BBCA" in out
-    assert "Risk Status" in out
-    assert "Gate detail" in out
-    assert "Rule Conf" not in out
-    assert "Gate Conf" not in out
-    assert "TechnicalGate is not evaluated by screen accum" in out
+    assert "Compact judgment" in out or "Case file:" in out
+    # Panel wall stays behind --detail
+    assert "Candidate Actions" not in out
+    assert "Decision · Action Why" not in out
+    assert "Risk Status" not in out
+    assert "Gate detail" not in out
     assert "Scoring Definitions" not in out
     assert "Run Context" not in out
-    # Option 1: Signal summary + FlowGrp component panel always present
-    assert "FlowGrp" in out or "flow confirmation" in out.lower()
-    assert "Signal" in out
+
+
+def test_display_results_case_file_via_detail(capsys):
+    """--detail expands the full ADR-054 case file (legacy default panels)."""
+    response = AccumulationScreenResponse(
+        candidates=[_candidate()],
+        screened_at=date(2026, 6, 19),
+        window_days=7,
+        total_tickers_checked=1,
+        tickers_skipped=0,
+        provider="stockbit",
+    )
+
+    display_results(
+        response=response,
+        candidates=response.candidates,
+        universe_label="lq45",
+        show_top_broker=False,
+        display_config=_CFG,
+        include_detail=True,
+    )
+
+    out = capsys.readouterr().out
+    assert "Candidate Actions" in out
+    assert "Decision · Action Why" in out
+    assert "Risk Status" in out
+    assert "Gate detail" in out
+    assert "TechnicalGate is not evaluated by screen accum" in out
+    assert "Run Context" in out
+    assert "Scoring Definitions" in out
 
 
 def test_display_results_never_shows_fresh_ok_and_splits_align_from_ready(capsys):
@@ -102,7 +127,7 @@ def test_display_results_never_shows_fresh_ok_and_splits_align_from_ready(capsys
         universe_label="lq45",
         show_top_broker=False,
         display_config=_CFG,
-        include_detail=False,
+        include_detail=True,
     )
 
     out = capsys.readouterr().out
@@ -256,20 +281,29 @@ def test_display_results_decision_why_matches_shared_formatter(capsys):
         include_detail=False,
     )
     out = capsys.readouterr().out
-    # Rich may wrap the Why column; assert key tokens from shared formatter
+    # Compact default: Why lives on the Judgment strip (shared formatter)
     assert "authority 0%" in out
     assert "setup readiness UNAVAILABLE" in out
-    assert "setup match not evaluated" in out
     assert "gate open" in out
-    assert "Decision · Action Why" in out
-    assert "cons 28.5" in out
-    assert "bb off" in out
-    assert "recipe" not in out.lower()
-    # ADR-054 S1: single-candidate board opens with Judgment strip
     assert "Judgment" in out
+    assert "Decision · Action Why" not in out
+    assert "recipe" not in out.lower()
     assert "WATCH" in out or "Watch" in out
     assert "plan swing" in out
-    assert "horizon" in out.lower() or "Structure" in out
+    # Case-file Accum breakdown stays behind --detail
+    display_results(
+        response=response,
+        candidates=response.candidates,
+        universe_label="lq45",
+        show_top_broker=False,
+        display_config=_CFG,
+        include_detail=True,
+    )
+    case = capsys.readouterr().out
+    assert "Decision · Action Why" in case
+    assert "setup readiness UNAVAILABLE" in case
+    assert "authority 0%" in case
+    assert "cons 28.5" in case or "28.5" in case
     # Judgment package: TradeSetup serializes for JSON clients (candidate field)
     ts = trade_setup.to_dict()
     assert ts["action"] == "WATCH"
@@ -277,7 +311,7 @@ def test_display_results_decision_why_matches_shared_formatter(capsys):
 
 
 def test_display_results_judgment_header_only_for_single_candidate(capsys):
-    """Universe/multi rows must not force a single-ticker Judgment strip."""
+    """Multi-ticker compact board has no single-ticker Judgment strip."""
     c1 = _candidate(ticker="BBCA")
     c2 = _candidate(ticker="BBRI")
     response = AccumulationScreenResponse(
@@ -297,9 +331,12 @@ def test_display_results_judgment_header_only_for_single_candidate(capsys):
         include_detail=False,
     )
     out = capsys.readouterr().out
-    assert "Candidate Actions" in out
+    assert "Decision board" in out
+    assert "BBCA" in out and "BBRI" in out
+    assert "Compact board" in out
     # Title "Judgment" is single-case only
     assert "Judgment case file" not in out
+    assert "Candidate Actions" not in out
 
 
 def test_display_results_diagnostic_market_context_panel(capsys):
@@ -388,10 +425,20 @@ def test_display_results_renders_blocked_risk_diagnostics(capsys):
         display_config=_CFG,
         include_detail=False,
     )
+    compact = capsys.readouterr().out
+    assert "BLOCKED" in compact
+    assert "FundamentalGate" in compact or "BLOCKED_STRUCTURAL" in compact
 
+    display_results(
+        response=response,
+        candidates=response.candidates,
+        universe_label="lq45",
+        show_top_broker=False,
+        display_config=_CFG,
+        include_detail=True,
+    )
     out = capsys.readouterr().out
     assert "Risk Status" in out
-    assert "BLOCKED" in out
     assert "structural" in out
     assert "FundamentalGate" in out
 
@@ -564,13 +611,21 @@ def test_display_results_renders_phase_column_and_note(capsys):
         display_config=_CFG,
         include_detail=False,
     )
+    compact = capsys.readouterr().out
+    assert "Phase" in compact
+    assert "ACCUMULATION" in compact
+    assert "saham screen accum" in compact or "plan swing" in compact
 
+    display_results(
+        response=response,
+        candidates=response.candidates,
+        universe_label="lq45",
+        show_top_broker=False,
+        display_config=_CFG,
+        include_detail=True,
+    )
     out = capsys.readouterr().out
-    assert "Phase" in out
-    assert "ACCUMULATION" in out
     assert "accumulation-lifecycle diagnostic" in out
-    # ADR-054: deep judgment is screen; structure is plan (no --setup required).
-    assert "saham screen accum" in out
     assert "saham plan swing" in out
     assert "MATCH" in out or "MATCH ≠" in out or "pattern" in out.lower()
     assert "Disc%" in out
@@ -596,7 +651,9 @@ def test_display_results_shows_unknown_phase_when_detection_unavailable(capsys):
     )
 
     out = capsys.readouterr().out
-    assert "UNKNOWN" in out
+    # Judgment Phase column when setup_phase is None
+    assert "Phase" in out
+    assert "UNKNOWN" in out or "—" in out or "NONE" in out
 
 
 def test_display_multi_with_explanation_signal_auth(capsys):

@@ -113,6 +113,35 @@ def test_readiness_unavailable_shows_its_reason():
     assert "pullback" in text
 
 
+def test_readiness_never_prints_code_identifiers():
+    from types import SimpleNamespace
+
+    readiness = SimpleNamespace(
+        status=SimpleNamespace(value="UNAVAILABLE"),
+        setup_family="pullback",
+        missing_required_inputs=("setup_evidence", "flow_ev"),
+        failed_requirements=("setup_match",),
+        current_phase=None,
+    )
+    text = format_setup_readiness(readiness, setup_family="pullback", style="full")
+    assert "setup_evidence" not in text
+    assert "flow_ev" not in text
+    assert "setup match inputs" in text
+    assert "flow evidence" in text
+    incomplete = format_setup_readiness(
+        SimpleNamespace(
+            status=SimpleNamespace(value="INCOMPLETE"),
+            setup_family="pullback",
+            missing_required_inputs=(),
+            failed_requirements=("setup_match",),
+            current_phase=None,
+        ),
+        style="full",
+    )
+    assert "setup_match" not in incomplete
+    assert "setup match" in incomplete
+
+
 def test_never_invent_ready_when_none():
     for style in ("full", "why"):
         phrase = format_setup_readiness(None, style=style)  # type: ignore[arg-type]

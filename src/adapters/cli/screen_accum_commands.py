@@ -153,7 +153,10 @@ def accumulation_run(
         bool,
         typer.Option(
             "--detail",
-            help="Append run context and scoring definitions after results",
+            help=(
+                "Progressive case file: full judgment panels + Run Context. "
+                "Default is a compact decision board only (single-window path)."
+            ),
         ),
     ] = False,
     strategy: Annotated[
@@ -268,21 +271,33 @@ def accumulation_run(
     evidence panels. Does **not** design trade geometry — that is
     ``saham plan swing TICKER`` (horizon / SL / TP / lots).
 
-    Modes:
-      --universe / list  → cheap shortlist board (filters, multi-window, patterns)
-      TICKER             → judgment case file. Optional diagnostic evidence flags
-                           (explicit only): --setup, --with-flow-detail,
-                           --with-sentiment, --full.
+    Progressive disclosure (single-window path):
+      default            → compact decision board / Judgment strip
+      --detail           → full case file (all judgment panels + Run Context)
+      --full / --setup / --with-flow-detail / --with-sentiment
+                         → diagnostic evidence bags (explicit tickers only)
 
-    Deep flags are rejected with --universe-only or --multi (keep board cheap).
+    Flag groups:
+      Filters:   --universe, --window, --min-*, --vwap-only, --squeeze-only, --top
+      Board:     --multi, --windows, --sort-by, --strategy, --top-broker
+      Drill:     --detail, --full, --setup, --with-flow-detail, --with-sentiment
+      IO/ops:    --format, --db, --save, --as-of, --auto-refresh, --force-refresh
+
+    Modes:
+      --universe / list  → compact shortlist board (filters, multi-window, patterns)
+      TICKER             → compact Judgment by default; --detail for case file
+
+    Deep diagnostic flags are rejected with --multi (keep board cheap).
 
     Next after judgment:
+        saham screen accum TICKER --detail
         saham plan swing TICKER --capital 10000000
         saham trade accum log --ticker TICKER --from-plan
 
     Examples:
         saham screen accum --universe lq45
         saham screen accum BBRI
+        saham screen accum BBRI --detail
         saham screen accum BBRI --with-flow-detail --with-sentiment
         saham screen accum BBRI --setup foreign-bounce --full
         saham screen accum BBRI --format json

@@ -301,6 +301,94 @@ def _scoring_definitions_panel(display_config: AccumulationDisplayConfig):
     )
 
 
+def _build_compact_board_table(
+    candidates: list,
+    display_config: AccumulationDisplayConfig,
+    strategy_signals: dict[str, str] | None,
+) -> Any:
+    """One-row-per-ticker decision board (default progressive disclosure)."""
+    table = compact_table()
+    table.add_column("#", justify="right", style="dim", width=3)
+    table.add_column("Ticker", style="bold")
+    table.add_column("Action")
+    table.add_column(SIGNAL, justify="right")
+    table.add_column(ACCUM, justify="right")
+    table.add_column("Gate")
+    table.add_column("Phase")
+    table.add_column("Disc%", justify="right")
+    table.add_column("Price", justify="right")
+    table.add_column("Why")
+    if strategy_signals is not None:
+        table.add_column("Strat")
+
+    for i, c in enumerate(candidates, 1):
+        fields = extract_screen_accum_board_fields(c, phase_style="full")
+        why = format_action_why(c, gate=fields.gate) or "—"
+        # Keep Why short on dense boards
+        if len(why) > 72:
+            why = why[:69] + "…"
+        if c.accum_score >= display_config.enter_min_accum_score:
+            accum_style = "green"
+        elif c.accum_score >= display_config.watch_min_accum_score:
+            accum_style = "yellow"
+        else:
+            accum_style = ""
+        row = [
+            str(i),
+            fields.ticker,
+            fields.action,
+            fields.signal,
+            Text(fields.accum, style=accum_style),
+            fields.gate,
+            fields.phase,
+            fields.disc_pct,
+            fields.price,
+            why,
+        ]
+        if strategy_signals is not None:
+            key = str(getattr(c, "ticker", "") or "").upper()
+            strat = strategy_signals.get(key) or "—"
+            if isinstance(strat, str) and strat in _STRAT_SYMBOL:
+                row.append(_STRAT_SYMBOL[strat])
+            else:
+                row.append(str(strat))
+        table.add_row(*row)
+    return table
+
+
+def _progressive_disclosure_hint(
+    *,
+    candidates: list,
+    universe_label: str,
+    case_file: bool,
+) -> Text:
+    """Operator next-step for drill-down (no computed-value change)."""
+    if case_file:
+        sample = getattr(candidates[0], "ticker", "TICKER") if candidates else "TICKER"
+        return Text(
+            f"\nCase file mode (--detail). Diagnostics: "
+            f"saham screen accum {sample} --full · "
+            f"Structure: saham plan swing {sample}",
+            style="dim",
+        )
+    sample = getattr(candidates[0], "ticker", "TICKER") if candidates else "TICKER"
+    if len(candidates) == 1:
+        return Text(
+            f"\nCompact judgment. Case file: "
+            f"saham screen accum {sample} --detail · "
+            f"Diagnostics: --full / --setup / --with-flow-detail · "
+            f"Structure: saham plan swing {sample}",
+            style="dim",
+        )
+    return Text(
+        f"\nCompact board ({len(candidates)} tickers). "
+        f"Case file: re-run with --detail · "
+        f"Single desk: saham screen accum {sample} · "
+        f"Structure: saham plan swing {sample}",
+        style="dim",
+    )
+
+
 def display_results(
     response: AccumulationScreenResponse,
     candidates: list,
@@ -308,6 +396,7 @@ def display_results(
     show_top_broker: bool,
     display_config: AccumulationDisplayConfig,
     include_detail: bool = False,
+    case_file: bool | None = None,
     strategy_signals: dict[str, str] | None = None,
     strategy_name: str | None = None,
     effective_session: EffectiveMarketSession | None = None,
@@ -315,7 +404,11 @@ def display_results(
     diagnostic_evidence_by_ticker: dict | None = None,
     diagnostic_flags: Any | None = None,
 ) -> None:
-    """Render accumulation screener results as terminal table.
+    """Render accumulation screener results.
+
+    Default is a **compact decision board** (progressive disclosure). Pass
+    ``case_file=True`` (CLI ``--detail``) for the full ADR-054 nested case-file
+    panel wall. ``include_detail`` still appends Run Context after the case file.
 
     `candidates` is the already-filtered/limited projection from
     src.application.services.screen_accum_result_projector — this function
@@ -324,6 +417,8 @@ def display_results(
     ``market_context`` is display-only (diagnostic). It must not imply
     DecisionPolicy used regime on this screen run (B-MCE-policy is separate).
     """
+    # --detail expands the case file; default stays compact.
+    show_case_file = include_detail if case_file is None else case_file
     show_context_ticker = len(candidates) > 1
 
     if not candidates:
@@ -346,6 +441,46 @@ def display_results(
                 ),
             )
         )
+        return
+
+    if not show_case_file:
+        hint = _progressive_disclosure_hint(
+            candidates=candidates,
+            universe_label=universe_label,
+            case_file=False,
+        )
+        sections: list[Any] = []
+        if len(candidates) == 1:
+            sections.append(
+                panel(
+                    Group(_build_judgment_header(candidates[0]), hint),
+                    title="Judgment",
+                )
+            )
+        else:
+            board = _build_compact_board_table(candidates, display_config, strategy_signals)
+            sections.append(panel(Group(board, hint), title="Decision board"))
+        console().print(
+            panel(
+                Group(*sections),
+                title=f"Foreign Accumulation - {universe_label.upper()}",
+                subtitle=_panel_subtitle(
+                    window_days=response.window_days,
+                    screened_at=response.screened_at,
+                    effective_session=effective_session,
+                ),
+            )
+        )
+        if diagnostic_evidence_by_ticker:
+            from src.adapters.cli.screen_accum_diagnostic_evidence_display import (
+                print_screen_diagnostic_evidence_panels,
+            )
+
+            print_screen_diagnostic_evidence_panels(
+                diagnostic_evidence_by_ticker=diagnostic_evidence_by_ticker,
+                diagnostic_flags=diagnostic_flags,
+                candidates=candidates,
+            )
         return
 
     action_table = compact_table()
@@ -693,6 +828,13 @@ def display_results(
     if has_detail_rows:
         sections.append(panel(details_table, title="Enrichment Details"))
 
+    sections.append(
+        _progressive_disclosure_hint(
+            candidates=candidates,
+            universe_label=universe_label,
+            case_file=True,
+        )
+    )
     console().print(
         panel(
             Group(*sections),
