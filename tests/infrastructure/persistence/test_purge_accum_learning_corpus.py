@@ -149,18 +149,14 @@ def test_execute_deletes_accum_preserves_preopen(tmp_path: Path) -> None:
 
     con = sqlite3.connect(path)
     con.row_factory = sqlite3.Row
-    assert (
-        con.execute(
-            "SELECT COUNT(*) FROM learning_observations WHERE purpose = 'ACCUMULATION_DISCOVERY'"
-        ).fetchone()[0]
-        == 0
-    )
-    assert (
-        con.execute(
-            "SELECT COUNT(*) FROM learning_observations WHERE purpose = 'PRE_OPEN_AUCTION_DIRECTION'"
-        ).fetchone()[0]
-        == 1
-    )
+    accum_left = con.execute(
+        "SELECT COUNT(*) FROM learning_observations WHERE purpose = 'ACCUMULATION_DISCOVERY'"
+    ).fetchone()[0]
+    assert accum_left == 0
+    preopen_left = con.execute(
+        "SELECT COUNT(*) FROM learning_observations WHERE purpose = 'PRE_OPEN_AUCTION_DIRECTION'"
+    ).fetchone()[0]
+    assert preopen_left == 1
     assert con.execute("SELECT COUNT(*) FROM learning_outcome_labels").fetchone()[0] == 1
     assert (
         con.execute("SELECT observation_id FROM learning_outcome_labels").fetchone()[0] == "obs-p1"
