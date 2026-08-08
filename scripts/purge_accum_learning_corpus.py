@@ -1,34 +1,32 @@
 #!/usr/bin/env python3
-"""ADR-056 clean break: delete ACCUMULATION_DISCOVERY learning rows only.
+"""Clean-break purge of ACCUMULATION_DISCOVERY learning corpus.
 
-Does not touch pre-open observations, tracks, or labels.
+Default is dry-run. Pass ``--execute`` to delete.
+
+Blast radius (see task 04 re-vet):
+  - track snapshots + labels for accum observation_ids (FK-first)
+  - accum evaluations + observations
+  - accum purpose policy snapshots
+  - full setup_phase_ledger (rebuilt from new observations)
+
+PRE_OPEN / SWING observations and their labels are never deleted.
 """
 
 from __future__ import annotations
 
 import argparse
-import sqlite3
+import json
 import sys
 from pathlib import Path
 
-# Allow running as scripts/purge_... from repo root
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from src.infrastructure.config.app_config import load_app_config  # noqa: E402
-
-
-def _connect(db: Path) -> sqlite3.Connection:
-    """Open SQLite with mandatory FK enforcement (same as learning repo)."""
-    con = sqlite3.connect(str(db))
-    con.row_factory = sqlite3.Row
-    con.execute("PRAGMA foreign_keys = ON")
-    enabled = con.execute("PRAGMA foreign_keys").fetchone()[0]
-    if enabled != 1:
-        con.close()
-        raise RuntimeError("SQLite foreign key enforcement is required")
-    return con
+from src.infrastructure.persistence.purge_accum_learning_corpus import (  # noqa: E402
+    purge_accum_learning_corpus,
+)
 
 
 def main() -> int:
@@ -39,57 +37,39 @@ def main() -> int:
         action="store_true",
         help="Actually delete (default is dry-run)",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable report JSON",
+    )
     args = parser.parse_args()
     db = args.db or Path(load_app_config().storage.db_path)
-    con = _connect(db)
 
-    obs_ids = [
-        r["observation_id"]
-        for r in con.execute(
-            "SELECT observation_id FROM learning_observations "
-            "WHERE purpose = 'ACCUMULATION_DISCOVERY'"
-        )
-    ]
-    n_obs = len(obs_ids)
-    n_labels = 0
-    if obs_ids:
-        placeholders = ",".join("?" * len(obs_ids))
-        n_labels = con.execute(
-            f"SELECT COUNT(*) AS c FROM learning_outcome_labels "
-            f"WHERE observation_id IN ({placeholders})",
-            obs_ids,
-        ).fetchone()["c"]
-    n_eval = con.execute(
-        "SELECT COUNT(*) AS c FROM learning_evaluations "
-        "WHERE purpose = 'ACCUMULATION_DISCOVERY'"
-    ).fetchone()["c"]
-    n_preopen = con.execute(
-        "SELECT COUNT(*) AS c FROM learning_observations "
-        "WHERE purpose != 'ACCUMULATION_DISCOVERY'"
-    ).fetchone()["c"]
+    report = purge_accum_learning_corpus(db, execute=args.execute)
+    c = report.counts
 
-    print(f"db: {db}")
-    print(f"accum observations: {n_obs}")
-    print(f"labels for those obs: {n_labels}")
-    print(f"accum evaluations: {n_eval}")
-    print(f"non-accum observations (untouched): {n_preopen}")
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
+    else:
+        print(f"db: {report.db_path}")
+        print(f"accum observations: {c.accum_observations}")
+        print(f"track snapshots (accum): {c.track_snapshots}")
+        print(f"labels for those obs: {c.labels}")
+        print(f"accum evaluations: {c.evaluations}")
+        print(f"accum policy snapshots: {c.policy_snapshots}")
+        print(f"setup_phase_ledger rows: {c.phase_ledger_rows}")
+        print(f"non-accum observations (untouched): {c.non_accum_observations}")
+        print(f"non-accum labels (untouched): {c.preopen_labels}")
+        if report.foreign_key_violations:
+            print(f"foreign_key_violations: {report.foreign_key_violations}")
+            return 2
+        if not report.executed:
+            print("dry-run only; pass --execute to delete")
+        else:
+            print("deleted.")
 
-    if not args.execute:
-        print("dry-run only; pass --execute to delete")
-        con.close()
-        return 0
-
-    if obs_ids:
-        placeholders = ",".join("?" * len(obs_ids))
-        con.execute(
-            f"DELETE FROM learning_outcome_labels WHERE observation_id IN ({placeholders})",
-            obs_ids,
-        )
-    con.execute("DELETE FROM learning_evaluations WHERE purpose = 'ACCUMULATION_DISCOVERY'")
-    con.execute("DELETE FROM learning_observations WHERE purpose = 'ACCUMULATION_DISCOVERY'")
-    con.commit()
-    print("deleted.")
-    con.close()
+    if report.foreign_key_violations:
+        return 2
     return 0
 
 
