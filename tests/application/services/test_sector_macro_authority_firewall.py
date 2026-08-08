@@ -12,7 +12,7 @@ from src.domain.value_objects.signal_artifact_schema import (
 
 def test_candidate_observation_schema_version_pin():
     """ADR-068 schema 13: the write-only ``config_hash`` payload field is gone."""
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 13
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 14
 
 
 def test_alpha_trigger_projection_does_not_import_sector_macro():

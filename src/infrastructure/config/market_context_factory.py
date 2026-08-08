@@ -10,6 +10,7 @@ from dataclasses import replace as dc_replace
 from datetime import date
 from pathlib import Path
 
+from src.application.config.market_context_config import MarketContextConfig
 from src.application.services.market_context_engine import MarketContextEngine
 from src.application.services.mce_observation_identity import build_mce_observation_identity
 from src.application.services.universe_loader import resolve_tickers
@@ -34,18 +35,24 @@ def create_market_context_engine(
     db_path: Path,
     universe: str,
     benchmark: str = "IHSG",
+    resolved_config: MarketContextConfig | None = None,
+    resolved_universe: tuple[str, ...] | None = None,
 ) -> MarketContextEngine:
     """Construct MCE with local SQLite repositories and configured universe."""
     from src.infrastructure.config.universe_config_loader import YamlUniverseConfigLoader
 
-    tickers = resolve_tickers(
-        universe=universe,
-        explicit=[],
-        db_path=db_path,
-        loader=YamlUniverseConfigLoader(),
-        repository=SQLiteBrokerRepository(db_path),
+    tickers = (
+        list(resolved_universe)
+        if resolved_universe is not None
+        else resolve_tickers(
+            universe=universe,
+            explicit=[],
+            db_path=db_path,
+            loader=YamlUniverseConfigLoader(),
+            repository=SQLiteBrokerRepository(db_path),
+        )
     )
-    config = load_market_context_config()
+    config = resolved_config or load_market_context_config()
     benchmark = canonicalize_ticker(benchmark) if benchmark else benchmark
     if benchmark and benchmark != config.idx_trend.benchmark_ticker:
         config = dc_replace(
@@ -76,11 +83,15 @@ def evaluate_market_context(
     as_of_date: date,
     universe: str,
     benchmark: str = "IHSG",
+    resolved_config: MarketContextConfig | None = None,
+    resolved_universe: tuple[str, ...] | None = None,
 ) -> MarketContext:
     """Evaluate MCE through the standard local-first construction path."""
     engine = create_market_context_engine(
         db_path=db_path,
         universe=universe,
         benchmark=benchmark,
+        resolved_config=resolved_config,
+        resolved_universe=resolved_universe,
     )
     return engine.evaluate(as_of_date=as_of_date)

@@ -35,6 +35,7 @@ LEARNING_TABLES = (
     "learning_policy_validations",
     "learning_policy_applications",
     "learning_policy_snapshots",
+    "learning_diagnostic_producer_snapshots",
 )
 
 

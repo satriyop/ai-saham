@@ -96,6 +96,7 @@ Full mirror of this contract: [`ml-saham/BOUNDARY.md`](../ml-saham/BOUNDARY.md) 
 | Policy snapshots (ADR-059) | ai-saham write | Active: nine closed `production_policy_snapshot.v4` rows per behavioral `compatibility_id` before observation writes, including the unevaluable-gate and resolved signal decision policies. Historical v1-v3 sets remain immutable and ineligible. `ml-saham` verifies digests with no fallback |
 | Cohort evaluate | **dropped** | Scoring → ml-saham challenge |
 | Challenge panel | ml-saham | Features from observations; protocol y from candles (excess vs IHSG) by default |
+| Diagnostic producer snapshots/bindings (ADR-069) | ai-saham write | Six immutable typed producer snapshots; four purpose-specific root bindings in observation schema 14 |
 
 ### ADR-059 production policy snapshots
 
@@ -137,6 +138,20 @@ Full mirror of this contract: [`ml-saham/BOUNDARY.md`](../ml-saham/BOUNDARY.md) 
 - **Pre-open identity is unchanged** by ADR-068 (purpose isolation).
 - **ml-saham** continues to key panels on opaque `compatibility_id` values; it
   does not recompute the probe digest. Treat a new id as a new cohort forever.
+
+### ADR-069 diagnostic identity (ACCUM diagnostics only)
+
+- The Action `compatibility_id` remains ADR-068 material only. Diagnostic
+  producer configuration never enters it.
+- ai-saham writes immutable `learning_diagnostic_producer_snapshots` and the
+  exact four-entry `diagnostic_bindings` root before observation persistence.
+- ml-saham selects one explicit Action ID plus one explicit diagnostic ID,
+  verifies both independently in SQLite read-only mode, and counts only
+  schema-14 rows sharing both identities.
+- Product features use window 7 and frozen observation context only. Historical
+  rows receive no binding synthesis, alias, or current-producer interpretation.
+- Diagnostic artifact schema 4 is sealed and non-promotable; upstream identity
+  is re-resolved before current display/reopen.
 
 Horizons **3 / 10 / 20** (primary **10**) align by number.  
 **Label math is not the same product** as challenge excess (see vocabulary).

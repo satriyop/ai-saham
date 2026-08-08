@@ -37,6 +37,9 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _summary,
     _weekdays,
 )
+from tests.fixtures.diagnostic_producer_identity import (
+    valid_accumulation_diagnostic_bindings,
+)
 
 _LEAN_ID = SemanticCompatibilityId("sha256:" + "a" * 64)
 
@@ -130,6 +133,7 @@ def test_persist_multi_window_writes_one_session_observation():
             pit_tradable_lookback_sessions=10,
             producer_source_revision="ai-saham@test",
         ),
+        diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
         canonical_window=7,
     )
 
@@ -141,6 +145,12 @@ def test_persist_multi_window_writes_one_session_observation():
     payload = dict(obs.decision_payload)
     assert payload["artifact_type"] == "accumulation_session_observation"
     assert set(payload["features_by_window"]) == {"7", "30", "90"}
+    assert set(payload["diagnostic_bindings"]) == {
+        "mce.screen_display",
+        "sector.peer_context",
+        "institutional.accumulation_bag",
+        "company_quality.bag",
+    }
     assert float(payload["shared"]["current_price"]) > 0
 
 

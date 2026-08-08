@@ -15,6 +15,9 @@ from src.application.services.accumulation_observation_fingerprint import (
     build_candidate_observation_payload,
     build_session_observation_payload,
 )
+from src.domain.value_objects.diagnostic_producer_identity import (
+    AccumulationDiagnosticBinding,
+)
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import (
     AccumPopulationBinding,
@@ -88,6 +91,7 @@ class AccumulationCandidateObservationPersister:
         semantic_compatibility_id: "SemanticCompatibilityId | None",
         universe_tickers: list[str],
         population_binding: AccumPopulationBinding | dict[str, Any],
+        diagnostic_bindings: dict[str, AccumulationDiagnosticBinding],
         canonical_window: int = 7,
     ) -> int:
         """Persist one ADR-056 session observation per ticker (windows 7/30/90 merged).
@@ -239,6 +243,7 @@ class AccumulationCandidateObservationPersister:
                 shared=shared,
                 screen_results_by_window=screen_results,
                 population_binding=binding_dict,
+                diagnostic_bindings=diagnostic_bindings,
             )
             observation = LearningObservation.create(
                 purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,

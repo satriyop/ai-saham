@@ -24,6 +24,9 @@ if TYPE_CHECKING:
         AccumulationCandidateObservationPersister,
     )
     from src.application.use_case.accumulation_screen_use_case import AccumulationScreenUseCase
+    from src.domain.value_objects.diagnostic_producer_identity import (
+        AccumulationDiagnosticBinding,
+    )
 
 
 @dataclass(frozen=True)
@@ -78,6 +81,7 @@ class RecordAccumulationObservationsUseCase:
         execution_context: "SignalEvidenceExecutionContext",
         universe_tickers: list[str],
         population_binding,
+        diagnostic_bindings: dict[str, "AccumulationDiagnosticBinding"],
         canonical_window: int = 7,
     ) -> int:
         """Persist merged session observations after all windows were screened."""
@@ -89,5 +93,6 @@ class RecordAccumulationObservationsUseCase:
             semantic_compatibility_id=execution_context.semantic_compatibility_id,
             universe_tickers=universe_tickers,
             population_binding=population_binding,
+            diagnostic_bindings=diagnostic_bindings,
             canonical_window=canonical_window,
         )

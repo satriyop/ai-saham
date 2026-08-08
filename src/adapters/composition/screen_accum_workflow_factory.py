@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.adapters.composition.accumulation_risk_workflow_factory import (
     create_accumulation_assess_risk_use_case,
@@ -65,6 +65,11 @@ from src.infrastructure.persistence.sqlite_setup_phase_ledger_repository import 
 from src.infrastructure.persistence.sqlite_watchlist_repository import (
     SQLiteWatchlistRepository,
 )
+
+if TYPE_CHECKING:
+    from src.infrastructure.composition.accumulation_diagnostic_producer_factory import (
+        AccumulationDiagnosticProducerRuntime,
+    )
 
 
 def _setup_phase_history_repo(db_path: Path) -> SQLiteSetupPhaseLedgerRepository:
@@ -149,6 +154,7 @@ def create_accumulation_screen_workflow_bundle(
     swing_policy: Any | None = None,
     dependencies: StockAnalysisWorkflowDependencies | None = None,
     production_policy_bundle: AccumulationProductionPolicyBundle | None = None,
+    diagnostic_producer_runtime: "AccumulationDiagnosticProducerRuntime | None" = None,
 ) -> AccumulationScreenUseCaseBundle:
     """Build the screen use case together with its canonical observation recorder.
 
@@ -198,6 +204,27 @@ def create_accumulation_screen_workflow_bundle(
         signal_engine = deps.create_signal_engine()
         accum_score_policy = screener_config.accum_score_policy
 
+    ticker_profile_factory = (
+        diagnostic_producer_runtime.ticker_profile_classifier_factory
+        if diagnostic_producer_runtime is not None
+        else deps.ticker_profile_classifier_factory
+    )
+    institutional_factory = (
+        diagnostic_producer_runtime.institutional_accumulation_config_factory
+        if diagnostic_producer_runtime is not None
+        else deps.institutional_accumulation_config_factory
+    )
+    sector_factory = (
+        diagnostic_producer_runtime.sector_context_builder_factory
+        if diagnostic_producer_runtime is not None
+        else deps.sector_context_builder_factory
+    )
+    company_factory = (
+        diagnostic_producer_runtime.company_quality_context_builder_factory
+        if diagnostic_producer_runtime is not None
+        else deps.company_quality_context_builder_factory
+    )
+
     return create_accumulation_screen_use_case_bundle(
         broker_repository=deps.broker_repository,
         market_repository=deps.market_repository,
@@ -211,11 +238,11 @@ def create_accumulation_screen_workflow_bundle(
         derived_feature_policy=screener_config.derived_features,
         swing_setup_catalog=swing_setup_catalog,
         rules_loader=deps.rules_loader_factory(),
-        ticker_profile_classifier_factory=deps.ticker_profile_classifier_factory,
-        institutional_accumulation_config_factory=(deps.institutional_accumulation_config_factory),
-        sector_context_builder_factory=deps.sector_context_builder_factory,
+        ticker_profile_classifier_factory=ticker_profile_factory,
+        institutional_accumulation_config_factory=institutional_factory,
+        sector_context_builder_factory=sector_factory,
         sector_macro_context_builder_factory=deps.sector_macro_context_builder_factory,
-        company_quality_context_builder_factory=(deps.company_quality_context_builder_factory),
+        company_quality_context_builder_factory=company_factory,
         macro_calendar_repository=SQLiteMacroCalendarRepository(db_path),
     )
 

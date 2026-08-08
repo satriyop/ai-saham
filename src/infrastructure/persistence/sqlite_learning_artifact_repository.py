@@ -9,6 +9,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence, TypeVar
 
+from src.domain.value_objects.diagnostic_producer_identity import (
+    DIAGNOSTIC_PRODUCER_SNAPSHOT_CONTRACT,
+    DiagnosticProducerSnapshot,
+)
 from src.domain.value_objects.learning_artifacts import (
     ACCUMULATION_PRODUCTION_POLICY_IDS_V1,
     ACCUMULATION_PRODUCTION_POLICY_IDS_V2,
@@ -261,6 +265,25 @@ LEARNING_SCHEMA_STATEMENTS = (
     """
     CREATE INDEX IF NOT EXISTS idx_learning_policy_snapshots_cohort
     ON learning_policy_snapshots(purpose, compatibility_id, policy_id)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS learning_diagnostic_producer_snapshots (
+        snapshot_id TEXT PRIMARY KEY,
+        schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+        contract_id TEXT NOT NULL CHECK (contract_id = 'diagnostic_producer_snapshot.v1'),
+        purpose TEXT NOT NULL CHECK (purpose = 'ACCUMULATION_DISCOVERY'),
+        producer_id TEXT NOT NULL,
+        producer_contract_id TEXT NOT NULL,
+        formula_id TEXT NOT NULL,
+        canonical_payload_json TEXT NOT NULL,
+        payload_digest TEXT NOT NULL,
+        source_revision TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_learning_diagnostic_producer_snapshots
+    ON learning_diagnostic_producer_snapshots(purpose, producer_id, snapshot_id)
     """,
 )
 
@@ -665,6 +688,24 @@ _LABEL_PROVENANCE_COLUMNS: frozenset[str] = frozenset({"labeled_at", "artifact_j
 
 _POLICY_SELECT = ", ".join(_POLICY_SNAPSHOT_COLUMNS)
 
+_DIAGNOSTIC_SNAPSHOT_COLUMNS: tuple[str, ...] = (
+    "snapshot_id",
+    "schema_version",
+    "contract_id",
+    "purpose",
+    "producer_id",
+    "producer_contract_id",
+    "formula_id",
+    "canonical_payload_json",
+    "payload_digest",
+    "source_revision",
+    "created_at",
+)
+_DIAGNOSTIC_SNAPSHOT_SELECT = ", ".join(_DIAGNOSTIC_SNAPSHOT_COLUMNS)
+_DIAGNOSTIC_SNAPSHOT_PROVENANCE_COLUMNS: frozenset[str] = frozenset(
+    {"source_revision", "created_at"}
+)
+
 
 def _cell_equal(actual: Any, expected: Any) -> bool:
     """Strict equality for normalized shadow columns (no silent string coercion)."""
@@ -869,6 +910,55 @@ def _load_policy_row(row: sqlite3.Row) -> ProductionPolicySnapshot:
         artifact_id=str(row["snapshot_id"]),
     )
     return snap
+
+
+def _load_diagnostic_producer_snapshot_row(
+    row: sqlite3.Row,
+) -> DiagnosticProducerSnapshot:
+    try:
+        payload = json.loads(row["canonical_payload_json"])
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise LearningArtifactReadIntegrityError(
+            f"diagnostic producer canonical_payload_json corrupt: {exc}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise LearningArtifactReadIntegrityError(
+            "diagnostic producer canonical_payload_json must decode to an object"
+        )
+    try:
+        rebuilt = DiagnosticProducerSnapshot.create(
+            purpose=AssessmentPurpose(row["purpose"]),
+            producer_id=row["producer_id"],
+            producer_contract_id=row["producer_contract_id"],
+            formula_id=row["formula_id"],
+            canonical_payload=payload,
+            source_revision=row["source_revision"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+    except (LearningContractError, TypeError, ValueError) as exc:
+        raise LearningArtifactReadIntegrityError(
+            f"diagnostic producer snapshot invalid: {exc}"
+        ) from exc
+    expected = {
+        "snapshot_id": rebuilt.snapshot_id,
+        "schema_version": rebuilt.schema_version,
+        "contract_id": rebuilt.contract_id,
+        "purpose": rebuilt.purpose.value,
+        "producer_id": rebuilt.producer_id,
+        "producer_contract_id": rebuilt.producer_contract_id,
+        "formula_id": rebuilt.formula_id,
+        "canonical_payload_json": canonical_json(rebuilt.canonical_payload),
+        "payload_digest": rebuilt.payload_digest,
+        "source_revision": rebuilt.source_revision,
+        "created_at": rebuilt.created_at.isoformat(),
+    }
+    _assert_row_matches_expected(
+        row,
+        expected,
+        table="learning_diagnostic_producer_snapshots",
+        artifact_id=str(row["snapshot_id"]),
+    )
+    return rebuilt
 
 
 def _load_json(row: sqlite3.Row, loader: Callable[[dict[str, Any]], Artifact]) -> Artifact:
@@ -1456,6 +1546,108 @@ class SQLiteLearningArtifactRepository:
         return _list_policy_snapshots_with_identity_discovery(
             self._connect, purpose=purpose, compatibility_id=compatibility_id
         )
+
+    @staticmethod
+    def _diagnostic_snapshot_insert_values(
+        artifact: DiagnosticProducerSnapshot,
+    ) -> tuple[Any, ...]:
+        return (
+            artifact.snapshot_id,
+            artifact.schema_version,
+            artifact.contract_id,
+            artifact.purpose.value,
+            artifact.producer_id,
+            artifact.producer_contract_id,
+            artifact.formula_id,
+            canonical_json(artifact.canonical_payload),
+            artifact.payload_digest,
+            artifact.source_revision,
+            artifact.created_at.isoformat(),
+        )
+
+    def add_diagnostic_producer_snapshots_atomic(
+        self, artifacts: Sequence[DiagnosticProducerSnapshot]
+    ) -> tuple[int, int]:
+        if not artifacts:
+            raise LearningContractError("diagnostic producer snapshot batch must be non-empty")
+        seen: set[str] = set()
+        for artifact in artifacts:
+            if artifact.contract_id != DIAGNOSTIC_PRODUCER_SNAPSHOT_CONTRACT:
+                raise LearningContractError("unsupported diagnostic producer snapshot contract")
+            if artifact.snapshot_id in seen:
+                raise LearningContractError(
+                    f"duplicate diagnostic producer snapshot_id: {artifact.snapshot_id}"
+                )
+            seen.add(artifact.snapshot_id)
+
+        inserted = 0
+        reused = 0
+        connection = connect_learning_database(self._db_path)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            for artifact in artifacts:
+                values = self._diagnostic_snapshot_insert_values(artifact)
+                wrote = _immutable_insert(
+                    connection,
+                    table="learning_diagnostic_producer_snapshots",
+                    id_column="snapshot_id",
+                    artifact_id=artifact.snapshot_id,
+                    digest=artifact.payload_digest,
+                    digest_column="payload_digest",
+                    insert_sql="""
+                        INSERT INTO learning_diagnostic_producer_snapshots VALUES (
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                        )
+                    """,
+                    values=values,
+                    column_names=_DIAGNOSTIC_SNAPSHOT_COLUMNS,
+                    exclude_from_check=_DIAGNOSTIC_SNAPSHOT_PROVENANCE_COLUMNS,
+                )
+                if wrote:
+                    inserted += 1
+                else:
+                    reused += 1
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+        return inserted, reused
+
+    def get_diagnostic_producer_snapshot(
+        self, snapshot_id: str
+    ) -> DiagnosticProducerSnapshot | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                f"SELECT {_DIAGNOSTIC_SNAPSHOT_SELECT} "
+                "FROM learning_diagnostic_producer_snapshots WHERE snapshot_id = ?",
+                (snapshot_id,),
+            ).fetchone()
+        return None if row is None else _load_diagnostic_producer_snapshot_row(row)
+
+    def list_diagnostic_producer_snapshots(
+        self,
+        *,
+        purpose: AssessmentPurpose,
+        snapshot_ids: Sequence[str] | None = None,
+    ) -> Sequence[DiagnosticProducerSnapshot]:
+        params: list[Any] = [purpose.value]
+        where = "purpose = ?"
+        if snapshot_ids is not None:
+            ids = tuple(snapshot_ids)
+            if not ids:
+                return ()
+            where += f" AND snapshot_id IN ({','.join('?' for _ in ids)})"
+            params.extend(ids)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"SELECT {_DIAGNOSTIC_SNAPSHOT_SELECT} "
+                f"FROM learning_diagnostic_producer_snapshots WHERE {where} "
+                "ORDER BY producer_id, snapshot_id",
+                params,
+            ).fetchall()
+        return tuple(_load_diagnostic_producer_snapshot_row(row) for row in rows)
 
 
 def connect_learning_database_readonly(db_path: Path) -> sqlite3.Connection:

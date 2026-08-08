@@ -29,6 +29,9 @@ from tests.application.use_case.accumulation_screen_fixtures import (
     _weekdays,
     make_signal_evidence_execution_context,
 )
+from tests.fixtures.diagnostic_producer_identity import (
+    valid_accumulation_diagnostic_bindings,
+)
 
 
 def test_create_accumulation_screen_use_case_wires_stockbit_providers():
@@ -143,6 +146,7 @@ def test_bundle_factory_supplies_screen_use_case_and_working_recorder():
             pit_tradable_lookback_sessions=10,
             producer_source_revision="ai-saham@test",
         ),
+        diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
     )
     assert saved == 1
     assert len(spy_repo.saved) == 1

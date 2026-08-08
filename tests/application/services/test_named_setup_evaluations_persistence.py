@@ -67,7 +67,7 @@ def _catalog_match_coiled() -> SwingSetupCatalogConfig:
 
 def test_candidate_observation_schema_version_pin():
     """ADR-068 schema 13: the write-only ``config_hash`` payload field is gone."""
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 13
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 14
 
 
 def test_fingerprint_serializes_named_setup_evaluations_lean_dict():

@@ -24,6 +24,9 @@ from src.domain.value_objects.signal_artifact_identity import SemanticCompatibil
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY_CONTRACT,
 )
+from tests.fixtures.diagnostic_producer_identity import (
+    valid_accumulation_diagnostic_bindings,
+)
 
 
 def _candle(ticker: str, on: date) -> Candle:
@@ -121,6 +124,7 @@ class RecordingRecordUseCase:
         execution_context,
         universe_tickers,
         population_binding,
+        diagnostic_bindings,
         canonical_window,
     ) -> int:
         self.persist_calls.append(
@@ -128,6 +132,7 @@ class RecordingRecordUseCase:
                 "snapshot_date": snapshot_date,
                 "universe_tickers": list(universe_tickers),
                 "population_binding": population_binding,
+                "diagnostic_bindings": diagnostic_bindings,
             }
         )
         # one saved row per unique ticker in universe for this date
@@ -178,6 +183,7 @@ def _make_use_case(
         named_universe_tickers=named_universe_tickers
         or ["A", "B", "ASII", "BBCA", "BBRI", "BMRI", "MISS", "OK", "TLKM"],
         producer_source_revision="ai-saham@test+git:deadbeef",
+        diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
         evaluate_market_context=None,
         session_resolver=MagicMock(
             resolve=lambda run_at: SimpleNamespace(
@@ -393,6 +399,7 @@ class TestPitWindowValidation:
                 pit_window_sessions=0,
                 named_universe_tickers=["BBCA"],
                 producer_source_revision="ai-saham@test",
+                diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
             )
 
     def test_unsupported_population_name_rejected_at_construction(self):
@@ -407,6 +414,7 @@ class TestPitWindowValidation:
                 pit_window_sessions=10,
                 named_universe_tickers=["BBCA", "BBRI"],
                 producer_source_revision="ai-saham@test",
+                diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
                 population_name="idx30",
             )
 

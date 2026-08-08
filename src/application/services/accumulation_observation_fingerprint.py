@@ -26,6 +26,10 @@ from src.application.services.accumulation_observation_signal_fingerprint import
     _alpha_trigger_fingerprint,
     _strategy_evidence_fingerprint,
 )
+from src.domain.value_objects.diagnostic_producer_identity import (
+    ACCUMULATION_DIAGNOSTIC_REQUIRED_PRODUCERS,
+    AccumulationDiagnosticBinding,
+)
 from src.domain.value_objects.signal_artifact_schema import (
     CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     validate_current_alpha_trigger_identity,
@@ -168,6 +172,7 @@ def build_session_observation_payload(
     shared: dict[str, Any],
     screen_results_by_window: dict[str, str] | None = None,
     population_binding: Mapping[str, Any] | None = None,
+    diagnostic_bindings: Mapping[str, AccumulationDiagnosticBinding] | None = None,
 ) -> dict[str, Any]:
     """ADR-056: one ticker-session observation with multi-window engine packs.
 
@@ -196,6 +201,20 @@ def build_session_observation_payload(
         )
     if not isinstance(population_binding, Mapping) or not population_binding:
         raise ValueError("population_binding must be a non-empty mapping")
+    if diagnostic_bindings is None:
+        raise ValueError("schema-14 session observation requires diagnostic_bindings")
+    if set(diagnostic_bindings) != set(ACCUMULATION_DIAGNOSTIC_REQUIRED_PRODUCERS):
+        raise ValueError("diagnostic_bindings must contain the exact closed diagnostic set")
+    for diagnostic_id, binding in diagnostic_bindings.items():
+        if not isinstance(binding, AccumulationDiagnosticBinding):
+            raise ValueError(
+                f"diagnostic_bindings[{diagnostic_id!r}] must be AccumulationDiagnosticBinding"
+            )
+        if binding.diagnostic_id != diagnostic_id:
+            raise ValueError(
+                f"diagnostic binding key/id mismatch: {diagnostic_id!r} != "
+                f"{binding.diagnostic_id!r}"
+            )
     return {
         "schema_version": CANDIDATE_OBSERVATION_SCHEMA_VERSION,
         "artifact_type": "accumulation_session_observation",
@@ -208,6 +227,10 @@ def build_session_observation_payload(
         "screen_results_by_window": dict(screen_results_by_window or {}),
         "shared": dict(shared),
         "population_binding": dict(population_binding),
+        "diagnostic_bindings": {
+            diagnostic_id: diagnostic_bindings[diagnostic_id].to_dict()
+            for diagnostic_id in sorted(diagnostic_bindings)
+        },
         "features_by_window": {
             "7": features_by_window["7"],
             "30": features_by_window["30"],

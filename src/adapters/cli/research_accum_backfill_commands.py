@@ -51,6 +51,10 @@ from src.application.use_case.backfill_signal_observations_use_case import (
     BackfillSignalObservationsResponse,
     BackfillSignalObservationsUseCase,
 )
+from src.application.use_case.ensure_accumulation_diagnostic_producer_snapshots_use_case import (
+    EnsureAccumulationDiagnosticProducerSnapshotsRequest,
+    EnsureAccumulationDiagnosticProducerSnapshotsUseCase,
+)
 from src.application.use_case.ensure_accumulation_policy_snapshots_use_case import (
     EnsureAccumulationPolicySnapshotsRequest,
     EnsureAccumulationPolicySnapshotsUseCase,
@@ -62,6 +66,9 @@ from src.domain.value_objects.learning_artifacts import (
 from src.domain.value_objects.market_context import MarketContext
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY_CONTRACT,
+)
+from src.infrastructure.composition.accumulation_diagnostic_producer_factory import (
+    resolve_accumulation_diagnostic_producer_runtime,
 )
 from src.infrastructure.config.accumulation_screener_config import (
     load_accumulation_screener_config,
@@ -150,6 +157,14 @@ def run_signal_observation_corpus_write(
             typer.echo(f"[error] Universe {universe!r} resolved to no tickers.", err=True)
             raise typer.Exit(1)
 
+    if named_tickers is None:
+        typer.echo(
+            "[error] population binding (schema-14) requires a named universe "
+            "(e.g. lq45); 'cached' board-wide mode is not challenge-corpus authority.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     market_repo = SQLiteMarketRepository(resolved_db)
 
     def membership_resolver(as_of: date) -> tuple[str, ...]:
@@ -171,11 +186,17 @@ def run_signal_observation_corpus_write(
         swing_policy=swing_policy,
         accumulation_screener_config=accumulation_config,
     )
+    diagnostic_runtime = resolve_accumulation_diagnostic_producer_runtime(
+        signal_engine_config=production_policy_bundle.signal_engine_config,
+        market_context_universe=tuple(named_tickers),
+        config_paths=cfg.config_paths,
+    )
     screen_bundle = create_accumulation_screen_workflow_bundle(
         db_path=resolved_db,
         screener_config=accumulation_config,
         swing_policy=swing_policy,
         production_policy_bundle=production_policy_bundle,
+        diagnostic_producer_runtime=diagnostic_runtime,
     )
     # Capture neutralizes score filters on a derived request only. Snapshot
     # ensure uses production_policy_bundle.hard_filter_policy (pre-neutralization).
@@ -192,6 +213,8 @@ def run_signal_observation_corpus_write(
             db_path=resolved_db,
             as_of_date=as_of_date,
             universe=universe,
+            resolved_config=diagnostic_runtime.inputs.market_context_config,
+            resolved_universe=diagnostic_runtime.inputs.market_context_universe,
         )
 
     # ADR-068 authoritative cohort identity. Resolved from the exact typed
@@ -238,6 +261,7 @@ def run_signal_observation_corpus_write(
             f"[cohort-fork] warning unavailable ({type(exc).__name__}: {exc})",
             err=True,
         )
+    producer_source_revision = resolve_producer_source_revision()
     try:
         EnsureAccumulationPolicySnapshotsUseCase(learning_repo).execute(
             EnsureAccumulationPolicySnapshotsRequest(
@@ -249,24 +273,25 @@ def run_signal_observation_corpus_write(
                 hard_filter_policy=production_policy_bundle.hard_filter_policy,
                 unevaluable_gate_policy=production_policy_bundle.unevaluable_gate_policy,
                 created_at=datetime.now(timezone.utc),
-                source_revision=resolve_producer_source_revision(),
+                source_revision=producer_source_revision,
             )
         )
     except LearningContractError as exc:
         typer.echo(f"[error] production policy snapshot ensure failed: {exc}", err=True)
         raise typer.Exit(1) from exc
-
-    if named_tickers is None:
-        # Board-wide pure candle-active still needs a named roster digest for
-        # Option A population binding; use the resolved membership roster of the
-        # run is not available here — require an explicit named universe for
-        # challenge corpus capture. Fall back to empty is rejected by use case.
-        typer.echo(
-            "[error] population binding (schema-10) requires a named universe "
-            "(e.g. lq45); 'cached' board-wide mode is not challenge-corpus authority.",
-            err=True,
+    try:
+        diagnostic_snapshot_result = EnsureAccumulationDiagnosticProducerSnapshotsUseCase(
+            learning_repo
+        ).execute(
+            EnsureAccumulationDiagnosticProducerSnapshotsRequest(
+                inputs=diagnostic_runtime.inputs,
+                created_at=datetime.now(timezone.utc),
+                source_revision=producer_source_revision,
+            )
         )
-        raise typer.Exit(1)
+    except LearningContractError as exc:
+        typer.echo(f"[error] diagnostic producer snapshot ensure failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
 
     return BackfillSignalObservationsUseCase(
         record_observations_use_case=screen_bundle.record_observations_use_case,
@@ -276,7 +301,8 @@ def run_signal_observation_corpus_write(
         membership_resolver=membership_resolver,
         pit_window_sessions=pit_window,
         named_universe_tickers=named_tickers,
-        producer_source_revision=resolve_producer_source_revision(),
+        producer_source_revision=producer_source_revision,
+        diagnostic_bindings=dict(diagnostic_snapshot_result.bindings),
         population_name=universe if universe != "cached" else "lq45",
         evaluate_market_context=_evaluate_market_context_for_corpus,
         session_resolver=EffectiveMarketSessionResolver(market_repo),

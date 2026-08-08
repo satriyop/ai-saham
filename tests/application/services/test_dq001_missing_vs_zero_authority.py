@@ -219,7 +219,7 @@ def test_schema_versions_bumped_for_dq001():
     # accumulation payload schema is 13. The engine/evidence version pins that
     # used to live here are gone with the constants themselves: engine change
     # detection is the behavioural probe digest, not a hand-typed string.
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 13
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 14
     assert SIGNAL_FORWARD_LABEL_SCHEMA_VERSION == 3
 
 

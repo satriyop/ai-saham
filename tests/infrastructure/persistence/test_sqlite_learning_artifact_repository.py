@@ -108,6 +108,7 @@ def test_schema_enables_foreign_keys_and_creates_exact_learning_tables(
         "learning_policy_validations",
         "learning_policy_applications",
         "learning_policy_snapshots",
+        "learning_diagnostic_producer_snapshots",
     }
 
 

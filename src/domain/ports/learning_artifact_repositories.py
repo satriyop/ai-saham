@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Protocol, Sequence
 
+from src.domain.value_objects.diagnostic_producer_identity import (
+    DiagnosticProducerSnapshot,
+)
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     LearningEvaluation,
@@ -104,3 +107,22 @@ class LearningPolicySnapshotRepository(Protocol):
         purpose: AssessmentPurpose,
         compatibility_id: str,
     ) -> Sequence[ProductionPolicySnapshot]: ...
+
+
+class LearningDiagnosticProducerSnapshotRepository(Protocol):
+    """Immutable diagnostic producer contracts owned by ai-saham."""
+
+    def add_diagnostic_producer_snapshots_atomic(
+        self, artifacts: Sequence[DiagnosticProducerSnapshot]
+    ) -> tuple[int, int]: ...
+
+    def get_diagnostic_producer_snapshot(
+        self, snapshot_id: str
+    ) -> DiagnosticProducerSnapshot | None: ...
+
+    def list_diagnostic_producer_snapshots(
+        self,
+        *,
+        purpose: AssessmentPurpose,
+        snapshot_ids: Sequence[str] | None = None,
+    ) -> Sequence[DiagnosticProducerSnapshot]: ...

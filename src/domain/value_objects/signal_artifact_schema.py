@@ -63,7 +63,7 @@ from src.domain.value_objects.alpha_trigger_score import (
 # 2026-07-27, and the material identity it approximated is now measured by the
 # behavioural probe digest. Live scoring is unchanged; record shape is not, so
 # this is an OBSERVATION_SCHEMA bump and schema-12 rows stay historical.
-ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 13
+ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 14
 # Pre-open remains on the pre-attested-ticker shared era; accumulation-only
 # population fields must not fork pre-open compatibility by accident.
 PRE_OPEN_OBSERVATION_PAYLOAD_SCHEMA_VERSION = 10

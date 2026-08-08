@@ -48,8 +48,8 @@ def test_schema_13_is_current_and_the_fixture_records_the_adr062_era() -> None:
     write-only ``config_hash`` payload field was removed), so the fixture's own
     version stays 12 and is asserted as history, byte-identical to its sidecar.
     """
-    assert ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION == 13
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 13
+    assert ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION == 14
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 14
     assert HISTORICAL_GROUP_BREADTH_ERA_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 11
     fixture = _load_fixture()
     assert fixture["candidate_observation_schema_version"] == 12

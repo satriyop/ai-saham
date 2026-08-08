@@ -1,7 +1,7 @@
 # Refactor Code Review — Findings Requiring Further Vetting
 
-Status: `VETTED / IMPLEMENTATION_PENDING` — every finding has been independently
-vetted. This review record is not authorization to apply the remaining fixes.
+Status: `CLOSED / FIXED / VERIFIED` — every finding was independently vetted,
+then implemented and verified through its approved follow-up.
 
 Review date: 2026-08-07
 
@@ -15,8 +15,7 @@ refactor.
 Spike / Research followed by separately approved bugfix tasks.
 
 **Priority**
-High. RC-01A, RC-02, RC-03, and RC-04 are fixed and verified. RC-01B remains
-vetted and ready for implementation.
+High. RC-01A, RC-01B, RC-02, RC-03, and RC-04 are fixed and verified.
 
 **Reviewed range**
 
@@ -30,20 +29,19 @@ vetted and ready for implementation.
 
 ## 2. Review Conclusion
 
-The review remains open for RC-01B implementation, not discovery. RC-01A,
-RC-02, RC-03, and RC-04 are fixed and vertically verified:
+The review is closed. All findings are fixed and vertically verified:
 
 | ID | Severity | Status | Finding / result |
 |---|---|---|---|
 | RC-01A | P1 | `FIXED / VERIFIED` | Active v4/nine binds the complete resolved `DecisionPolicyConfig`; the original Action-changing counterexample now forks `compatibility_id` |
-| RC-01B | P1 challenge/corpus | `VETTED / READY_FOR_IMPLEMENTATION` | Purpose-specific schema-14 producer bindings and fail-closed consumer contract selected; code not implemented |
+| RC-01B | P1 challenge/corpus | `FIXED / VERIFIED` | Purpose-specific schema-14 producer bindings, strict dual-ID read-only consumer verification, exact extraction, and sealed non-promotable artifact v4 implemented |
 | RC-02 | P1 | `FIXED / VERIFIED` | Implicit lock cleanup removed; Chromium is the sole profile-ownership arbiter and adversarial markers remain untouched |
 | RC-03 | P2 | `FIXED / VERIFIED` | Readiness output and validation now source the same active v4 descriptor |
 | RC-04 | P2 | `FIXED / VERIFIED` | Plan consumes the exact typed screen judgment; v2 plan artifacts separate geometry from handoff readiness and fail closed |
 
-Passing tests do not invalidate the remaining RC-01B finding; its
-characterization tests preserve the current identity gaps. Its vetted design is
-not implemented yet.
+RC-01B's prior counterexamples are now negative contract tests: historical,
+missing, mixed, extra, digest-invalid, alias, and noncanonical-window inputs
+cannot acquire current diagnostic authority.
 
 ## 3. Verification Evidence
 
@@ -194,7 +192,7 @@ mutated decision           WATCH
 
 ### RC-01B — Diagnostic producer semantics lack their own identity
 
-Vetting status: `VETTED / READY_FOR_IMPLEMENTATION` on 2026-08-07. Exact task:
+Vetting status: `FIXED / VERIFIED` on 2026-08-08. Exact task:
 `tasks/backlog/rc01b_design_diagnostic_producer_identity.md`.
 
 #### Problem statement
@@ -509,8 +507,8 @@ Layer plan:
 
 1. RC-01A coordinated v4 cutover: completed and verified. RC-03 re-vet:
    completed and classified fixed.
-2. RC-01B design vet: completed. Implement only after explicit approval, then
-   vertically re-vet the coordinated cross-repository cutover.
+2. RC-01B coordinated cross-repository cutover: implemented and vertically
+   verified after explicit approval.
 3. RC-02 implementation and vertical verification: completed.
 4. RC-04 authority-contract implementation and vertical re-vet: completed.
 5. After each approved implementation, rerun focused tests, relevant

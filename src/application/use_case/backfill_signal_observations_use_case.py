@@ -26,6 +26,9 @@ from src.application.use_case.record_accumulation_observations_use_case import (
     RecordAccumulationObservationsUseCase,
 )
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.diagnostic_producer_identity import (
+    AccumulationDiagnosticBinding,
+)
 from src.domain.value_objects.idx_market import IDX_TIMEZONE, MARKET_CLOSE
 from src.domain.value_objects.learning_artifacts import (
     ACCUM_POPULATION_NAME,
@@ -212,6 +215,7 @@ class BackfillSignalObservationsUseCase:
         pit_window_sessions: int,
         named_universe_tickers: Sequence[str],
         producer_source_revision: str,
+        diagnostic_bindings: dict[str, AccumulationDiagnosticBinding],
         population_name: str = "lq45",
         evaluate_market_context: Callable[..., MarketContext] | None = None,
         session_resolver: EffectiveMarketSessionResolver | None = None,
@@ -245,6 +249,7 @@ class BackfillSignalObservationsUseCase:
         self._pit_window_sessions = pit_window_sessions
         self._named_universe_tickers = named
         self._producer_source_revision = str(producer_source_revision).strip()
+        self._diagnostic_bindings = dict(diagnostic_bindings)
         self._population_name = population_name
         self._evaluate_market_context = evaluate_market_context
         self._session_resolver = session_resolver or EffectiveMarketSessionResolver(
@@ -372,6 +377,7 @@ class BackfillSignalObservationsUseCase:
                 execution_context=context,
                 universe_tickers=list(tickers),
                 population_binding=population_binding,
+                diagnostic_bindings=self._diagnostic_bindings,
                 canonical_window=7,
             )
             processed.append(trading_date)

@@ -73,6 +73,9 @@ from src.domain.value_objects.signal_assessment import (
     SignalStrength,
 )
 from src.domain.value_objects.trade_setup import SetupAction, TradeSetup
+from tests.fixtures.diagnostic_producer_identity import (
+    valid_accumulation_diagnostic_bindings,
+)
 
 
 def _default_hard_filters() -> AccumulationScreenHardFilterPolicy:
@@ -170,6 +173,7 @@ def _probe_session_observation() -> dict[str, Any]:
         shared={"current_price": str(candidate.current_price)},
         population_binding={"population_id": "probe"},
         screen_results_by_window={"7": "pass", "30": "pass", "90": "pass"},
+        diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
     )
 
 

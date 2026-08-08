@@ -23,6 +23,9 @@ from src.domain.value_objects.learning_artifacts import AccumPopulationBinding
 from src.infrastructure.config.ticker_profile_config_loader import (
     create_ticker_profile_classifier,
 )
+from tests.fixtures.diagnostic_producer_identity import (
+    valid_accumulation_diagnostic_bindings,
+)
 
 
 class FakeRulesLoader(RulesLoader):
@@ -476,6 +479,7 @@ def record_observations(use_case: AccumulationScreenUseCase, request):
             pit_tradable_lookback_sessions=10,
             producer_source_revision="ai-saham@test",
         ),
+        diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
         canonical_window=7,
     )
     return RecordAccumulationObservationsResult(response=primary, recorded_count=saved)

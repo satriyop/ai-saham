@@ -26,6 +26,9 @@ from src.domain.value_objects.signal_artifact_identity import (
 from src.domain.value_objects.signal_semantic_contract import (
     ACCUMULATION_DISCOVERY_CONTRACT,
 )
+from tests.fixtures.diagnostic_producer_identity import (
+    valid_accumulation_diagnostic_bindings,
+)
 
 _VALID_ID = SemanticCompatibilityId("sha256:" + "b" * 64)
 
@@ -94,6 +97,7 @@ def _call(persister, **kwargs):
         semantic_compatibility_id=_VALID_ID,
         universe_tickers=["BBCA"],
         population_binding=_test_population_binding(),
+        diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
     )
     base.update(kwargs)
     return persister.persist_session_multi_window(**base)
@@ -140,6 +144,7 @@ def test_missing_required_window_raises() -> None:
             semantic_compatibility_id=_VALID_ID,
             universe_tickers=["BBCA"],
             population_binding=_test_population_binding(),
+            diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
         )
 
 
@@ -187,6 +192,7 @@ def test_persist_skips_existing_observation_without_rebuild() -> None:
         semantic_compatibility_id=_VALID_ID,
         universe_tickers=universe,
         population_binding=_test_population_binding(tickers=universe),
+        diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
     )
     assert saved == 0
     assert repo.saved == []

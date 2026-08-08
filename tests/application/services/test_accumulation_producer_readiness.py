@@ -60,6 +60,9 @@ from src.domain.value_objects.trading_session_calendar_snapshot import (
     TradingSessionCalendarSnapshot,
     label_window_digest,
 )
+from tests.fixtures.diagnostic_producer_identity import (
+    valid_accumulation_diagnostic_bindings,
+)
 
 NOW = datetime(2026, 7, 31, 12, 0, tzinfo=timezone.utc)
 COMPAT = "sha256:" + ("ab" * 32)
@@ -210,6 +213,11 @@ def _payload(
         body["session_date"] = session_date
     if with_population_binding and session_date is not None:
         body["population_binding"] = population_binding or _binding_for_session(session_date)
+    if schema_version == CANDIDATE_OBSERVATION_SCHEMA_VERSION:
+        body["diagnostic_bindings"] = {
+            diagnostic_id: binding.to_dict()
+            for diagnostic_id, binding in valid_accumulation_diagnostic_bindings().items()
+        }
     return body
 
 
@@ -2324,7 +2332,7 @@ def _rehash_snapshot(snap: ProductionPolicySnapshot) -> ProductionPolicySnapshot
     return snap
 
 
-def test_candidate_observation_schema_version_is_13_with_attested_tickers() -> None:
+def test_candidate_observation_schema_version_is_14_with_diagnostic_bindings() -> None:
     from src.domain.value_objects.learning_artifacts import (
         ACCUM_POPULATION_BINDING_SCHEMA_VERSION,
         LEGACY_ACCUM_POPULATION_BINDING_SCHEMA_VERSION,
@@ -2334,14 +2342,20 @@ def test_candidate_observation_schema_version_is_13_with_attested_tickers() -> N
         INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION,
     )
 
-    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 13
+    assert CANDIDATE_OBSERVATION_SCHEMA_VERSION == 14
     assert HISTORICAL_GROUP_BREADTH_ERA_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 11
     assert INCOMPLETE_POPULATION_ATTESTATION_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 10
     assert LEGACY_CANDIDATE_OBSERVATION_SCHEMA_VERSION == 9
     assert ACCUM_POPULATION_BINDING_SCHEMA_VERSION == 2
     assert LEGACY_ACCUM_POPULATION_BINDING_SCHEMA_VERSION == 1
     o = _observation(day=1)
-    assert o.decision_payload["schema_version"] == 13
+    assert o.decision_payload["schema_version"] == 14
+    assert set(o.decision_payload["diagnostic_bindings"]) == {
+        "mce.screen_display",
+        "sector.peer_context",
+        "institutional.accumulation_bag",
+        "company_quality.bag",
+    }
     assert "population_binding" in o.decision_payload
     binding = AccumPopulationBinding.from_mapping(o.decision_payload["population_binding"])
     assert binding.schema_version == 2
@@ -2379,8 +2393,9 @@ def test_build_session_observation_payload_requires_population_binding() -> None
         features_by_window=features,
         shared=shared,
         population_binding=_binding_for_session("2026-07-01"),
+        diagnostic_bindings=valid_accumulation_diagnostic_bindings(),
     )
-    assert payload["schema_version"] == 13
+    assert payload["schema_version"] == 14
     assert payload["population_binding"]["membership_session"] == "2026-07-01"
     assert payload["population_binding"]["schema_version"] == 2
     assert "membership_tickers" in payload["population_binding"]

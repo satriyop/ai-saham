@@ -1,8 +1,7 @@
 # Design Purpose-Specific Diagnostic Producer Identity
 
-Status: `VETTED / READY_FOR_IMPLEMENTATION` — the design contract is complete;
-runtime implementation still requires separate user approval and re-vetting of
-the resulting code.
+Status: `FIXED / VERIFIED` — implemented as the coordinated ai-saham schema-14
+producer cutover and ml-saham strict consumer/artifact cutover on 2026-08-08.
 
 Source finding: RC-01B in
 `tasks/backlog/review_code_2026-08-07.md` (`VETTED` 2026-08-07).
@@ -569,3 +568,38 @@ format check, compile/package gates where applicable, and `git diff --check`.
 - Do not allow ml-saham to write ai-saham SQLite.
 - Do not make diagnostic output promotable or authoritative.
 - Do not move policy or binding construction into CLI/TUI adapters.
+
+## 24. Implementation Result
+
+Implemented the chosen contract without expanding ADR-068 Action identity:
+
+- ai-saham now resolves the six typed producer payloads once at composition,
+  persists immutable snapshots, emits the four closed schema-14 bindings, and
+  exposes the table through repository/audit/clean-break contracts;
+- ml-saham now requires explicit Action and diagnostic identities, verifies
+  active v4/nine plus every diagnostic snapshot read-only, extracts only exact
+  window-7 fields, and emits sealed non-promotable artifact schema 4 with
+  read-time upstream re-verification;
+- historical rows and artifact schema 3 remain historical only; no repair,
+  migration, alias, or synthesized identity was added.
+
+Verification evidence is recorded in the source review backlog and commits.
+
+## 25. Verification Evidence
+
+- ai-saham whole-repository Ruff check and format check: pass.
+- ai-saham full pytest: `6631 passed, 41 skipped`.
+- ai-saham focused producer/persistence/architecture re-run: `189 passed`;
+  independent producer dependency mutation suite: `7 passed`.
+- ml-saham focused diagnostic, binding, health, payload, and live-smoke suite:
+  `62 passed, 1 skipped`; `scripts/check_challenge_contracts.sh`:
+  `39 passed`.
+- ml-saham changed-file Ruff check/format check and both repositories'
+  `git diff --check`: pass. The pre-existing whole-ml-saham Ruff baseline still
+  reports unrelated chapter debt; the available full pytest environment lacks
+  optional Streamlit/scikit-learn/LightGBM/Prophet dependencies, while 381
+  tests passed and 7 skipped before those unrelated dependency failures.
+- all three ai-saham data-audit commands exited 0. Manifest had no warnings;
+  source contracts and reconciliation remained `WARN` only for pre-existing
+  optional coverage and duplicate snapshot identities. The live SQLite SHA-256
+  remained `bbfb38d...11c33` before and after every audit/read path.
