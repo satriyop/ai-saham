@@ -204,12 +204,33 @@ class RunAccumulationScreenWorkflowUseCase:
         if self._evaluate_market_context is None:
             return None
         as_of = execution_context.effective_session.analysis_as_of
-        universe = request.universe_name or request.universe_label or "lq45"
+        universe = self._display_market_context_universe(request)
         try:
             return self._evaluate_market_context(as_of_date=as_of, universe=universe)
         except Exception as exc:
             warnings.append(f"Market context unavailable (display-only): {exc}")
             return None
+
+    @staticmethod
+    def _display_market_context_universe(
+        request: RunAccumulationScreenWorkflowRequest,
+    ) -> str:
+        """Resolve a real universe name for display-only MCE.
+
+        Explicit-ticker screens set ``universe_label`` to synthetic strings like
+        ``"1 tickers"``. Those must not be passed to the universe loader (leaks
+        internal config lists into operator warnings). Prefer ``universe_name``,
+        then a non-synthetic label, else the default board universe.
+        """
+        if request.universe_name:
+            return request.universe_name
+        label = (request.universe_label or "").strip()
+        if not label:
+            return "lq45"
+        lowered = label.lower()
+        if lowered.endswith(" ticker") or lowered.endswith(" tickers"):
+            return "lq45"
+        return label
 
     @staticmethod
     def _screen_as_of_date(

@@ -12,6 +12,11 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import (
+    raise_data_unavailable,
+    raise_user_error,
+    resolve_cli_db_path,
+)
 from src.adapters.cli.effective_session_display import parse_as_of_option
 from src.adapters.cli.screen_accum_display import (
     display_multi,
@@ -309,7 +314,7 @@ def accumulation_run(
         return
 
     cfg = load_app_config()
-    resolved_db = db_path or Path(cfg.storage.db_path)
+    resolved_db = resolve_cli_db_path(db_path, configured_default=cfg.storage.db_path)
     output_format = resolve_output_format(output_format or cfg.analysis.format)
     deps = build_screen_deps(resolved_db)
 
@@ -325,39 +330,32 @@ def accumulation_run(
             repository=deps.broker_repository,
         )
     except UniverseNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(str(e), tip="See: saham fetch universe list")
     except FileNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(str(e), tip="Run: saham fetch universe update")
 
     if not ticker_list:
-        typer.echo(
+        raise_user_error(
             "No tickers to screen. Specify --universe or provide ticker arguments.",
-            err=True,
+            tip="Example: saham screen accum --universe lq45",
         )
-        raise typer.Exit(1)
 
     universe_label = universe or f"{len(ticker_list)} tickers"
     explicit_tickers = [str(t).upper() for t in (tickers or ())]
 
     if force_refresh and not explicit_tickers:
-        typer.echo(
-            "Error: --force-refresh requires explicit ticker arguments "
+        raise_user_error(
+            "--force-refresh requires explicit ticker arguments "
             "(not universe-only). Universe screens stay cache-cheap.",
-            err=True,
         )
-        raise typer.Exit(1)
 
     if strategy and multi:
-        typer.echo("Error: --strategy is not supported with --multi.", err=True)
-        raise typer.Exit(1)
+        raise_user_error("--strategy is not supported with --multi.")
 
     include_strategy_overlay = bool(strategy)
 
     if save_name and multi:
-        typer.echo("Error: --save is not supported with --multi.", err=True)
-        raise typer.Exit(1)
+        raise_user_error("--save is not supported with --multi.")
     save_enabled = bool(save_name)
     as_of_date = parse_as_of_option(as_of)
 
@@ -387,20 +385,16 @@ def accumulation_run(
     )
     if diagnostic_flags.any_enabled:
         if multi:
-            typer.echo(
-                "Error: diagnostic evidence flags (--setup/--with-flow-detail/"
+            raise_user_error(
+                "diagnostic evidence flags (--setup/--with-flow-detail/"
                 "--with-sentiment/--full) are not supported with --multi. "
                 "Use explicit tickers without --multi.",
-                err=True,
             )
-            raise typer.Exit(1)
         if not explicit_tickers:
-            typer.echo(
-                "Error: diagnostic evidence flags require explicit ticker arguments "
-                "(not universe-only). Example: saham screen accum BBRI --full",
-                err=True,
+            raise_user_error(
+                "diagnostic evidence flags require explicit ticker arguments (not universe-only).",
+                tip="Example: saham screen accum BBRI --full",
             )
-            raise typer.Exit(1)
 
     if multi:
         window_list = [int(w.strip()) for w in (windows or "7,30,90").split(",")]
@@ -442,8 +436,7 @@ def accumulation_run(
             )
         )
     except ScreenAccumProjectionError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(str(e))
 
     for warning in result.warnings:
         typer.echo(f"⚠ {warning}", err=True)
@@ -458,6 +451,29 @@ def accumulation_run(
         )
         return
 
+    # Honest empty: missing/insufficient cache for explicit tickers is data,
+    # not a successful filter empty.
+    response = result.response
+    projection = result.single_projection
+    if (
+        response is not None
+        and projection is not None
+        and not projection.candidates
+        and explicit_tickers
+        and response.tickers_skipped >= len(explicit_tickers)
+        and response.total_tickers_checked == len(explicit_tickers)
+    ):
+        shown = ", ".join(explicit_tickers)
+        raise_data_unavailable(
+            f"No usable screen data for {shown} (insufficient or missing cache).",
+            tip=(
+                f"Run: saham fetch market {explicit_tickers[0]} --days 365 "
+                f"&& saham fetch broker {explicit_tickers[0]}"
+            ),
+        )
+
+    # Valid empty (filters eliminated candidates): display_results renders
+    # without Error: prefix; process exits 0.
     _render_single(
         result=result,
         universe_label=universe_label,

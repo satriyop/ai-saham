@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from src.adapters.cli.cli_errors import resolve_cli_db_path
 from src.application.use_case.get_system_status_use_case import (
     GetSystemStatusUseCase,
 )
@@ -35,7 +36,10 @@ def status(
     Probes IDX API, Yahoo Finance, Stockbit session, and AI classifier.
     Reports latest data dates and row counts across all database tables.
     """
-    resolved_db = db_path or Path(load_app_config().storage.db_path)
+    cfg = load_app_config()
+    # Explicit --db must already exist (never create). Default may be missing
+    # so first-run can still report "No database found" honestly.
+    resolved_db = resolve_cli_db_path(db_path, configured_default=cfg.storage.db_path)
 
     # Inject dependencies and execute use case
     provider = SQLiteSystemStatusProvider(db_path=resolved_db)

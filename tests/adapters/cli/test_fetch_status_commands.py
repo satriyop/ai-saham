@@ -74,20 +74,39 @@ class TestDefaultDbPath:
         assert SpyProviderFactory.captured_paths[0] == configured_path
 
     def test_explicit_db_path_wins(self, monkeypatch, tmp_path: Path):
-        def raise_on_load(*args, **kwargs):
-            raise RuntimeError("load_app_config should not be called")
-
-        monkeypatch.setattr(status_commands, "load_app_config", raise_on_load)
+        configured = tmp_path / "configured.db"
+        monkeypatch.setattr(
+            status_commands,
+            "load_app_config",
+            lambda: FakeAppConfig(storage=FakeStorageConfig(db_path=str(configured))),
+        )
 
         SpyProviderFactory.captured_paths.clear()
         monkeypatch.setattr(status_commands, "SQLiteSystemStatusProvider", SpyProviderFactory)
         monkeypatch.setattr(status_commands, "GetSystemStatusUseCase", _fake_use_case)
 
         explicit_path = tmp_path / "explicit.db"
+        explicit_path.write_bytes(b"")
         status_commands.status(db_path=explicit_path)
 
         assert len(SpyProviderFactory.captured_paths) == 1
-        assert SpyProviderFactory.captured_paths[0] == explicit_path
+        assert SpyProviderFactory.captured_paths[0] == explicit_path.resolve()
+
+    def test_explicit_missing_db_fails_closed(self, monkeypatch, tmp_path: Path):
+        import pytest
+        import typer
+
+        monkeypatch.setattr(
+            status_commands,
+            "load_app_config",
+            lambda: FakeAppConfig(storage=FakeStorageConfig(db_path=str(tmp_path / "default.db"))),
+        )
+        missing = tmp_path / "nope" / "missing.db"
+        with pytest.raises(typer.Exit) as ei:
+            status_commands.status(db_path=missing)
+        assert ei.value.exit_code == 1
+        assert not missing.exists()
+        assert not missing.parent.exists()
 
     def test_missing_db_message_uses_configured_path(self, monkeypatch, tmp_path: Path, capsys):
         configured_path = tmp_path / "nonexistent" / "app_configured.sqlite"

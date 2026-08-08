@@ -373,6 +373,45 @@ def test_display_market_context_none_when_not_injected():
     assert result.market_context is None
 
 
+def test_display_market_context_ignores_synthetic_ticker_count_label():
+    """Explicit-ticker screens use 'N tickers' labels — must not hit universe loader."""
+    screen_mock = MagicMock()
+    screen_mock.execute.return_value = _screen_response()
+    calls: list[dict] = []
+
+    def capture(*, as_of_date, universe):
+        calls.append({"as_of_date": as_of_date, "universe": universe})
+        return MagicMock(name="MarketContext")
+
+    uc = _make_uc(screen_use_case=screen_mock, evaluate_market_context=capture)
+    result = uc.execute(
+        _single_request(
+            tickers=["ZZZZ"],
+            universe_label="1 tickers",
+            universe_name=None,
+        )
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["universe"] == "lq45"
+    assert result.market_context is not None
+    assert not any("1 tickers" in w for w in result.warnings)
+
+
+def test_display_market_context_universe_helper_prefers_name():
+    from src.application.use_case.run_accumulation_screen_workflow_use_case import (
+        RunAccumulationScreenWorkflowUseCase,
+    )
+
+    req = _single_request(universe_name="bank", universe_label="1 tickers")
+    assert RunAccumulationScreenWorkflowUseCase._display_market_context_universe(req) == "bank"
+    req2 = _single_request(universe_name=None, universe_label="basic_materials")
+    assert (
+        RunAccumulationScreenWorkflowUseCase._display_market_context_universe(req2)
+        == "basic_materials"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Multi mode
 # ---------------------------------------------------------------------------
