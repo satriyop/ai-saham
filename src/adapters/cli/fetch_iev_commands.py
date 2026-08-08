@@ -142,6 +142,22 @@ def collect_iev(
     if sidecar_path is not None:
         typer.echo(f"  JSON sidecar: {sidecar_path}")
     typer.echo(f"  Captured at {collected_at.strftime('%H:%M:%S')} WIB  {phase_badge}")
+    typer.echo(
+        f"  Lock-window population: top_n={top_n} "
+        f"(baseline coverage is this set, not the full board)"
+    )
+    if is_locked_input:
+        typer.echo(
+            "  NCP batch: YES — is_ncp_locked=1 for this write "
+            f"(collection started {collection_started_at.strftime('%H:%M:%S')} WIB)"
+        )
+    else:
+        typer.echo(
+            "  NCP batch: NO — this write is discovery/matching only. "
+            "Production baseline requires a fetch started in "
+            f"{NCP_LOCK_TIME.strftime('%H:%M')}–"
+            f"{PRE_OPEN_MATCHING_START.strftime('%H:%M')} WIB."
+        )
     typer.echo("")
 
     show_delta = bool(deltas)
@@ -169,10 +185,16 @@ def collect_iev(
     typer.echo(f"\n  Movers with IEP >= {iep_floor}: {passes_floor}/{len(movers)}")
 
     coverage = repo.get_coverage()
+    ncp = repo.get_ncp_lock_window_coverage(recent_days=14)
     typer.echo("")
     typer.echo(
         f"IEV/IEP history: {coverage['total_dates']} days "
         f"({coverage['first_date']} → {coverage['last_date']}), "
         f"avg {coverage['avg_movers_per_day']:.0f} movers/day, "
         f"IEP fill {coverage['iep_fill_pct']:.0f}%"
+    )
+    typer.echo(
+        f"NCP lock batches: {ncp['ncp_dates']}/{ncp['history_dates']} history dates; "
+        f"recent {ncp['recent_lock_batch_days']}/{ncp['recent_days_reported']} days "
+        f"({ncp['recent_lock_batch_rate']:.0%}) had a lock-window batch"
     )

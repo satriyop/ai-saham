@@ -437,6 +437,72 @@ class SQLiteIEVRepository:
             "iep_fill_pct": round(row["iep_fill_pct"] or 0.0, 1),
         }
 
+    def get_ncp_lock_window_coverage(self, *, recent_days: int = 30) -> dict:
+        """Per-day NCP lock-window batch metrics from ``iev_snapshot_history``.
+
+        Success metric is **did this calendar day write any is_ncp_locked=1
+        rows**, not the global NCP fraction of all history rows. Discovery-only
+        days (pre-08:56 fetches) correctly report ncp_tickers=0. Typical
+        successful days show ``ncp_tickers`` near the fetch ``--top-n`` (default
+        50) — that is a population limit, not full-board coverage.
+        """
+        if recent_days < 1:
+            raise ValueError("recent_days must be >= 1")
+        with self._get_connection() as conn:
+            day_rows = conn.execute(
+                """
+                SELECT
+                    date,
+                    COUNT(*) AS history_rows,
+                    SUM(CASE WHEN is_ncp_locked = 1 THEN 1 ELSE 0 END) AS ncp_rows,
+                    COUNT(DISTINCT CASE WHEN is_ncp_locked = 1 THEN ticker END)
+                        AS ncp_tickers
+                FROM iev_snapshot_history
+                GROUP BY date
+                ORDER BY date DESC
+                LIMIT ?
+                """,
+                (recent_days,),
+            ).fetchall()
+            totals = conn.execute(
+                """
+                SELECT
+                    COUNT(DISTINCT date) AS history_dates,
+                    COUNT(DISTINCT CASE WHEN is_ncp_locked = 1 THEN date END)
+                        AS ncp_dates,
+                    COUNT(*) AS history_rows,
+                    SUM(CASE WHEN is_ncp_locked = 1 THEN 1 ELSE 0 END) AS ncp_rows
+                FROM iev_snapshot_history
+                """
+            ).fetchone()
+
+        days = [
+            {
+                "date": r["date"],
+                "history_rows": int(r["history_rows"] or 0),
+                "ncp_rows": int(r["ncp_rows"] or 0),
+                "ncp_tickers": int(r["ncp_tickers"] or 0),
+                "has_lock_batch": int(r["ncp_tickers"] or 0) > 0,
+            }
+            for r in day_rows
+        ]
+        lock_days = sum(1 for d in days if d["has_lock_batch"])
+        return {
+            "history_dates": int(totals["history_dates"] or 0) if totals else 0,
+            "ncp_dates": int(totals["ncp_dates"] or 0) if totals else 0,
+            "history_rows": int(totals["history_rows"] or 0) if totals else 0,
+            "ncp_rows": int(totals["ncp_rows"] or 0) if totals else 0,
+            "recent_days_reported": len(days),
+            "recent_lock_batch_days": lock_days,
+            "recent_lock_batch_rate": (round(lock_days / len(days), 4) if days else 0.0),
+            "days": days,
+            "notes": (
+                "ncp_tickers is the lock-window population size (usually ~fetch --top-n)",
+                "has_lock_batch=false means no NCP-locked history that day "
+                "(ops gap or pre-NCP only)",
+            ),
+        }
+
     def get_ticker_history(self, ticker: str, limit: int = 5) -> list[IEVSnapshot]:
         """Return the latest snapshots for a specific ticker.
 
