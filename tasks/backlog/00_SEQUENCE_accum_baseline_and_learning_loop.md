@@ -43,7 +43,7 @@ Measurements). Doing it two months from now costs two months.
 | 4 | `04_rebuild_accum_corpus_single_deep_cohort.md` | No | needs 1, 2, 3, 9 — **mandatory; re-vet after 9** |
 | 5 | `05_fix_preopen_directional_score_resolution.md` | pre-open only | independent — **vetted 2026-08-08**; ready when scheduled |
 | 6 | `06_implement_accum_policy_proposal_lifecycle.md` | No | needs 4 + depth |
-| 7 | `07_improve_screen_accum_progressive_disclosure.md` | No | independent |
+| 7 | `07_improve_screen_accum_progressive_disclosure.md` | No | independent — **vetted 2026-08-08**; safe under accum freeze |
 | 8 | `08_fix_cli_error_taxonomy_and_exit_codes.md` | No | independent |
 
 ```
@@ -71,6 +71,13 @@ sticky-flag bug. ml-saham directional n=0 is multi-cause (explicit
 `compatibility_id` + `--baseline static_reference` required). Continuous score
 must not preserve the unreachable intensity boolean; PRE_OPEN clean-break is
 cheap and must not touch the frozen accum cohort.
+
+**2026-08-08 task-07 re-vet.** Single-window `display_results` still prints a
+default nested panel wall; `--full`/`--detail` do **not** gate that wall
+(`--detail` only adds Run Context; `--full` adds diagnostic bags). Multi-window
+`display_multi` is already compact. Why-line `setup_evidence` leak is mostly
+fixed in shared `decision_display`; residual identifier audit remains. Safe
+adapter-only work under the accum freeze.
 
 **Why ADR-068 goes first.** It deletes `SEMANTIC_ENGINE_VERSION` and
 `EVIDENCE_CONTRACT_VERSION`, which task 2 would otherwise bump and then lose. It
