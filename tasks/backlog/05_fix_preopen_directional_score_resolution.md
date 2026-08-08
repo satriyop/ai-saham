@@ -1,8 +1,12 @@
 # Give Pre-Open `directional_score` Enough Resolution To Rank And Learn
 
-Status: `VETTED / READY FOR IMPLEMENTATION` — code-first re-vet **2026-08-08**.
+Status: `IMPLEMENTED` — code-first re-vet and slices 1–5 landed **2026-08-08**.
 Sequence: **5 of 8** — independent of the accumulation config freeze (PRE_OPEN
 purpose isolation). See `tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`.
+
+**Note:** PRE_OPEN corpus was clean-broken; live recapture must run in the NCP
+lock window (`saham fetch iev` then `research pre-open capture`) to refill
+rows under the new compatibility id.
 
 ## 1. Task Metadata
 
@@ -347,13 +351,25 @@ Commit: `chore(corpus)!: clean-break pre-open corpus for directional v2`
 
 ## 15. Completion Record
 
-- Completed date:
+- Completed date: **2026-08-08**
 - Slice commits:
-- Tie rate before → after:
-- Intensity handling decision (continuous vs recalibrated gate) + evidence:
-- NCP per-day lock batch rate before → after:
-- Old → new entry cutover mapping:
-- New PRE_OPEN `compatibility_id`:
-- Accum observation count before/after (must match):
-- `ml-saham` command line + verdict + n:
-- Test / Lint result:
+  - `8a80275e` pin discrete score + intensity collapse (superseded by v2 tests)
+  - `144f963b` NCP lock-window coverage observability
+  - `4cb540e8` continuous ranking score baseline v2 + entry cutovers
+  - (this commit) PRE_OPEN purge isolation + closeout
+- Tie rate before → after: 4 discrete scores / 59% modal → continuous board
+  (unit: ≥5 distinct scores on 6 synthetic tickers; not six-value set)
+- Intensity handling: continuous `log1p(i / 0.02)` term; HIGH confidence soft
+  floor `intensity_high_soft=0.02` (live scale); no `intensity>=1.0` clamp
+- NCP: `get_ncp_lock_window_coverage` + fetch iev messaging (top-N + lock batch YES/NO)
+- Old → new entry cutover: shared 70/45 → pre-open `enter_min_score=62` /
+  `watch_min_score=48`
+- New PRE_OPEN `compatibility_id` (config after v2, iev_min=100000, top_n=5):
+  `sha256:bc54ac667ed3be5f1787567d114577c4286917eed79f1fe25301e5724c9abacd`
+- Accum observation count before/after purge: **1035 → 1035** (compat
+  `sha256:355e5b59…` unchanged)
+- PRE_OPEN purged: 29 obs, 22 labels, 8 evals (tracks for those ids)
+- Recapture: deferred to NCP lock window (market hours)
+- `ml-saham`: until recapture, no PRE_OPEN cohort; after capture use
+  `--compatibility-id <new> --baseline static_reference`
+- Test / Lint: pre-open suite green; whole-repo ruff green
