@@ -1,11 +1,28 @@
 # CLI Troubleshooting Guide
 
+## Exit codes (MVP contract)
+
+| Code | Meaning |
+|------|---------|
+| **0** | Success, including **valid empty** results (filters found nothing) |
+| **1** | User / input / config error (bad args, bad universe, explicit `--db` missing) |
+| **2** | Data or environment unavailable (no cache, provider/auth/network) |
+
+High-traffic commands print `Error [<category>]: …` plus an optional `Tip:` line.
+Valid empty never uses the `Error:` prefix.
+
+Shared module: `src/adapters/cli/cli_errors.py`.
+
+---
+
 ## "No cached data found"
 
 ```
-Error: No cached data found for BBCA
+Error [data_unavailable]: No cached data found for BBCA
 Tip: Run 'saham fetch market BBCA --days 365' first to download data.
 ```
+
+Exit code: **2**.
 
 **Solution:** Fetch data first with `saham fetch market TICKER --days 365`
 
@@ -13,11 +30,18 @@ Tip: Run 'saham fetch market BBCA --days 365' first to download data.
 
 ## "Database not found"
 
+Explicit `--db` path that does not exist:
+
 ```
-Error: Database not found at /path/to/data.db
+Error [user_input]: Database not found at /path/to/data.db
+Tip: Pass an existing --db path, or omit --db to use the configured default.
 ```
 
-**Solution:** Run `saham fetch market` for any ticker to create the database
+Exit code: **1**. The CLI does **not** create a database for a bad explicit path.
+
+When the **configured default** DB is missing (first run), `saham fetch status`
+reports a yellow “No database found” panel and exits **0** — run any fetch to
+initialize.
 
 ---
 

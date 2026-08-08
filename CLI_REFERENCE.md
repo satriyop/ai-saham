@@ -5,6 +5,17 @@ Compact, agent-optimized command reference. One `##` block per command.
 Tutorial & workflows → `CLI_GUIDE.md`
 Troubleshooting → `CLI_TROUBLESHOOTING.md`
 
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| **0** | Success, including valid empty results |
+| **1** | User / input / config error (bad args, missing explicit `--db`) |
+| **2** | Data unavailable (no cache, provider/auth/network) |
+
+High-traffic commands use `src/adapters/cli/cli_errors.py`
+(`Error [<category>]: …` + optional `Tip:`). Explicit `--db` never creates a DB.
+
 ## Command-family consistency
 
 Verb dictionary (ADR-050): first token is the behavior contract.
