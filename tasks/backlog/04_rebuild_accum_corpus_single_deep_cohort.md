@@ -1,293 +1,412 @@
 # Rebuild The Accum Corpus As One Deep, Snapshot-Bound Cohort
 
-Status: `BLOCKED` — requires the whole config-edit batch merged first
-(ADR-068 identity, ADR-067 retirement, risk-gate task).
+Status: `VETTED / READY FOR IMPLEMENTATION` — re-vetted **2026-08-08** after
+task 09 (`ai-saham@6d9099af`, `ml-saham@e1a5fac`). **Do not purge until this
+document’s acceptance criteria and slice-1 plan are followed.**
 
-> **Mandatory, not optional (2026-08-04).** ADR-067 alone needs no purge — it is
-> NON_SEMANTIC on screen. **ADR-068 does**: cohort identity changes mechanism
-> entirely, so every existing observation belongs to a superseded identity
-> scheme. This task is now the single purge for the whole batch.
+> **Mandatory, not optional.** The config-edit batch (ADR-068, ADR-067, task 03
+> risk/PIT, task 09 snapshot binding) is identity-moving. Every existing accum
+> observation belongs to a superseded identity and/or schema. This task is the
+> **single** purge + rebuild for the whole batch.
 >
-> **Purge exactly once.** Do not purge after ADR-068 and again after ADR-067.
+> **Purge exactly once.** Do not execute a destructive purge during re-vet
+> (this document). Destructive work starts only at slice 3 after backup +
+> dry-run review.
 
 Sequence: **4 of 8** — see `tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`
+Prerequisites: tasks **1, 2, 3, 9** (all implemented/verified as of this re-vet).
+
+---
 
 ## 1. Task Metadata
 
 **Task Title**
-Clean-break the accum learning corpus and rebuild it as a single cohort with
-enough session depth for `ml-saham` to return a real verdict.
+Clean-break the accum learning corpus and rebuild it as a single cohort under
+the **current** ADR-068 identity (schema **15**, snapshot contract
+**production_policy_snapshot.v4**, nine policy rows including task-09 risk-audit
+bindings).
 
 **Task Type**
 Ops / clean break (no scoring logic changes)
 
 **Priority**
-High — this is the task that makes the learning loop capable of closing.
+High — unblocks a learnable single-cohort challenge lab.
 
 ---
 
-## 2. Problem Statement
+## 2. Re-Vet Summary (2026-08-08)
 
-The accum learning loop has **never closed once**. `learning_policy_proposals`,
-`learning_policy_validations`, and `learning_policy_applications` each hold
-**0 rows**, ever.
+### 2.1 What was stale in the prior draft
 
-The proximate cause is corpus shape, not missing machinery. `ml-saham`'s
-`accum_path_v1` needs 3 folds with a 20-session embargo inside one cohort; the
-deepest cohort with valid ADR-059 snapshots holds **304 observations from a
-single calendar date**, which structurally caps it at `INCONCLUSIVE` forever.
-The current production cohort holds 45 observations and returns `BLOCKED_DATA`.
+| Prior draft claim | Current truth (code + live DB) |
+|---|---|
+| Expects `production_policy_snapshot.v2` **7** rows | Active contract is **`production_policy_snapshot.v4`** with **exactly 9** rows |
+| Silent about observation schema | Writer/reader current = **schema 15**; DB has **0** schema-15 accum rows |
+| Predates task 09 | Task 09 binds `risk.gate_evaluations` / `unevaluable_gates` into snapshot payloads; that **moves** the ADR-068 snapshot-set digest / `compatibility_id` |
+| Four cohorts measured 2026-08-04 | Live DB now has **six** accum cohorts (see §3) |
+| Purge deletes phase ledger + orphaned snapshots | Current `scripts/purge_accum_learning_corpus.py` deletes **only** accum observations, their labels, and accum evaluations — **not** snapshots or phase ledger |
+| Implies WIN/LOSE immediately after rebuild | Fundamentals honest floor is **2026-07-08**; only **26** candle sessions through **2026-08-07** — below a comfortable `accum_path_v1` multi-fold + 20-session embargo WIN path |
 
-Measured 2026-08-04 — **no cohort holds value, which is why ADR-067 and ADR-068
-both accept a fork rather than avoiding one**:
+### 2.2 Prerequisite batch status
 
-| compatibility_id | obs | sessions | snapshots | ml-saham verdict |
-|---|---|---|---|---|
-| `0053…` | 1,890 | 42 | 0/7 | ineligible (pre-ADR-059) |
-| `5898…` | 349 | 1 | 6/7 | `BLOCKED_POLICY` |
-| `8ba8…` | 304 | 1 | 7/7 | `INCONCLUSIVE` (1 fold) |
-| `6493…` (live) | 45 | 1 | 7/7 | `BLOCKED_DATA`, n=0 |
+| # | Task | Status |
+|---|---|---|
+| 1 | ADR-068 behavioural identity | **DONE** (`tasks/done/`) |
+| 2 | ADR-067 retire setup_quality | **DONE** (`tasks/done/`) |
+| 3 | Risk-gate skips + fundamentals PIT | **FIXED / VERIFIED** (backlog file) |
+| 9 | Bind risk audit into snapshots + ml-saham v2 | **IMPLEMENTED** (2026-08-08) |
 
-After the config-edit batch, **every existing accum observation is an artifact
-of a superseded engine and a superseded identity scheme** — flow-only scoring,
-silently skipped risk gates, proxy-based cohort identity, and a
-proxy identity material. They are not comparable to post-batch observations and
-must not be mixed with them.
+### 2.3 Current production identity (computed from live config, post–task 09)
 
-Meanwhile the underlying market data is **not** the constraint:
+Measured 2026-08-08 via `resolve_accumulation_production_policy_bundle` +
+`resolve_accumulation_cohort_identity` (no DB write):
+
+| Axis | Value |
+|---|---|
+| Observation schema | **15** |
+| Snapshot contract (target) | **production_policy_snapshot.v4** (9 policies) |
+| `compatibility_id` | `sha256:355e5b59600dbdc9f762f7b373e8879b7cda9a1e55e18bd590461315cfe1e091` |
+| Behavioural probe digest | `913ab690547eba19e95f509f281ce4d1afe15ffdaaae3d242795b18c2f5b4ad8` |
+| Policy snapshot-set digest | `57bd394b345c118f0b9d932743cd1de2d37ac137d6ea3d1985c2d555d33602cc` |
+
+Hard filters currently: `min_market_cap_idr=0`, `min_piotroski=0`,
+`min_accum_score=0` enabled, `min_signal_score` disabled. Unevaluable aggregate
+policy: **surface**.
+
+**None of the six stored accum cohorts match this `compatibility_id`.** The
+newest stored cohort (`d213…`) is schema **13** with v4 snapshots that still
+lack task-09 `observation_result_fields` on
+`risk.accum.unevaluable_policy` and still declare only coarse
+`trade_setup.blocking_gates` / `candidate.risk_status` on
+`risk.accum.hard_gates`.
+
+### 2.4 ml-saham protocol (unchanged, still binding)
+
+`accum_path_v1` (`ml-saham` `src/ml_saham/challenge/protocols.py`):
+
+- `min_n_total=80`, `min_n_test=20`
+- `n_folds=3`, `embargo_sessions=20`
+- `min_folds_for_win=2`
+- Primary metric horizon H=10 (report 3/10/20)
+
+Do **not** relax these parameters to force a verdict.
+
+---
+
+## 3. Live Corpus Measurements (read-only, 2026-08-08)
+
+Source: `data/db/data.db` (~1.34 GB), measured with SQLite SELECT only.
+Purge dry-run: `python scripts/purge_accum_learning_corpus.py --db data/db/data.db`.
+
+### 3.1 Observation purposes
+
+| purpose | n | cohorts |
+|---|---:|---:|
+| `ACCUMULATION_DISCOVERY` | **2,678** | **6** |
+| `PRE_OPEN_AUCTION_DIRECTION` | **29** | 1 |
+
+### 3.2 Accum cohorts (all superseded)
+
+| compatibility_id (prefix) | obs | schema | session_date span | distinct sessions | snapshots | notes |
+|---|---:|---:|---|---:|---|---|
+| `0053…` | 1,890 | 9 | 2026-06-02 → 2026-07-30 | **42** | 0 | Pre–ADR-059; deepest calendar |
+| `5898…` | 349 | 9 | 2026-07-31 | 1 | 6 × **v1** | Incomplete set |
+| `8ba8…` | 304 | 9 | 2026-06-30 | 1 | 7 × **v2** | Single day |
+| `6493…` | 45 | 12 | 2026-08-03 | 1 | 7 × **v2** | |
+| `0fa0…` | 45 | 13 | 2026-08-05 | 1 | 7 × **v2** | |
+| `d213…` | 45 | 13 | 2026-08-07 | 1 | **9 × v4** | Newest; still pre–schema 15 / pre–task 09 payload binding |
+
+**Schema-15 accum rows in DB: 0.**
+**Learning loop tables:** proposals / validations / applications = **0** each.
+
+Risk audit note: even schema-9 rows often contain
+`features_by_window.7.risk.gate_evaluations` arrays (persister enrichment is
+older than task 09). Task 09’s defect was **snapshot declaration + ML
+extraction**, not missing raw audit storage. Post-rebuild writers must still
+emit schema **15** with structural-filter + diagnostic binding contracts.
+
+Labels attached to accum observations: **5,232** rows (join on
+`observation_id`).
+
+### 3.3 Market data (not the soft limit; fundamentals are)
 
 | Table | rows | tickers | date range |
-|---|---|---|---|
-| `candles` | 82,649 | 320 | 2025-07-07 → 2026-08-03 |
-| `broker_summaries` | 65,453 | 306 | 2025-07-07 → 2026-08-03 |
-| `broker_daily_flow` | 513,662 | 303 | 2025-07-07 → 2026-08-03 |
+|---|---:|---:|---|
+| `candles` | 83,917 | 320 | 2025-07-07 → **2026-08-07** |
+| `broker_summaries` | 65,604 | 306 | 2025-07-07 → 2026-08-07 |
+| `broker_daily_flow` | 515,645 | 303 | 2025-07-07 → 2026-08-07 |
 
-That is roughly **13 months** of history against a corpus currently spanning
-42 sessions at best.
+Candle sessions with `date >= 2026-07-08` (fundamentals floor): **26**
+(`2026-07-08` … `2026-08-07`). Broker summary sessions in that window: **23**.
+
+### 3.4 Fundamentals PIT floor (unchanged, still hard)
+
+From `docs/data_fundamentals_pit_depth.md` + live re-count 2026-08-08:
+
+| | |
+|---|---|
+| `company_fundamentals` rows | 9,014 |
+| With `piotroski_f_score` / `market_cap_idr` | **473** each |
+| First honest non-null | **2026-07-08** |
+| Latest fundamentals fetch | 2026-08-03 |
+
+**Decision (locked for this rebuild):** start the deep cohort at
+**2026-07-08 or later**. Do not mix pre-cutoff sessions into the same
+compatibility cohort. Keep `min_market_cap_idr` and `min_piotroski` at **0**
+(current production) so structural filters do not empty the universe on residual
+missingness.
+
+### 3.5 ml-saham health (live DB, 2026-08-08)
+
+`ml-saham challenge health --scenario accum` against this DB returned
+**BLOCKED_POLICY** for `screener.accum.score_weights` (n=0 without an explicit
+eligible post–task-09 cohort). Confirms no usable production baseline cohort
+exists today.
+
+### 3.6 Session-calendar authority gap
+
+`trading_session_calendar_snapshots` currently covers only
+**2026-08-05 → 2026-08-07** (Stockbit IHSG history snapshot). A deep backfill
+from 2026-07-08 **must** expand calendar coverage first
+(`saham research accum sync-session-calendar`), or capture/backfill will
+fail-closed / under-count sessions.
 
 ---
 
-## 3. Desired Outcome
+## 4. Desired Outcome
 
-- Exactly **one** accum `compatibility_id` exists after this task.
-- It carries the full 7-row `production_policy_snapshot.v2` set.
-- Its session depth is the maximum the data honestly supports, and is
-  **≥ 3 folds + 20-session embargo** so `ml-saham` can return WIN/LOSE rather
-  than `INCONCLUSIVE`/`BLOCKED_DATA`.
-- `ml-saham challenge health --scenario accum --compatibility-id <new>` returns
-  a real verdict.
-- Zero observations from the pre-fix engine remain.
-
----
-
-## 4. Non-Goals
-
-- No scoring, gate, or identity logic changes. Those belong to the config-edit
-  batch (ADR-068 task, ADR-067 task, risk-gate task). If this task needs a logic
-  change, it is a defect in a prior task — go back and fix it there.
-- No re-weighting of accum sleeves (deferred; see `SEQUENCE_*.md`).
-- No promotion of anything into production config
-  (`06_implement_accum_policy_proposal_lifecycle.md`).
-- No pre-open corpus changes (`05_fix_preopen_directional_score_resolution.md` —
-  different purpose, isolated per the purpose-isolation rule in
-  `grow_snapshot_bound_accum_challenge_corpus.md`).
-- No changes to `ml-saham`.
+- Exactly **one** accum `compatibility_id` after rebuild, equal to the live
+  ADR-068 triple (probe + snapshot-set digest + schema 15). Recompute at execute
+  time; the §2.3 value is the re-vet baseline and will change if config moves.
+- That cohort carries the full **9-row `production_policy_snapshot.v4`** set,
+  including task-09 paths:
+  - `risk.accum.hard_gates` → `features_by_window.7.risk.gate_evaluations` (+ coarse companions)
+  - `risk.accum.unevaluable_policy` → `unevaluable_gates` + `gate_evaluations`
+- Observation payloads are **schema 15** only.
+- Session depth is the maximum the data honestly supports **from 2026-07-08**,
+  then grows under config freeze. **Do not claim WIN/LOSE** until protocol
+  depth is actually met (see §8).
+- Zero pre-batch accum observations remain.
+- `PRE_OPEN_AUCTION_DIRECTION` rows remain untouched (29 today).
+- `ml-saham challenge health --scenario accum --compatibility-id <new>` runs
+  against the new id (honest BLOCKED_DATA / INCONCLUSIVE is acceptable if depth
+  is short; **BLOCKED_POLICY** from wrong snapshot binding is not).
 
 ---
 
-## 5. Architecture Impact Assessment
+## 5. Non-Goals
 
-- **Domain / Application / Infrastructure / Adapter:** ideally **none**. This is
-  an ops task run through existing commands.
-- Expected exception: `scripts/purge_accum_learning_corpus.py` may need a range
-  or dry-run refinement, and the backfill command may need a depth guard.
+- No scoring, gate, threshold, or identity-algorithm changes (those were the
+  config-edit batch). If rebuild needs a logic fix, stop and fix upstream.
+- No re-weighting of accum sleeves; no policy proposal promotion (task 06).
+- No pre-open corpus purge/rebuild (purpose isolation).
+- No relaxing `ml-saham` `accum_path_v1` fold/embargo/min_n parameters.
+- No purge during documentation-only slices.
 
-New dependency: **No.**
-Determinism: **No** logic change.
-Persistence: **Yes — destructive.** Rows are deleted. Backup is mandatory.
-Warm-up: **Yes** — indicator warm-up bounds how early the backfill can start.
-Measure it; do not assume.
-Policy in adapter: **No.**
+---
+
+## 6. Architecture Impact Assessment
 
 ```md
 Layer plan:
 - Domain: not touched
-- Application: not touched (unless a backfill depth guard is required)
-- Infrastructure: not touched
+- Application: not touched unless backfill depth/calendar guard is required
+- Infrastructure: not touched (unless purge script completeness is extended)
 - Adapter: not touched
-- Ops: purge script + documented command sequence
+- Ops: purge script hardening + documented command sequence
 ```
 
----
-
-## 6. AI Usage Declaration
-
-**No AI involved.**
+- Determinism: no engine logic change.
+- Persistence: **yes — destructive** after slice 3.
+- Policy in adapter: no.
 
 ---
 
-## 7. Risk, Signal, And Evidence Authority Considerations
+## 7. Data & Persistence
 
-No decision component changes. The corpus this produces becomes the evidence
-base for every later tuning decision, so its integrity is the whole point.
+### 7.1 Read
 
-**Does this change what can produce ENTER/WATCH/AVOID?** No.
+`candles`, `broker_summaries`, `broker_daily_flow`, `company_fundamentals`,
+`shareholding_composition`, `trading_session_calendar_snapshots`, config YAMLs.
+
+### 7.2 Exact purge blast radius (measured dry-run)
+
+**Current script** (`scripts/purge_accum_learning_corpus.py`) dry-run on
+`data/db/data.db` (2026-08-08):
+
+| Target | Count | Action today |
+|---|---:|---|
+| `learning_observations` purpose=`ACCUMULATION_DISCOVERY` | **2,678** | DELETE |
+| `learning_outcome_labels` for those observation_ids | **5,232** | DELETE (must precede obs because `ON DELETE RESTRICT`) |
+| `learning_evaluations` purpose=`ACCUMULATION_DISCOVERY` | **0** | DELETE (no-op) |
+| Non-accum observations (PRE_OPEN etc.) | **29** | **UNTOUCHED** (verified by script) |
+
+**Not handled by the current script — must be addressed before/with purge
+(slice 2 hardening):**
+
+| Residue | Count (2026-08-08) | Risk if left behind |
+|---|---:|---|
+| `learning_policy_snapshots` (all contracts, all cohorts) | **36** | Orphaned superseded identities; ml-saham may still see wrong sets if selection is sloppy |
+| `setup_phase_ledger` | **2,713** | Stale production memory from pre-batch screens; not FK-bound to observations |
+| `learning_track_snapshots` | 1,230 total; **0** linked to current accum obs ids | Low today; still enforce purpose isolation / FK order |
+| `learning_diagnostic_producer_snapshots` | **0** | OK |
+| Policy lifecycle tables | 0 / 0 / 0 | OK |
+
+**FK constraint:** labels and track snapshots use
+`FOREIGN KEY (observation_id) … ON DELETE RESTRICT`. Purge **must** delete
+dependent rows first (script already deletes labels first). Extend the same
+pattern for any other RESTRICT children discovered at execute time.
+
+**Explicit non-deletes:** market data tables, PRE_OPEN observations and their
+labels, app config, candles, fundamentals.
+
+### 7.3 Written after rebuild
+
+- Fresh schema-15 `ACCUMULATION_DISCOVERY` observations under the single new
+  `compatibility_id`
+- Full **v4** nine-row snapshot set for that id
+- Labels for mature horizons; phase-ledger backfill from new observations
+- Expanded trading-session calendar coverage for the rebuild range
+
+### 7.4 Depth limits (all three still apply)
+
+1. **Market data:** from 2025-07-07, but not usable alone.
+2. **Indicator warm-up:** longest screen lookbacks (SMA/RSI, liquidity median,
+   7d window) — measure at execute; do not guess.
+3. **Fundamentals PIT:** hard floor **2026-07-08** (recommended rebuild start).
+
+**Honest post-rebuild expectation (2026-08-08):**
+
+- Rebuild range ≈ **2026-07-08 → latest completed session** (~26 candle
+  sessions today).
+- That can seed a **single deep cohort** and clear BLOCKED_POLICY identity
+  debt.
+- It is **unlikely** to satisfy a promotion-grade WIN (`min_folds_for_win=2`
+  with `embargo_sessions=20`) until the freeze accumulates more sessions
+  (~40+ calendar sessions of same identity is the planning target from
+  SEQUENCE).
+- Final ~10 / ~20 sessions will have UNAVAILABLE H10 / H20 labels until
+  maturity — expected; do not forward-fill labels.
 
 ---
 
-## 8. Data & Persistence
+## 8. Acceptance Criteria
 
-- **Read:** `candles`, `broker_summaries`, `broker_daily_flow`,
-  `company_fundamentals`, `shareholding_composition`,
-  `trading_session_calendar_snapshots`.
-- **Deleted:** all accum-purpose `learning_observations`,
-  `learning_outcome_labels`, `setup_phase_ledger` entries, and orphaned
-  `learning_policy_snapshots`.
-- **Written:** fresh observations, labels, phase-ledger rows, and one snapshot set.
-- **Schema change:** No.
+### Pre-execute (slice 1–2)
 
-### Depth is bounded by three limits — measure all three before purging
+- [ ] This re-vet document is the execution brief (stale v2/seven-row language gone).
+- [ ] Purge script extended or companion cleanup covers **policy snapshots** for
+      accum-related superseded cohorts and documents phase-ledger handling.
+- [ ] Dry-run counts re-measured on the execute-day DB and pasted.
+- [ ] Backup path + byte size recorded **before** `--execute`.
+- [ ] Trading-session calendar coverage plan for 2026-07-08 → end documented.
 
-1. **Market data:** 2025-07-07 (`candles`, `broker_daily_flow`).
-2. **Indicator warm-up:** the longest lookback on the screen path
-   (`sma_period`, `rsi_period`, 20d liquidity median, 7d canonical window).
-3. **Fundamentals PIT depth:** confirmed by implementing
-   `03_fix_risk_gate_silent_skip_and_fundamentals_pit_hole.md` (2026-08-05) — see
-   `docs/data_fundamentals_pit_depth.md` for the full measurement. Honest
-   `piotroski_f_score` / `market_cap_idr` coverage starts **2026-07-08** (273
-   tickers) / **2026-07-09** (30 tickers). This is a **hard, non-recoverable**
-   limit, not a backfill-later gap: `piotroski_f_score` arrives from Stockbit
-   precomputed with no local F-score calculator to rebuild it from, and
-   `market_cap_idr` has no stored shares-outstanding to reconstruct a historical
-   value from. Nothing before 2026-07-08 can ever be filled in.
+### Post-execute
 
-   **Sharper than "FundamentalGate goes unevaluable": the structural filter
-   rejects, it does not go unevaluable.** `AccumulationCandidateStructuralFilter`
-   and the risk gates handle the same missing data differently — `FundamentalGate`
-   / the LiquidityGate market-cap leg record `GateOutcome.UNEVALUABLE` (safe,
-   asserts nothing), but `min_market_cap_idr` / `min_piotroski` in the
-   *structural filter* **reject** candidates outright on a missing value. Setting
-   either above 0 for any pre-2026-07-08 session **empties the universe**, not
-   "degrades it." Verify both filter thresholds are 0 (or the rebuild window
-   starts at 2026-07-08+) before running anything against an earlier session.
-
-Limit 3 is the sharp one. **Decide explicitly and record the decision** (see
-`docs/data_fundamentals_pit_depth.md` §5 for the ranked options):
-
-1. **Start the deep cohort at 2026-07-08 or later (recommended).** Every
-   session then has honest fundamentals for all 303 tickers and both gates are
-   genuinely live — no permanently-degraded window in the cohort.
-2. **Go deeper and accept the degradation explicitly**, but pre-2026-07-08 rows
-   must then be a *separate* cohort — pooling them with post-cutoff rows mixes
-   observations where the gate was live with observations where it was
-   structurally blind, which is not one population.
-3. Either way: **do not** set `min_market_cap_idr` or `min_piotroski` above 0
-   for any pre-cutoff session (see the structural-filter note above) — a known
-   evaluable-vs-unevaluable gate is analysable; an emptied universe is not.
-
-**Label maturity:** the 20d horizon needs 20 sessions after each signal date.
-Observations in the final 20 sessions will have `UNAVAILABLE` 20d labels until
-they mature. This is expected — do not backfill labels forward to fill them.
-
----
-
-## 9. Acceptance Criteria
-
-- [ ] DB backed up before any destructive command; path and size recorded.
-- [ ] Purge dry-run counts reviewed and matched against expectation before `--execute`.
-- [ ] `SELECT COUNT(DISTINCT compatibility_id)` for accum purpose = **1**.
-- [ ] That cohort has 7 `production_policy_snapshot.v2` rows.
-- [ ] The cohort id is the ADR-068 behavioural identity (probe digest + snapshot
-      payload digest + payload schema version), not a legacy proxy value.
-- [ ] Session depth recorded and ≥ protocol minimum.
-- [ ] Zero rows with `risk.snapshot_date > session_date` (PIT guard from `34fc4360`).
+- [ ] `SELECT COUNT(DISTINCT compatibility_id) FROM learning_observations WHERE purpose='ACCUMULATION_DISCOVERY'` = **1**.
+- [ ] That id matches live ADR-068 identity at rebuild time (schema **15**).
+- [ ] Exactly **9** `learning_policy_snapshots` rows for that id with
+      `contract_id='production_policy_snapshot.v4'`.
+- [ ] Snapshot payloads for `risk.accum.hard_gates` and
+      `risk.accum.unevaluable_policy` include task-09
+      `observation_result_fields` paths.
+- [ ] Zero accum observations with `schema_version != 15`.
+- [ ] PRE_OPEN observation count unchanged across purge (29 → 29, or execute-day baseline).
+- [ ] Zero rows with risk PIT violation `risk.snapshot_date > session_date` (guard from prior clean break).
 - [ ] Label maturity distribution recorded per horizon.
 - [ ] `ml-saham challenge health --scenario accum --compatibility-id <new>`
-      returns a non-`BLOCKED` verdict; output pasted into the Completion Record.
-- [ ] Cron scripts still reference the correct commands after the rebuild.
+      output pasted; not BLOCKED_POLICY for missing/wrong snapshot set.
+- [ ] Cron scripts still correct; config freeze called out in SEQUENCE/ops notes.
 
 ---
 
-## 10. Slices (each slice = one commit)
+## 9. Slices (each slice = one commit)
 
-**Slice 1 — Measure and plan.**
-Report all three depth limits, the achievable start date, expected observation
-count, and the exact purge blast radius. **No destructive action.** Land the
-numbers first so the purge is reviewable.
-Commit: `docs(corpus): measure accum rebuild depth limits and purge blast radius`
+**Slice 1 — Measure and plan (this re-vet is the draft; refresh counts on execute day).**
+Commit: `docs(corpus): re-vet accum rebuild depth, identity, purge blast radius`
 
-**Slice 2 — Harden the purge script.**
-Backup verification, FK pragma, dry-run/execute parity, purpose isolation so
-PRE_OPEN rows are provably untouched.
-Commit: `chore(corpus): harden accum purge script for the rebuild`
+**Slice 2 — Harden purge / cleanup for full blast radius.**
+Must cover: labels-first FK order (already), accum observations, evaluations,
+**orphaned/superseded `learning_policy_snapshots`**, phase-ledger policy
+(delete-all-for-rebuild vs rebuild-from-obs only — pick one and test), dry-run
+parity, PRE_OPEN isolation tests.
+Commit: `chore(corpus): harden accum purge for snapshots and phase ledger`
 
-**Slice 3 — Execute the clean break.**
-Backup → dry-run → confirm → `--execute`. Nothing else in this commit.
+**Slice 3 — Execute clean break only.**
+Backup → dry-run → human confirm → `--execute`. No backfill in this commit.
 Commit: `chore(corpus)!: purge superseded accum learning corpus`
 
 **Slice 4 — Rebuild.**
-Session-calendar sync → backfill over the chosen range → labels → phase ledger →
-status. Record counts at each step.
-Commit: `chore(corpus): rebuild accum corpus as single deep cohort`
+Calendar sync → backfill from **2026-07-08** (or later) → ensure v4 snapshots →
+labels → phase ledger → status. Record counts each step.
+Commit: `chore(corpus): rebuild accum corpus as single schema-15 v4 cohort`
 
-**Slice 5 — Verify against ml-saham.**
-Run `challenge health` / `challenge run` against the new cohort. Record the
-verdict. If still `INCONCLUSIVE`, diagnose and record why — do **not** adjust
-protocol parameters to force a verdict.
+**Slice 5 — Verify with ml-saham.**
+Health + representative `challenge run` with explicit `--compatibility-id`.
+Honest short-depth BLOCKED_DATA/INCONCLUSIVE is fine; record the gap.
 Commit: `docs(corpus): record ml-saham verdict on rebuilt accum cohort`
 
 ---
 
-## 11. Testing Expectations
+## 10. Testing Expectations
 
-- Purge script unit tests: purpose isolation (PRE_OPEN untouched), FK integrity,
-  dry-run counts equal execute counts.
-- Post-rebuild invariant queries as listed in Acceptance Criteria, run and pasted.
-- Ruff applies only if Python changes (slice 2 will).
-
----
-
-## 12. Documentation Impact
-
-- README: **No.**
-- New config options: **No.**
-- Limitations: **Yes** — record the fundamentals-horizon decision and its effect
-  on early-session risk assessment.
+- Purge unit tests: PRE_OPEN untouched; label-before-obs FK order; snapshot
+  cleanup; dry-run == execute counts for each table.
+- Post-rebuild invariant SQL from Acceptance Criteria, pasted into Completion
+  Record.
+- Ruff if Python changes (slice 2).
+- No full-suite requirement beyond touched scripts + existing purge tests.
 
 ---
 
-## 13. Required Reading
+## 11. Documentation Impact
+
+- This task file + SEQUENCE note.
+- Record fundamentals start decision and post-rebuild depth honesty in
+  Completion Record (and optionally a short ops note under `docs/` if execute
+  discovers new calendar constraints).
+- README: no.
+
+---
+
+## 12. Required Reading
 
 - `AGENT_QUICKSTART.md`, `TASK_TEMPLATE.md`, `DEFINITION_OF_DONE.md`
-- `BOUNDARY.md` — corpus authority split with `ml-saham`
-- `tasks/done/fix_risk_pit_cutoff_lookahead.md` — the prior clean break; reuse
-  its command sequence and Completion Record shape
-- `tasks/backlog/grow_snapshot_bound_accum_challenge_corpus.md` — locked
-  decisions on calendar authority, label integrity, purpose isolation
-- `docs/adr/ADR-056-*`, `docs/adr/ADR-059-*`
+- `BOUNDARY.md` — corpus authority split with ml-saham
+- `docs/adr/ADR-059-*` (v4 nine-row closed set + task-09 field bindings)
+- `docs/adr/ADR-068-*` (identity triple)
+- `docs/data_fundamentals_pit_depth.md`
+- `tasks/backlog/09_expose_unevaluable_gate_block_provenance.md` (IMPLEMENTED)
+- `tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`
+- `tasks/done/fix_risk_pit_cutoff_lookahead.md` — prior clean-break shape
+- `scripts/purge_accum_learning_corpus.py` — current incomplete blast radius
+- ml-saham `src/ml_saham/challenge/protocols.py` (`accum_path_v1`)
 
 ---
 
-## 14. Do Not Interpret This As
+## 13. Do Not Interpret This As
 
-- **Not** permission to relax `ml-saham` protocol parameters (`n_folds`,
-  `embargo_sessions`, `min_n_total`) to obtain a verdict. If depth is
-  insufficient, the answer is more depth or an honest `INCONCLUSIVE`.
-- **Not** permission to run the purge before tasks 1–3 are merged. A rebuild on
-  a half-fixed engine wastes the whole exercise.
-- **Not** permission to skip the backup.
+- Permission to purge during re-vet or slice 1.
+- Permission to rebuild before slices 1–2 hardening if snapshot/phase residues
+  would leave a mixed-authority lab.
+- Permission to start before 2026-07-08 without a **separate** cohort decision.
+- Permission to relax ml-saham protocol parameters.
+- Permission to skip backup.
 
 ---
 
-## 15. Completion Record
+## 14. Completion Record
 
 - Completed date:
+- Re-vet commits:
 - Slice commits:
 - Backup path / size:
-- Purge dry-run counts vs expected:
+- Execute-day dry-run counts vs §7.2:
 - Rebuild range + session depth:
 - Final observation / label counts per horizon:
-- Single `compatibility_id`:
+- Single `compatibility_id` (must match live ADR-068 at rebuild):
+- Snapshot contract + policy count:
 - Fundamentals-horizon decision + reasoning:
 - `ml-saham challenge health` output:
+- Known depth gap vs WIN criteria (if any):
 - Test / Lint result:
