@@ -17,6 +17,12 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import (
+    raise_data_unavailable,
+    raise_internal_error,
+    raise_user_error,
+    resolve_cli_db_path,
+)
 from src.adapters.cli.research_pre_open_paths import parse_session_date
 from src.adapters.cli.screen_pre_open_workflow_factory import (
     create_pre_open_cli_workflow,
@@ -110,7 +116,7 @@ def pre_open_capture(
     not authoritative.
     """
     cfg = load_app_config()
-    resolved_db = db_path or Path(cfg.storage.db_path)
+    resolved_db = resolve_cli_db_path(db_path, configured_default=cfg.storage.db_path)
     resolved_config = config_path or Path(cfg.config_paths.pre_open_screener)
     run_date = parse_session_date(session)
 
@@ -126,17 +132,16 @@ def pre_open_capture(
         allow_non_trading_day=allow_non_trading_day,
     )
     if run_guard.error:
-        typer.echo(f"Pre-open guard: {run_guard.error}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(f"Pre-open guard: {run_guard.error}")
 
     if movers_json is not None or order_books_json is not None:
-        typer.echo(
-            "Capture rejected: manual JSON is discovery-only. Use "
-            "`saham screen pre-open` for manual payloads; authoritative capture "
-            "requires the direct live provider.",
-            err=True,
+        raise_user_error(
+            "Capture rejected: manual JSON is discovery-only.",
+            tip=(
+                "Use `saham screen pre-open` for manual payloads; "
+                "authoritative capture requires the direct live provider."
+            ),
         )
-        raise typer.Exit(1)
 
     movers_raw: list | None = None
     order_books_raw: dict | None = None
@@ -148,14 +153,15 @@ def pre_open_capture(
     )
     skip_live_fetch = run_guard.outside_window and movers_raw is None
     if browser_plan.provider is None and not skip_live_fetch:
-        typer.echo(
-            "Browser/session plan required for capture (or pass --movers-json / "
-            "run inside window with snapshot fallback).",
-            err=True,
+        tip = (
+            "Run: saham fetch stockbit login"
+            if browser_plan.session_missing
+            else "Run inside the pre-open window or after stockbit login."
         )
-        if browser_plan.session_missing:
-            typer.echo("Run: saham fetch stockbit login", err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(
+            "Browser/session plan required for capture.",
+            tip=tip,
+        )
 
     browser_provider = browser_plan.provider or ManualBrowserDataProvider(movers=[])
     cli_workflow = create_pre_open_cli_workflow(
@@ -165,8 +171,7 @@ def pre_open_capture(
         ai_provider=None,
     )
     if cli_workflow.record_observations_use_case is None:
-        typer.echo("Error: observation recorder not wired.", err=True)
-        raise typer.Exit(1)
+        raise_internal_error("observation recorder not wired.")
 
     workflow_request = PreOpenWorkflowRequest(
         config=config,
@@ -187,8 +192,7 @@ def pre_open_capture(
             workflow_request,
         )
     except Exception as e:
-        typer.echo(f"Capture failed: {e}", err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(f"Capture failed: {e}")
 
     observation_rows = [
         {

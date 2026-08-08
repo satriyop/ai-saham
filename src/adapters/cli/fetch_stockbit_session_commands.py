@@ -16,6 +16,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import raise_data_unavailable, raise_user_error
 from src.adapters.cli.fetch_stockbit_playwright_guard import require_playwright_cli
 
 
@@ -43,8 +44,7 @@ def login(
     try:
         save_stockbit_session(timeout=timeout)
     except Exception as e:
-        typer.echo(f"Login failed: {e}", err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(f"Login failed: {e}")
 
 
 def reauth(
@@ -86,11 +86,7 @@ def reauth(
 
     normalized = (mode or "").strip().lower()
     if normalized not in ("headless", "headed"):
-        typer.echo(
-            f"Invalid --mode {mode!r}; expected 'headless' or 'headed'.",
-            err=True,
-        )
-        raise typer.Exit(1)
+        raise_user_error(f"Invalid --mode {mode!r}; expected 'headless' or 'headed'.")
 
     try:
         result = reauth_stockbit_session(
@@ -98,10 +94,15 @@ def reauth(
             mode=normalized,  # type: ignore[arg-type]
         )
     except Exception as e:
-        typer.echo(f"Reauth failed: {e}", err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(
+            f"Reauth failed: {e}",
+            tip="Run: saham fetch stockbit login",
+        )
     if not result.success:
-        raise typer.Exit(1)
+        raise_data_unavailable(
+            "Reauth failed.",
+            tip="Run: saham fetch stockbit login",
+        )
 
 
 def status() -> None:
@@ -193,5 +194,4 @@ def browse(
     try:
         browse_stockbit_session(url=target)
     except Exception as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(str(e), tip="Run: saham fetch stockbit login")

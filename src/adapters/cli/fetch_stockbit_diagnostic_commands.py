@@ -14,6 +14,11 @@ from typing import Annotated
 
 import typer
 
+from src.adapters.cli.cli_errors import (
+    CliErrorCategory,
+    echo_cli_error,
+    raise_data_unavailable,
+)
 from src.adapters.cli.fetch_stockbit_diagnostic_factory import (
     create_authenticated_stockbit_provider,
 )
@@ -43,8 +48,7 @@ def test(
     try:
         provider = create_authenticated_stockbit_provider()
     except ValueError as e:
-        typer.echo(str(e))
-        raise typer.Exit(1)
+        raise_data_unavailable(str(e), tip="Run: saham fetch stockbit login")
 
     # ── Test 1: movers ────────────────────────────────────────────────────
     typer.echo("")
@@ -71,7 +75,7 @@ def test(
             typer.echo("    — Token may be expired: saham fetch stockbit login")
             typer.echo("    — Next step: saham fetch stockbit spy --target screener")
     except Exception as e:
-        typer.echo(typer.style(f"  ✗ Error: {e}", fg=typer.colors.RED))
+        echo_cli_error(str(e), category=CliErrorCategory.DATA_UNAVAILABLE)
 
     # ── Test 2: order book ────────────────────────────────────────────────
     typer.echo("")
@@ -94,7 +98,7 @@ def test(
                 f"  Next step: saham fetch stockbit spy --target orderbook --ticker {ticker}"
             )
     except Exception as e:
-        typer.echo(typer.style(f"  ✗ Error: {e}", fg=typer.colors.RED))
+        echo_cli_error(str(e), category=CliErrorCategory.DATA_UNAVAILABLE)
 
     typer.echo("")
 
@@ -119,8 +123,7 @@ def fetch_top5(
     try:
         provider = create_authenticated_stockbit_provider()
     except ValueError as e:
-        typer.echo(str(e))
-        raise typer.Exit(1)
+        raise_data_unavailable(str(e), tip="Run: saham fetch stockbit login")
 
     typer.echo("")
     typer.echo(f"Fetching top {top} IEV movers + orderbooks...")
@@ -130,8 +133,7 @@ def fetch_top5(
     try:
         results = provider.fetch_top5_iev_with_orderbooks(top_n=top)
     except Exception as e:
-        typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED), err=True)
-        raise typer.Exit(1)
+        raise_data_unavailable(str(e), tip="Run: saham fetch stockbit login")
 
     if not results:
         typer.echo(typer.style("No results returned.", fg=typer.colors.YELLOW))

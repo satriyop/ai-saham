@@ -10,6 +10,11 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import (
+    raise_data_unavailable,
+    raise_internal_error,
+    raise_user_error,
+)
 from src.application.use_case.create_strategy_from_intent_use_case import (
     CreateStrategyFromIntentRequest,
     CreateStrategyFromIntentUseCase,
@@ -89,19 +94,17 @@ def create(
 
         # Handle response
         if response.unsupported:
-            typer.echo("Error: This intent cannot be expressed as a strategy.", err=True)
-            typer.echo("", err=True)
-            typer.echo("Unsupported requests include:", err=True)
-            typer.echo("  - Specific stock recommendations", err=True)
-            typer.echo("  - Price predictions", err=True)
-            typer.echo("  - Guaranteed outcomes", err=True)
-            typer.echo("  - Non-strategy requests", err=True)
-            raise typer.Exit(1)
+            raise_user_error(
+                "This intent cannot be expressed as a strategy.",
+                tip=(
+                    "Unsupported: stock recommendations, price predictions, "
+                    "guaranteed outcomes, non-strategy requests."
+                ),
+            )
 
         if not response.success:
-            typer.echo(f"Error: {response.error_message}", err=True)
             _handle_error_hints(response.error_message or "", provider)
-            raise typer.Exit(1)
+            raise_user_error(response.error_message or "Strategy generation failed.")
 
         # Display generated strategy
         typer.echo("Generated Strategy:")
@@ -132,11 +135,9 @@ def create(
                 target_dir.mkdir(parents=True, exist_ok=True)
                 strategy_yaml.write_text(response.yaml_content, encoding="utf-8")
             except PermissionError:
-                typer.echo(f"Error: Permission denied creating {target_dir}", err=True)
-                raise typer.Exit(1)
+                raise_user_error(f"Permission denied creating {target_dir}")
             except OSError as e:
-                typer.echo(f"Error saving strategy: {e}", err=True)
-                raise typer.Exit(1)
+                raise_data_unavailable(f"Error saving strategy: {e}")
 
             typer.echo(f"Strategy saved to: {strategy_yaml}")
             typer.echo("")
@@ -152,17 +153,16 @@ def create(
             typer.echo(f'  saham strategy create "{intent}" --name {name}')
 
     except ValueError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(str(e))
     except Exception as e:
         error_str = str(e).lower()
         if "api key" in error_str or "authentication" in error_str:
             _handle_auth_error(provider)
-        elif "connection" in error_str or "timeout" in error_str:
+            raise_data_unavailable(str(e), tip="Set the provider API key environment variable.")
+        if "connection" in error_str or "timeout" in error_str:
             _handle_connection_error(provider)
-        else:
-            typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+            raise_data_unavailable(str(e))
+        raise_internal_error(str(e))
 
 
 def _slugify_intent(intent: str) -> str:

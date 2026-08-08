@@ -12,6 +12,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import raise_data_unavailable, raise_user_error
 from src.application.services.skill_generator import SkillGeneratorService
 from src.application.services.strategy_loader import StrategyLoader
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
@@ -77,31 +78,35 @@ def generate(
         try:
             strategy_path = loader.resolve(artifact)
         except Exception as e:
-            typer.echo(f"Error: {e}", err=True)
-            raise typer.Exit(1)
+            raise_user_error(str(e))
 
         result = generator.generate_for_strategy(strategy_path)
 
     elif artifact_type == "indicator":
         plugin_path = Path("plugins/indicators") / f"{artifact}.py"
         if not plugin_path.exists():
-            typer.echo(f"Error: Indicator plugin not found at {plugin_path}", err=True)
-            raise typer.Exit(1)
+            raise_data_unavailable(
+                f"Indicator plugin not found at {plugin_path}",
+                tip="Check plugins/indicators/ or generate the plugin first.",
+            )
         result = generator.generate_for_indicator(plugin_path)
 
     elif artifact_type == "formula":
         formulas_path = Path("config/formulas.yaml")
         if not formulas_path.exists():
-            typer.echo(f"Error: Formulas file not found at {formulas_path}", err=True)
-            raise typer.Exit(1)
+            raise_data_unavailable(
+                f"Formulas file not found at {formulas_path}",
+                tip="Ensure config/formulas.yaml exists.",
+            )
         result = generator.generate_for_formula(
             artifact.upper(), formulas_path, output_dir=Path("skills/formulas")
         )
 
     else:
-        typer.echo(f"Error: Unknown artifact type '{artifact_type}'", err=True)
-        typer.echo("Valid types: strategy, indicator, formula", err=True)
-        raise typer.Exit(1)
+        raise_user_error(
+            f"Unknown artifact type '{artifact_type}'",
+            tip="Valid types: strategy, indicator, formula",
+        )
 
     # Display result
     for warning in result.warnings:
@@ -115,8 +120,7 @@ def generate(
                 err=True,
             )
     else:
-        typer.echo("Failed to generate SKILL.md", err=True)
-        raise typer.Exit(1)
+        raise_user_error("Failed to generate SKILL.md")
 
 
 @skill_app.command("check")

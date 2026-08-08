@@ -107,7 +107,7 @@ def test_reauth_command_failure_exit_one(monkeypatch):
 
     result = runner.invoke(app, ["fetch", "stockbit", "reauth"])
 
-    assert result.exit_code == 1
+    assert result.exit_code == 2  # data_unavailable
 
 
 def test_reauth_command_surfaces_profile_in_use_without_token_leak(monkeypatch):
@@ -127,7 +127,7 @@ def test_reauth_command_surfaces_profile_in_use_without_token_leak(monkeypatch):
     result = runner.invoke(app, ["fetch", "stockbit", "reauth"])
 
     combined = result.stdout + result.stderr
-    assert result.exit_code == 1
+    assert result.exit_code == 2  # data_unavailable
     assert "Reauth failed:" in combined
     assert "profile is already in use" in combined
     assert "eyJ" not in combined
@@ -233,28 +233,32 @@ def test_stockbit_help_lists_all_commands():
         assert command_name in result.stdout
 
 
-def test_test_command_exits_1_with_session_expired_message_when_unauthenticated(monkeypatch):
+def test_test_command_exits_2_with_session_expired_message_when_unauthenticated(monkeypatch):
     monkeypatch.setattr(
         "src.adapters.cli.fetch_stockbit_diagnostic_factory.get_stockbit_session",
         lambda stockbit_config=None: None,
     )
 
     result = runner.invoke(app, ["fetch", "stockbit", "test"])
+    out = result.stdout + result.stderr
 
-    assert result.exit_code == 1
-    assert "Stockbit session expired. Run `saham fetch stockbit login` to refresh." in result.stdout
+    assert result.exit_code == 2  # data_unavailable
+    assert "Stockbit session expired. Run `saham fetch stockbit login` to refresh." in out
+    assert "Error [data_unavailable]:" in out
 
 
-def test_fetch_top5_command_exits_1_with_session_expired_message_when_unauthenticated(monkeypatch):
+def test_fetch_top5_command_exits_2_with_session_expired_message_when_unauthenticated(monkeypatch):
     monkeypatch.setattr(
         "src.adapters.cli.fetch_stockbit_diagnostic_factory.get_stockbit_session",
         lambda stockbit_config=None: None,
     )
 
     result = runner.invoke(app, ["fetch", "stockbit", "fetch-top5"])
+    out = result.stdout + result.stderr
 
-    assert result.exit_code == 1
-    assert "Stockbit session expired. Run `saham fetch stockbit login` to refresh." in result.stdout
+    assert result.exit_code == 2  # data_unavailable
+    assert "Stockbit session expired. Run `saham fetch stockbit login` to refresh." in out
+    assert "Error [data_unavailable]:" in out
 
 
 def test_router_does_not_import_concrete_stockbit_infrastructure():
@@ -273,7 +277,7 @@ def test_router_does_not_import_concrete_stockbit_infrastructure():
     assert not any(m.startswith("src.infrastructure") for m in imported_modules)
 
 
-def test_playwright_guard_exits_1_with_install_message_when_missing(monkeypatch, capsys):
+def test_playwright_guard_exits_2_with_install_message_when_missing(monkeypatch, capsys):
     import builtins
 
     from src.adapters.cli.fetch_stockbit_playwright_guard import require_playwright_cli
@@ -290,7 +294,8 @@ def test_playwright_guard_exits_1_with_install_message_when_missing(monkeypatch,
     with pytest.raises(typer.Exit) as exc_info:
         require_playwright_cli()
 
-    assert exc_info.value.exit_code == 1
+    assert exc_info.value.exit_code == 2  # data_unavailable
     captured = capsys.readouterr()
     assert "playwright not installed." in captured.err
     assert "Run: pip install playwright && playwright install chromium" in captured.err
+    assert "Error [data_unavailable]:" in captured.err

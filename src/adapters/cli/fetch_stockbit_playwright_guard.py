@@ -6,15 +6,14 @@ Layer: Adapter
 
 from __future__ import annotations
 
-import typer
+from src.adapters.cli.cli_errors import raise_data_unavailable
 
 
 def require_playwright_cli() -> None:
     try:
         import playwright  # noqa: F401
     except ImportError:
-        typer.echo(
-            "playwright not installed.\nRun: pip install playwright && playwright install chromium",
-            err=True,
+        raise_data_unavailable(
+            "playwright not installed.",
+            tip="Run: pip install playwright && playwright install chromium",
         )
-        raise typer.Exit(1)

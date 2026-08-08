@@ -9,6 +9,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import raise_data_unavailable, raise_user_error
 from src.adapters.cli.strategy_lifecycle_display import (
     print_strategy_created,
     print_strategy_list,
@@ -60,20 +61,18 @@ def init(
     try:
         response = use_case.execute(request)
     except InvalidStrategyPackageName as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(str(e))
     except StrategyPackageAlreadyExists as e:
-        typer.echo(f"Error: Strategy already exists at {e}", err=True)
-        typer.echo("Use --force to overwrite.", err=True)
-        raise typer.Exit(1)
+        raise_user_error(
+            f"Strategy already exists at {e}",
+            tip="Use --force to overwrite.",
+        )
     except StrategyPackageWriteError as e:
         if e.stage == "directory_permission":
-            typer.echo(f"Error: Permission denied creating {e.path}", err=True)
-        elif e.stage == "directory":
-            typer.echo(f"Error creating directory: {e}", err=True)
-        else:
-            typer.echo(f"Error writing strategy.yaml: {e}", err=True)
-        raise typer.Exit(1)
+            raise_user_error(f"Permission denied creating {e.path}")
+        if e.stage == "directory":
+            raise_data_unavailable(f"Error creating directory: {e}")
+        raise_data_unavailable(f"Error writing strategy.yaml: {e}")
 
     if not response.readme_written:
         typer.echo(f"Warning: Could not write README.md: {response.readme_warning}", err=True)
@@ -110,8 +109,7 @@ def validate(
     try:
         path = loader.resolve(strategy)
     except StrategyNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(1)
+        raise_user_error(str(e), tip="Use 'saham strategy list' or path to strategy.yaml")
 
     result = loader.validate(path, strict=strict)
 
@@ -120,7 +118,7 @@ def validate(
     if result.valid:
         generate_skill_md_for_strategy(path)
     else:
-        raise typer.Exit(1)
+        raise_user_error("Strategy validation failed.")
 
 
 def list_strategies(

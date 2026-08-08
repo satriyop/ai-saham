@@ -60,11 +60,19 @@ Exit-code alignment notes:
 - Missing cache / auth / session → **2** (data_unavailable; was often 1)
 - Explicit `--db` missing → **1**, never create
 
-### Still deferred
+### Remainder migration (2026-08-09)
 
-- Strategy authoring surface (`strategy_*`, AI create, skills)
-- Stockbit diagnostic / spy / session browse
-- Research capture wiring errors
+Also migrated:
+
+- Strategy: `strategy_lifecycle`, `strategy_skill`, `strategy_ai_create`
+- Stockbit: session login/reauth/browse, diagnostic test/fetch-top5, playwright guard
+- Research: `research pre-open capture` wiring / guard / session failures
+
+Bare `typer.echo(...Error:` sites under `src/adapters/cli/` are **0** after this pass
+(search may still find mid-flow status text that is not the old bare-prefix pattern).
+
+### Still deferred (non-taxonomy)
+
 - `saham today` warning truncation / severity ordering
 - Rich markup escaping for dynamic `[…]` strings
 - Doc-truth test for every historical `Error:` string in `CLI_TROUBLESHOOTING.md`
@@ -235,5 +243,7 @@ Commit: `docs(cli): document exit codes for error taxonomy MVP`
   - Application: synthetic universe label ignored for display-only MCE
 - Partial migration (2026-08-09): fetch market/broker/financials/iev/enrichment;
   contract helpers; plan/screen-preopen/regime/today/view-universe; backtest +
-  pre-open paper helpers. Remaining bare `Error:` sites ~22 (strategy/stockbit diag/research).
+  pre-open paper helpers.
+- Remainder migration (2026-08-09): strategy lifecycle/skill/AI create; stockbit
+  session/diag/playwright guard; research pre-open capture. Bare `Error:` sites → 0.
 - Test / Lint result: focused pytest green; `ruff check/format` whole-repo green
