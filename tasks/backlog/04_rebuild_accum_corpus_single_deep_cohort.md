@@ -397,11 +397,29 @@ Commit: `docs(corpus): record ml-saham verdict on rebuilt accum cohort`
 
 ## 14. Completion Record
 
-- Completed date:
-- Re-vet commits:
+- Completed date: (in progress — slice 3 executed 2026-08-08)
+- Re-vet commits: `831d5659`
 - Slice commits:
+  - Slice 1: `831d5659` docs re-vet
+  - Slice 2: `788786ff` purge harden + tests
+  - Slice 3: (this commit) purge executed
 - Backup path / size:
+  - `data/db/backups/data.db.pre-task04-purge-20260808_212307`
+  - 1.2G; sha256 `bbfb38d91ebcb9aa649389266dd67243baaf7cd27cd7ffabd5fc0105ba211c33`
+  - dry-run JSON: `data/db/backups/purge-dry-run-20260808_212307.json`
 - Execute-day dry-run counts vs §7.2:
+
+  | Target | Count | After |
+  |---|---:|---:|
+  | accum observations | 2678 | 0 |
+  | labels (accum) | 5232 | 0 |
+  | track snapshots | 0 | 0 |
+  | evaluations | 0 | 0 |
+  | policy snapshots | 36 | 0 |
+  | phase ledger | 2713 | 0 |
+  | PRE_OPEN observations | 29 | **29** |
+  | non-accum labels | 22 | **22** |
+
 - Rebuild range + session depth:
 - Final observation / label counts per horizon:
 - Single `compatibility_id` (must match live ADR-068 at rebuild):
