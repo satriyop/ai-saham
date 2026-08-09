@@ -116,6 +116,15 @@ the CLI's `--require-operational-success` gate so `BLOCKED_POLICY` cannot emit
 now `CODE_COMPLETE_AWAITING_DATA`. ml-saham's separate `BLOCKED_DATA` remains a
 protocol-depth result and does not overrule the producer status.
 
+**2026-08-09 OOS-protocol follow-up.** Task 06 must not unblock merely when the
+current `accum_path_v1` first emits two folds. The cross-repository task
+`vet_ml_accum_oos_protocol_before_policy_lifecycle.md` records a confirmed
+row-based thin-calendar fallback, row-count rather than session-count
+sufficiency gates, pooled ticker-row IC without session-aware uncertainty, and
+the absence of a final confirmation holdout. Corpus growth continues in
+parallel, but policy-proposal eligibility requires the vetted, versioned
+ml-saham protocol follow-up first.
+
 ---
 
 ## Three drafts were retired — do not implement any of them

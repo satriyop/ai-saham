@@ -3,7 +3,10 @@
 Status: `BLOCKED` — the corpus-growth producer recovered to
 `CHALLENGE_INPUT_READY` on 2026-08-09; this task now requires at least two valid
 post-embargo ml-saham OOS folds from the exact frozen cohort. Task 4's rebuild
-alone is insufficient.
+alone is insufficient. Before those folds may unblock this task, close
+`vet_ml_accum_oos_protocol_before_policy_lifecycle.md`: the current v1 splitter
+still has a row-based thin-calendar fallback, row-count rather than
+session-count sufficiency gates, and no policy-grade confirmation holdout.
 Sequence: **6 of 8** — see `tasks/backlog/00_SEQUENCE_accum_baseline_and_learning_loop.md`
 
 ## 1. Task Metadata
