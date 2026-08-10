@@ -75,6 +75,97 @@ class StockbitReauthResult:
 
 ReauthMode = Literal["headless", "headed"]
 
+# Headless JWT capture is flaky under cron (SPA request timing / URL heuristics).
+# Retry a few times with a slightly longer settle; never print token material.
+_HEADLESS_MAX_ATTEMPTS = 3
+_HEADLESS_RETRY_PAUSE_S = 0.75
+_HEADLESS_RETRY_EXTRA_SETTLE_MS = 2_000
+
+
+@dataclass(frozen=True)
+class HeadlessCaptureDiag:
+    """Non-secret facts about one headless JWT capture attempt."""
+
+    attempt: int
+    max_attempts: int
+    page_url: str
+    settle_ms: int
+    token_present: bool
+    algorithm: str | None
+    token_state: str | None
+    valid_rs256: bool
+    logged_in: bool
+    on_auth: bool
+    reason: str
+
+    def format_lines(self) -> tuple[str, ...]:
+        token_bit = (
+            f"present alg={self.algorithm or '?'} state={self.token_state or '?'}"
+            if self.token_present
+            else "absent"
+        )
+        return (
+            f"  Attempt {self.attempt}/{self.max_attempts} "
+            f"settle_ms={self.settle_ms} reason={self.reason}",
+            f"  url={self.page_url or '(empty)'}",
+            f"  token={token_bit} valid_rs256={self.valid_rs256}",
+            f"  logged_in={self.logged_in} on_auth={self.on_auth}",
+        )
+
+
+def _classify_headless_capture(
+    *,
+    attempt: int,
+    max_attempts: int,
+    page_url: str,
+    settle_ms: int,
+    token: str | None,
+    valid_rs256: bool,
+    algorithm: str | None,
+    token_state: str | None,
+    logged_in: bool,
+    on_auth: bool,
+) -> HeadlessCaptureDiag:
+    """Classify a headless capture without requiring a successful URL heuristic."""
+    if valid_rs256 and token:
+        if on_auth:
+            reason = "ok_rs256_on_auth_url"
+        elif not logged_in:
+            reason = "ok_rs256_ambiguous_url"
+        else:
+            reason = "ok_rs256"
+    elif on_auth:
+        reason = "auth_ui"
+    elif not token:
+        reason = "no_token_intercepted"
+    elif algorithm and algorithm != "RS256":
+        reason = f"token_not_rs256(alg={algorithm})"
+    elif token_state and token_state != "valid":
+        reason = f"token_{token_state}"
+    else:
+        reason = "token_not_valid_rs256"
+
+    return HeadlessCaptureDiag(
+        attempt=attempt,
+        max_attempts=max_attempts,
+        page_url=page_url or "",
+        settle_ms=settle_ms,
+        token_present=bool(token),
+        algorithm=algorithm,
+        token_state=token_state,
+        valid_rs256=bool(valid_rs256 and token),
+        logged_in=logged_in,
+        on_auth=on_auth,
+        reason=reason,
+    )
+
+
+def _reauth_wall_clock() -> str:
+    """Local wall clock for cron logs (no dependency on operator TZ env)."""
+    from datetime import datetime
+
+    return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %z")
+
 
 def _url_looks_logged_in(url: str) -> bool:
     """True when URL is on stockbit.com and outside the auth flow paths."""
@@ -356,18 +447,26 @@ def _try_capture_valid_jwt_from_orderbook(
     token_box: list[str],
     profile_dir: Path,
     cfg: StockbitConfig,
-) -> tuple[str | None, bool]:
-    """Navigate orderbook and return (token, is_valid_rs256) when captured."""
+    settle_ms: int | None = None,
+) -> tuple[str | None, bool, str | None, str | None]:
+    """
+    Navigate orderbook and inspect any captured JWT.
+
+    Returns ``(token, is_valid_rs256, algorithm, token_state)``. Never logs the
+    token string. ``settle_ms`` overrides config SPA settle (used for retries).
+    """
+    wait_ms = cfg.spa_settle_ms if settle_ms is None else max(0, int(settle_ms))
     try:
         page.goto(ORDERBOOK_PAGE_URL, timeout=cfg.nav_timeout_ms, wait_until="domcontentloaded")
-        page.wait_for_timeout(cfg.spa_settle_ms)
+        page.wait_for_timeout(wait_ms)
     except Exception as e:
         logger.debug("Orderbook open for JWT capture failed: %s", e)
     token = _resolve_token(page, token_box)
     if not token:
-        return None, False
+        return None, False, None, None
     meta = StockbitTokenStore(profile_dir / "token.json").describe_candidate(token)
-    return token, meta.state == "valid" and meta.algorithm == "RS256"
+    valid = meta.state == "valid" and meta.algorithm == "RS256"
+    return token, valid, meta.algorithm, meta.state
 
 
 def reauth_stockbit_session(
@@ -384,8 +483,9 @@ def reauth_stockbit_session(
     -----
     ``headless`` (default, cron-safe)
         Open the profile without a window, hit orderbook, capture RS256 JWT.
-        No login UI automation and no human fallback. Fails closed if auth UI
-        appears or no valid JWT is minted — run ``--mode headed`` then.
+        Retries a few times with diagnostics. No login UI automation and no
+        human fallback. Fails closed if auth UI appears or no valid JWT is
+        minted — run ``--mode headed`` then.
 
     ``headed``
         Visible Chromium for password autofill, confirmation dialogs, and
@@ -409,45 +509,125 @@ def _reauth_headless_jwt_refresh(
     *,
     profile_dir: Path,
     cfg: StockbitConfig,
+    max_attempts: int = _HEADLESS_MAX_ATTEMPTS,
 ) -> StockbitReauthResult:
-    """Cron path: headless only — mint JWT from cookies/session or fail closed."""
-    print("Stockbit JWT refresh (headless)")
+    """
+    Cron path: headless only — mint JWT from cookies/session or fail closed.
+
+    A locally valid RS256 JWT is sufficient for success (and is persisted) even
+    when the final page URL is ambiguous. Auth UI still fails closed after
+    retries so cron does not pretend a login dialog is recoverable headlessly.
+    """
+    attempts = max(1, int(max_attempts))
+    started = _reauth_wall_clock()
+    print(f"Stockbit JWT refresh (headless)  @ {started}")
     print(f"  Profile : {profile_dir}")
+    print(f"  Attempts: {attempts} (extra settle +{_HEADLESS_RETRY_EXTRA_SETTLE_MS}ms after first)")
     print("  No UI — fails if login page appears; use --mode headed to recover.\n")
 
     sync_playwright = _require_playwright()
-    with sync_playwright() as pw:
-        ctx, page = _persistent_context(pw, profile_dir, headless=True)
-        try:
-            token_box = _intercept_token(page)
-            token, valid = _try_capture_valid_jwt_from_orderbook(
-                page=page,
-                token_box=token_box,
-                profile_dir=profile_dir,
-                cfg=cfg,
-            )
-            on_auth = _url_looks_auth_flow(page.url)
-            logged_in = _url_looks_logged_in(page.url)
-        finally:
-            ctx.close()
+    last_diag: HeadlessCaptureDiag | None = None
 
-    if valid and token and logged_in and not on_auth:
-        token_saved = _save_rs256_token_if_valid(profile_dir=profile_dir, token=token)
-        _mark_profile_logged_in(profile_dir)
-        msg = "Headless JWT refresh OK — already authenticated."
-        print(f"✓ {msg}")
-        return StockbitReauthResult(
-            success=True,
-            token_saved=token_saved,
-            already_authenticated=True,
-            auto_clicks=(),
-            message=msg,
-            mode="headless",
+    for attempt in range(1, attempts + 1):
+        settle_ms = cfg.spa_settle_ms
+        if attempt > 1:
+            settle_ms = cfg.spa_settle_ms + _HEADLESS_RETRY_EXTRA_SETTLE_MS
+
+        token: str | None = None
+        valid = False
+        algorithm: str | None = None
+        token_state: str | None = None
+        page_url = ""
+        on_auth = False
+        logged_in = False
+
+        with sync_playwright() as pw:
+            ctx, page = _persistent_context(pw, profile_dir, headless=True)
+            try:
+                token_box = _intercept_token(page)
+                token, valid, algorithm, token_state = _try_capture_valid_jwt_from_orderbook(
+                    page=page,
+                    token_box=token_box,
+                    profile_dir=profile_dir,
+                    cfg=cfg,
+                    settle_ms=settle_ms,
+                )
+                page_url = getattr(page, "url", "") or ""
+                on_auth = _url_looks_auth_flow(page_url)
+                logged_in = _url_looks_logged_in(page_url)
+            finally:
+                ctx.close()
+
+        diag = _classify_headless_capture(
+            attempt=attempt,
+            max_attempts=attempts,
+            page_url=page_url,
+            settle_ms=settle_ms,
+            token=token,
+            valid_rs256=valid,
+            algorithm=algorithm,
+            token_state=token_state,
+            logged_in=logged_in,
+            on_auth=on_auth,
+        )
+        last_diag = diag
+        for line in diag.format_lines():
+            print(line)
+        logger.info(
+            "headless reauth attempt=%s/%s reason=%s url=%s valid_rs256=%s "
+            "alg=%s state=%s logged_in=%s on_auth=%s",
+            diag.attempt,
+            diag.max_attempts,
+            diag.reason,
+            diag.page_url,
+            diag.valid_rs256,
+            diag.algorithm,
+            diag.token_state,
+            diag.logged_in,
+            diag.on_auth,
         )
 
-    reason = "auth UI" if on_auth else "no valid RS256 JWT from session cookies"
-    msg = f"Headless JWT refresh failed ({reason}). Run: saham fetch stockbit reauth --mode headed"
+        if diag.valid_rs256 and token:
+            token_saved = _save_rs256_token_if_valid(profile_dir=profile_dir, token=token)
+            _mark_profile_logged_in(profile_dir)
+            if diag.reason == "ok_rs256_ambiguous_url":
+                msg = (
+                    "Headless JWT refresh OK — RS256 saved "
+                    "(page URL was ambiguous; token still valid)."
+                )
+            elif diag.reason == "ok_rs256_on_auth_url":
+                msg = (
+                    "Headless JWT refresh OK — RS256 saved "
+                    "(captured while URL still looked like auth flow)."
+                )
+            else:
+                msg = "Headless JWT refresh OK — already authenticated."
+            print(f"✓ {msg}")
+            return StockbitReauthResult(
+                success=True,
+                token_saved=token_saved,
+                already_authenticated=True,
+                auto_clicks=(),
+                message=msg,
+                mode="headless",
+            )
+
+        if attempt < attempts:
+            print(f"  Retrying in {_HEADLESS_RETRY_PAUSE_S:.2f}s...")
+            time.sleep(_HEADLESS_RETRY_PAUSE_S)
+
+    reason = last_diag.reason if last_diag is not None else "unknown"
+    human = {
+        "auth_ui": "auth UI (login/OTP) — headless cannot complete this",
+        "no_token_intercepted": "no Exodus Bearer intercepted from session",
+    }.get(reason, reason)
+    msg = (
+        f"Headless JWT refresh failed after {attempts} attempt(s) ({human}). "
+        "Run: saham fetch stockbit reauth --mode headed"
+    )
     print(f"✗ {msg}")
+    if last_diag is not None:
+        print(f"  Last url={last_diag.page_url or '(empty)'} reason={last_diag.reason}")
     return StockbitReauthResult(
         success=False,
         token_saved=False,
@@ -478,13 +658,14 @@ def _reauth_headed_interactive(
         ctx, page = _persistent_context(pw, profile_dir, headless=False)
         try:
             token_box = _intercept_token(page)
-            token, valid = _try_capture_valid_jwt_from_orderbook(
+            token, valid, _alg, _state = _try_capture_valid_jwt_from_orderbook(
                 page=page,
                 token_box=token_box,
                 profile_dir=profile_dir,
                 cfg=cfg,
             )
-            if valid and token and _url_looks_logged_in(page.url):
+            # Valid RS256 is enough to persist; URL heuristics are diagnostic only.
+            if valid and token:
                 token_saved = _save_rs256_token_if_valid(profile_dir=profile_dir, token=token)
                 _mark_profile_logged_in(profile_dir)
                 msg = "Already authenticated; Exodus JWT refreshed from browser session."

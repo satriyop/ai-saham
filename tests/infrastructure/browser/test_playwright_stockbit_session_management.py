@@ -400,6 +400,7 @@ def test_reauth_headless_fails_closed_on_auth_ui_without_clicks(monkeypatch, tmp
     page = _FakeReauthPage(start_url="https://stockbit.com/login", login_succeeds=True)
     _patch_common(monkeypatch, page)
     monkeypatch.setattr(browser_mod, "_resolve_token", lambda p, box: None)
+    monkeypatch.setattr(browser_mod.time, "sleep", lambda _s: None)
     clicks = {"n": 0}
 
     def _clicks(_p):
@@ -414,6 +415,7 @@ def test_reauth_headless_fails_closed_on_auth_ui_without_clicks(monkeypatch, tmp
     assert result.mode == "headless"
     assert clicks["n"] == 0
     assert "headed" in result.message.lower()
+    assert "auth" in result.message.lower() or "attempt" in result.message.lower()
 
 
 # ── browse_stockbit_session ───────────────────────────────────────────────
