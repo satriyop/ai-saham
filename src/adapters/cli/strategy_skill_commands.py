@@ -85,7 +85,10 @@ def generate(
     elif artifact_type == "indicator":
         plugin_path = Path("plugins/indicators") / f"{artifact}.py"
         if not plugin_path.exists():
-            raise_data_unavailable(
+            # Naming an artifact that does not exist is a bad argument, not an
+            # unavailable data source — same condition, and same exit code, as
+            # an unresolvable strategy name in the branch above.
+            raise_user_error(
                 f"Indicator plugin not found at {plugin_path}",
                 tip="Check plugins/indicators/ or generate the plugin first.",
             )
