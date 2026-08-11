@@ -81,6 +81,14 @@ read -r -d '' SAHAM_CRON << ENTRIES || true
 # saham research accum backfill-phase-ledger
 # Labels omit --compatibility-id inside the wrapper: CLI labels each cohort.
 15 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; /bin/bash $PROJECT_DIR/scripts/cron_accum_challenge_corpus.sh' >> $LOG_DIR/accumulation-challenge-corpus.log 2>&1
+# Corpus-continuity watchdog. The capture jobs are fail-closed but silent; this
+# compares the corpus against the attested trading calendar and raises a macOS
+# notification when a session is missing.
+# Must run AFTER 19:15 — that job syncs the session calendar, and before the
+# sync today is unattested, so a real hole would report as NO_CALENDAR_AUTHORITY
+# and stay silent.
+# Exit 0 whole / 1 hole detected / 2 watchdog environment broken.
+30 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; /bin/bash $PROJECT_DIR/scripts/cron_corpus_continuity_watchdog.sh' >> $LOG_DIR/corpus-continuity-watchdog.log 2>&1
 # --- saham-cron-end ---
 ENTRIES
 
