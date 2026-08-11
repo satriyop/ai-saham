@@ -15,6 +15,7 @@ Covers:
 - a raising calendar refresh never aborts the surrounding command
 """
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -270,6 +271,11 @@ def _base_monkeypatches(monkeypatch, tmp_path: Path):
         "src.infrastructure.composition.fetch_market.fetch_market_macro_calendar_refresh.refresh_market_macro_calendar",
         lambda **kwargs: "skip:test",
     )
+    # Explicit --db is fail-closed and never creates a database (CLI_REFERENCE
+    # "Exit codes"; b555bb88). These tests pass `tmp_path / "data.db"`, so the
+    # file has to exist before the command runs or every invoke exits 1 on input
+    # validation and never reaches the calendar wiring under test.
+    sqlite3.connect(tmp_path / "data.db").close()
     return tmp_path
 
 

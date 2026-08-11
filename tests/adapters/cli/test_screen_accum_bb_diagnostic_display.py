@@ -41,6 +41,15 @@ def _bb_disabled_config() -> AccumulationDisplayConfig:
                 tight_pctile=0.05,
                 loose_pctile=0.15,
             ),
+            # The scoring-definitions panel renders every sleeve, so the fake
+            # policy has to carry them all. Values are arbitrary; only the
+            # bb_squeeze row is under test.
+            consistency=SimpleNamespace(weight=33.3),
+            streak=SimpleNamespace(weight=16.7, tau_days=3.0),
+            vwap_discount=SimpleNamespace(weight=16.7, saturate_at=5.0),
+            rsi_headroom=SimpleNamespace(weight=16.7, low=30.0, high=70.0, peak=50.0),
+            foreign_flow_ratio=SimpleNamespace(weight=16.7, saturate_at=20.0),
+            bci=SimpleNamespace(cluster_points=5.0, stable_points=2.5),
             base_enter_score=70,
             base_watch_score=50,
         ),
@@ -107,6 +116,13 @@ def _response(candidate: AccumulationCandidate) -> AccumulationScreenResponse:
 
 
 def test_bb_not_shown_as_scored_flow_points_when_disabled(capsys):
+    """BB must read as a diagnostic, never as scored flow points.
+
+    Asserted against the detail view: 5cb8412b (task 07) made the default
+    output compact, moving the scoring-definitions panel — which is where the
+    BB%ile row lives — behind the drill-down. The BB ownership contract under
+    test is unchanged; only the surface that renders it moved.
+    """
     candidate = _candidate(
         bb_width_pctile=0.05,
         accum_score_breakdown=_breakdown_with_tight_bb(),
@@ -119,7 +135,7 @@ def test_bb_not_shown_as_scored_flow_points_when_disabled(capsys):
         universe_label="lq45",
         show_top_broker=False,
         display_config=_bb_disabled_config(),
-        include_detail=False,
+        include_detail=True,
     )
 
     out = capsys.readouterr().out

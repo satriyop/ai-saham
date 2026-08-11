@@ -3,6 +3,7 @@ Tests for macro calendar wiring in fetch market:
 refresh_market_macro_calendar() + --no-macro-calendar CLI routing.
 """
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -187,6 +188,10 @@ def _base_monkeypatches(monkeypatch, tmp_path: Path):
         "src.infrastructure.composition.fetch_market.fetch_market_calendar_refresh.refresh_market_calendar",
         lambda *a, **k: "cached",
     )
+    # Explicit --db is fail-closed and never creates a database (CLI_REFERENCE
+    # "Exit codes"; b555bb88), so the file must exist before invoking or the
+    # command exits 1 before reaching the macro-calendar wiring under test.
+    sqlite3.connect(tmp_path / "data.db").close()
     return tmp_path
 
 

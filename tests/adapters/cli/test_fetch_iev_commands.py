@@ -1,6 +1,7 @@
 """Tests for IEV fetch CLI command."""
 
 import json
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -43,6 +44,10 @@ def test_fetch_iev_writes_sqlite_and_json_sidecar(monkeypatch, tmp_path: Path):
     monkeypatch.chdir(tmp_path)
 
     db_path = tmp_path / "iev.db"
+    # Explicit --db is fail-closed and never creates a database (CLI_REFERENCE
+    # "Exit codes"; b555bb88). The repository still owns schema creation, so an
+    # empty SQLite file is all the command needs to proceed.
+    sqlite3.connect(db_path).close()
     result = runner.invoke(app, ["fetch", "iev", "--top-n", "5", "--db", str(db_path)])
 
     assert result.exit_code == 0, result.output
