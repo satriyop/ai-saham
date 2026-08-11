@@ -49,71 +49,132 @@ sessions.
 
 | # | Change | State | Identity-moving | Blocked by |
 |---|---|---|---|---|
-| IB-1 | Demote the `setup_quality` Alpha/Trigger slot to `DIAGNOSTIC` | **READY** | Yes | nothing |
+| IB-0 | Extend the ADR-068 probe projection to cover the Alpha/Trigger surface | **READY** | Yes | nothing |
+| IB-1 | ~~Demote the `setup_quality` Alpha/Trigger slot to `DIAGNOSTIC`~~ | **WITHDRAWN — measured inert** | No | — |
+| IB-1b | Remove permanently-absent groups from `alpha_trigger.group_weights` | `NEEDS IB-0` | Yes, but **invisible** to the current mechanism | IB-0 |
 | IB-2 | Recalibrate `strong_min_score` | `BLOCKED` | Yes | task 06; needs ml-saham evidence, which needs corpus depth |
 | IB-3 | Re-weight the accum sleeves | `BLOCKED` | Yes | task 06; source ablation not reproducible |
 | IB-4 | Promote `sector_context` / `company_quality_context` to present evidence | `NEEDS DESIGN` | Yes | ADR-057 promotion guardrails; `parked_evidence_promotion_lane.md` |
 
 ---
 
+### IB-0 — Extend the ADR-068 probe projection to the Alpha/Trigger surface
+
+**State:** `READY`. Identified 2026-08-12 while attempting IB-1.
+
+The cohort identity's code axis is `compute_behavioral_probe_digest()`, which
+digests `{probe_id -> canonical output projection}`. That projection
+(`behavioral_probe_runner._project_candidate`) carries `accum_score`,
+`signal_score`, `signal_breakdown`, `signal_authority_coverage`, the decision
+constraints, setup phase/readiness, and the risk gates.
+
+It carries **no Alpha/Trigger field at all** — measured by running the probe set
+and searching the projection: `alpha_trigger` absent, `evidence_status` absent,
+`group_contributions` absent, `trigger_score` absent. (`coverage` matches only
+`signal_authority_coverage`, a different quantity.)
+
+Persisted observations **do** carry that surface:
+`decision_payload.features_by_window.*.signal.alpha_trigger_score` holds
+`coverage`, `trigger_score`, `authority_coverage`, and per-group
+`evidence_status` / `configured_weight` / `effective_weight`.
+
+So there is a class of change that alters **every recorded observation** while
+leaving `compatibility_id` fixed. Old and new rows would pool under one cohort
+with different feature semantics, which is exactly the contamination ADR-068
+exists to prevent. ADR-068 anticipated this — "probe coverage remains a measured
+floor, not a proof of behavioural equivalence" — and this is a concrete instance.
+
+**IB-1b must not land before this.** Extending the projection is itself
+identity-moving (the probe digest changes), so it belongs in a batch.
+
+Open design question: whether the whole `alpha_trigger_score` belongs in the
+projection, or only the fields ml-saham consumes as features. The projection's
+docstring says it deliberately excludes "diagnostic-only enrichment", and
+Alpha/Trigger *is* a diagnostic projection — so a blanket include would
+contradict that principle. The narrower question is which diagnostic fields
+are corpus features, because those are the ones whose drift must fork a cohort.
+
+---
+
 ### IB-1 — Demote the `setup_quality` Alpha/Trigger slot to `DIAGNOSTIC`
 
-**State:** `READY`. Decision taken 2026-08-11.
+**State:** `WITHDRAWN`. Attempted 2026-08-12, measured inert, config reverted.
+No purge was performed.
 
-ADR-067 retired `setup_quality` as an *evidence group* — `config/signal_engine.yaml`
-`evidence_groups` now holds only `flow_confirmation`, and the resolver rejects a
-re-added key. That part is complete and correct.
+The original entry claimed the slot's `PRODUCTION` status held production weight
+hostage and was the cause of the null trigger leg. **Both claims were wrong**,
+established by running the real `AlphaTriggerAggregator` over the production
+group shape (institutional_flow present at 49.83, other three absent) under both
+statuses:
 
-The Alpha/Trigger **projection slot** of the same name survives, and it is not
-covered by that retirement. It declares `group_weights.setup_quality: 0.35`
-(`config/signal_engine.yaml:131`) with **no `evidence_registrations` entry**, so
-its status resolves from the typed default at
-`src/application/services/signal_engine_config.py:354-357` — `PRODUCTION`.
+| | `PRODUCTION` | `DIAGNOSTIC` |
+|---|---|---|
+| `final_exact_score` | 49.83 | 49.83 |
+| `alpha_score` | 49.83 | 49.83 |
+| `trigger_score` | `None` | `None` |
+| `coverage` | 0.30 | 0.30 |
+| `authority_coverage` | 0.24 | 0.24 |
+| `unavailable_reasons` | incl. `trigger:no_production_weight` | identical |
+| `effective_weight` | 0.0 | 0.0 |
+| `evidence_status` | `PRODUCTION` | `DIAGNOSTIC` |
 
-A group that is `PRODUCTION` but never present holds production weight hostage.
-Measured across all **3,375** window-observations of the live frozen cohort
-`sha256:355e5b…` (25 sessions, 2026-07-08 → 2026-08-11):
+Only the recorded label changes. The mechanism is
+`alpha_trigger_aggregator.py:110-130`: a group that is not `present` takes an
+early branch that hardcodes `effective_weight=0.0` and `continue`s, so it never
+reaches `alpha_den` / `trigger_den`. A never-present group cannot hold weight
+hostage because it never contributes weight in the first place.
 
-| Measurement | Value |
-|---|---|
-| `coverage` | **0.30 on 3,375/3,375** — zero variance |
-| `trigger_score` | **null on 3,375/3,375** |
-| `unavailable_reasons` | `trigger:no_production_weight` on 3,375/3,375 |
-| `setup_quality` present | **0/3,375** (weight 0.35, `PRODUCTION`) |
-| `institutional_flow` present | 3,375/3,375 (weight 0.30, `PRODUCTION`) |
-| `sector_context` present | 0/3,375 (weight 0.25, `DIAGNOSTIC`) |
-| `company_quality_context` present | 0/3,375 (weight 0.10, `DIAGNOSTIC`) |
-| `final_exact_score` | 4.96–80.00, μ 40.93, σ 15.64; ≥70 → 132/3,375 |
+The cohort identity correctly did **not** move (`sha256:355e5b…` before and
+after, all three parts identical). The decision surface genuinely did not change.
 
-Two distinct consequences, worth separating:
+Landing it anyway would have written `evidence_status: DIAGNOSTIC` rows into a
+cohort whose existing rows say `PRODUCTION`, with no identity move to separate
+them — a within-cohort inconsistency for no benefit.
 
-1. **The trigger leg never resolves.** `trigger:no_production_weight` fires
-   because the only other `PRODUCTION` group, `institutional_flow`, is
-   `trigger_allowed: false` in the sampled rows. The emitted score is the alpha
-   leg alone; `trigger_weight: 0.6` is declared and never applied.
-2. **`coverage` carries zero information.** A feature constant at 0.30 across an
-   entire corpus cannot discriminate anything downstream in ml-saham. It is
-   payload width with no signal.
+**Why the trigger leg is actually null.** It is phase-gated by design, not
+broken. `AlphaTriggerAggregator`'s own contract: the institutional-flow trigger
+contribution is routed "only when setup phase is BREAKOUT_CONFIRMATION and flow
+confirmation status is CONFIRMED". An accumulation *discovery* screen sits
+pre-breakout by construction — measured across the frozen cohort, setup phase is
+`DISTRIBUTION` 2,796 · `ACCUMULATION` 376 · `COMPRESSION` 327 · `FAILED` 287 ·
+`EXHAUSTION` 12 · `NONE` 29 · **`BREAKOUT_CONFIRMATION` 8**. A near-always-null
+trigger score on this corpus is the design working, not a defect.
 
-Note what is **not** claimed: the score itself still varies (σ 15.64), so
-`institutional_flow` alone does discriminate. The cohort is not worthless — it
-is a 1-of-4 evidence engine whose second scoring leg is switched off.
+---
 
-**Decided fix:** add an explicit `evidence_registrations.setup_quality` entry
-with `status: DIAGNOSTIC`, so the slot stops claiming production weight and the
-trigger leg resolves against the groups that are actually present. Preferred
-over deleting the slot because it is the smallest change, it is reversible, and
-it keeps the return path open if a producer is ever built.
+### IB-1b — Remove permanently-absent groups from `alpha_trigger.group_weights`
 
-**Task:** to be written against `TASK_TEMPLATE.md` before implementation.
+**State:** `NEEDS IB-0`.
 
-**Verification required before the batch closes:**
+The surviving real finding from the 2026-08-11 measurement: `coverage` is
+**0.30 on 3,375/3,375 window-observations, with zero variance**. A feature
+constant across an entire corpus carries no information for ml-saham.
 
-- probe digest / `compatibility_id` recomputed and recorded;
-- post-rebuild re-measurement of the table above — `trigger_score` must be
-  non-null on a non-trivial fraction, and `coverage` must show variance;
-- corpus continuity confirms the rebuild restored every session in
-  2026-07-08 → rebuild date with no holes.
+The cause is not evidence status. `coverage` is
+`configured_available_weight / configured_required_weight`, and
+`configured_required_weight` sums the `group_weights` of **all four** groups
+(1.00) while only `institutional_flow` (0.30) is ever available. Registration
+status never enters that formula — only `configured_weight` does.
+
+Measured with the real aggregator:
+
+| `group_weights` contents | `coverage` | `final_exact_score` |
+|---|---|---|
+| all four groups (today) | 0.30 | 49.83 |
+| without `setup_quality` | 0.4615 | 49.83 |
+| `institutional_flow` only | 1.00 | 49.83 |
+
+Note the score is unchanged in every case — this moves the recorded coverage
+feature, not the decision.
+
+**And that is precisely why it is dangerous today.** The change is invisible to
+the cohort identity (see IB-0), so it would silently repoint a recorded feature
+inside a live cohort. Sequence: IB-0, then this, then one purge + rebuild.
+
+Open question before it becomes `READY`: whether a permanently-absent group
+*should* count toward required coverage. Keeping it means "we know we are
+missing 70% of designed evidence"; removing it means "coverage measures what we
+actually attempt". Those are different claims and only one can be true at a time.
 
 ---
 
