@@ -49,9 +49,9 @@ sessions.
 
 | # | Change | State | Identity-moving | Blocked by |
 |---|---|---|---|---|
-| IB-0 | Extend the ADR-068 probe projection to cover the Alpha/Trigger surface | **READY** | Yes | nothing |
+| IB-0 | Extend the ADR-068 probe projection to cover the Alpha/Trigger surface | `READY` — gates IB-4 | Yes | nothing |
 | IB-1 | ~~Demote the `setup_quality` Alpha/Trigger slot to `DIAGNOSTIC`~~ | **WITHDRAWN — measured inert** | No | — |
-| IB-1b | Remove permanently-absent groups from `alpha_trigger.group_weights` | `NEEDS IB-0` | Yes, but **invisible** to the current mechanism | IB-0 |
+| IB-1b | ~~Remove permanently-absent groups from `alpha_trigger.group_weights`~~ | **WITHDRAWN — no variance gained** | — | — |
 | IB-2 | Recalibrate `strong_min_score` | `BLOCKED` | Yes | task 06; needs ml-saham evidence, which needs corpus depth |
 | IB-3 | Re-weight the accum sleeves | `BLOCKED` | Yes | task 06; source ablation not reproducible |
 | IB-4 | Promote `sector_context` / `company_quality_context` to present evidence | `NEEDS DESIGN` | Yes | ADR-057 promotion guardrails; `parked_evidence_promotion_lane.md` |
@@ -84,8 +84,12 @@ with different feature semantics, which is exactly the contamination ADR-068
 exists to prevent. ADR-068 anticipated this — "probe coverage remains a measured
 floor, not a proof of behavioural equivalence" — and this is a concrete instance.
 
-**IB-1b must not land before this.** Extending the projection is itself
-identity-moving (the probe digest changes), so it belongs in a batch.
+**This gates IB-4.** Promotion changes `evidence_status`, `effective_weight`,
+`coverage` and `authority_coverage` in every recorded row. Without the
+projection covering that surface, promotion would repoint those features
+inside a live cohort with `compatibility_id` unmoved. Extending the
+projection is itself identity-moving (the probe digest changes), so the two
+belong in one batch, IB-0 first.
 
 Open design question: whether the whole `alpha_trigger_score` belongs in the
 projection, or only the fields ml-saham consumes as features. The projection's
@@ -144,37 +148,41 @@ trigger score on this corpus is the design working, not a defect.
 
 ### IB-1b — Remove permanently-absent groups from `alpha_trigger.group_weights`
 
-**State:** `NEEDS IB-0`.
+**State:** `WITHDRAWN` 2026-08-12. Decision: **keep `group_weights` as they are.**
 
-The surviving real finding from the 2026-08-11 measurement: `coverage` is
-**0.30 on 3,375/3,375 window-observations, with zero variance**. A feature
-constant across an entire corpus carries no information for ml-saham.
+The finding that motivated it stands: `coverage` is **0.30 on 3,375/3,375
+window-observations with zero variance**, and a constant feature carries no
+information. Removing the absent groups was the proposed fix. It does not work.
 
-The cause is not evidence status. `coverage` is
-`configured_available_weight / configured_required_weight`, and
-`configured_required_weight` sums the `group_weights` of **all four** groups
-(1.00) while only `institutional_flow` (0.30) is ever available. Registration
-status never enters that formula — only `configured_weight` does.
+`coverage = configured_available_weight / configured_required_weight`. Both
+terms are fixed:
 
-Measured with the real aggregator:
+- the numerator is always 0.30, because `institutional_flow` is present in every
+  row at `coverage_fraction` 1.0;
+- the denominator is always 1.00, because it sums config constants.
 
-| `group_weights` contents | `coverage` | `final_exact_score` |
-|---|---|---|
-| all four groups (today) | 0.30 | 49.83 |
-| without `setup_quality` | 0.4615 | 49.83 |
-| `institutional_flow` only | 1.00 | 49.83 |
+Removing the three absent groups makes the denominator 0.30 and the ratio
+**1.00 — still constant.** Measured with the real aggregator: `institutional_flow`
+alone yields `coverage 1.00`, score unchanged at 49.83. The change moves a
+constant; it does not create variance.
 
-Note the score is unchanged in every case — this moves the recorded coverage
-feature, not the decision.
+So it would cost IB-0 plus a purge and rebuild for no analytical gain, and it
+would make the recorded claim *less* true. `0.30` says "this engine was designed
+for four evidence groups and runs on one". `1.00` says "fully covered", which is
+false. Of the two claims only one can be right, and the current one is.
 
-**And that is precisely why it is dangerous today.** The change is invisible to
-the cohort identity (see IB-0), so it would silently repoint a recorded feature
-inside a live cohort. Sequence: IB-0, then this, then one purge + rebuild.
+**`coverage` is correctly constant right now.** It measures coverage-against-
+design, and while exactly one group ever fires the only honest value is fixed.
 
-Open question before it becomes `READY`: whether a permanently-absent group
-*should* count toward required coverage. Keeping it means "we know we are
-missing 70% of designed evidence"; removing it means "coverage measures what we
-actually attempt". Those are different claims and only one can be true at a time.
+**The real fix is IB-4.** The zero variance is a symptom of one evidence group
+firing, not of mis-set weights. Light up `sector_context` and
+`company_quality_context` — whose producers already exist and already emit — and
+`coverage` starts varying on its own without touching a single weight.
+
+**For ml-saham:** drop `coverage` from the feature set while it is constant.
+That is ml-saham's side of `BOUNDARY.md` (it owns accum scoring and feature
+selection), and nothing is lost — `authority_coverage` already varies, measured
+0.30 on 2,607 rows and 0.0 on 768.
 
 ---
 
