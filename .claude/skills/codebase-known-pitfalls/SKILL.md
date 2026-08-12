@@ -9,14 +9,20 @@ description: >
   through a service, design a frozen dataclass value object, write profile-
   override logic in assess_all_profiles, add counts to a fetch response DTO,
   inject a service into a use case, build enrichment-result workflows, add a
-  new field to RiskAssessment/SignalAssessment/TradeSetup, or post-process
-  assessment results with replace().
+  new field to RiskAssessment/SignalAssessment/TradeSetup, post-process
+  assessment results with replace(), or edit any value under
+  config/signal_engine.yaml (weights, evidence_registrations, thresholds).
   Also trigger for: "gate not firing in screener but fires in analyze risk",
   "backtest results look too good", "free_float_pct over 100", "active_codes
   lower than expected", "CLOSE always shows dash", "profile list out of sync",
   "signal computed twice for same ticker", "should I inject AssessSignalUseCase",
   "BLOCKED_STRUCTURAL shows as BLOCKED_EXECUTION", "regime gate not classifying
-  correctly", "tests pass but production crashes in RISK_OFF regime".
+  correctly", "tests pass but production crashes in RISK_OFF regime",
+  "this PRODUCTION group is never present so it must be starving the score",
+  "coverage is a constant 0.30 with zero variance", "trigger_score is always
+  null", "should I remove absent groups from alpha_trigger.group_weights",
+  "will this config change fork the cohort / require a purge and rebuild",
+  "is editing signal_engine.yaml identity-moving".
 ---
 
 # Codebase Known Pitfalls
@@ -1071,6 +1077,105 @@ helpers in the adapter.
 
 ---
 
+## 24. A Configured Weight Is Not a Behaving Weight — Measure Before You Believe the YAML
+
+**Context:** `config/signal_engine.yaml` declares slots that may never be
+populated at runtime. Reading a weight there and inferring what it does to the
+output is the single most expensive wrong turn available in this repo, because
+the "fix" is identity-moving and costs a corpus purge + rebuild.
+
+### 24a. A never-present group cannot hold weight hostage
+
+Real case (2026-08-12, register entry IB-1, withdrawn). The config reads:
+
+```yaml
+alpha_trigger:
+  group_weights:
+    setup_quality: 0.35        # status PRODUCTION (typed default, not declared here)
+    institutional_flow: 0.30
+```
+
+The obvious inference — *"a PRODUCTION group at weight 0.35 that is never
+present must be starving the production weight and nulling the trigger leg"* —
+is **wrong**, and it survived a full day of reasoning before measurement killed it.
+
+`AlphaTriggerAggregator` gives an absent group an early branch that hardcodes
+`effective_weight=0.0` and `continue`s, so it never reaches `alpha_den` /
+`trigger_den`. Measured over the production group shape under both statuses:
+
+| | `PRODUCTION` | `DIAGNOSTIC` |
+|---|---|---|
+| `final_exact_score` / `alpha_score` | 49.83 | 49.83 |
+| `trigger_score` | `None` | `None` |
+| `coverage` / `authority_coverage` | 0.30 / 0.24 | 0.30 / 0.24 |
+| `effective_weight` | 0.0 | 0.0 |
+| `evidence_status` | `PRODUCTION` | `DIAGNOSTIC` ← the only delta |
+
+**Anti-pattern:** reading `group_weights` + `evidence_registrations` and
+reasoning about the arithmetic. **Correct pattern:** instantiate the real
+aggregator, feed it the measured group-presence shape, and diff the outputs
+under both configs. It is ~40 lines and it is the difference between a comment
+and a purge.
+
+Related trap in the same file: `configured_required_weight` accumulates
+**before** the presence check, so `coverage` counts groups that never fire. That
+makes it constant (0.30 on 3,375/3,375 rows) — which is *correct*, meaning
+"designed for four groups, running on one". Deleting the absent groups yields a
+constant `1.00`, i.e. trading a true constant for a false one. See
+`tasks/backlog/NEXT_IDENTITY_BATCH.md` IB-1b.
+
+### 24b. Know whether your config edit is identity-moving — comments are free
+
+ADR-068 **deleted** config-byte hashing (`material_config_hash_from_canonical`).
+`resolve_accumulation_cohort_identity` builds the ADR-059 payloads from the
+resolved **typed objects**, never a YAML re-parse. Its docstring states the
+contract:
+
+> *"so a comment or formatting edit cannot move identity while a changed
+> declared value must."*
+
+Consequence, and it is the useful half of this section: **documenting a
+confusing config costs nothing.** A changed declared value forks the cohort and
+buys a purge + backfill; a comment explaining why that value is what it is does
+not. When config misleads, the cheap fix is always available.
+
+**Correct pattern — verify, do not assume,** before and after any
+`config/*.yaml` edit:
+
+```python
+identity = resolve_accumulation_cohort_identity(
+    accum_score_policy=bundle.accum_score_policy,
+    signal_engine_config=bundle.signal_engine_config,
+    structural_gates=bundle.structural_gates,
+    execution_gates=bundle.execution_gates,
+    hard_filter_policy=bundle.hard_filter_policy,
+    unevaluable_gate_policy=bundle.unevaluable_gate_policy,
+)
+# compare ALL THREE parts, not just compatibility_id:
+#   semantic_compatibility_id / behavioral_probe_digest
+#   / policy_snapshot_payload_digest
+```
+
+**Blind spot to check when the edit IS identity-moving:** the ADR-068 probe
+projection (`behavioral_probe_runner._project_candidate`) carries **no
+`alpha_trigger` field**, while persisted observations do. So a `group_weights`
+change moves recorded `coverage` in every row with `compatibility_id` unmoved —
+old and new rows pool in one cohort with different feature semantics. Confirm
+your surface is covered by the probe projection before assuming identity will
+fork on its own. (Register entry IB-0.)
+
+### 24c. "Always null" output is often a gate working, not a defect
+
+`trigger_score` is `None` on essentially every accum row. That is not broken:
+the trigger leg is phase-gated to `BREAKOUT_CONFIRMATION` + CONFIRMED flow, and
+an accumulation *discovery* screen is pre-breakout by construction — measured
+phase distribution is `BREAKOUT_CONFIRMATION` **8** out of 3,835 readings.
+
+Before treating a constant/null field as a bug, find the gate that produces it
+and check whether the corpus can even reach the gate's precondition.
+
+---
+
 ## Quick Reference — Component → Pitfall
 
 | Component / scenario | Read section |
@@ -1115,3 +1220,11 @@ helpers in the adapter.
 | CLI `runner.invoke(app, …)` test slow / "hangs" / times out | §23 |
 | Writing a `screen accum` / `fetch market` / `today` CLI test | §23 |
 | Mocked the use case but the invoke still does real Stockbit/Yahoo I/O | §23 |
+| About to edit `config/signal_engine.yaml` (any weight, status, threshold) | §24 (all) |
+| Inferring what a configured weight does from reading the YAML | §24a — measure it |
+| "This PRODUCTION group is never present, so it must be starving the score" | §24a — it is not |
+| `coverage` is a zero-variance constant — delete the absent groups? | §24a — no, that yields a *false* constant |
+| Will this config edit fork the cohort / need a purge + rebuild? | §24b — comments free, declared values not |
+| Documenting a confusing config value | §24b — costs nothing, do it |
+| A field is `None` / constant on 100% of rows | §24c — find the gate first |
+| Changing anything under `alpha_trigger.*` | §24a + §24b + IB-0 probe blind spot |
