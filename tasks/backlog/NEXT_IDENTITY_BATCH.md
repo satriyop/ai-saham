@@ -23,6 +23,31 @@ change is added here when it is identified, and the batch executes when the
 **Nothing in this file is implemented by editing this file.** Each entry names
 its own task.
 
+### The withdrawn entries are documented at the code, not only here
+
+IB-1 and IB-1b were both withdrawn because the config *reads* as if it has two
+obvious bugs which it does not have. A register entry does not help someone who
+never opens the register — they open `config/signal_engine.yaml`, see a
+never-present `PRODUCTION` slot holding weight 0.35, and reach the same wrong
+conclusion this register already spent a cycle disproving.
+
+So the disproof now lives where the misreading happens:
+
+- `config/signal_engine.yaml`, above `alpha_trigger` — both wrong conclusions
+  stated explicitly, with the measured group-presence table and a pointer here.
+- `src/application/services/alpha_trigger_aggregator.py` — at
+  `configured_required_weight` (why coverage counts absent groups, and why
+  deleting them yields a *false* constant) and at the not-present early branch
+  (why an absent group's `evidence_status` is a label only).
+- The same file's class docstring — why `trigger_score` is legitimately `None`
+  on essentially every accum row, with the measured phase distribution.
+
+Those edits are comments only. Verified identity-free: `compatibility_id`,
+`behavioral_probe_digest` and `policy_snapshot_payload_digest` are byte-identical
+before and after (`sha256:355e5b…`). ADR-068 deleted config-byte hashing, so
+payloads are built from resolved typed objects and a comment cannot move a
+cohort — `resolve_accumulation_cohort_identity` states this in its docstring.
+
 ---
 
 ## The economics, measured

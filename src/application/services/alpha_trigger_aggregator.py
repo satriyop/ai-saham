@@ -66,6 +66,14 @@ class AlphaTriggerAggregator:
     status is CONFIRMED. Otherwise the flow score remains visible as evidence,
     but trigger contribution is blocked with an explicit reason.
 
+    Read that gate together with what an accumulation *discovery* screen is, or
+    the output looks broken: accum sits pre-breakout by construction, so the
+    gate almost never opens there. Measured over the frozen ACCUM cohort, setup
+    phase is DISTRIBUTION 2,796 · ACCUMULATION 376 · COMPRESSION 327 · FAILED
+    287 · EXHAUSTION 12 · NONE 29 · BREAKOUT_CONFIRMATION 8. A `trigger_score`
+    of None on essentially every accum row is this design working, not a defect,
+    and `trigger:no_production_weight` is its expected reason string.
+
     DQ-001: directional group scores are never multiplied by coverage.
     Configured coverage uses configured_weight * coverage_fraction.
     Authority coverage uses effective_weight * authority_fraction.
@@ -105,9 +113,29 @@ class AlphaTriggerAggregator:
             configured_weight = (
                 max(0.0, group_input.configured_weight) if group_input is not None else 0.0
             )
+            # Counted BEFORE the presence check, deliberately: `coverage` measures
+            # available-against-*designed*, so a configured group that never fires
+            # still raises the bar it fails to clear. Consequence worth stating
+            # because it looks like a bug: while exactly one of the four groups
+            # ever reports present, coverage is a constant (0.30 on the ACCUM
+            # corpus, 3,375/3,375 rows). That constant is correct — it says "built
+            # for four evidence groups, running on one". Do NOT "fix" it by
+            # deleting absent groups from `group_weights`: measured, that makes
+            # the denominator 0.30 and coverage a constant 1.00, which trades a
+            # true constant for a false one. The fix is to make a second group
+            # present — see tasks/backlog/NEXT_IDENTITY_BATCH.md IB-4.
             configured_required_weight += configured_weight
 
             if group_input is None or not group_input.present:
+                # An absent group exits here with effective_weight hardcoded to
+                # 0.0 and never reaches alpha_den / trigger_den below. So its
+                # `evidence_status` — PRODUCTION or DIAGNOSTIC — is a recorded
+                # LABEL ONLY for this branch. A never-present group cannot hold
+                # production weight hostage, because it never contributes weight
+                # at all. Verified by running this aggregator over the production
+                # group shape under both statuses: score, alpha, trigger,
+                # coverage, authority_coverage and unavailable_reasons are all
+                # identical (IB-1, withdrawn as inert).
                 unavailable.append(f"{group_name}:missing")
                 contributions.append(
                     AlphaTriggerGroupContribution(

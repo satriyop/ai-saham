@@ -123,6 +123,40 @@ signal_engine:
   # Its registration is no longer declared here (ADR-067 removed the
   # evidence_registrations entry) and resolves from the typed
   # AlphaTriggerConfig default (PRODUCTION), which is what it declared before.
+  #
+  # ─── READ THIS BEFORE CHANGING group_weights ─────────────────────────────
+  # Three of the four slots below are configured but NEVER present. Measured
+  # over the frozen ACCUM cohort (3,375 window-observations):
+  #
+  #   setup_quality             0/3375   weight 0.35   status PRODUCTION (default)
+  #   institutional_flow     3375/3375   weight 0.30   status PRODUCTION
+  #   sector_context            0/3375   weight 0.25   status DIAGNOSTIC
+  #   company_quality_context   0/3375   weight 0.10   status DIAGNOSTIC
+  #
+  # Two conclusions look obvious here and are both WRONG. They were each
+  # attempted, measured against the real aggregator, and withdrawn — see
+  # tasks/backlog/NEXT_IDENTITY_BATCH.md (IB-1, IB-1b).
+  #
+  #  1. "setup_quality is PRODUCTION but never present, so it holds production
+  #     weight hostage and nulls the trigger leg." It does not. An absent group
+  #     takes an early branch in AlphaTriggerAggregator that hardcodes
+  #     effective_weight=0.0 and skips the accumulators entirely, so its status
+  #     is a recorded label only. Demoting it to DIAGNOSTIC changes no number.
+  #     The trigger leg is null because it is phase-gated to
+  #     BREAKOUT_CONFIRMATION, which a pre-breakout discovery screen rarely hits.
+  #
+  #  2. "The absent slots make coverage a useless constant 0.30, so delete
+  #     them." Deleting them makes coverage a constant 1.00 instead — both terms
+  #     of the ratio are fixed while one group fires. That swaps a true claim
+  #     ("designed for four groups, running on one") for a false one ("fully
+  #     covered"), and costs a purge + rebuild for zero variance gained.
+  #
+  # Keep these four weights as they are. The real change is to make a second
+  # group actually present — IB-4, promoting sector_context /
+  # company_quality_context, whose producers already exist and already emit.
+  # That is governed by ADR-057 promotion guardrails; do not shortcut it by
+  # flipping a status here.
+  # ─────────────────────────────────────────────────────────────────────────
   alpha_trigger:
     enabled: true
     default_horizon: SWING_10D
