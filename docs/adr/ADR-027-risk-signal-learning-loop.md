@@ -5,7 +5,9 @@
 **Status:** Accepted — amended by [ADR-049](ADR-049-database-owned-learning-pipeline-clean-break.md)
 **Date:** 2026-06-24
 **Current implementation:** Database-owned typed evaluations, proposals, paired
-OOS validations, explicit YAML application, and application audit records.
+OOS validations, explicit YAML application, and application audit records. CLI
+family is ADR-049 (`policy accum` / research / trade paper) — not retired
+`trade swing`.
 
 ## Decision
 
@@ -38,8 +40,11 @@ point-in-time observations
 
 ## Current CLI contract
 
-Use live `saham trade swing --help`: `backtest`, `tune`, `review`, `validate`,
-`apply`, and `status`. File patch and review-journal workflows are retired.
+**Do not use retired `trade swing`.** After ADR-049 the guarded setup-config
+lifecycle lives under **`saham policy accum`** (and related research/trade paper
+families). Use live `saham --help` / `saham policy accum --help` for the shipped
+verbs (`backtest` / tune / review / validate / apply / status equivalents as
+implemented). File patch and review-journal workflows remain retired.
 
 ## Related decisions
 

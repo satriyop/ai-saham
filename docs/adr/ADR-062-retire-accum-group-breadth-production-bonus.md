@@ -9,6 +9,12 @@
 **Amended:** 2026-08-02 — identity, schema-12, targeted YAML rejection,
 compatibility-fork, research/ml-saham companion scope, and golden gate locked.
 
+**Reading note (2026-08-13):** Snapshot and identity locks in this ADR record the
+**state at retirement**. Active production challenges use **ADR-059
+`production_policy_snapshot.v4` (nine rows)**; cohort identity is **ADR-068**
+(behavioral probe + snapshot payload digests). Do not treat seven-row v2 or
+config-byte identity language below as current eligibility law.
+
 **Amends:** [ADR-059](ADR-059-production-policy-snapshot-for-ml-challenges.md)
 
 **Depends on:** [ADR-030](ADR-030-accumulation-screener-evidence-split.md),
@@ -35,9 +41,11 @@ and dormant implementation do not establish production behavior or authority.
 
 Silently wiring the mapping would change accumulation ranking after signal
 assessment without recomputing that assessment. It could alter downstream
-candidate selection while the active seven-row `production_policy_snapshot.v2`
-correctly excludes the bonus. Treating the existing static mapping as corpus
-evidence would also invent membership provenance and historical meaning.
+candidate selection while the then-active seven-row
+`production_policy_snapshot.v2` (and every later closed snapshot, including
+active **v4**) correctly excludes the bonus. Treating the existing static
+mapping as corpus evidence would also invent membership provenance and
+historical meaning.
 
 ## Decision
 
@@ -48,9 +56,11 @@ policy. Implement this option only.
    cron, briefing, or alternate accumulation-scoring path.
 2. The current applier, config keys, request/DTO fields, fingerprints, payload
    fields, and isolated tests are removal debt, not a latent feature flag.
-3. `production_policy_snapshot.v2` remains the exact seven-row closed set.
-   There is no breadth policy row, snapshot v3, lean compatibility v3, or
-   historical snapshot backfill from this decision.
+3. At decision time, `production_policy_snapshot.v2` remained the exact
+   seven-row closed set with **no breadth policy row**. Later ADR-059 amendments
+   advanced the **active** producer to v3/v4 without reintroducing breadth —
+   active challenges accept **v4 only** (see ADR-059). This ADR does not mint
+   breadth into any snapshot version.
 4. ml-saham must evaluate the production baseline without a breadth bonus. It
    must not reconstruct the dormant rule from payload/config remnants.
 5. Existing observations remain immutable historical facts. Residual zero/null
@@ -63,15 +73,15 @@ and must be proven by an offline golden fixture. The clean-break still **forks
 compatibility identity** because material config-hash inputs and candidate
 payload shape change.
 
-| Surface | Classification |
+| Surface | Classification (at ADR-062 decision time) |
 |---|---|
 | Live Accum, Signal, Risk, Action, and ordering | `NON_SEMANTIC`, proven by offline golden |
-| Removed config paths and config-hash inputs | `CONFIG_MATERIAL` |
+| Removed config paths and config-hash inputs | `CONFIG_MATERIAL` (pre-ADR-068 identity model) |
 | Removed candidate payload fields | `OBSERVATION_SCHEMA` |
-| Semantic engine version | Unchanged |
+| Semantic engine version | Unchanged then; **ADR-068** later retires hand-typed engine versions from cohort identity |
 | SQLite learning schema | Unchanged |
-| Snapshot contract | Remains `production_policy_snapshot.v2`, seven rows |
-| Lean contract ID | Remains `lean_accumulation_compatibility.v2` |
+| Snapshot contract | Locked **v2 / seven rows** at decision; **active today: ADR-059 v4** (still no breadth row) |
+| Lean contract ID | Remained `lean_accumulation_compatibility.v2` at decision |
 | Compatibility value | Must fork |
 
 Required version action:

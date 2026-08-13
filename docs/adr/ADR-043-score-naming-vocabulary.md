@@ -27,8 +27,8 @@ weights** — this ADR is naming and persistence-key hygiene only.
 |---|---|---|---|
 | Accumulation composite from broker-flow evidence | `accum_score` | 0–100 | Former `foreign_flow_score` (accum meaning) |
 | SignalEngine staged-evidence output | `signal_score` | 0–100 | `SignalAssessment.score`; unchanged field name on assessment object |
-| Setup evidence group contribution | `setup_group_score` | 0–100 | Renamed from `setup_score` on group-scorer results |
-| Flow confirmation group contribution | `flow_group_score` | 0–100 | Renamed from `flow_score` on group-scorer results |
+| Setup evidence group contribution | `setup_group_score` | 0–100 | Historical rename from `setup_score`; **production group retired by ADR-067** — not a live accum evidence basis |
+| Flow confirmation group contribution | `flow_group_score` | 0–100 | Renamed from `flow_score`; **sole production evidence group** for accum after ADR-067 |
 | Trade setup sizing input | `signal_score` on `TradeSetup` | 0–100 | Unchanged |
 | Foreign participation ratio (profile) | `foreign_flow_score` on `TickerProfileSnapshot` | 0–1 | **Excluded** — different metric, keep name |
 

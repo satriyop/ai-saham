@@ -99,22 +99,27 @@ Readiness:
 Removed identities, including `SIGNAL_COHORT`, `raw_market`, and `executable`,
 are invalid at every typed producer and consumer boundary.
 
-Canonical contract IDs:
+Canonical contract IDs (ADR-049 clean-break baseline; **accum unit/labels
+amended by [ADR-056](ADR-056-accum-corpus-session-observation-and-accum-path-labels.md)**):
 
-| Artifact | Contract ID |
-|---|---|
-| Accumulation observation | `learning_observation.accumulation_discovery.v1` |
-| Pre-open observation | `learning_observation.pre_open_auction_direction.v1` |
-| Tactical label | `price_path.tactical_3d.v1` |
-| Swing label | `price_path.swing_10d.v1` |
-| Accumulation label | `price_path.accum_20d.v1` |
-| Pre-open label | `price_path.open_30m.v1` |
-| Accumulation evaluation | `forward_outcome_cohort.v1` |
-| Pre-open evaluation | `session_outcome_cohort.v1` |
-| Swing evaluation | `portfolio_walk_forward.v1` |
-| Swing proposal | `swing_policy_proposal.v1` |
-| Swing validation | `paired_oos_swing_policy_validation.v1` |
-| YAML application | `yaml_policy_application.v1` |
+| Artifact | Contract ID | Notes |
+|---|---|---|
+| Accumulation observation | `learning_observation.accumulation_discovery.v2` | **ADR-056** session unit (one obs / ticker / session). Historical `…v1` rows remain immutable. |
+| Pre-open observation | `learning_observation.pre_open_auction_direction.v1` | Unchanged by ADR-056 |
+| Tactical label | `price_path.tactical_3d.v1` | Non-accum |
+| Swing label | `price_path.swing_10d.v1` | Non-accum |
+| Accumulation label (primary) | `price_path.accum_10d.v1` | **ADR-056** primary hold path |
+| Accumulation label (aux) | `price_path.accum_20d.v1` | **ADR-056** auxiliary only — not the sole accum label |
+| Pre-open label | `price_path.open_30m.v1` | Unchanged |
+| Accumulation evaluation | `forward_outcome_cohort.v1` | Product-dropped evaluate for accum still governed by later tasks; see live help |
+| Pre-open evaluation | `session_outcome_cohort.v1` | Unchanged |
+| Swing evaluation | `portfolio_walk_forward.v1` | Unchanged |
+| Swing proposal | `swing_policy_proposal.v1` | Unchanged |
+| Swing validation | `paired_oos_swing_policy_validation.v1` | Unchanged |
+| YAML application | `yaml_policy_application.v1` | Unchanged |
+
+Agents must not treat the pre-056 single-row `accumulation_discovery.v1` +
+sole `accum_20d` pair as the current accum learning contract.
 
 Stable SHA-256 identifiers are derived from canonical JSON identity payloads.
 `captured_at` and other operational timestamps are metadata and never

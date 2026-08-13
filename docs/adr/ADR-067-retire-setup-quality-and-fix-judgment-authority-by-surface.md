@@ -220,16 +220,24 @@ Reducing that blast radius is out of scope here and is tracked separately
 
 ### 7. Identity and schema lock
 
+**Historical decision record (as written at acceptance).** Current cohort
+identity is **[ADR-068](ADR-068-behavioral-engine-identity-for-accum-cohorts.md)**
+(behavioral probe digest + ADR-059 snapshot payload digest + payload schema
+version). Current active snapshot producer is **ADR-059 v4**. Do not re-apply
+config-byte / hand-typed version rules below as live eligibility law.
+
 - `ACCUMULATION_OBSERVATION_PAYLOAD_SCHEMA_VERSION` **12 → 13**. Schema-12 rows
   stay historical and must not be claimed to share a cohort with schema-13.
-- `EVIDENCE_CONTRACT_VERSION` and `SEMANTIC_ENGINE_VERSION` bump; the evidence
-  group set is part of the engine's semantic identity.
-- Lean contract ID remains `lean_accumulation_compatibility.v2`. As in ADR-062,
-  "contract unchanged" does **not** mean compatibility hashes stay equal.
-- `production_policy_snapshot.v2` remains **closed and exact at seven rows**.
-  `signal.accum.evidence_group_weights` is retained and its payload now declares
-  the single production evidence basis. Do not drop the row, do not add an
-  eighth, do not mint a v3.
+- At decision time: `EVIDENCE_CONTRACT_VERSION` and `SEMANTIC_ENGINE_VERSION`
+  bumps were planned as identity material; **ADR-068 deletes those hand-typed
+  versions from cohort identity** in favour of measured behaviour.
+- Lean contract ID remained `lean_accumulation_compatibility.v2` at decision.
+  As in ADR-062, "contract unchanged" does **not** mean compatibility values
+  stay equal.
+- At decision time: `production_policy_snapshot.v2` was the closed seven-row set;
+  weight payload retained `signal.accum.evidence_group_weights` with a single
+  production evidence basis. **Active challenges now require ADR-059 v4** (still
+  no reintroduction of retired groups; see ADR-059).
 
 ### 8. Golden equivalence gate
 
@@ -262,7 +270,8 @@ false and decision 5 must be revisited before merge.
 - permission to preserve a compatibility path, alias, or dual-profile mode for
   the retired group;
 - a claim that schema-12 and schema-13 observations share one cohort;
-- permission to weaken the ADR-059 seven-row closed set.
+- permission to weaken the ADR-059 closed snapshot set (then seven-row v2; now
+  active **v4** per ADR-059 — still exact, still no retired-group resurrection).
 
 ---
 
@@ -289,18 +298,16 @@ board observations now faithfully represent what the engine decides — an
 improvement. But no capture purpose records post-judgment operator behavior.
 This ADR names the gap and does not close it.
 
-**Cohort identity blast radius is unaddressed.** Half the twelve identity-material
-config files provably cannot affect an accum decision (`sector_context` and
-`company_quality_context` are DIAGNOSTIC by ADR-057; `market_context_engine` is
-diagnostic on screen accum; `plan_swing`, `swing_setups`, `swing_targets`, and
-`swing_risk_policy` become plan-only under decision 3). Trimming the set to
-files that can actually change an accum decision — and warning the operator
-before an edit orphans the corpus — is follow-up work that depends on this ADR
-being accepted first.
+**Cohort identity blast radius (pre-ADR-068 concern).** This section described
+the config-byte identity problem that motivated trimming identity-material
+files. **Resolved by ADR-068:** cohort identity is measured engine behaviour plus
+snapshot payload digest, not raw config bytes. See ADR-068 for the current
+identity stack; do not reintroduce config-hash cohort forking from this ADR.
 
-**Config edits must be batched.** Until the blast radius is reduced, every
-config-touching change forks the cohort. All such work should land before the
-corpus accumulation window begins, not during it.
+**Config edits and corpus windows.** Operational caution remains: material
+behaviour changes still fork cohorts under ADR-068 (probe outputs change). Batch
+engine-affecting work deliberately relative to challenge windows; verify live
+identity helpers rather than this historical blast-radius paragraph.
 
 ---
 

@@ -106,7 +106,7 @@ saham version
 
 | Current public path | Target | Notes |
 |---------------------|--------|-------|
-| `analyze swing` | **`plan swing`** | Sole live `TradeSetup` authority for swing horizon |
+| `analyze swing` | **`plan swing`** | Structure design surface (ADR-054); Action only via shared composer / carry-forward — **not** sole judgment desk |
 | `analyze pre-open` | **`assess pre-open`** | Frozen observation + track; stdout only |
 | `analyze risk` | **`inspect risk`** | Live capability lens |
 | `analyze sentiment` | **`inspect sentiment`** | Live capability lens |
@@ -214,13 +214,19 @@ This ADR is a **CLI grammar / adapter ownership** decision. It does not change:
 - evidence authority or promotion rules
 - learning table contracts
 
-Binding product rules after rename:
+Binding product rules after rename (judgment vs structure after ADR-054/067):
 
 ```text
+screen accum (universe + TICKER):
+  live discovery and judgment desk
+    → may emit composed TradeSetup.action
+    → canonical deep judgment for a chosen name
+
 plan swing:
-  canonical SignalAssessment + RiskAssessment
-    → AssessTradeSetupUseCase
-    → TradeSetup.action   # sole live swing action authority
+  trade-structure design (horizon / SL / TP / sizing)
+    → may display or carry forward Action via shared composer
+    → must not invent a competing independent judgment path
+    → after ADR-067: carries screen's verdict; does not re-judge
 
 inspect *:
   may display scores, gates, charts, provenance
@@ -232,7 +238,7 @@ assess pre-open:
     → ENTER/WAIT/SKIP_* relative to that plan only
   not a learning label write; paper log remains trade pre-open log
 
-screen / research / trade / policy:
+research / trade / policy:
   keep ADR-049 family jobs
 ```
 
@@ -269,8 +275,8 @@ authority, or JSON artifact meaning changes.
 ## Consequences
 
 - First CLI token is a stable behavior contract for humans and agents.
-- `plan` is the only live swing action surface; `inspect` cannot quietly grow
-  ENTER/WATCH/AVOID authority.
+- After ADR-054/067: **`screen` judges**, **`plan` structures** (and may carry
+  forward Action); `inspect` cannot quietly grow ENTER/WATCH/AVOID authority.
 - `assess` is reserved for frozen-plan confirmation (pre-open), not live
   ticker recomputation.
 - `accum` vs `swing` vocabulary stays explicit across families.

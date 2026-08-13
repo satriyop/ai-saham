@@ -2,9 +2,14 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted — score scale amended by ADR-039
+**Status:** Accepted — score scale amended by ADR-039; naming by ADR-043;
+production evidence groups by ADR-067
 **Date:** 2026-06-25
-**Current implementation:** Accumulation screening separates flow evidence, signal assessment, risk assessment, final action, and data availability. Foreign-flow score uses 0–100.
+**Current implementation:** Accumulation screening separates accum/flow evidence,
+signal assessment, risk assessment, final action, and data availability.
+Composite accum score is 0–100 as **`accum_score`** (ADR-039 scale, ADR-043 name).
+Production signal evidence group for accum is **`flow_confirmation` only** after
+ADR-067 (`setup_quality` retired).
 
 ## Decision
 
@@ -16,15 +21,16 @@ The workflow must keep these questions distinct:
 
 | Concern | Authority |
 |---|---|
-| Foreign-flow accumulation evidence | `ScoreForeignFlowUseCase` / `ForeignFlowScoreBreakdown` |
+| Accumulation / broker-flow composite evidence | `ScoreAccumUseCase` / `AccumScoreBreakdown` (ADR-043; was foreign-flow naming) |
 | Canonical signal assessment | `SignalEngine` |
 | Risk blockers | `RiskEngine` |
 | Final action | `AssessTradeSetupUseCase` / `TradeSetup` |
 | Data availability and freshness | Typed application evidence metadata |
 
-Public fields and filters use explicit names such as `foreign_flow_score` and
-`signal_score`; generic `score` aliases are not new contracts. Current
-foreign-flow values and thresholds use the ADR-039 0–100 scale.
+Public fields and filters use explicit names such as **`accum_score`** and
+`signal_score` (ADR-043); generic `score` aliases are not new contracts. Scale
+remains ADR-039 0–100. Profile participation metric may still use
+`TickerProfileSnapshot.foreign_flow_score` (0–1) — different metric, keep name.
 
 ## Boundaries
 
@@ -37,9 +43,11 @@ foreign-flow values and thresholds use the ADR-039 0–100 scale.
 
 ## Current implementation pointers
 
-- `src/application/use_case/accumulation_screen_use_case.py`
-- `src/application/use_case/score_foreign_flow_use_case.py`
-- `src/domain/value_objects/foreign_flow_score_breakdown.py`
+- `src/application/use_case/accumulation_screen_use_case.py` (or current screen workflow entry)
+- `src/application/use_case/score_accum_use_case.py` (ADR-043 rename)
+- `src/domain/value_objects/accum_score_breakdown.py` (ADR-043 rename)
 - `config/accumulation_screener.yaml`
 
-The retired 0–120 wording is preserved in ADR-039 and git history only.
+The retired 0–120 wording is preserved in ADR-039 and git history only. Retired
+`setup_quality` production group is ADR-067; retired foreign-flow public field
+names are ADR-043.

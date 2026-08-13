@@ -1,9 +1,16 @@
 # ADR-037: MarketContext Promotes from Preview-Only to Canonical Signal Input
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
-**Status:** Accepted — supersedes ADR-032 signal-preview constraint
+**Status:** Accepted — supersedes ADR-032 signal-preview constraint; **surface scope
+amended by [ADR-054](ADR-054-screen-judge-plan-structure-contract.md) Policy A and
+[ADR-057](ADR-057-evidence-diagnostic-evidence-corpus-vocabulary.md)**
 **Date:** 2026-07-03
-**Current implementation:** When MCE is requested, its context is supplied to the canonical SignalEngine path before `TradeSetup` composition. Risk-side regime adjustment remains preview-only.
+**Current implementation:** Regime conditioning of the canonical signal remains a
+valid **engine** capability when a path supplies `market_context` into
+`AssessSignalEvidenceUseCase`. **Primary live desks do not use that path today:**
+`screen accum` / plan-structure Policy A treat MCE as **display-only diagnostic
+evidence** (ADR-054/057); plan does not recompute Action via MCE. Risk-side
+regime adjustment remains preview-only everywhere.
 
 ### Context
 
@@ -76,4 +83,20 @@ input to `AssessSignalEvidenceUseCase`, not a post-score adjustment. This means:
 
 MCE thresholds (weak_flow_threshold, weak_setup_threshold, discounts) are now config-backed
 and tunable via `config/signal_engine.yaml` without code changes. Calibration of these values
-proceeds in the `trade tune signal` workflow.
+uses the current guarded policy / research workflow (see ADR-049 and live `saham --help`);
+do not assume a retired `trade tune signal` path.
+
+### Amendment — surface Policy A (ADR-054 / ADR-057)
+
+This ADR's Decision still describes the **engine contract** when a caller wires
+`market_context` into signal assessment. It does **not** authorize every CLI/TUI
+surface to do that wiring.
+
+| Surface | MCE role after ADR-054 Policy A |
+|---|---|
+| `screen accum` (universe + ticker) | **Diagnostic / display-only** panel; must not change Action via MCE |
+| `plan swing` | Structure-only product job; **no** Action recompute via MCE / TechnicalGate |
+| Engine path that explicitly passes `market_context` | May condition signal (this ADR) — only if a future task promotes B-MCE into DecisionPolicy |
+
+Agents must not read Decision §1–2 as “screen/plan Action moves with MCE.”
+Read ADR-054 Policy A and ADR-057 for live-desk authority.
