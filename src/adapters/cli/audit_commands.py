@@ -24,6 +24,9 @@ from rich.text import Text
 from src.adapters.cli.audit_corpus_continuity_commands import (
     corpus_continuity as _corpus_continuity_fn,
 )
+from src.adapters.cli.audit_preopen_readiness_commands import (
+    preopen_readiness as _preopen_readiness_fn,
+)
 from src.adapters.cli.audit_sentiment_commands import sentiment_audit as _sentiment_audit_fn
 from src.application.use_case.audit_source_field_contracts_use_case import (
     AuditSourceFieldContractsResponse,
@@ -284,6 +287,7 @@ data_app.command("repair-seasonality-cache")(repair_seasonality_cache)
 audit_app.add_typer(data_app, name="data")
 audit_app.command("sentiment")(_sentiment_audit_fn)
 audit_app.command("corpus-continuity")(_corpus_continuity_fn)
+audit_app.command("preopen-readiness")(_preopen_readiness_fn)
 
 
 def _run_manifest(

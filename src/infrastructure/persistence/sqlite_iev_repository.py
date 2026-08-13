@@ -399,6 +399,15 @@ class SQLiteIEVRepository:
             ).fetchone()
         return row is not None
 
+    def count_snapshot_rows(self, snapshot_date: date) -> int:
+        """Number of rows stored for this date. Implements PreOpenIevSnapshotCountPort."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM iev_snapshots WHERE date = ?",
+                (snapshot_date.isoformat(),),
+            ).fetchone()
+        return int(row["n"]) if row is not None else 0
+
     def get_snapshot_dates(self) -> list[date]:
         """Return all dates that have snapshot data, ascending."""
         with self._get_connection() as conn:

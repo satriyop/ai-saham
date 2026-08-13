@@ -51,8 +51,17 @@ read -r -d '' SAHAM_CRON << ENTRIES || true
 # exits non-zero. If headless fails (auth UI), run once interactively:
 #   saham fetch stockbit reauth --mode headed
 40 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch stockbit reauth --mode headless' >> $LOG_DIR/stockbit-reauth.log 2>&1 || true
+# Pre-flight: is the session still good enough to reach the 08:56 NCP window?
+# Predictive and local — catches the reauth above having left an unusable token
+# while 15 minutes of manual recovery time remain. The NCP capture cannot be
+# replayed, so the 19:30 continuity watchdog is too late for this lane.
+41 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; /bin/bash $PROJECT_DIR/scripts/cron_preopen_lane_preflight.sh preflight' >> $LOG_DIR/preopen-lane-preflight.log 2>&1
 # Multi-tick IEV discovery (diagnostic all-session ΔIEV)
 47 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
+# Verify: did 08:47 actually store rows? `fetch iev` exits 0 having stored
+# nothing when the token is rejected, so this is the live proof the local
+# pre-flight above cannot give. 8 minutes of margin remain at this point.
+48 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; /bin/bash $PROJECT_DIR/scripts/cron_preopen_lane_preflight.sh verify' >> $LOG_DIR/preopen-lane-preflight.log 2>&1
 50 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
 53 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
 # Locked-input IEV baseline — existing orders cannot be withdrawn/amended

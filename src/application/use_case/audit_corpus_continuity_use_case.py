@@ -34,14 +34,12 @@ from src.application.dto.corpus_continuity import (
     SessionContinuityRow,
     SessionContinuityStatus,
 )
+from src.application.services.trading_calendar_authority import CalendarAuthority
 from src.domain.ports.learning_artifact_repositories import LearningObservationRepository
 from src.domain.ports.trading_session_calendar_repository import (
     TradingSessionCalendarSnapshotReadRepository,
 )
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
-from src.domain.value_objects.trading_session_calendar_snapshot import (
-    TradingSessionCalendarSnapshot,
-)
 
 _SATURDAY = 5
 
@@ -95,34 +93,6 @@ def classify_session(
     return SessionContinuityStatus.OK
 
 
-class _CalendarAuthority:
-    """Union of every attested calendar snapshot.
-
-    Snapshots are rolling ~30-day windows, so no single one spans a mature
-    corpus. Reading only the newest silently blinds the audit to the corpus's
-    earliest sessions. Both the session set *and* the coverage intervals are
-    therefore unioned, and coverage is tracked separately from sessions so an
-    uncovered date stays distinguishable from a confirmed market holiday.
-    """
-
-    def __init__(self, snapshots: tuple[TradingSessionCalendarSnapshot, ...]) -> None:
-        self._sessions: frozenset[date] = frozenset(
-            session for snapshot in snapshots for session in snapshot.ordered_sessions
-        )
-        self._coverage: tuple[tuple[date, date], ...] = tuple(
-            (snapshot.coverage_start, snapshot.coverage_end) for snapshot in snapshots
-        )
-        self.snapshot_ids: tuple[str, ...] = tuple(
-            sorted(snapshot.snapshot_id for snapshot in snapshots)
-        )
-
-    def covers(self, day: date) -> bool:
-        return any(start <= day <= end for start, end in self._coverage)
-
-    def is_session(self, day: date) -> bool:
-        return day in self._sessions
-
-
 class AuditCorpusContinuityUseCase:
     """Report which sessions the corpus is missing for one purpose/cohort."""
 
@@ -137,7 +107,7 @@ class AuditCorpusContinuityUseCase:
 
     def execute(self, request: CorpusContinuityRequest) -> CorpusContinuityResponse:
         counts_by_session = self._observation_counts(request)
-        authority = _CalendarAuthority(tuple(self._calendar_snapshots.list_snapshots()))
+        authority = CalendarAuthority(tuple(self._calendar_snapshots.list_snapshots()))
 
         window_start = request.window_start
         if window_start is None:
@@ -188,7 +158,7 @@ class AuditCorpusContinuityUseCase:
         window_start: date,
         window_end: date,
         counts_by_session: dict[date, int],
-        authority: _CalendarAuthority,
+        authority: CalendarAuthority,
         declared: int | None,
         min_coverage_fraction: float,
     ) -> tuple[SessionContinuityRow, ...]:
