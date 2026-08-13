@@ -1176,6 +1176,39 @@ and check whether the corpus can even reach the gate's precondition.
 
 ---
 
+## 25. `install_cron.sh` Heredoc Is Unquoted — Backticks in *Comments* Execute
+
+**Context:** the cron block is built with `read -r -d '' SAHAM_CRON << ENTRIES`.
+The delimiter is deliberately **unquoted** so `$PROJECT_DIR` and `$LOG_DIR`
+expand into the installed crontab lines. That is required and must stay.
+
+The consequence is easy to miss: inside a heredoc body there is no such thing as
+a comment. A leading `#` is literal text, not a lexer directive, so bash applies
+expansion to **every** line — including the ones that look like documentation.
+
+**The failure (introduced and fixed 2026-08-13):**
+```bash
+# Verify: did 08:47 actually store rows? `fetch iev` exits 0 having stored
+```
+produced `install_cron.sh: line 48: fetch: command not found`, and silently
+blanked the backticked words in the installed crontab comment. The cron entries
+themselves were fine, which is what makes it easy to shrug off — the damage is
+an executed command plus a comment that now reads as nonsense.
+
+**Correct pattern:** quote shell examples in these comments, never backtick them.
+```bash
+# Verify: did 08:47 actually store rows? "saham fetch iev" exits 0 having
+```
+
+**Why not just quote the delimiter (`<< 'ENTRIES'`):** that would stop
+`$PROJECT_DIR` / `$LOG_DIR` expanding and install literal `$PROJECT_DIR` paths
+into cron — a silent, total breakage of every entry. Do not "fix" it that way.
+
+**Check before running:** `awk '/<< ENTRIES/,/^ENTRIES$/' install_cron.sh | grep '`\|\$('`
+should return nothing but intentional expansions.
+
+---
+
 ## Quick Reference — Component → Pitfall
 
 | Component / scenario | Read section |
@@ -1228,3 +1261,5 @@ and check whether the corpus can even reach the gate's precondition.
 | Documenting a confusing config value | §24b — costs nothing, do it |
 | A field is `None` / constant on 100% of rows | §24c — find the gate first |
 | Changing anything under `alpha_trigger.*` | §24a + §24b + IB-0 probe blind spot |
+| Adding or editing a cron entry in `install_cron.sh` | §25 — no backticks in the heredoc |
+| `install_cron.sh` prints "command not found" | §25 — a comment backtick executed |

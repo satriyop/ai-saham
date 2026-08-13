@@ -45,6 +45,11 @@ echo ""
 # Accumulation: evening capture + labels (labels attach y when horizon allows;
 # recent ~20 sessions may be UNAVAILABLE until forward candles exist).
 # No trade confirm / grade / prompt / tune (retired).
+# NOTE: the heredoc delimiter is deliberately UNQUOTED so $PROJECT_DIR and
+# $LOG_DIR expand. That also means backticks and $(...) are EXECUTED — including
+# inside comment lines. A `saham fetch iev` written in a comment here ran as a
+# command and printed "fetch: command not found" while silently blanking the
+# comment text. Quote shell examples in these comments, never backtick them.
 read -r -d '' SAHAM_CRON << ENTRIES || true
 # --- saham-cron-begin ---
 # Headless JWT refresh before IEV (no window). Fail-soft: IEV still runs if this
@@ -58,9 +63,9 @@ read -r -d '' SAHAM_CRON << ENTRIES || true
 41 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; /bin/bash $PROJECT_DIR/scripts/cron_preopen_lane_preflight.sh preflight' >> $LOG_DIR/preopen-lane-preflight.log 2>&1
 # Multi-tick IEV discovery (diagnostic all-session ΔIEV)
 47 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
-# Verify: did 08:47 actually store rows? `fetch iev` exits 0 having stored
-# nothing when the token is rejected, so this is the live proof the local
-# pre-flight above cannot give. 8 minutes of margin remain at this point.
+# Verify: did 08:47 actually store rows? "saham fetch iev" exits 0 having
+# stored nothing when the token is rejected, so this is the live proof the
+# local pre-flight above cannot give. 8 minutes of margin remain here.
 48 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; /bin/bash $PROJECT_DIR/scripts/cron_preopen_lane_preflight.sh verify' >> $LOG_DIR/preopen-lane-preflight.log 2>&1
 50 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
 53 8 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch iev' >> $LOG_DIR/iev-collector.log 2>&1
