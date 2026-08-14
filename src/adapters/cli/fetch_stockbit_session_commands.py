@@ -82,26 +82,24 @@ def reauth(
         saham fetch stockbit reauth --mode headed --timeout 120
     """
     require_playwright_cli()
-    from src.infrastructure.browser.playwright_stockbit_provider import reauth_stockbit_session
+    from src.application.ports.stockbit_auth import (
+        StockbitAuthFailure,
+        StockbitAuthRefreshMode,
+    )
+    from src.infrastructure.composition.stockbit_auth_factory import create_stockbit_auth_port
 
     normalized = (mode or "").strip().lower()
-    if normalized not in ("headless", "headed"):
+    try:
+        refresh_mode = StockbitAuthRefreshMode(normalized)
+    except ValueError:
         raise_user_error(f"Invalid --mode {mode!r}; expected 'headless' or 'headed'.")
 
-    try:
-        result = reauth_stockbit_session(
-            timeout=timeout,
-            mode=normalized,  # type: ignore[arg-type]
-        )
-    except Exception as e:
+    auth = create_stockbit_auth_port(reauth_timeout=timeout)
+    outcome = auth.force_refresh(refresh_mode)
+    if isinstance(outcome, StockbitAuthFailure):
         raise_data_unavailable(
-            f"Reauth failed: {e}",
-            tip="Run: saham fetch stockbit login",
-        )
-    if not result.success:
-        raise_data_unavailable(
-            "Reauth failed.",
-            tip="Run: saham fetch stockbit login",
+            outcome.message,
+            tip="Run: saham fetch stockbit reauth --mode headed",
         )
 
 
@@ -116,9 +114,9 @@ def status() -> None:
     Example:
         saham fetch stockbit status
     """
-    from src.infrastructure.browser.playwright_stockbit_provider import get_stockbit_session_status
+    from src.infrastructure.composition.stockbit_auth_factory import create_stockbit_auth_port
 
-    info = get_stockbit_session_status()
+    info = create_stockbit_auth_port().inspect()
 
     typer.echo("")
     typer.echo("Stockbit Session Status")

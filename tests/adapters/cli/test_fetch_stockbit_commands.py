@@ -1,12 +1,7 @@
 """
-CLI tests for `saham fetch stockbit status`.
+CLI tests for `saham fetch stockbit status` / `reauth`.
 
-Follows the CliRunner + monkeypatch convention from test_fetch_calendar_commands.py:
-the `status()` command body (now in fetch_stockbit_session_commands.py) does
-`from ...playwright_stockbit_provider import get_stockbit_session_status` as a
-local import inside the function, re-imported fresh on every call, so we patch
-the name on the *source* module (src.infrastructure.browser.playwright_stockbit_provider)
-rather than on the adapter module.
+Commands import `create_stockbit_auth_port` locally; patch that factory.
 """
 
 from __future__ import annotations
@@ -15,11 +10,18 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-import src.infrastructure.browser.playwright_stockbit_provider as playwright_stockbit_provider
 from src.adapters.cli.main import app
+from src.application.fakes.stockbit_auth import FakeStockbitAuth
+from src.application.ports.stockbit_auth import (
+    StockbitAuthFailure,
+    StockbitAuthFailureKind,
+    StockbitAuthReady,
+    StockbitAuthRefreshMode,
+)
 from src.application.services.stockbit_session import StockbitSessionStatus
 
 runner = CliRunner()
+_FACTORY = "src.infrastructure.composition.stockbit_auth_factory.create_stockbit_auth_port"
 
 
 def _status(**overrides) -> StockbitSessionStatus:
@@ -38,41 +40,26 @@ def _status(**overrides) -> StockbitSessionStatus:
 
 
 def test_status_valid_token_shows_state_and_no_jwt_leak(monkeypatch):
-    monkeypatch.setattr(
-        playwright_stockbit_provider,
-        "get_stockbit_session_status",
-        lambda: _status(token_state="valid"),
-    )
+    fake = FakeStockbitAuth(status=_status(token_state="valid"))
+    monkeypatch.setattr(_FACTORY, lambda **_kwargs: fake)
 
     result = runner.invoke(app, ["fetch", "stockbit", "status"])
 
     assert result.exit_code == 0
     assert "Token state" in result.stdout
+    assert "eyJ" not in result.stdout
+    assert "Bearer" not in result.stdout
 
 
 def test_reauth_command_success_exit_zero(monkeypatch):
-    from src.infrastructure.browser.stockbit_session_actions import StockbitReauthResult
-
+    fake = FakeStockbitAuth()
     captured: dict = {}
 
-    def _fake_reauth(timeout=180, mode="headless"):
-        captured["timeout"] = timeout
-        captured["mode"] = mode
-        return StockbitReauthResult(
-            success=True,
-            token_saved=True,
-            already_authenticated=True,
-            auto_clicks=(),
-            message="ok",
-            mode=mode,
-        )
+    def _factory(*, reauth_timeout: int = 180, **_kwargs):
+        captured["timeout"] = reauth_timeout
+        return fake
 
-    monkeypatch.setattr(
-        playwright_stockbit_provider,
-        "reauth_stockbit_session",
-        _fake_reauth,
-    )
-    # CLI imports reauth from provider inside the function.
+    monkeypatch.setattr(_FACTORY, _factory)
     monkeypatch.setattr(
         "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
         lambda: None,
@@ -81,75 +68,60 @@ def test_reauth_command_success_exit_zero(monkeypatch):
     result = runner.invoke(app, ["fetch", "stockbit", "reauth", "--timeout", "60"])
 
     assert result.exit_code == 0
-    assert captured["mode"] == "headless"
     assert captured["timeout"] == 60
+    assert fake.refresh_calls == [StockbitAuthRefreshMode.HEADLESS]
 
 
-def test_reauth_command_failure_exit_one(monkeypatch):
-    from src.infrastructure.browser.stockbit_session_actions import StockbitReauthResult
-
-    monkeypatch.setattr(
-        playwright_stockbit_provider,
-        "reauth_stockbit_session",
-        lambda timeout=180, mode="headless": StockbitReauthResult(
-            success=False,
-            token_saved=False,
-            already_authenticated=False,
-            auto_clicks=("login",),
-            message="failed",
-            mode=mode,
-        ),
+def test_reauth_command_failure_maps_auth_failure(monkeypatch):
+    fake = FakeStockbitAuth(
+        refresh_results={
+            StockbitAuthRefreshMode.HEADLESS: StockbitAuthFailure(
+                kind=StockbitAuthFailureKind.REFRESH_FAILED,
+                message="headless capture failed",
+            )
+        }
     )
+    monkeypatch.setattr(_FACTORY, lambda **_kwargs: fake)
     monkeypatch.setattr(
         "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
         lambda: None,
     )
 
     result = runner.invoke(app, ["fetch", "stockbit", "reauth"])
+    combined = result.stdout + result.stderr
 
-    assert result.exit_code == 2  # data_unavailable
+    assert result.exit_code == 2
+    assert "Error [data_unavailable]:" in combined
+    assert "headless capture failed" in combined
+    assert "reauth --mode headed" in combined
+    assert "eyJ" not in combined
 
 
 def test_reauth_command_surfaces_profile_in_use_without_token_leak(monkeypatch):
-    def _raise_profile_in_use(timeout=180, mode="headless"):
-        raise RuntimeError("Failed to create a ProcessSingleton: profile is already in use")
-
-    monkeypatch.setattr(
-        playwright_stockbit_provider,
-        "reauth_stockbit_session",
-        _raise_profile_in_use,
+    fake = FakeStockbitAuth(
+        refresh_results={
+            StockbitAuthRefreshMode.HEADLESS: StockbitAuthFailure(
+                kind=StockbitAuthFailureKind.REFRESH_FAILED,
+                message="Failed to create a ProcessSingleton: profile is already in use",
+            )
+        }
     )
+    monkeypatch.setattr(_FACTORY, lambda **_kwargs: fake)
     monkeypatch.setattr(
         "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
         lambda: None,
     )
 
     result = runner.invoke(app, ["fetch", "stockbit", "reauth"])
-
     combined = result.stdout + result.stderr
-    assert result.exit_code == 2  # data_unavailable
-    assert "Reauth failed:" in combined
+    assert result.exit_code == 2
     assert "profile is already in use" in combined
     assert "eyJ" not in combined
 
 
 def test_reauth_command_passes_headed_mode(monkeypatch):
-    from src.infrastructure.browser.stockbit_session_actions import StockbitReauthResult
-
-    captured: dict = {}
-
-    def _fake_reauth(timeout=180, mode="headless"):
-        captured["mode"] = mode
-        return StockbitReauthResult(
-            success=True,
-            token_saved=True,
-            already_authenticated=False,
-            auto_clicks=("login",),
-            message="ok",
-            mode=mode,
-        )
-
-    monkeypatch.setattr(playwright_stockbit_provider, "reauth_stockbit_session", _fake_reauth)
+    fake = FakeStockbitAuth(refresh_results={StockbitAuthRefreshMode.HEADED: StockbitAuthReady()})
+    monkeypatch.setattr(_FACTORY, lambda **_kwargs: fake)
     monkeypatch.setattr(
         "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
         lambda: None,
@@ -159,7 +131,7 @@ def test_reauth_command_passes_headed_mode(monkeypatch):
         app, ["fetch", "stockbit", "reauth", "--mode", "headed", "--timeout", "90"]
     )
     assert result.exit_code == 0
-    assert captured["mode"] == "headed"
+    assert fake.refresh_calls == [StockbitAuthRefreshMode.HEADED]
 
 
 def test_reauth_command_rejects_invalid_mode(monkeypatch):
@@ -184,15 +156,14 @@ def test_reauth_help_documents_mode_switch():
 
 
 def test_status_expired_token_shows_refresh_guidance_not_age_wording(monkeypatch):
-    monkeypatch.setattr(
-        playwright_stockbit_provider,
-        "get_stockbit_session_status",
-        lambda: _status(
+    fake = FakeStockbitAuth(
+        status=_status(
             token_state="expired",
             token_expires_at="2020-01-01T00:00:00+00:00",
             token_seconds_remaining=0,
-        ),
+        )
     )
+    monkeypatch.setattr(_FACTORY, lambda **_kwargs: fake)
 
     result = runner.invoke(app, ["fetch", "stockbit", "status"])
 
@@ -205,10 +176,8 @@ def test_status_expired_token_shows_refresh_guidance_not_age_wording(monkeypatch
 
 
 def test_status_no_profile_prints_message_and_exits_cleanly(monkeypatch):
-    monkeypatch.setattr(
-        playwright_stockbit_provider,
-        "get_stockbit_session_status",
-        lambda: _status(
+    fake = FakeStockbitAuth(
+        status=_status(
             profile_exists=False,
             browser_login_age_hours=None,
             token_exists=False,
@@ -216,8 +185,9 @@ def test_status_no_profile_prints_message_and_exits_cleanly(monkeypatch):
             token_expires_at=None,
             token_seconds_remaining=None,
             token_expiry_source=None,
-        ),
+        )
     )
+    monkeypatch.setattr(_FACTORY, lambda **_kwargs: fake)
 
     result = runner.invoke(app, ["fetch", "stockbit", "status"])
 
