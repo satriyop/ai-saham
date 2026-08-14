@@ -3,7 +3,8 @@ StockbitApiClient — authenticated HTTP client for the Exodus API.
 
 Reads the persisted JWT from StockbitTokenStore before each request.
 On 401, triggers a single token refresh (via injected token_refresher)
-and retries. If the refresh also fails, returns None.
+and retries. Auth death after that policy raises StockbitSessionExpired.
+Non-auth transport / empty bodies still return None.
 
 The token_refresher callable is injected so this module never hard-imports
 playwright — the app still runs without Playwright installed as long as a
@@ -67,10 +68,10 @@ class StockbitApiClient:
     def get(self, url: str, params: dict | None = None) -> dict | None:
         """
         GET url with Bearer auth. Refreshes token once on 401, then retries.
-        Returns parsed JSON dict, or None on unrecoverable failure.
+        Returns parsed JSON dict, or None on non-auth transport failure.
 
-        At most ONE browser launch per call: if the token was already refreshed
-        (because the store was empty), a subsequent 401 is treated as terminal.
+        Auth death (no JWT after refresh, or 401 after the single refresh)
+        raises StockbitSessionExpired. At most ONE browser launch per call.
         """
         token = self._store.load()
         already_refreshed = False
@@ -79,23 +80,23 @@ class StockbitApiClient:
             token = self._do_refresh()
             already_refreshed = True
             if token is None:
-                return None
+                raise StockbitSessionExpired("No usable Stockbit JWT after refresh.")
 
         try:
             return self._http_get(url, token, params)
         except _NeedsTokenRefresh:
             if already_refreshed:
                 logger.warning("Stockbit 401 after token refresh — session unusable: %s", url)
-                return None
+                raise StockbitSessionExpired("Stockbit 401 after token refresh.") from None
 
         token = self._do_refresh()
         if token is None:
-            return None
+            raise StockbitSessionExpired("Stockbit token refresh failed after 401.")
         try:
             return self._http_get(url, token, params)
         except _NeedsTokenRefresh:
             logger.warning("Stockbit 401 after token refresh — session unusable: %s", url)
-            return None
+            raise StockbitSessionExpired("Stockbit 401 after token refresh.") from None
 
     # ── Internal ──────────────────────────────────────────────────────────────
 

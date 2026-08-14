@@ -13,7 +13,12 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
+import pytest
+
+from src.infrastructure.browser.stockbit_api_client import (
+    StockbitApiClient,
+    StockbitSessionExpired,
+)
 from src.infrastructure.browser.stockbit_token_store import StockbitTokenStore
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -126,16 +131,15 @@ def test_get_401_triggers_single_refresh_then_retries(tmp_path):
     assert call_count[0] == 2, "two GET calls: original + retry"
 
 
-def test_get_401_after_refresh_returns_none(tmp_path):
-    """If the refreshed token also gets 401, give up and return None."""
+def test_get_401_after_refresh_raises_session_expired(tmp_path):
+    """If the refreshed token also gets 401, auth is typed — not silent None."""
     token = _make_jwt()
     store = _make_store(tmp_path, token)
     client = StockbitApiClient(store, lambda: _make_jwt())
 
     with patch("httpx.get", return_value=_fake_response(401)):
-        result = client.get("https://exodus.stockbit.com/test")
-
-    assert result is None
+        with pytest.raises(StockbitSessionExpired):
+            client.get("https://exodus.stockbit.com/test")
 
 
 # ── Refresh failure ────────────────────────────────────────────────────────
@@ -145,8 +149,8 @@ def test_get_no_token_and_refresher_returns_none(tmp_path):
     store = _make_store(tmp_path, None)
     client = StockbitApiClient(store, lambda: None)
 
-    result = client.get("https://exodus.stockbit.com/test")
-    assert result is None
+    with pytest.raises(StockbitSessionExpired):
+        client.get("https://exodus.stockbit.com/test")
 
 
 def test_get_401_and_refresher_returns_none(tmp_path):
@@ -155,9 +159,8 @@ def test_get_401_and_refresher_returns_none(tmp_path):
     client = StockbitApiClient(store, lambda: None)
 
     with patch("httpx.get", return_value=_fake_response(401)):
-        result = client.get("https://exodus.stockbit.com/test")
-
-    assert result is None
+        with pytest.raises(StockbitSessionExpired):
+            client.get("https://exodus.stockbit.com/test")
 
 
 def test_get_rejects_hs256_refresh_without_persisting_or_requesting(tmp_path):
@@ -171,9 +174,9 @@ def test_get_rejects_hs256_refresh_without_persisting_or_requesting(tmp_path):
     client = StockbitApiClient(store, lambda: f"{header}.{payload}.signature")
 
     with patch("httpx.get") as mock_get:
-        result = client.get("https://exodus.stockbit.com/test")
+        with pytest.raises(StockbitSessionExpired):
+            client.get("https://exodus.stockbit.com/test")
 
-    assert result is None
     assert store.load() is None
     mock_get.assert_not_called()
 
@@ -184,9 +187,9 @@ def test_get_rejects_malformed_rs256_refresh_without_persisting_or_requesting(tm
     client = StockbitApiClient(store, lambda: f"{header}.not-valid-base64.signature")
 
     with patch("httpx.get") as mock_get:
-        result = client.get("https://exodus.stockbit.com/test")
+        with pytest.raises(StockbitSessionExpired):
+            client.get("https://exodus.stockbit.com/test")
 
-    assert result is None
     assert store.load() is None
     mock_get.assert_not_called()
 
@@ -265,7 +268,8 @@ def test_no_infinite_refresh_loop(tmp_path):
     client = StockbitApiClient(store, refresher)
 
     with patch("httpx.get", return_value=_fake_response(401)):
-        client.get("https://exodus.stockbit.com/test")
+        with pytest.raises(StockbitSessionExpired):
+            client.get("https://exodus.stockbit.com/test")
 
     assert refresh_count[0] <= 1, "at most one browser launch per get() call"
 
