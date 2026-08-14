@@ -2,9 +2,9 @@
 
 [Architecture decision index](../../ARCHITECTURE_DECISIONS.md)
 
-**Status:** Accepted
+**Status:** Accepted — **caller/auth-failure contract amended by [ADR-070](ADR-070-stockbit-auth-port-and-typed-failures.md)**
 **Date:** Not recorded (legacy decision)
-**Current implementation:** Implemented — persisted Stockbit token storage is the normal API path; browser login is an explicit refresh/recovery boundary.
+**Current implementation:** Implemented — persisted Stockbit token storage is the normal API path; browser login is an explicit refresh/recovery boundary. **Usable-session policy, typed AuthFailure vs empty market data, and dual refresh modes live in ADR-070** (`StockbitAuthPort`). This ADR still owns the JWT file, local expiry, and “providers do not launch a browser per request.”
 ### Context
 
 Every CLI command that fetched live Stockbit data previously launched a headless Chromium
