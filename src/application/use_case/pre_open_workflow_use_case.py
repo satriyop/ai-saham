@@ -204,7 +204,7 @@ class PreOpenWorkflowUseCase:
         signal_builder: PreOpenSignalInputsBuilder | None = None,
         trade_setup_uc: AssessTradeSetupUseCase | None = None,
         run_snapshot_screen: (
-            Callable[[PreOpenScreenConfig, date], PreOpenSnapshotScreenResult | None] | None
+            Callable[[PreOpenScreenConfig, date | None], PreOpenSnapshotScreenResult | None] | None
         ) = None,
         locked_iev_baseline_provider: LockedIevBaselineProvider | None = None,
         decision_clock: Callable[[], datetime] | None = None,

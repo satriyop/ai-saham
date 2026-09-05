@@ -35,7 +35,13 @@ from src.application.services.pre_open_observation_payload import (
 )
 from src.application.services.pre_open_run_guard import build_pre_open_run_guard
 from src.application.use_case.pre_open_workflow_use_case import PreOpenWorkflowRequest
-from src.domain.value_objects.idx_market import IDX_TIMEZONE
+from src.domain.value_objects.idx_market import (
+    IDX_TIMEZONE,
+    NCP_LOCK_TIME,
+    PRE_OPEN_MATCHING_START,
+    PRE_OPEN_START,
+    REGULAR_OPEN,
+)
 from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
 from src.infrastructure.config.app_config import load_app_config
 from src.infrastructure.config.pre_open_config import load_pre_open_screen_config
@@ -139,6 +145,25 @@ def pre_open_capture(
     )
     if run_guard.error:
         raise_user_error(f"Pre-open guard: {run_guard.error}")
+
+    # Capture is fail-closed outside the live pre-open window. Discovery may use
+    # `saham screen pre-open` (snapshot fallback); authoritative learning writes
+    # require a live collection inside the same-session NCP locked-input phase.
+    if run_guard.outside_window:
+        window = f"{PRE_OPEN_START.strftime('%H:%M')}-{REGULAR_OPEN.strftime('%H:%M')}"
+        ncp = f"{NCP_LOCK_TIME.strftime('%H:%M')}–{PRE_OPEN_MATCHING_START.strftime('%H:%M')}"
+        raise_data_unavailable(
+            (
+                f"Capture rejected: outside the IDX pre-open window "
+                f"({window} Asia/Jakarta). Authoritative capture requires a "
+                f"live collection wholly inside the same-session {ncp} "
+                "NCP locked-input phase."
+            ),
+            tip=(
+                f"Re-run during {ncp} WIB on a trading day, or use "
+                "`saham screen pre-open` for discovery-only outside the window."
+            ),
+        )
 
     if movers_json is not None or order_books_json is not None:
         raise_user_error(

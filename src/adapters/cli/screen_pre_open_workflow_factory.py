@@ -177,7 +177,13 @@ def _build_run_snapshot_screen(
     """
     iev_repository = SQLiteIEVRepository(db_path)
 
-    def _run(config: PreOpenScreenConfig, as_of_date: date) -> PreOpenSnapshotScreenResult | None:
+    def _run(
+        config: PreOpenScreenConfig, as_of_date: date | None
+    ) -> PreOpenSnapshotScreenResult | None:
+        # Defensive: never compare snapshot dates to a missing as_of_date.
+        # Capture should fail closed before this path; screen may still call it.
+        if as_of_date is None:
+            return None
         candidate_dates = [d for d in iev_repository.get_snapshot_dates() if d <= as_of_date]
         if not candidate_dates:
             return None
