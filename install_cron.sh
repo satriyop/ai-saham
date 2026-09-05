@@ -87,14 +87,19 @@ read -r -d '' SAHAM_CRON << ENTRIES || true
 # Kept separate from the 18:30 lq45 job: that one is narrow+deep (broker/enrichment);
 # this one is broad+shallow. Use 'mbx' instead of 'cached' to also discover new listings.
 35 18 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; source .venv/bin/activate && saham fetch market --universe cached --candles-only --no-enrichment --no-meta --no-calendar --no-macro-calendar' >> $LOG_DIR/board-candle-sweep.log 2>&1
-# Accumulation challenge corpus (P1): single fail-closed wrapper
-# capture (lq45) → labels (--all-label-contracts) → status.
+# Accumulation challenge corpus (P1): fail-closed wrapper
+# EOD candle retry → catch-up missing IHSG sessions → capture --require-session
+# → sync-session-calendar → labels (--all-label-contracts) → status.
 # Wrapper: scripts/cron_accum_challenge_corpus.sh (set -euo pipefail; COMPLETION_OK
-# only after all three succeed). COLLECTING status is success, not failure.
+# only after the chain succeeds). Empty capture of a traded session is failure.
+# COLLECTING status is success, not failure. Holiday (no IHSG, no IEV) is success.
 # Manual capture-before-cron is OK (same assess path). One-time after upgrade:
 # saham research accum backfill-phase-ledger
 # Labels omit --compatibility-id inside the wrapper: CLI labels each cohort.
 15 19 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; /bin/bash $PROJECT_DIR/scripts/cron_accum_challenge_corpus.sh' >> $LOG_DIR/accumulation-challenge-corpus.log 2>&1
+# Same-day EOD-lag catch-up. If Stockbit publishes candles after 19:15, this
+# rerun fills today. Already-captured sessions skip the screen.
+45 20 * * 1-5 /bin/bash -c 'cd $PROJECT_DIR || exit 1; if [ -f .env ]; then set -a; source .env; set +a; fi; /bin/bash $PROJECT_DIR/scripts/cron_accum_challenge_corpus.sh' >> $LOG_DIR/accumulation-challenge-corpus.log 2>&1
 # Corpus-continuity watchdog. The capture jobs are fail-closed but silent; this
 # compares the corpus against the attested trading calendar and raises a macOS
 # notification when a session is missing.

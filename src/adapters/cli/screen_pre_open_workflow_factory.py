@@ -83,6 +83,11 @@ def resolve_pre_open_market_status() -> MarketStatus:
     return get_current_market_status()
 
 
+def has_same_day_auction_evidence(db_path: Path, session_date: date) -> bool:
+    """True when pre-open IEV snapshot rows exist for ``session_date``."""
+    return SQLiteIEVRepository(db_path).count_snapshot_rows(session_date) > 0
+
+
 @dataclass(frozen=True)
 class PreOpenBrowserPlan:
     """Result of resolving how to source pre-open movers data."""
@@ -294,6 +299,7 @@ __all__ = [
     "create_pre_open_ai_explainer",
     "create_pre_open_cli_workflow",
     "playwright_available",
+    "has_same_day_auction_evidence",
     "resolve_pre_open_browser_plan",
     "resolve_pre_open_market_status",
     "stockbit_session_exists",

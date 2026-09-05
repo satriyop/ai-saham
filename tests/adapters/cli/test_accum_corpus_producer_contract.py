@@ -16,9 +16,18 @@ def test_capture_and_backfill_share_run_signal_observation_corpus_write() -> Non
     )
     capture_src = inspect.getsource(capture_mod.signal_capture_observations)
     assert "run_signal_observation_corpus_write" in capture_src
+    assert "classify_accum_session_capture" in inspect.getsource(capture_mod)
     # Capture is single-session: start_date == end_date == session.
     assert "start_date=session_date" in capture_src
     assert "end_date=session_date" in capture_src
+
+
+def test_catch_up_uses_shared_producer_for_missing_sessions_only() -> None:
+    catch_up_src = inspect.getsource(capture_mod.signal_catch_up_observations)
+    assert "missing_ihsg_sessions" in catch_up_src
+    assert "run_signal_observation_corpus_write" in catch_up_src
+    assert "start_date=session_date" in catch_up_src
+    assert "end_date=session_date" in catch_up_src
 
 
 def test_shared_producer_ensures_snapshots_before_observation_backfill() -> None:

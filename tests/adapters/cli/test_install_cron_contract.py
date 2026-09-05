@@ -38,11 +38,10 @@ def test_cron_uses_database_owned_pre_open_lifecycle_only() -> None:
 
 
 def test_cron_activates_accumulation_capture_and_labels() -> None:
-    """Single fail-closed wrapper replaces split 19:15 capture + 19:45 labels."""
-    assert any(
-        line.startswith("15 19 * * 1-5 ") and "cron_accum_challenge_corpus.sh" in line
-        for line in ACTIVE_CRON_LINES
-    )
+    """Fail-closed wrapper at 19:15 plus same-day EOD-lag rerun at 20:45."""
+    wrapper_lines = [line for line in ACTIVE_CRON_LINES if "cron_accum_challenge_corpus.sh" in line]
+    assert any(line.startswith("15 19 * * 1-5 ") for line in wrapper_lines)
+    assert any(line.startswith("45 20 * * 1-5 ") for line in wrapper_lines)
     # Must not schedule bare capture/labels as separate active cron lines.
     for line in ACTIVE_CRON_LINES:
         if "research accum capture" in line or "research accum labels" in line:
@@ -59,6 +58,8 @@ def test_cron_activates_accumulation_capture_and_labels() -> None:
     assert "--universe lq45" in wrapper
     assert "--all-label-contracts" in wrapper
     assert "--compatibility-id" not in wrapper
+    assert "research accum catch-up" in wrapper
+    assert "--require-session" in wrapper
 
 
 def test_cron_does_not_require_dotenv_to_activate_project() -> None:

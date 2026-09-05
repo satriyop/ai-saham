@@ -22,6 +22,7 @@ from src.adapters.cli.screen_pre_open_display import (
 )
 from src.adapters.cli.screen_pre_open_workflow_factory import (
     create_pre_open_cli_workflow,
+    has_same_day_auction_evidence,
     resolve_pre_open_browser_plan,
     resolve_pre_open_market_status,
 )
@@ -164,10 +165,12 @@ def pre_open(
     }
     config = load_pre_open_screen_config(resolved_config, overrides)
 
+    run_at = datetime.now(IDX_TIMEZONE)
     run_guard = build_pre_open_run_guard(
-        run_at=datetime.now(IDX_TIMEZONE),
+        run_at=run_at,
         market_status=resolve_pre_open_market_status(),
         allow_non_trading_day=allow_non_trading_day,
+        same_day_auction_evidence=has_same_day_auction_evidence(resolved_db, run_at.date()),
     )
     if run_guard.error:
         if quiet:

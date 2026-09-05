@@ -1,11 +1,13 @@
 """Tests for pre-open screen CLI helpers."""
 
+import inspect
 import json
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from typer.testing import CliRunner
 
 from src.adapters.cli.main import app
@@ -33,6 +35,21 @@ from src.infrastructure.persistence.sqlite_iev_repository import SQLiteIEVReposi
 
 runner = CliRunner()
 
+
+@pytest.fixture(autouse=True)
+def _stub_pre_open_guard_inputs(monkeypatch):
+    class _WeekdayDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 6, 12, 8, 50, tzinfo=tz)
+
+    monkeypatch.setattr("src.adapters.cli.screen_pre_open_commands.datetime", _WeekdayDatetime)
+    monkeypatch.setattr(
+        "src.adapters.cli.screen_pre_open_commands.has_same_day_auction_evidence",
+        lambda db_path, session_date: True,
+    )
+
+
 _BYPASS_GUARD_STATUS = MarketStatus(
     status="STATUS_OPEN",
     session_name="Pre-Open",
@@ -58,6 +75,16 @@ def _candidate(ticker: str) -> ScreenerCandidate:
         bid_gap_pct=Decimal("0.5"),
         gap_price_source="IEP",
     )
+
+
+def test_pre_open_cli_passes_auction_evidence_into_run_guard():
+    from src.adapters.cli import research_pre_open_capture_commands as capture_mod
+    from src.adapters.cli import screen_pre_open_commands as screen_mod
+
+    assert "same_day_auction_evidence" in inspect.getsource(screen_mod.pre_open)
+    assert "has_same_day_auction_evidence" in inspect.getsource(screen_mod.pre_open)
+    assert "same_day_auction_evidence" in inspect.getsource(capture_mod.pre_open_capture)
+    assert "has_same_day_auction_evidence" in inspect.getsource(capture_mod.pre_open_capture)
 
 
 def test_default_pre_open_config_lives_under_config():

@@ -29,7 +29,9 @@ class MarketStatus:
     @property
     def is_pre_open(self) -> bool:
         name = self.session_name.lower()
-        return "pre-open" in name or "pre open" in name or name == "pre-open"
+        return (
+            "pre-open" in name or "pre open" in name or "opening call" in name or name == "pre-open"
+        )
 
     @property
     def is_regular(self) -> bool:

@@ -110,3 +110,89 @@ def test_valid_pre_open_time_has_no_timing_warning():
     assert guard.is_trading_day is True
     assert not any("outside IDX pre-open window" in warning for warning in guard.warnings)
     assert guard.outside_window is False
+
+
+def test_stockbit_post_market_during_ncp_lock_is_not_a_non_trading_day():
+    """NCP lock closes FCA; Stockbit reports Post-Market at 08:57 on a trading day."""
+    dt = datetime(2026, 8, 25, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta"))
+    guard = build_pre_open_run_guard(
+        run_at=dt,
+        market_status=_stockbit_status("Post-Market", False, False, dt),
+        allow_non_trading_day=False,
+        same_day_auction_evidence=True,
+    )
+
+    assert guard.error is None
+    assert guard.is_trading_day is True
+    assert any("NCP lock" in warning for warning in guard.warnings)
+    assert guard.outside_window is False
+
+
+def test_stockbit_post_market_without_auction_evidence_is_non_trading_day():
+    """Weekday holiday: Stockbit still reports Post-Market, never Weekend."""
+    dt = datetime(2026, 6, 11, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta"))
+    guard = build_pre_open_run_guard(
+        run_at=dt,
+        market_status=_stockbit_status("Post-Market", False, False, dt),
+        allow_non_trading_day=False,
+        same_day_auction_evidence=False,
+    )
+
+    assert guard.error is not None
+    assert "non-trading day" in guard.error
+    assert guard.is_trading_day is False
+
+
+def test_stockbit_post_market_holiday_allow_override_returns_warning():
+    dt = datetime(2026, 6, 11, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta"))
+    guard = build_pre_open_run_guard(
+        run_at=dt,
+        market_status=_stockbit_status("Post-Market", False, False, dt),
+        allow_non_trading_day=True,
+        same_day_auction_evidence=False,
+    )
+
+    assert guard.error is None
+    assert guard.is_trading_day is False
+    assert any("non-trading day" in warning for warning in guard.warnings)
+
+
+def test_stockbit_post_market_after_hours_is_non_trading_day_even_with_iev():
+    dt = datetime(2026, 8, 25, 16, 30, tzinfo=ZoneInfo("Asia/Jakarta"))
+    guard = build_pre_open_run_guard(
+        run_at=dt,
+        market_status=_stockbit_status("Post-Market", False, False, dt),
+        allow_non_trading_day=False,
+        same_day_auction_evidence=True,
+    )
+
+    assert guard.error is not None
+    assert "non-trading day" in guard.error
+    assert guard.is_trading_day is False
+    assert guard.outside_window is True
+
+
+def test_stockbit_post_market_on_weekend_blocks_without_weekend_session_name():
+    dt = datetime(2026, 6, 13, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta"))
+    guard = build_pre_open_run_guard(
+        run_at=dt,
+        market_status=_stockbit_status("Post-Market", False, False, dt),
+        allow_non_trading_day=False,
+        same_day_auction_evidence=False,
+    )
+
+    assert guard.error is not None
+    assert guard.is_trading_day is False
+
+
+def test_stockbit_opening_call_auction_during_pre_open_is_trading_day():
+    dt = datetime(2026, 8, 25, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta"))
+    guard = build_pre_open_run_guard(
+        run_at=dt,
+        market_status=_stockbit_status("Opening Call Auction", False, True, dt),
+        allow_non_trading_day=False,
+    )
+
+    assert guard.error is None
+    assert guard.is_trading_day is True
+    assert guard.outside_window is False

@@ -6,9 +6,8 @@
 # is missing, and raises a visible macOS notification when one is.
 #
 # Why it matters per purpose:
-#   ACCUM     replayable — `saham research accum signal-backfill-observations`
-#             can rebuild a missed session from stored market data, but only if
-#             somebody notices it is gone.
+#   ACCUM     replayable — `saham research accum catch-up` (or the 19:15/20:45
+#             wrapper) rebuilds a missed session from stored market data.
 #   PRE_OPEN  NOT replayable — the 08:56 IEV reading exists only inside the NCP
 #             lock window. A missed session is gone permanently, so the alarm's
 #             job is to get the cause fixed before the next session opens.

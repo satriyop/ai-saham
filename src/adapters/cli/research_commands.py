@@ -15,7 +15,10 @@ from __future__ import annotations
 import typer
 
 from src.adapters.cli.research_accum_backfill_commands import signal_backfill_observations
-from src.adapters.cli.research_accum_capture_commands import signal_capture_observations
+from src.adapters.cli.research_accum_capture_commands import (
+    signal_capture_observations,
+    signal_catch_up_observations,
+)
 from src.adapters.cli.research_accum_evaluate_commands import (
     accumulation_evaluate,
     accumulation_labels,
@@ -58,7 +61,7 @@ research_pre_open_app = typer.Typer(
 research_accum_app = typer.Typer(
     name="accum",
     help=(
-        "Accum corpus: capture, backfill, labels, compatible-cohort "
+        "Accum corpus: capture, catch-up, backfill, labels, compatible-cohort "
         "evaluation, replay inspection, and status."
     ),
     no_args_is_help=True,
@@ -72,6 +75,7 @@ research_pre_open_app.command("evaluate")(pre_open_evaluate)
 research_pre_open_app.command("status")(pre_open_status)
 
 research_accum_app.command("capture")(signal_capture_observations)
+research_accum_app.command("catch-up")(signal_catch_up_observations)
 research_accum_app.command("backfill")(signal_backfill_observations)
 research_accum_app.command("backfill-phase-ledger")(backfill_phase_ledger)
 research_accum_app.command("sync-session-calendar")(accumulation_sync_session_calendar)
