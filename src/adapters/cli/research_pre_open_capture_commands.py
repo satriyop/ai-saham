@@ -144,14 +144,8 @@ def pre_open_capture(
     # `saham screen pre-open` (snapshot fallback); authoritative learning writes
     # require a live collection inside the same-session NCP locked-input phase.
     if run_guard.outside_window:
-        window = (
-            f"{PRE_OPEN_START.strftime('%H:%M')}-"
-            f"{REGULAR_OPEN.strftime('%H:%M')}"
-        )
-        ncp = (
-            f"{NCP_LOCK_TIME.strftime('%H:%M')}–"
-            f"{PRE_OPEN_MATCHING_START.strftime('%H:%M')}"
-        )
+        window = f"{PRE_OPEN_START.strftime('%H:%M')}-{REGULAR_OPEN.strftime('%H:%M')}"
+        ncp = f"{NCP_LOCK_TIME.strftime('%H:%M')}–{PRE_OPEN_MATCHING_START.strftime('%H:%M')}"
         raise_data_unavailable(
             (
                 f"Capture rejected: outside the IDX pre-open window "

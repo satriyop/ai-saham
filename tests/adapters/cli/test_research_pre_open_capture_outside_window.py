@@ -35,9 +35,7 @@ _BYPASS_GUARD_STATUS = MarketStatus(
 )
 
 
-def test_capture_outside_window_fails_closed_without_typeerror_or_persist(
-    monkeypatch, tmp_path
-):
+def test_capture_outside_window_fails_closed_without_typeerror_or_persist(monkeypatch, tmp_path):
     """Outside window + no --session: clear data_unavailable, no observation write."""
 
     class _FixedDatetime(datetime):
