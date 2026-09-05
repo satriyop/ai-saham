@@ -93,14 +93,17 @@ All AI components use factories for consistent instantiation:
 ```python
 # Explainers
 from src.infrastructure.ai import ExplainerFactory
+
 explainer = ExplainerFactory.create(provider="ollama", model="llama3:8b")
 
 # Formula Translators
 from src.infrastructure.ai import FormulaTranslatorFactory
+
 translator = FormulaTranslatorFactory.create(provider="claude")
 
 # Classifiers
 from src.infrastructure.sentiment import SentimentFactory
+
 classifier = SentimentFactory.create_classifier(use_ai=True, provider="openai")
 ```
 
@@ -125,9 +128,9 @@ All adapters raise consistent exceptions:
 
 ```python
 from src.domain.ports.ai_explainer import (
-    ExplainerAuthError,      # Invalid/missing API key
-    ExplainerTimeoutError,   # Request timeout
-    ExplainerRateLimitError, # Rate limit exceeded
+    ExplainerAuthError,  # Invalid/missing API key
+    ExplainerTimeoutError,  # Request timeout
+    ExplainerRateLimitError,  # Rate limit exceeded
 )
 
 from src.application.ports.formula_translator import (
