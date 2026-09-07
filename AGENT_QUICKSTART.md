@@ -50,6 +50,12 @@ Read this before every task. This is the mandatory entry point for agents. The l
   `ruff format --check src/ tests/` must pass (same as CI). Do not weaken
   `pyproject.toml` Ruff config, add blanket ignores, or expand per-file
   exemptions to land a task.
+- **CI is an agent gate.** GitHub Actions `CI` (Lint + Test at minimum) must
+  be green on the commit you report as done. A local pytest pass on a wide,
+  colorless terminal is not CI. Reproduce the runner before landing:
+  `NO_COLOR=1 COLUMNS=80 TZ=UTC pytest`. Do not merge or push-to-main with
+  known red CI. Use the Ruff extra pinned in `pyproject.toml` (`[dev]`), not
+  an unpinned `pip install ruff`.
 
 ## Multi-surface parity (CLI / TUI)
 
@@ -541,6 +547,8 @@ Before marking done:
 - [ ] Focused tests and `git diff --check` pass.
 - [ ] Lint Gate: `ruff check src/ tests/` and `ruff format --check src/ tests/`
       pass (whole-repo, same as CI).
+- [ ] CI Gate: GitHub Actions workflow `CI` is green on the commit being
+      reported (Lint + Test at minimum). Local pytest is not a substitute.
 - [ ] All close gates were rerun after the final edit on the exact commit/state
       being reported; earlier green evidence was not reused.
 
@@ -625,4 +633,5 @@ For documentation-only edits:
 
 If verification is skipped or impossible, say exactly why (including if Ruff
 is unavailable in the environment — state that explicitly; do not pretend
-lint passed).
+lint passed). After a push to `main` or a PR, confirm GitHub Actions `CI`
+is green on that SHA; do not close the task on a red run.

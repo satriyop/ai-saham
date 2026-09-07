@@ -226,18 +226,11 @@ class GoogleNewsProvider:
         Returns:
             Parsed datetime or None if parsing fails
         """
-        # Common RFC 822 formats
-        formats = [
-            "%a, %d %b %Y %H:%M:%S %Z",  # With timezone name
-            "%a, %d %b %Y %H:%M:%S %z",  # With timezone offset
-            "%a, %d %b %Y %H:%M:%S",  # Without timezone
-        ]
+        from src.infrastructure.sentiment.rss_datetime import parse_rss_datetime
 
-        for fmt in formats:
-            try:
-                return datetime.strptime(date_str, fmt)
-            except ValueError:
-                continue
+        parsed = parse_rss_datetime(date_str)
+        if parsed is not None:
+            return parsed
 
         # Last resort: try to parse just the date portion
         try:

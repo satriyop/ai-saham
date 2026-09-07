@@ -115,15 +115,6 @@ class IDXChannelNewsProvider:
         return headlines
 
     def _parse_date(self, date_str: str) -> datetime | None:
-        formats = [
-            "%a, %d %b %Y %H:%M:%S %Z",
-            "%a, %d %b %Y %H:%M:%S %z",
-            "%a, %d %b %Y %H:%M:%S",
-        ]
-        for fmt in formats:
-            try:
-                dt = datetime.strptime(date_str, fmt)
-                return dt.replace(tzinfo=None)
-            except ValueError:
-                continue
-        return None
+        from src.infrastructure.sentiment.rss_datetime import parse_rss_datetime
+
+        return parse_rss_datetime(date_str)

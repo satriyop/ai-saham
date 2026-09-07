@@ -146,12 +146,14 @@ docs: update README with sentiment examples
 2. **Update documentation**: Update README if needed
 3. **Run CI locally**: Ensure all tests and lints pass
 4. **Write clear PR description**: Explain what and why
+5. **Wait for GitHub CI**: Do not merge while workflow `CI` is red
 
 ### PR Checklist
 
 - [ ] Tests added/updated
 - [ ] All tests passing (`pytest tests/`)
-- [ ] Linting passes (`ruff check src/ tests/`)
+- [ ] Linting passes (`ruff check src/ tests/` and `ruff format --check src/ tests/`)
+- [ ] GitHub Actions `CI` is green on the PR head (Lint + Test)
 - [ ] Documentation updated if needed
 - [ ] Commit messages follow conventions
 

@@ -1209,6 +1209,22 @@ should return nothing but intentional expansions.
 
 ---
 
+## 26. CI Help Tests Fail When Rich Colors `--flags`
+
+GitHub Actions is an 80-column colored pty. Typer/Rich then emits
+`-\x1b[0m-universe` instead of `--universe`, so `assert "--universe" in stdout`
+fails on CI and passes on a wide local terminal.
+
+Keep `tests/conftest.py` setting `NO_COLOR=1` and `COLUMNS=120`. Workflow
+`CI` sets the same env. Do not assert on raw ANSI help. Do not `pip install
+ruff` unpinned in CI — install the `[dev]` extra so Lint matches the lock.
+
+`datetime.strptime(..., "%Z")` is host-TZ-specific: `WIB` parses on macOS
+Jakarta and returns None on Ubuntu `TZ=UTC`. Use
+`src/infrastructure/sentiment/rss_datetime.py`.
+
+---
+
 ## Quick Reference — Component → Pitfall
 
 | Component / scenario | Read section |
@@ -1263,3 +1279,5 @@ should return nothing but intentional expansions.
 | Changing anything under `alpha_trigger.*` | §24a + §24b + IB-0 probe blind spot |
 | Adding or editing a cron entry in `install_cron.sh` | §25 — no backticks in the heredoc |
 | `install_cron.sh` prints "command not found" | §25 — a comment backtick executed |
+| CLI `--help` substring asserts fail on GitHub CI only | §26 — Rich ANSI splits `--flag` |
+| RSS `WIB` dates parse locally, None in CI | §26 — do not use `%Z` |
