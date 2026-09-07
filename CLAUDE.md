@@ -222,6 +222,8 @@ If code decides what data to fetch, when to fetch it, whether cached data is fre
 ### Lint (Ruff)
 
 * Follow the Lint Gate in `AGENT_QUICKSTART.md` — mandatory agent close criterion
+* Follow the CI Gate in `AGENT_QUICKSTART.md` — GitHub Actions `CI` must be
+  green on the reported commit; local pytest is not a substitute
 * Whole-repo: `ruff check src/ tests/` and `ruff format --check src/ tests/`
   (same as CI)
 * Do not weaken Ruff config, add blanket ignores, or unreviewed repo-wide autofix
