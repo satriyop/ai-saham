@@ -11,6 +11,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_errors import raise_data_unavailable
 from src.adapters.cli.research_pre_open_paths import resolve_session_date
 from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.learning_artifacts import AssessmentPurpose
@@ -110,6 +111,16 @@ def track(
         typer.echo("No tickers to track.", err=True)
         raise typer.Exit(1)
 
+    from src.application.ports.stockbit_auth import StockbitAuthFailure
+    from src.infrastructure.composition.stockbit_auth_factory import create_stockbit_auth_port
+
+    auth_outcome = create_stockbit_auth_port().ensure_usable()
+    if isinstance(auth_outcome, StockbitAuthFailure):
+        raise_data_unavailable(
+            auth_outcome.message,
+            tip="Run: saham fetch stockbit reauth --mode headed",
+        )
+
     try:
         from src.application.use_case.opening_track_use_case import (
             OpeningTrackRequest,
@@ -118,33 +129,18 @@ def track(
         from src.infrastructure.browser.playwright_stockbit_provider import (
             PlaywrightStockbitProvider,
         )
+        from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
+        from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
     except ImportError as e:
         typer.echo(f"Import error: {e}", err=True)
         raise typer.Exit(1)
 
-    resolved_session_file = Path(cfg.storage.stockbit_session_file)
-    if not resolved_session_file.exists():
-        typer.echo("No Stockbit session. Run: saham fetch stockbit login", err=True)
-        raise typer.Exit(1)
-
-    from src.infrastructure.browser.stockbit_config_bundle import load_stockbit_provider_config
-    from src.infrastructure.composition.stockbit_session_factory import (
-        get_stockbit_session as _get_learn_session,
-    )
-
     _stockbit_config = load_stockbit_provider_config()
-    _learn_session = _get_learn_session(_stockbit_config)
-
-    from src.infrastructure.browser.stockbit_api_client import create_stockbit_api_client
-
-    _api_client = (
-        _learn_session.api_client if _learn_session else None
-    ) or create_stockbit_api_client(
+    _api_client = create_stockbit_api_client(
         profile_dir=Path(cfg.storage.stockbit_profile_dir),
         headless=headless,
         stockbit_config=_stockbit_config,
     )
-
     browser = PlaywrightStockbitProvider(api_client=_api_client, stockbit_config=_stockbit_config)
 
     running_trade_provider = None
@@ -157,23 +153,17 @@ def track(
                 StockbitRunningTradeProvider,
             )
 
-            if _learn_session and _learn_session.authenticated:
-                running_trade_provider = StockbitRunningTradeProvider(
-                    api_client=_learn_session.api_client, stockbit_config=_stockbit_config
-                )
-                with open(cfg.config_paths.stockbit) as f:
-                    stockbit_cfg = yaml.safe_load(f) or {}
-                institutional_codes = frozenset(
-                    stockbit_cfg.get("broker_codes", {}).get("institutional_proxy", [])
-                )
-                typer.echo(
-                    "Broker confirm enabled — "
-                    f"{len(institutional_codes)} institutional codes loaded"
-                )
-            else:
-                typer.echo(
-                    "Stockbit session not authenticated — --broker-confirm disabled", err=True
-                )
+            running_trade_provider = StockbitRunningTradeProvider(
+                api_client=_api_client, stockbit_config=_stockbit_config
+            )
+            with open(cfg.config_paths.stockbit) as f:
+                stockbit_cfg = yaml.safe_load(f) or {}
+            institutional_codes = frozenset(
+                stockbit_cfg.get("broker_codes", {}).get("institutional_proxy", [])
+            )
+            typer.echo(
+                f"Broker confirm enabled — {len(institutional_codes)} institutional codes loaded"
+            )
         except Exception as e:
             typer.echo(f"Broker confirm setup failed: {e} — continuing without it", err=True)
 
@@ -181,13 +171,10 @@ def track(
     try:
         from src.infrastructure.browser.stockbit_order_book import StockbitOrderBookProvider
 
-        if _learn_session and _learn_session.authenticated:
-            order_book_provider = StockbitOrderBookProvider(
-                api_client=_learn_session.api_client, stockbit_config=_stockbit_config
-            )
-            typer.echo("Order book depth enabled — bid_pressure_ratio + live F.Net per snapshot")
-        else:
-            typer.echo("Stockbit session not authenticated — order book disabled", err=True)
+        order_book_provider = StockbitOrderBookProvider(
+            api_client=_api_client, stockbit_config=_stockbit_config
+        )
+        typer.echo("Order book depth enabled — bid_pressure_ratio + live F.Net per snapshot")
     except Exception as e:
         typer.echo(f"Order book setup failed: {e} — continuing without it", err=True)
 
