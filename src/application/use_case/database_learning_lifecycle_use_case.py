@@ -668,8 +668,36 @@ class EvaluateLearningCohortUseCase:
             readiness=readiness,
             evaluated_at=request.evaluated_at,
         )
+        existing = self._evaluations.get_evaluation(evaluation.evaluation_id)
+        if existing is not None and _evaluation_content_equal(existing, evaluation):
+            # Re-eval of the same label set is the same artifact. evaluated_at is
+            # when the cron happened to run; it must not raise an immutable conflict
+            # or fork a second evaluation that labels cannot be compared against.
+            return existing
         self._evaluations.add_evaluation(evaluation)
         return evaluation
+
+
+def _evaluation_content_equal(left: LearningEvaluation, right: LearningEvaluation) -> bool:
+    """True when two evaluations describe the same label cohort.
+
+    ``evaluated_at`` is operational provenance (when evaluate ran), not content.
+    Labels stay comparable across days because identity is the label set, not the clock.
+    """
+    return (
+        left.evaluation_id == right.evaluation_id
+        and left.contract_id is right.contract_id
+        and left.purpose is right.purpose
+        and left.method is right.method
+        and left.compatibility_id == right.compatibility_id
+        and left.dataset_fingerprint == right.dataset_fingerprint
+        and left.split_contract == right.split_contract
+        and dict(left.population) == dict(right.population)
+        and dict(left.exclusions) == dict(right.exclusions)
+        and dict(left.metrics) == dict(right.metrics)
+        and left.outcome_basis is right.outcome_basis
+        and left.readiness is right.readiness
+    )
 
 
 def _metric_return(metrics: Any) -> float | None:

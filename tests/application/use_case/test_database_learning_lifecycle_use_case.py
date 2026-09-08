@@ -711,3 +711,56 @@ def test_accumulation_price_path_ignores_legacy_entry_price_alias(
     )
     assert result.skipped_count == 1
     assert result.inserted_count == 0
+
+
+def test_pre_open_reevaluate_is_idempotent_across_days(tmp_path) -> None:
+    """Re-eval of the same labels must not raise immutable artifact conflict."""
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    observation = _observation(day=27)
+    repository.add_observation(observation)
+    repository.add_track_snapshot(
+        LearningTrackSnapshot.create(
+            observation_id=observation.observation_id,
+            sampled_at=NOW,
+            source="stockbit.opening_track",
+            snapshot_payload={"mid_price": 100.0},
+            captured_at=NOW,
+        )
+    )
+    GeneratePreOpenOutcomeLabelsUseCase(
+        observations=repository,
+        tracks=repository,
+        labels=repository,
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.PRE_OPEN_LABEL,
+            labeled_at=NOW,
+        )
+    )
+    use_case = EvaluateLearningCohortUseCase(
+        observations=repository,
+        labels=repository,
+        evaluations=repository,
+    )
+    first = use_case.execute(
+        EvaluateLearningCohortRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id="compat-1",
+            evaluated_at=NOW,
+        )
+    )
+    later = NOW + timedelta(days=1)
+    second = use_case.execute(
+        EvaluateLearningCohortRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id="compat-1",
+            evaluated_at=later,
+        )
+    )
+
+    assert second.evaluation_id == first.evaluation_id
+    assert second.artifact_digest == first.artifact_digest
+    assert second.metrics == first.metrics
+    assert repository.list_evaluations(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION) == (first,)
