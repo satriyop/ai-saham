@@ -91,6 +91,7 @@ def fetch_candles(
     short_history: list[str] | None = None,
     broker_provider: "StockbitBrokerProvider | None" = None,
     effective_session: EffectiveMarketSession | None = None,
+    session_bar: bool = False,
 ) -> str:
     """Fetch candles for one ticker. Returns status string."""
     from src.infrastructure.config.market_context_config import get_global_context_tickers
@@ -140,6 +141,7 @@ def fetch_candles(
                 refresh=refresh,
                 start_tolerance_days=market_start_tolerance_days,
                 end_tolerance_days=end_tolerance,
+                session_bar=session_bar,
             )
         )
         if short_history is not None and response.short_history_note:

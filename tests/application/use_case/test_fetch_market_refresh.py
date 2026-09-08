@@ -205,3 +205,36 @@ def test_fetch_market_refresh_passes_refresh_to_enrichment():
     )
 
     assert force_values == [True, True]
+
+
+def test_candles_only_hung_fetch_fails_cleanly_and_counts_hangs():
+    def fetch_candles(**kwargs):
+        if kwargs["ticker"] == "BBCA":
+            import time
+
+            time.sleep(0.4)
+            return "✓(2026-09-08)"
+        return "✓(2026-09-07)"
+
+    use_case = FetchMarketRefreshUseCase(
+        fetch_candles=fetch_candles,
+        fetch_broker=lambda **kwargs: BrokerFetchResult("skip", "skip"),
+        fetch_meta=lambda ticker, db_path: "skip",
+        fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        _request(
+            candles_only=True,
+            no_meta=True,
+            tickers=["BBCA"],
+            candle_call_timeout_s=0.05,
+        )
+    )
+
+    statuses = {item.ticker: item.candles_status for item in response.ticker_results}
+    assert statuses["BBCA"].startswith("ERR:")
+    assert response.hang_count >= 1
+    assert response.hang_attempted >= 1
+    assert response.fail_count >= 1

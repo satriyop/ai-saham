@@ -31,6 +31,7 @@ class RefreshDailyWorkspaceRequest:
     include_calendar: bool = True
     include_macro_calendar: bool = True
     briefing_top: int = 3
+    session_bar: bool = False
 
 
 @dataclass(frozen=True)

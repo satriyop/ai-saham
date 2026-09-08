@@ -5,12 +5,14 @@ Layer: Application
 AI usage: None
 """
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from src.application.ports.universe_config_loader import UniverseConfigLoader
+from src.application.services.bounded_call import CallTimeout, call_bounded
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )
@@ -63,6 +65,10 @@ class FetchMarketRefreshRequest:
     no_meta: bool
     no_enrichment: bool
     effective_session: EffectiveMarketSession | None = None
+    session_bar: bool = False
+    # monotonic deadline for candles-only. None = no wall-clock bound.
+    deadline_at: float | None = None
+    candle_call_timeout_s: float = 12.0
 
 
 @dataclass(frozen=True)
@@ -78,6 +84,8 @@ class FetchMarketRefreshResponse:
     meta_changed: list[str] = field(default_factory=list)
     enrichment_available: bool = False
     pit_coverage: list[EnrichmentPitTableCoverage] = field(default_factory=list)
+    hang_count: int = 0
+    hang_attempted: int = 0
 
 
 class FetchMarketRefreshUseCase:
@@ -130,6 +138,8 @@ class FetchMarketRefreshUseCase:
         ok_count = 0
         fail_count = 0
         failures: list[str] = []
+        hang_count = 0
+        hang_attempted = 0
         ticker_results: list[FetchMarketTickerResult] = []
         candle_short_history: list[str] = []
         broker_backfills: list[str] = []
@@ -142,15 +152,16 @@ class FetchMarketRefreshUseCase:
             enrichment_status = "skip"
 
             if not request.broker_only:
-                candles_status = self._fetch_candles(
+                candles_status = self._fetch_candles_bounded(
+                    request,
                     ticker=ticker,
-                    days=request.days,
-                    db_path=request.db_path,
-                    provider_name=request.candles_provider,
-                    refresh=request.refresh,
                     short_history=candle_short_history,
-                    effective_session=request.effective_session,
+                    hang_attempted=hang_attempted,
+                    hang_count=hang_count,
                 )
+                hang_attempted = candles_status[1]
+                hang_count = candles_status[2]
+                candles_status = candles_status[0]
 
             if not request.candles_only:
                 broker_result = self._fetch_broker(
@@ -230,7 +241,57 @@ class FetchMarketRefreshUseCase:
             meta_changed=meta_changed,
             enrichment_available=enrichment_available,
             pit_coverage=pit_coverage,
+            hang_count=hang_count,
+            hang_attempted=hang_attempted,
         )
+
+    def _fetch_candles_bounded(
+        self,
+        request: FetchMarketRefreshRequest,
+        *,
+        ticker: str,
+        short_history: list[str],
+        hang_attempted: int,
+        hang_count: int,
+    ) -> tuple[str, int, int]:
+        """Fetch one ticker's candles, failing cleanly on hang or deadline."""
+
+        def _call() -> str:
+            return self._fetch_candles(
+                ticker=ticker,
+                days=request.days,
+                db_path=request.db_path,
+                provider_name=request.candles_provider,
+                refresh=request.refresh,
+                short_history=short_history,
+                effective_session=request.effective_session,
+                session_bar=request.session_bar,
+            )
+
+        # Broker-inclusive runs keep the previous unbounded candle path so a
+        # legitimate EOD backfill is not cut short. Candles-only is the morning
+        # desk path and must not sit on a hung provider call.
+        if not request.candles_only:
+            return _call(), hang_attempted, hang_count
+
+        hang_attempted += 1
+        now = time.monotonic()
+        if request.deadline_at is not None and now >= request.deadline_at:
+            return "ERR:deadline", hang_attempted, hang_count + 1
+        timeout_s = request.candle_call_timeout_s
+        if request.deadline_at is not None:
+            timeout_s = min(timeout_s, max(0.0, request.deadline_at - now))
+        if timeout_s <= 0:
+            return "ERR:deadline", hang_attempted, hang_count + 1
+        try:
+            return call_bounded(_call, timeout_s), hang_attempted, hang_count
+        except CallTimeout:
+            status = (
+                "ERR:deadline"
+                if request.deadline_at is not None and time.monotonic() >= request.deadline_at
+                else "ERR:timeout"
+            )
+            return status, hang_attempted, hang_count + 1
 
     def _with_benchmark_first(self, tickers: list[str]) -> list[str]:
         seen: set[str] = set()

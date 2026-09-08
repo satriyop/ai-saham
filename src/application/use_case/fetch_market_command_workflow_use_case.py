@@ -48,6 +48,9 @@ class FetchMarketCommandWorkflowRequest:
     no_enrichment: bool
     no_calendar: bool
     no_macro_calendar: bool = False
+    session_bar: bool = False
+    deadline_at: float | None = None
+    candle_call_timeout_s: float = 20.0
 
 
 @dataclass(frozen=True)
@@ -196,6 +199,9 @@ class FetchMarketCommandWorkflowUseCase:
             no_meta=request.no_meta,
             no_enrichment=request.no_enrichment,
             effective_session=effective_session,
+            session_bar=request.session_bar,
+            deadline_at=request.deadline_at if request.candles_only else None,
+            candle_call_timeout_s=request.candle_call_timeout_s,
         )
         response = self._refresh_use_case.execute(
             refresh_req,

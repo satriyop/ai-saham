@@ -446,6 +446,11 @@ def _build_refresh_workspace_use_case(*, use_case: DailyBriefingUseCase, db_path
     )
 
     def refresh_capability(req, *, on_start=None, on_ticker_complete=None):
+        from src.application.services.bounded_call import candles_only_deadline
+
+        deadline_at = None
+        if req.components == "CANDLES_ONLY":
+            deadline_at, _note = candles_only_deadline()
         workflow_request = FetchMarketCommandWorkflowRequest(
             tickers=list(req.tickers),
             universe=req.universe,
@@ -461,6 +466,8 @@ def _build_refresh_workspace_use_case(*, use_case: DailyBriefingUseCase, db_path
             no_enrichment=not req.include_enrichment,
             no_calendar=not req.include_calendar,
             no_macro_calendar=not req.include_macro_calendar,
+            session_bar=req.session_bar,
+            deadline_at=deadline_at,
         )
         return workflow.execute(
             workflow_request,
@@ -511,8 +518,32 @@ def _resolve_briefing_response(
             RefreshDailyWorkspaceRequest(
                 universe=request.universe,
                 briefing_top=request.top,
+                # Morning desk must not hang on broker/enrichment. Candles-only
+                # is bounded; session_bar keeps yesterday from counting as current
+                # so ENTER marks can read same-session Stockbit OHLC.
+                components="CANDLES_ONLY",
+                include_meta=False,
+                include_enrichment=False,
+                include_calendar=False,
+                include_macro_calendar=False,
+                session_bar=True,
             )
         )
+        refresh_response = getattr(getattr(result, "refresh", None), "response", None)
+        if refresh_response is not None and getattr(refresh_response, "hang_attempted", 0):
+            from src.application.services.bounded_call import HangRateRecord, log_hang_rate
+
+            attempted = refresh_response.hang_attempted
+            hung = refresh_response.hang_count
+            log_hang_rate(
+                HangRateRecord(
+                    surface="today-candles-only",
+                    attempted=attempted,
+                    hung=hung,
+                    rate=(hung / attempted) if attempted else 0.0,
+                    note="today live refresh",
+                )
+            )
         return _BriefingResolution("LIVE", result.briefing, list(result.warnings))
     except Exception as exc:  # noqa: BLE001 — degrade to cache on any refresh failure
         return _BriefingResolution(
