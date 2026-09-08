@@ -92,6 +92,16 @@ def fetch_market(
         bool,
         typer.Option("--refresh", "-r", help="Force refresh even if cached"),
     ] = False,
+    session_bar: Annotated[
+        bool,
+        typer.Option(
+            "--session-bar",
+            help=(
+                "Force candles forward-fill through today so the scorecard can "
+                "read same-session OHLC from Stockbit. Does not treat yesterday as current."
+            ),
+        ),
+    ] = False,
     no_meta: Annotated[
         bool,
         typer.Option("--no-meta", help="Skip sector/industry metadata fetch"),
@@ -229,6 +239,13 @@ def fetch_market(
         typer.echo(typer.style(status_line, fg=status_color))
 
     # Execute the workflow
+    deadline_at = None
+    deadline_note = ""
+    if candles_only:
+        from src.application.services.bounded_call import candles_only_deadline
+
+        deadline_at, deadline_note = candles_only_deadline()
+
     try:
         req = FetchMarketCommandWorkflowRequest(
             tickers=list(tickers) if tickers else [],
@@ -245,6 +262,8 @@ def fetch_market(
             no_enrichment=no_enrichment,
             no_calendar=no_calendar,
             no_macro_calendar=no_macro_calendar,
+            session_bar=session_bar,
+            deadline_at=deadline_at,
         )
         result = workflow_use_case.execute(
             req,
@@ -321,6 +340,25 @@ def fetch_market(
 
     typer.echo(f"Calendar: {result.calendar_status}")
     typer.echo(f"Macro calendar: {result.macro_calendar_status}")
+
+    if candles_only:
+        from src.application.services.bounded_call import log_hang_rate, HangRateRecord
+
+        attempted = response.hang_attempted
+        hung = response.hang_count
+        rate = (hung / attempted) if attempted else 0.0
+        log_hang_rate(
+            HangRateRecord(
+                surface="fetch-market-candles-only",
+                attempted=attempted,
+                hung=hung,
+                rate=rate,
+                note=deadline_note,
+            )
+        )
+        typer.echo(f"hung-fetch: {hung}/{attempted} rate={rate:.4f} {deadline_note}")
+        if hung:
+            raise typer.Exit(1)
 
     if response.pit_coverage:
         render_enrichment_pit_coverage(response.pit_coverage)

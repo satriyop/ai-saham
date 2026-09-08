@@ -35,6 +35,9 @@ class RefreshMarketDataRequest:
     end_date: date | None = None
     start_tolerance_days: int = DEFAULT_START_TOLERANCE_DAYS
     end_tolerance_days: int = DEFAULT_END_TOLERANCE_DAYS
+    # Same-session OHLC: do not treat the last completed session (yesterday
+    # during the cash session) as current. Forward-fill through end_date.
+    session_bar: bool = False
 
 
 @dataclass(frozen=True)
@@ -106,7 +109,11 @@ class RefreshMarketDataUseCase:
                     fetch_ranges.append((requested_start, end_date, "refresh"))
                 else:
                     tolerated_start = requested_start + timedelta(days=request.start_tolerance_days)
-                    tolerated_end = end_date - timedelta(days=request.end_tolerance_days)
+                    # session_bar is the scorecard path: yesterday must not
+                    # count as the current bar even when end_tolerance would
+                    # otherwise treat the last completed session as current.
+                    end_tolerance_days = 0 if request.session_bar else request.end_tolerance_days
+                    tolerated_end = end_date - timedelta(days=end_tolerance_days)
                     needs_older_backfill = earliest > tolerated_start
                     needs_forward_fill = latest < tolerated_end
 

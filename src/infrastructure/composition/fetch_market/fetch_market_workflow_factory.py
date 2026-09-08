@@ -74,13 +74,35 @@ def create_workflow_use_case(
         return frozenset(get_global_context_tickers())
 
     def market_status_loader() -> FetchMarketStatusHeader | None:
+        from src.application.services.bounded_call import (
+            MARKET_STATUS_TIMEOUT_S,
+            CallTimeout,
+            HangRateRecord,
+            call_bounded,
+            log_hang_rate,
+        )
         from src.infrastructure.browser.stockbit_market_time import (
             fetch_and_cache_market_status,
             format_market_status_line,
             get_display_market_status,
         )
 
-        mstatus = fetch_and_cache_market_status() or get_display_market_status()
+        # Live Stockbit status can block on token refresh (~90s). Bound it and
+        # fall back to the display cache / local clock. Logged, not a silent kill.
+        try:
+            mstatus = call_bounded(fetch_and_cache_market_status, MARKET_STATUS_TIMEOUT_S)
+        except CallTimeout:
+            log_hang_rate(
+                HangRateRecord(
+                    surface="fetch-market-status",
+                    attempted=1,
+                    hung=1,
+                    rate=1.0,
+                    note=f"market-status exceeded {MARKET_STATUS_TIMEOUT_S:.0f}s",
+                )
+            )
+            mstatus = None
+        mstatus = mstatus or get_display_market_status()
         if mstatus is None:
             return None
         line = format_market_status_line(mstatus)

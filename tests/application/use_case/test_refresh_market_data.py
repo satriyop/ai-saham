@@ -280,3 +280,50 @@ def test_refresh_forces_full_refresh_when_start_boundary_gap_exists():
     # Should trigger a full refresh of the entire requested range
     assert "refresh" in response.fetch_modes
     assert provider.requested_ranges == [(requested_start, end_date)]
+
+def test_session_bar_does_not_treat_yesterday_as_current():
+    """Scorecard same-session path must forward-fill through today.
+
+    Without session_bar, end_tolerance of 1 treats yesterday as current and
+    never asks the provider. With session_bar the stored bar is today's, not yesterday.
+    """
+
+    class TodayBarProvider(FakeMarketProvider):
+        def fetch_daily_ohlcv(self, ticker: str, start_date: date, end_date: date) -> list[Candle]:
+            self.requested_ranges.append((start_date, end_date))
+            return [_candle(ticker, end_date)]
+
+    today = date(2026, 9, 8)
+    yesterday = date(2026, 9, 7)
+    repo = MemoryMarketRepository()
+    provider = TodayBarProvider()
+    repo.save_candles(_generate_candles("BBCA", date(2026, 8, 1), yesterday))
+
+    skipped = RefreshMarketDataUseCase(FakeMarketProvider(), repo).execute(
+        RefreshMarketDataRequest(
+            ticker="BBCA",
+            days=30,
+            end_date=today,
+            end_tolerance_days=1,
+            session_bar=False,
+        )
+    )
+    assert skipped.status == "cached-current"
+    assert skipped.date_range is not None
+    assert skipped.date_range[1] == yesterday
+
+    response = RefreshMarketDataUseCase(provider, repo).execute(
+        RefreshMarketDataRequest(
+            ticker="BBCA",
+            days=30,
+            end_date=today,
+            end_tolerance_days=1,
+            session_bar=True,
+        )
+    )
+
+    assert provider.requested_ranges
+    assert provider.requested_ranges[0][1] == today
+    assert response.date_range is not None
+    assert response.date_range[1] == today
+    assert response.date_range[1] != yesterday
