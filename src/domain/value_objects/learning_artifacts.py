@@ -995,7 +995,7 @@ def rehash_label_excluding_labeled_at(label: LearningOutcomeLabel) -> LearningOu
 
 @dataclass(frozen=True)
 class LearningEvaluation:
-    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset()
+    DIGEST_EXCLUDED_FIELDS: ClassVar[frozenset[str]] = frozenset({"evaluated_at"})
 
     evaluation_id: str
     artifact_digest: str

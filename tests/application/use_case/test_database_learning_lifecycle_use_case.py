@@ -177,6 +177,59 @@ def test_one_session_pre_open_evaluation_is_descriptive(tmp_path) -> None:
     assert evaluation.readiness is EvaluationReadiness.DESCRIPTIVE_READY
 
 
+def test_pre_open_evaluate_rerun_is_idempotent(tmp_path) -> None:
+    """Cron/manual re-eval must not raise immutable conflict (issue #11)."""
+    repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
+    observation = _observation(day=27)
+    repository.add_observation(observation)
+    repository.add_track_snapshot(
+        LearningTrackSnapshot.create(
+            observation_id=observation.observation_id,
+            sampled_at=NOW,
+            source="stockbit.opening_track",
+            snapshot_payload={"mid_price": 100.0},
+            captured_at=NOW,
+        )
+    )
+    GeneratePreOpenOutcomeLabelsUseCase(
+        observations=repository,
+        tracks=repository,
+        labels=repository,
+    ).execute(
+        GenerateLearningLabelsRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id="compat-1",
+            label_contract=LearningContractId.PRE_OPEN_LABEL,
+            labeled_at=NOW,
+        )
+    )
+
+    use_case = EvaluateLearningCohortUseCase(
+        observations=repository,
+        labels=repository,
+        evaluations=repository,
+    )
+    first = use_case.execute(
+        EvaluateLearningCohortRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id="compat-1",
+            evaluated_at=NOW,
+        )
+    )
+    later = NOW + timedelta(hours=1)
+    second = use_case.execute(
+        EvaluateLearningCohortRequest(
+            purpose=AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION,
+            compatibility_id="compat-1",
+            evaluated_at=later,
+        )
+    )
+
+    assert second.evaluation_id == first.evaluation_id
+    assert second.artifact_digest == first.artifact_digest
+    assert len(repository.list_evaluations(AssessmentPurpose.PRE_OPEN_AUCTION_DIRECTION)) == 1
+
+
 def test_evaluation_fails_closed_for_missing_labels(tmp_path) -> None:
     repository = SQLiteLearningArtifactRepository(tmp_path / "data.db")
     repository.add_observation(_observation(day=27))

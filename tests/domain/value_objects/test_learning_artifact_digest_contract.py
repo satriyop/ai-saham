@@ -172,7 +172,7 @@ FROZEN_CONTRACT = {
         _evaluation,
         "evaluation_id",
         "0bb08a28adf31ff5e5173f4d718f6fee2d395a8d4211e0117cf447a447e2ece4",
-        "0643553e0e819a4d991678d5ead8290d5f2937d4e7f7695a8925f356df41f3d1",
+        "2640cf3d7fee015405e9d3216f739fec7d82343fa8c61b3ddc678eb34365e768",
     ),
     "proposal": (
         _proposal,
@@ -241,7 +241,6 @@ FROZEN_DIGEST_FIELDS = {
         "metrics",
         "outcome_basis",
         "readiness",
-        "evaluated_at",
     ),
     "proposal": (
         "schema_version",
@@ -284,7 +283,7 @@ FROZEN_DIGEST_EXCLUSIONS = {
     "observation": (LearningObservation, frozenset({"producer_source_revision"})),
     "track": (LearningTrackSnapshot, frozenset()),
     "label": (LearningOutcomeLabel, frozenset({"labeled_at"})),
-    "evaluation": (LearningEvaluation, frozenset()),
+    "evaluation": (LearningEvaluation, frozenset({"evaluated_at"})),
     "proposal": (LearningPolicyProposal, frozenset()),
     "validation": (LearningPolicyValidation, frozenset()),
     "application": (LearningPolicyApplication, frozenset()),
@@ -354,6 +353,36 @@ def test_label_rerun_reproduces_the_frozen_digest() -> None:
 
     assert rerun.labeled_at == LATER
     assert rerun.label_id == frozen_id
+    assert rerun.artifact_digest == frozen_digest
+
+
+def test_evaluation_digest_material_omits_evaluated_at() -> None:
+    payload = _artifact_payload(
+        _evaluation(), id_field="evaluation_id", digest_field="artifact_digest"
+    )
+
+    assert "evaluated_at" not in payload
+
+
+def test_evaluation_rerun_reproduces_the_frozen_digest() -> None:
+    """A cron re-eval at a different wall clock yields the same stored bytes."""
+    _, _, frozen_id, frozen_digest = FROZEN_CONTRACT["evaluation"]
+    rerun = LearningEvaluation.create(
+        purpose=AssessmentPurpose.ACCUMULATION_DISCOVERY,
+        method=EvaluationMethod.FORWARD_OUTCOME_COHORT,
+        compatibility_id="compat-1",
+        dataset_fingerprint="dataset-1",
+        split_contract="chronological.v1",
+        population={"observation_ids": [_observation().observation_id]},
+        exclusions={},
+        metrics={"average_return": 1.2},
+        outcome_basis=OutcomeBasis.PRICE_PATH_ONLY,
+        readiness=EvaluationReadiness.OOS_DIAGNOSTIC_READY,
+        evaluated_at=LATER,
+    )
+
+    assert rerun.evaluated_at == LATER
+    assert rerun.evaluation_id == frozen_id
     assert rerun.artifact_digest == frozen_digest
 
 
