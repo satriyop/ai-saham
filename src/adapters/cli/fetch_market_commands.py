@@ -342,7 +342,7 @@ def fetch_market(
     typer.echo(f"Macro calendar: {result.macro_calendar_status}")
 
     if candles_only:
-        from src.application.services.bounded_call import log_hang_rate, HangRateRecord
+        from src.application.services.bounded_call import HangRateRecord, log_hang_rate
 
         attempted = response.hang_attempted
         hung = response.hang_count

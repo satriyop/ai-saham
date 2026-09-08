@@ -281,6 +281,7 @@ def test_refresh_forces_full_refresh_when_start_boundary_gap_exists():
     assert "refresh" in response.fetch_modes
     assert provider.requested_ranges == [(requested_start, end_date)]
 
+
 def test_session_bar_does_not_treat_yesterday_as_current():
     """Scorecard same-session path must forward-fill through today.
 

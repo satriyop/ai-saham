@@ -11,9 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from src.application.services.bounded_call import CallTimeout, call_bounded
-
 from src.application.ports.universe_config_loader import UniverseConfigLoader
+from src.application.services.bounded_call import CallTimeout, call_bounded
 from src.application.services.effective_market_session_resolver import (
     EffectiveMarketSession,
 )

@@ -10,7 +10,7 @@ import json
 import logging
 import threading
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 from pathlib import Path
 from typing import Callable, TypeVar
 
