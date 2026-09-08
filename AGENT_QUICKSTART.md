@@ -54,7 +54,8 @@ Read this before every task. This is the mandatory entry point for agents. The l
   Actions workflow `CI` is green on it. Local pytest is not CI. Push owned
   commits to a working branch first, wait until a run exists
   (`gh run list --commit <sha>`), then `gh run watch --exit-status <run-id>`.
-  After it is green, fast-forward `main` or merge the PR. Do not push a new
+  After it is green, fast-forward `main` or merge the PR. Workflow
+  `.github/workflows/ci.yml` runs on every branch push. Do not push a new
   untested SHA straight to `main` (ruleset `main requires CI` rejects it).
   Do not report the task done on a pending or red run. Do not leave `main`
   red. Reproduce the runner before landing:
