@@ -18,8 +18,9 @@ Always confirm explicitly:
 - You will protect shared worktree changes and will not run destructive git cleanup without explicit approval and file scope.
 - You will obey the Lint Gate in `AGENT_QUICKSTART.md` (whole-repo
   `ruff check src/ tests/` and `ruff format --check src/ tests/`).
-- You will not report a task done while GitHub Actions workflow `CI` is
-  red on that commit.
+- You will not update `main` or report a task done while GitHub Actions
+  workflow `CI` is pending or red on that commit; push a branch, wait until
+  it is green, then update `main`.
 
 Before coding, state:
 

@@ -110,12 +110,15 @@ A code change is done when:
 
 ## 7c. CI Requirements
 
-A change is not done while GitHub Actions workflow `CI` is red on that
-commit. Local green is necessary, not sufficient.
+A SHA is not eligible for `main` while GitHub Actions workflow `CI` is
+pending or red on that commit. Local green is necessary, not sufficient.
+Push a working branch first, wait for the run on that SHA, then update
+`main`.
 
 * Lint job and Test job must both pass (Base install / TUI extra when those
   jobs apply to the change)
 * Close-gate evidence is the CI run on the exact commit being reported
+* Do not leave `main` red; if CI fails, fix the branch and wait again
 * Do not treat a wide local terminal, a colored TTY, or the developer
   timezone as the CI environment. The runner is Ubuntu, `TZ=UTC`, 80-column
   unless the workflow sets `COLUMNS`, and `NO_COLOR=1`

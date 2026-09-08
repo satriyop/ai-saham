@@ -50,12 +50,17 @@ Read this before every task. This is the mandatory entry point for agents. The l
   `ruff format --check src/ tests/` must pass (same as CI). Do not weaken
   `pyproject.toml` Ruff config, add blanket ignores, or expand per-file
   exemptions to land a task.
-- **CI is an agent gate.** GitHub Actions `CI` (Lint + Test at minimum) must
-  be green on the commit you report as done. A local pytest pass on a wide,
-  colorless terminal is not CI. Reproduce the runner before landing:
-  `NO_COLOR=1 COLUMNS=80 TZ=UTC pytest`. Do not merge or push-to-main with
-  known red CI. Use the Ruff extra pinned in `pyproject.toml` (`[dev]`), not
-  an unpinned `pip install ruff`.
+- **CI is an agent gate.** A SHA is not eligible for `main` until GitHub
+  Actions workflow `CI` is green on it. Local pytest is not CI. Push owned
+  commits to a working branch first, wait until a run exists
+  (`gh run list --commit <sha>`), then `gh run watch --exit-status <run-id>`.
+  After it is green, fast-forward `main` or merge the PR. Do not push a new
+  untested SHA straight to `main` (ruleset `main requires CI` rejects it).
+  Do not report the task done on a pending or red run. Do not leave `main`
+  red. Reproduce the runner before landing:
+  `NO_COLOR=1 COLUMNS=80 TZ=UTC pytest`. Use the Ruff extra pinned in
+  `pyproject.toml` (`[dev]`), not an unpinned `pip install ruff`. Sibling
+  `ml-saham` uses the same push-CI rule against its `ci` workflow.
 
 ## Multi-surface parity (CLI / TUI)
 
@@ -547,8 +552,10 @@ Before marking done:
 - [ ] Focused tests and `git diff --check` pass.
 - [ ] Lint Gate: `ruff check src/ tests/` and `ruff format --check src/ tests/`
       pass (whole-repo, same as CI).
-- [ ] CI Gate: GitHub Actions workflow `CI` is green on the commit being
-      reported (Lint + Test at minimum). Local pytest is not a substitute.
+- [ ] CI Gate: GitHub Actions workflow `CI` is green on the SHA before it
+      updates `main` (Lint + Test at minimum; Base install / TUI extra when
+      they ran). Local pytest is not a substitute. Wait with
+      `gh run watch --exit-status` on the working-branch push.
 - [ ] All close gates were rerun after the final edit on the exact commit/state
       being reported; earlier green evidence was not reused.
 
@@ -633,5 +640,6 @@ For documentation-only edits:
 
 If verification is skipped or impossible, say exactly why (including if Ruff
 is unavailable in the environment — state that explicitly; do not pretend
-lint passed). After a push to `main` or a PR, confirm GitHub Actions `CI`
-is green on that SHA; do not close the task on a red run.
+lint passed). Push a working branch, wait until GitHub Actions `CI` is green
+on that SHA, then update `main`; do not close the task on a pending or red
+run.

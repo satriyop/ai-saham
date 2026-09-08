@@ -146,14 +146,17 @@ docs: update README with sentiment examples
 2. **Update documentation**: Update README if needed
 3. **Run CI locally**: Ensure all tests and lints pass
 4. **Write clear PR description**: Explain what and why
-5. **Wait for GitHub CI**: Do not merge while workflow `CI` is red
+5. **Wait for GitHub CI**: Push a working branch first. Wait until workflow
+   `CI` is green on that SHA, then merge or fast-forward `main`. Do not push a
+   new untested SHA straight to `main`. Do not leave `main` red.
 
 ### PR Checklist
 
 - [ ] Tests added/updated
 - [ ] All tests passing (`pytest tests/`)
 - [ ] Linting passes (`ruff check src/ tests/` and `ruff format --check src/ tests/`)
-- [ ] GitHub Actions `CI` is green on the PR head (Lint + Test)
+- [ ] GitHub Actions `CI` is green on the SHA before it updates `main`
+      (Lint + Test)
 - [ ] Documentation updated if needed
 - [ ] Commit messages follow conventions
 
