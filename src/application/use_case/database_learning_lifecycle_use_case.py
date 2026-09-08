@@ -668,7 +668,15 @@ class EvaluateLearningCohortUseCase:
             readiness=readiness,
             evaluated_at=request.evaluated_at,
         )
-        self._evaluations.add_evaluation(evaluation)
+        try:
+            self._evaluations.add_evaluation(evaluation)
+        except LearningContractError as exc:
+            if "immutable artifact conflict" not in str(exc):
+                raise
+            existing = self._evaluations.get_evaluation(evaluation.evaluation_id)
+            if existing is None:
+                raise
+            return existing
         return evaluation
 
 
