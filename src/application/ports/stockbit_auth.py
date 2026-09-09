@@ -50,12 +50,7 @@ def ready_requires_usable_status(
     outcome: StockbitAuthOutcome,
     status: StockbitSessionStatus,
 ) -> StockbitAuthOutcome:
-    """Ready is valid only when inspect() would show a usable RS256 JWT.
-
-    Reauth must not report success while ``saham fetch stockbit status``
-    would still show expired/missing/invalid. ``inspect`` is local health
-    only; it does not prove Stockbit accepted the token.
-    """
+    """Ready only if inspect() would show token_state=valid (local JWT health)."""
     if isinstance(outcome, StockbitAuthFailure):
         return outcome
     if status.token_state == "valid":

@@ -78,12 +78,24 @@ def test_force_refresh_headless_and_headed_are_distinct() -> None:
         refresh_results={
             StockbitAuthRefreshMode.HEADLESS: ready,
             StockbitAuthRefreshMode.HEADED: headed_fail,
-        }
+        },
+        status=_status(token_state="valid"),
     )
     assert isinstance(auth.force_refresh(StockbitAuthRefreshMode.HEADLESS), StockbitAuthReady)
     headed = auth.force_refresh(StockbitAuthRefreshMode.HEADED)
     assert isinstance(headed, StockbitAuthFailure)
     assert headed.kind is StockbitAuthFailureKind.AUTH_UI
+
+
+def test_fake_force_refresh_ready_with_expired_inspect_is_failure() -> None:
+    auth = FakeStockbitAuth(
+        refresh_results={StockbitAuthRefreshMode.HEADLESS: StockbitAuthReady()},
+        status=_status(token_state="expired"),
+    )
+    result = auth.force_refresh(StockbitAuthRefreshMode.HEADLESS)
+    assert isinstance(result, StockbitAuthFailure)
+    assert result.kind is StockbitAuthFailureKind.EXPIRED
+    assert "eyJ" not in result.message
 
 
 def test_ready_requires_usable_status_keeps_ready_when_token_valid() -> None:

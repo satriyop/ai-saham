@@ -73,8 +73,10 @@ class StockbitAuthAdapter:
 
     def force_refresh(self, mode: StockbitAuthRefreshMode) -> StockbitAuthOutcome:
         if self._refresh is not None:
-            return self._refresh(mode)
-        return self._default_refresh(mode)
+            outcome = self._refresh(mode)
+        else:
+            outcome = self._default_refresh(mode)
+        return ready_requires_usable_status(outcome, self.inspect())
 
     def inspect(self) -> StockbitSessionStatus:
         return get_stockbit_session_status(self._profile_dir)
@@ -96,5 +98,5 @@ class StockbitAuthAdapter:
                 message=f"Stockbit refresh failed: {exc}",
             )
         if result.success:
-            return ready_requires_usable_status(StockbitAuthReady(), self.inspect())
+            return StockbitAuthReady()
         return _map_reauth_failure(result.message)

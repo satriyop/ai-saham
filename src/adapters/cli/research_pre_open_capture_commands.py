@@ -39,8 +39,6 @@ from src.domain.value_objects.idx_market import (
     IDX_TIMEZONE,
     NCP_LOCK_TIME,
     PRE_OPEN_MATCHING_START,
-    PRE_OPEN_START,
-    REGULAR_OPEN,
 )
 from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
 from src.infrastructure.config.app_config import load_app_config
@@ -146,31 +144,20 @@ def pre_open_capture(
     if run_guard.error:
         raise_user_error(f"Pre-open guard: {run_guard.error}")
 
-    window = f"{PRE_OPEN_START.strftime('%H:%M')}-{REGULAR_OPEN.strftime('%H:%M')}"
-    ncp = f"{NCP_LOCK_TIME.strftime('%H:%M')}–{PRE_OPEN_MATCHING_START.strftime('%H:%M')}"
-    if run_guard.late_wake:
-        raise_data_unavailable(
-            (
-                f"Capture rejected: late wake — NCP lock {ncp} Asia/Jakarta "
-                "already missed. No authoritative capture."
-            ),
-            tip=(
+    capture_rejection = run_guard.capture_rejection()
+    if capture_rejection:
+        ncp = f"{NCP_LOCK_TIME.strftime('%H:%M')}–{PRE_OPEN_MATCHING_START.strftime('%H:%M')}"
+        if run_guard.late_wake:
+            tip = (
                 "Do not use --allow-non-trading-day; the lock cannot be replayed. "
                 "Use `saham screen pre-open` for discovery-only."
-            ),
-        )
-    if not run_guard.in_ncp_lock_window:
-        raise_data_unavailable(
-            (
-                f"Capture rejected: outside the {ncp} NCP locked-input window "
-                f"(IDX pre-open is {window} Asia/Jakarta). Authoritative capture "
-                "requires a live collection wholly inside the same-session lock."
-            ),
-            tip=(
+            )
+        else:
+            tip = (
                 f"Re-run during {ncp} WIB on a trading day, or use "
                 "`saham screen pre-open` for discovery-only outside the window."
-            ),
-        )
+            )
+        raise_data_unavailable(capture_rejection, tip=tip)
 
     if movers_json is not None or order_books_json is not None:
         raise_user_error(

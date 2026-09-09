@@ -22,6 +22,9 @@ from src.domain.value_objects.idx_market import (
 from src.domain.value_objects.idx_market import REGULAR_OPEN as PRE_OPEN_END
 from src.domain.value_objects.market_status import MarketStatus
 
+_NCP_LOCK_WINDOW = f"{NCP_LOCK_TIME.strftime('%H:%M')}–{PRE_OPEN_MATCHING_START.strftime('%H:%M')}"
+_PRE_OPEN_WINDOW = f"{PRE_OPEN_START.strftime('%H:%M')}-{PRE_OPEN_END.strftime('%H:%M')}"
+
 
 @dataclass(frozen=True)
 class PreOpenRunGuard:
@@ -34,6 +37,39 @@ class PreOpenRunGuard:
     is_trading_day: bool = True
     in_ncp_lock_window: bool = False
     late_wake: bool = False
+
+    def capture_rejection(self) -> str | None:
+        """Authoritative-capture fail-closed reason, or None if the start is in lock."""
+        if self.late_wake:
+            return (
+                f"Capture rejected: late wake — NCP lock {_NCP_LOCK_WINDOW} "
+                "Asia/Jakarta already missed. No authoritative capture."
+            )
+        if not self.in_ncp_lock_window:
+            return (
+                f"Capture rejected: outside the {_NCP_LOCK_WINDOW} NCP "
+                f"locked-input window (IDX pre-open is {_PRE_OPEN_WINDOW} "
+                "Asia/Jakarta). Authoritative capture requires a live "
+                "collection wholly inside the same-session lock."
+            )
+        return None
+
+
+def _non_trading_block(
+    *,
+    run_at: datetime,
+    message: str,
+    in_pre_open_window: bool,
+    in_ncp_lock_window: bool,
+) -> PreOpenRunGuard:
+    return PreOpenRunGuard(
+        run_at=run_at,
+        error=message,
+        is_trading_day=False,
+        outside_window=not in_pre_open_window,
+        in_ncp_lock_window=in_ncp_lock_window,
+        late_wake=False,
+    )
 
 
 def build_pre_open_run_guard(
@@ -69,13 +105,11 @@ def build_pre_open_run_guard(
                 "Use --allow-non-trading-day only for dry-runs/backfills."
             )
             if not allow_non_trading_day:
-                return PreOpenRunGuard(
+                return _non_trading_block(
                     run_at=local_run_at,
-                    error=message,
-                    is_trading_day=False,
-                    outside_window=not in_pre_open_window,
+                    message=message,
+                    in_pre_open_window=in_pre_open_window,
                     in_ncp_lock_window=in_ncp_lock_window,
-                    late_wake=False,
                 )
             warnings.append(message)
         elif ncp_lock_exception:
@@ -92,40 +126,32 @@ def build_pre_open_run_guard(
                 "Use --allow-non-trading-day only for dry-runs/backfills."
             )
             if not allow_non_trading_day:
-                return PreOpenRunGuard(
+                return _non_trading_block(
                     run_at=local_run_at,
-                    error=message,
-                    is_trading_day=False,
-                    outside_window=not in_pre_open_window,
+                    message=message,
+                    in_pre_open_window=in_pre_open_window,
                     in_ncp_lock_window=in_ncp_lock_window,
-                    late_wake=False,
                 )
             warnings.append(message)
-    else:
-        # Heuristic/wall-clock fallback
-        if local_is_weekend:
-            is_trading_day = False
-            message = (
-                f"{local_run_at.date()} is a weekend. "
-                "Use --allow-non-trading-day only for dry-runs/backfills."
+    elif local_is_weekend:
+        is_trading_day = False
+        message = (
+            f"{local_run_at.date()} is a weekend. "
+            "Use --allow-non-trading-day only for dry-runs/backfills."
+        )
+        if not allow_non_trading_day:
+            return _non_trading_block(
+                run_at=local_run_at,
+                message=message,
+                in_pre_open_window=in_pre_open_window,
+                in_ncp_lock_window=in_ncp_lock_window,
             )
-            if not allow_non_trading_day:
-                return PreOpenRunGuard(
-                    run_at=local_run_at,
-                    error=message,
-                    is_trading_day=False,
-                    outside_window=not in_pre_open_window,
-                    in_ncp_lock_window=in_ncp_lock_window,
-                    late_wake=False,
-                )
-            warnings.append(message)
+        warnings.append(message)
 
-    # Pre-open window timing warning
     outside_window = not in_pre_open_window
     if outside_window:
         warnings.append(
-            "Current Asia/Jakarta time is outside IDX pre-open window "
-            f"{PRE_OPEN_START.strftime('%H:%M')}-{PRE_OPEN_END.strftime('%H:%M')}."
+            f"Current Asia/Jakarta time is outside IDX pre-open window {_PRE_OPEN_WINDOW}."
         )
 
     late_wake = is_trading_day and current_time >= PRE_OPEN_MATCHING_START
