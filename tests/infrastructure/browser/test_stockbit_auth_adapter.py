@@ -100,6 +100,16 @@ def test_ensure_usable_refresh_failure_is_typed(tmp_path: Path) -> None:
     assert result == fail
 
 
+def test_force_refresh_injected_ready_without_usable_jwt_is_failure(tmp_path: Path) -> None:
+    profile = _profile(tmp_path)
+    store = StockbitTokenStore(profile / "token.json")
+    adapter = StockbitAuthAdapter(profile, store, refresh=lambda _m: StockbitAuthReady())
+    result = adapter.force_refresh(StockbitAuthRefreshMode.HEADLESS)
+    assert isinstance(result, StockbitAuthFailure)
+    assert result.kind is StockbitAuthFailureKind.REFRESH_FAILED
+    assert adapter.inspect().token_state == "missing"
+
+
 def test_force_refresh_headed_uses_injected_strategy(tmp_path: Path) -> None:
     profile = _profile(tmp_path)
     store = StockbitTokenStore(profile / "token.json")

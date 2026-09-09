@@ -236,6 +236,46 @@ def test_after_regular_open_on_trading_day_is_late_wake():
     assert guard.late_wake is True
 
 
+def test_capture_rejection_late_wake_and_not_in_lock():
+    late = build_pre_open_run_guard(
+        run_at=datetime(2026, 9, 9, 9, 7, tzinfo=ZoneInfo("Asia/Jakarta")),
+        market_status=_stockbit_status(
+            "Regular", True, False, datetime(2026, 9, 9, 9, 7, tzinfo=ZoneInfo("Asia/Jakarta"))
+        ),
+    )
+    rejection = late.capture_rejection()
+    assert late.late_wake is True
+    assert rejection is not None
+    assert "late wake" in rejection
+    assert "already missed" in rejection
+    assert "08:56" in rejection and "08:58" in rejection
+
+    early = build_pre_open_run_guard(
+        run_at=datetime(2026, 6, 12, 8, 50, tzinfo=ZoneInfo("Asia/Jakarta")),
+        market_status=_stockbit_status(
+            "Pre-Open", False, True, datetime(2026, 6, 12, 8, 50, tzinfo=ZoneInfo("Asia/Jakarta"))
+        ),
+    )
+    early_rejection = early.capture_rejection()
+    assert early.late_wake is False
+    assert early.in_ncp_lock_window is False
+    assert early_rejection is not None
+    assert "late wake" not in early_rejection
+    assert "NCP locked-input window" in early_rejection
+
+    locked = build_pre_open_run_guard(
+        run_at=datetime(2026, 8, 25, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
+        market_status=_stockbit_status(
+            "Opening Call Auction",
+            False,
+            True,
+            datetime(2026, 8, 25, 8, 57, tzinfo=ZoneInfo("Asia/Jakarta")),
+        ),
+    )
+    assert locked.in_ncp_lock_window is True
+    assert locked.capture_rejection() is None
+
+
 def test_weekend_after_open_is_not_late_wake():
     dt = datetime(2026, 6, 13, 9, 7, tzinfo=ZoneInfo("Asia/Jakarta"))
     guard = build_pre_open_run_guard(

@@ -120,6 +120,15 @@ def test_reauth_command_surfaces_profile_in_use_without_token_leak(monkeypatch):
 
 
 def test_reauth_command_ready_with_expired_status_fails_closed(monkeypatch):
+    """CLI maps port Failure; it must not re-compose force_refresh + inspect."""
+    import inspect
+
+    from src.adapters.cli import fetch_stockbit_session_commands as cmd
+
+    source = inspect.getsource(cmd.reauth)
+    assert "ready_requires_usable_status" not in source
+    assert "auth.inspect()" not in source
+
     fake = FakeStockbitAuth(
         refresh_results={StockbitAuthRefreshMode.HEADLESS: StockbitAuthReady()},
         status=_status(token_state="expired"),
@@ -137,6 +146,7 @@ def test_reauth_command_ready_with_expired_status_fails_closed(monkeypatch):
     assert "data_unavailable" in combined
     assert "token expired" in combined.lower()
     assert "eyJ" not in combined
+    assert fake.refresh_calls == [StockbitAuthRefreshMode.HEADLESS]
 
 
 def test_reauth_command_passes_headed_mode(monkeypatch):
