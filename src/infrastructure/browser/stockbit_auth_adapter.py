@@ -14,6 +14,7 @@ from src.application.ports.stockbit_auth import (
     StockbitAuthOutcome,
     StockbitAuthReady,
     StockbitAuthRefreshMode,
+    ready_requires_usable_status,
 )
 from src.application.services.stockbit_session import StockbitSessionStatus
 from src.infrastructure.browser.stockbit_browser_context import default_stockbit_profile_dir
@@ -94,11 +95,6 @@ class StockbitAuthAdapter:
                 kind=StockbitAuthFailureKind.REFRESH_FAILED,
                 message=f"Stockbit refresh failed: {exc}",
             )
-        if result.success and self._store.load():
-            return StockbitAuthReady()
         if result.success:
-            return StockbitAuthFailure(
-                kind=StockbitAuthFailureKind.REFRESH_FAILED,
-                message="Reauth reported success but no usable JWT was stored.",
-            )
+            return ready_requires_usable_status(StockbitAuthReady(), self.inspect())
         return _map_reauth_failure(result.message)

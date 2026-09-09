@@ -96,6 +96,8 @@ def test_outside_pre_open_time_adds_timing_warning():
     assert guard.error is None
     assert any("outside IDX pre-open window" in warning for warning in guard.warnings)
     assert guard.outside_window is True
+    assert guard.late_wake is True
+    assert guard.in_ncp_lock_window is False
 
 
 def test_valid_pre_open_time_has_no_timing_warning():
@@ -110,6 +112,8 @@ def test_valid_pre_open_time_has_no_timing_warning():
     assert guard.is_trading_day is True
     assert not any("outside IDX pre-open window" in warning for warning in guard.warnings)
     assert guard.outside_window is False
+    assert guard.late_wake is False
+    assert guard.in_ncp_lock_window is False
 
 
 def test_stockbit_post_market_during_ncp_lock_is_not_a_non_trading_day():
@@ -126,6 +130,8 @@ def test_stockbit_post_market_during_ncp_lock_is_not_a_non_trading_day():
     assert guard.is_trading_day is True
     assert any("NCP lock" in warning for warning in guard.warnings)
     assert guard.outside_window is False
+    assert guard.late_wake is False
+    assert guard.in_ncp_lock_window is True
 
 
 def test_stockbit_post_market_without_auction_evidence_is_non_trading_day():
@@ -196,3 +202,48 @@ def test_stockbit_opening_call_auction_during_pre_open_is_trading_day():
     assert guard.error is None
     assert guard.is_trading_day is True
     assert guard.outside_window is False
+    assert guard.in_ncp_lock_window is True
+    assert guard.late_wake is False
+
+
+def test_matching_start_on_trading_day_is_late_wake_not_ncp_lock():
+    dt = datetime(2026, 8, 25, 8, 58, tzinfo=ZoneInfo("Asia/Jakarta"))
+    guard = build_pre_open_run_guard(
+        run_at=dt,
+        market_status=_stockbit_status("Opening Call Auction", False, True, dt),
+        allow_non_trading_day=False,
+    )
+
+    assert guard.error is None
+    assert guard.is_trading_day is True
+    assert guard.outside_window is False
+    assert guard.in_ncp_lock_window is False
+    assert guard.late_wake is True
+
+
+def test_after_regular_open_on_trading_day_is_late_wake():
+    dt = datetime(2026, 9, 9, 9, 7, tzinfo=ZoneInfo("Asia/Jakarta"))
+    guard = build_pre_open_run_guard(
+        run_at=dt,
+        market_status=_stockbit_status("Regular", True, False, dt),
+        allow_non_trading_day=False,
+    )
+
+    assert guard.error is None
+    assert guard.is_trading_day is True
+    assert guard.outside_window is True
+    assert guard.in_ncp_lock_window is False
+    assert guard.late_wake is True
+
+
+def test_weekend_after_open_is_not_late_wake():
+    dt = datetime(2026, 6, 13, 9, 7, tzinfo=ZoneInfo("Asia/Jakarta"))
+    guard = build_pre_open_run_guard(
+        run_at=dt,
+        market_status=_local_clock_status("Weekend", False, dt),
+        allow_non_trading_day=False,
+    )
+
+    assert guard.error is not None
+    assert guard.is_trading_day is False
+    assert guard.late_wake is False

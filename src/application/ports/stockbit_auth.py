@@ -46,6 +46,33 @@ class StockbitAuthFailure:
 StockbitAuthOutcome = StockbitAuthReady | StockbitAuthFailure
 
 
+def ready_requires_usable_status(
+    outcome: StockbitAuthOutcome,
+    status: StockbitSessionStatus,
+) -> StockbitAuthOutcome:
+    """Ready is valid only when inspect() would show a usable RS256 JWT.
+
+    Reauth must not report success while ``saham fetch stockbit status``
+    would still show expired/missing/invalid. ``inspect`` is local health
+    only; it does not prove Stockbit accepted the token.
+    """
+    if isinstance(outcome, StockbitAuthFailure):
+        return outcome
+    if status.token_state == "valid":
+        return outcome
+    if status.token_state == "expired":
+        return StockbitAuthFailure(
+            kind=StockbitAuthFailureKind.EXPIRED,
+            message="Refresh did not leave a usable RS256 JWT (token expired).",
+        )
+    return StockbitAuthFailure(
+        kind=StockbitAuthFailureKind.REFRESH_FAILED,
+        message=(
+            f"Refresh did not leave a usable RS256 JWT (token state is {status.token_state})."
+        ),
+    )
+
+
 @runtime_checkable
 class StockbitAuthPort(Protocol):
     """Application-facing Stockbit auth recovery seam."""

@@ -394,6 +394,24 @@ def test_reauth_timeout_fails(monkeypatch, tmp_path, capsys):
     assert "failed" in result.message.lower() or "auth" in result.message.lower()
 
 
+def test_reauth_headed_app_ui_without_jwt_is_failure(monkeypatch, tmp_path, capsys):
+    (tmp_path / ".gitkeep").write_text("x")
+    page = _FakeReauthPage(start_url="https://stockbit.com/login", login_succeeds=True)
+    _patch_common(monkeypatch, page)
+    monkeypatch.setattr(browser_mod, "_resolve_token", lambda p, box: None)
+    monkeypatch.setattr(browser_mod, "attempt_stockbit_reauth_clicks", lambda p: ("login",))
+
+    result = browser_mod.reauth_stockbit_session(profile_dir=tmp_path, timeout=5, mode="headed")
+
+    assert result.success is False
+    assert result.token_saved is False
+    assert not (tmp_path / "token.json").exists()
+    assert not (tmp_path / ".logged_in_at").exists()
+    out = capsys.readouterr().out
+    assert "✓" not in out
+    assert "status" in result.message.lower()
+
+
 def test_reauth_headless_fails_closed_on_auth_ui_without_clicks(monkeypatch, tmp_path):
     """Headless must not run Login/OK automation — fail and point at --mode headed."""
     (tmp_path / ".gitkeep").write_text("x")

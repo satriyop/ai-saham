@@ -382,6 +382,27 @@ def test_headless_fails_after_retries_with_diag(
     assert "Last url=" in out
 
 
+def test_headless_expired_jwt_does_not_report_success(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    (profile / "marker").write_text("x")
+    expired = _make_jwt({"exp": int(time.time() - 3600)}, alg="RS256")
+    StockbitTokenStore(profile / "token.json").save(expired)
+    page = _FakePage(url="https://stockbit.com/orderbook")
+    _patch_headless_runtime(monkeypatch, page, resolve_sequence=[expired])
+
+    result = reauth_stockbit_session(profile_dir=profile, mode="headless")
+
+    assert result.success is False
+    assert result.token_saved is False
+    assert StockbitTokenStore(profile / "token.json").inspect().state == "expired"
+    out = capsys.readouterr().out
+    assert "✓" not in out
+    assert "token_expired" in out or "expired" in result.message.lower()
+
+
 def test_headless_auth_ui_fails_closed_without_login_clicks(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -13,7 +13,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from src.domain.value_objects.idx_market import IDX_TIMEZONE, PRE_OPEN_START
+from src.domain.value_objects.idx_market import (
+    IDX_TIMEZONE,
+    NCP_LOCK_TIME,
+    PRE_OPEN_MATCHING_START,
+    PRE_OPEN_START,
+)
 from src.domain.value_objects.idx_market import REGULAR_OPEN as PRE_OPEN_END
 from src.domain.value_objects.market_status import MarketStatus
 
@@ -27,6 +32,8 @@ class PreOpenRunGuard:
     error: str | None = None
     outside_window: bool = False
     is_trading_day: bool = True
+    in_ncp_lock_window: bool = False
+    late_wake: bool = False
 
 
 def build_pre_open_run_guard(
@@ -41,6 +48,7 @@ def build_pre_open_run_guard(
     current_time = local_run_at.time()
     is_trading_day = True
     in_pre_open_window = PRE_OPEN_START <= current_time < PRE_OPEN_END
+    in_ncp_lock_window = NCP_LOCK_TIME <= current_time < PRE_OPEN_MATCHING_START
     local_is_weekend = local_run_at.weekday() in (5, 6)
     stockbit_closed = (
         market_status.source == "stockbit"
@@ -66,6 +74,8 @@ def build_pre_open_run_guard(
                     error=message,
                     is_trading_day=False,
                     outside_window=not in_pre_open_window,
+                    in_ncp_lock_window=in_ncp_lock_window,
+                    late_wake=False,
                 )
             warnings.append(message)
         elif ncp_lock_exception:
@@ -87,6 +97,8 @@ def build_pre_open_run_guard(
                     error=message,
                     is_trading_day=False,
                     outside_window=not in_pre_open_window,
+                    in_ncp_lock_window=in_ncp_lock_window,
+                    late_wake=False,
                 )
             warnings.append(message)
     else:
@@ -103,6 +115,8 @@ def build_pre_open_run_guard(
                     error=message,
                     is_trading_day=False,
                     outside_window=not in_pre_open_window,
+                    in_ncp_lock_window=in_ncp_lock_window,
+                    late_wake=False,
                 )
             warnings.append(message)
 
@@ -114,9 +128,12 @@ def build_pre_open_run_guard(
             f"{PRE_OPEN_START.strftime('%H:%M')}-{PRE_OPEN_END.strftime('%H:%M')}."
         )
 
+    late_wake = is_trading_day and current_time >= PRE_OPEN_MATCHING_START
     return PreOpenRunGuard(
         run_at=local_run_at,
         warnings=tuple(warnings),
         outside_window=outside_window,
         is_trading_day=is_trading_day,
+        in_ncp_lock_window=in_ncp_lock_window,
+        late_wake=late_wake,
     )

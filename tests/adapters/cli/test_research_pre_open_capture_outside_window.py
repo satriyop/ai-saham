@@ -84,8 +84,10 @@ def test_capture_outside_window_fails_closed_without_typeerror_or_persist(monkey
     assert "TypeError" not in result.output
     assert "'<=' not supported" not in result.output
     assert "data_unavailable" in result.output
-    assert "Capture rejected: outside the IDX pre-open window" in result.output
+    assert "late wake" in result.output
+    assert "already missed" in result.output
     assert "08:56" in result.output and "08:58" in result.output
+    assert "--allow-non-trading-day" in result.output
 
 
 def test_capture_outside_window_does_not_create_workflow(monkeypatch, tmp_path):
@@ -114,7 +116,7 @@ def test_capture_outside_window_does_not_create_workflow(monkeypatch, tmp_path):
 
     assert result.exit_code == 2
     assert workflow_created["count"] == 0
-    assert "outside the IDX pre-open window" in result.output
+    assert "late wake" in result.output
 
 
 def test_run_snapshot_screen_none_as_of_date_returns_none_without_typeerror(tmp_path):
@@ -176,3 +178,50 @@ def test_run_snapshot_screen_with_date_still_selects_snapshot(tmp_path):
     assert result is not None
     assert result.snapshot_date == date(2026, 6, 11)
     assert len(screen_calls) == 1
+
+
+def test_capture_matching_start_is_late_wake_without_workflow(monkeypatch, tmp_path):
+    _stub_capture_guard(
+        monkeypatch,
+        now=datetime(2026, 9, 9, 8, 58),
+    )
+
+    def _fake_create(**kwargs):
+        raise AssertionError("create_pre_open_cli_workflow must not run after NCP lock")
+
+    monkeypatch.setattr(
+        "src.adapters.cli.research_pre_open_capture_commands.create_pre_open_cli_workflow",
+        _fake_create,
+    )
+
+    db_path = tmp_path / "data.db"
+    db_path.touch()
+    result = runner.invoke(app, ["research", "pre-open", "capture", "--db", str(db_path)])
+
+    assert result.exit_code == 2
+    assert "late wake" in result.output
+    assert "No authoritative capture" in result.output
+
+
+def test_capture_pre_ncp_fails_closed_without_workflow(monkeypatch, tmp_path):
+    _stub_capture_guard(
+        monkeypatch,
+        now=datetime(2026, 6, 12, 8, 50),
+    )
+
+    def _fake_create(**kwargs):
+        raise AssertionError("create_pre_open_cli_workflow must not run before NCP lock")
+
+    monkeypatch.setattr(
+        "src.adapters.cli.research_pre_open_capture_commands.create_pre_open_cli_workflow",
+        _fake_create,
+    )
+
+    db_path = tmp_path / "data.db"
+    db_path.touch()
+    result = runner.invoke(app, ["research", "pre-open", "capture", "--db", str(db_path)])
+
+    assert result.exit_code == 2
+    assert "late wake" not in result.output
+    assert "NCP locked-input window" in result.output
+    assert "08:56" in result.output and "08:58" in result.output

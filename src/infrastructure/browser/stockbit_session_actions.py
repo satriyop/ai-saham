@@ -192,6 +192,12 @@ def _save_rs256_token_if_valid(*, profile_dir: Path, token: str | None) -> bool:
     return False
 
 
+def _stored_jwt_is_usable(profile_dir: Path) -> bool:
+    """True when status would show a locally valid RS256 JWT."""
+    meta = StockbitTokenStore(profile_dir / "token.json").inspect()
+    return meta.state == "valid" and meta.algorithm == "RS256"
+
+
 def _mark_profile_logged_in(profile_dir: Path) -> None:
     profile_dir.mkdir(parents=True, exist_ok=True)
     (profile_dir / ".logged_in_at").write_text(str(time.time()))
@@ -589,28 +595,29 @@ def _reauth_headless_jwt_refresh(
 
         if diag.valid_rs256 and token:
             token_saved = _save_rs256_token_if_valid(profile_dir=profile_dir, token=token)
-            _mark_profile_logged_in(profile_dir)
-            if diag.reason == "ok_rs256_ambiguous_url":
-                msg = (
-                    "Headless JWT refresh OK — RS256 saved "
-                    "(page URL was ambiguous; token still valid)."
+            if token_saved and _stored_jwt_is_usable(profile_dir):
+                _mark_profile_logged_in(profile_dir)
+                if diag.reason == "ok_rs256_ambiguous_url":
+                    msg = (
+                        "Headless JWT refresh OK — RS256 saved "
+                        "(page URL was ambiguous; token still valid)."
+                    )
+                elif diag.reason == "ok_rs256_on_auth_url":
+                    msg = (
+                        "Headless JWT refresh OK — RS256 saved "
+                        "(captured while URL still looked like auth flow)."
+                    )
+                else:
+                    msg = "Headless JWT refresh OK — already authenticated."
+                print(f"✓ {msg}")
+                return StockbitReauthResult(
+                    success=True,
+                    token_saved=True,
+                    already_authenticated=True,
+                    auto_clicks=(),
+                    message=msg,
+                    mode="headless",
                 )
-            elif diag.reason == "ok_rs256_on_auth_url":
-                msg = (
-                    "Headless JWT refresh OK — RS256 saved "
-                    "(captured while URL still looked like auth flow)."
-                )
-            else:
-                msg = "Headless JWT refresh OK — already authenticated."
-            print(f"✓ {msg}")
-            return StockbitReauthResult(
-                success=True,
-                token_saved=token_saved,
-                already_authenticated=True,
-                auto_clicks=(),
-                message=msg,
-                mode="headless",
-            )
 
         if attempt < attempts:
             print(f"  Retrying in {_HEADLESS_RETRY_PAUSE_S:.2f}s...")
@@ -667,17 +674,18 @@ def _reauth_headed_interactive(
             # Valid RS256 is enough to persist; URL heuristics are diagnostic only.
             if valid and token:
                 token_saved = _save_rs256_token_if_valid(profile_dir=profile_dir, token=token)
-                _mark_profile_logged_in(profile_dir)
-                msg = "Already authenticated; Exodus JWT refreshed from browser session."
-                print(f"✓ {msg}")
-                return StockbitReauthResult(
-                    success=True,
-                    token_saved=token_saved,
-                    already_authenticated=True,
-                    auto_clicks=(),
-                    message=msg,
-                    mode="headed",
-                )
+                if token_saved and _stored_jwt_is_usable(profile_dir):
+                    _mark_profile_logged_in(profile_dir)
+                    msg = "Already authenticated; Exodus JWT refreshed from browser session."
+                    print(f"✓ {msg}")
+                    return StockbitReauthResult(
+                        success=True,
+                        token_saved=True,
+                        already_authenticated=True,
+                        auto_clicks=(),
+                        message=msg,
+                        mode="headed",
+                    )
 
             if _url_looks_auth_flow(page.url):
                 print(f"  Auth UI detected ({page.url})")
@@ -732,21 +740,29 @@ def _reauth_headed_interactive(
             mode="headed",
         )
 
-    _mark_profile_logged_in(profile_dir)
     token_saved = _save_rs256_token_if_valid(profile_dir=profile_dir, token=token)
-    if token_saved:
+    if token_saved and _stored_jwt_is_usable(profile_dir):
+        _mark_profile_logged_in(profile_dir)
         msg = "Reauth OK — profile marked logged-in and Exodus JWT saved."
         print(f"\n✓ {msg}")
-    else:
-        msg = (
-            "Reauth reached app UI but no usable RS256 JWT was captured; "
-            "profile marked logged-in (JWT may refresh on next API call)."
+        print("Verify: saham fetch stockbit status")
+        return StockbitReauthResult(
+            success=True,
+            token_saved=True,
+            already_authenticated=False,
+            auto_clicks=auto_clicks,
+            message=msg,
+            mode="headed",
         )
-        print(f"\n⚠ {msg}")
+    msg = (
+        "Reauth reached app UI but no usable RS256 JWT was stored. "
+        "saham fetch stockbit status must show a valid token before this is success."
+    )
+    print(f"\n✗ {msg}")
     print("Verify: saham fetch stockbit status")
     return StockbitReauthResult(
-        success=True,
-        token_saved=token_saved,
+        success=False,
+        token_saved=False,
         already_authenticated=False,
         auto_clicks=auto_clicks,
         message=msg,

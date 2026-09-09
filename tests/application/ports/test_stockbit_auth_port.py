@@ -16,6 +16,7 @@ from src.application.ports.stockbit_auth import (
     StockbitAuthPort,
     StockbitAuthReady,
     StockbitAuthRefreshMode,
+    ready_requires_usable_status,
 )
 from src.application.services.stockbit_session import StockbitSessionStatus
 
@@ -83,6 +84,33 @@ def test_force_refresh_headless_and_headed_are_distinct() -> None:
     headed = auth.force_refresh(StockbitAuthRefreshMode.HEADED)
     assert isinstance(headed, StockbitAuthFailure)
     assert headed.kind is StockbitAuthFailureKind.AUTH_UI
+
+
+def test_ready_requires_usable_status_keeps_ready_when_token_valid() -> None:
+    outcome = ready_requires_usable_status(StockbitAuthReady(), _status(token_state="valid"))
+    assert isinstance(outcome, StockbitAuthReady)
+
+
+def test_ready_requires_usable_status_maps_expired_inspect_to_expired() -> None:
+    outcome = ready_requires_usable_status(StockbitAuthReady(), _status(token_state="expired"))
+    assert isinstance(outcome, StockbitAuthFailure)
+    assert outcome.kind is StockbitAuthFailureKind.EXPIRED
+    assert "eyJ" not in outcome.message
+
+
+def test_ready_requires_usable_status_maps_missing_inspect_to_refresh_failed() -> None:
+    outcome = ready_requires_usable_status(StockbitAuthReady(), _status(token_state="missing"))
+    assert isinstance(outcome, StockbitAuthFailure)
+    assert outcome.kind is StockbitAuthFailureKind.REFRESH_FAILED
+    assert "missing" in outcome.message
+
+
+def test_ready_requires_usable_status_preserves_existing_failure() -> None:
+    failure = StockbitAuthFailure(
+        kind=StockbitAuthFailureKind.AUTH_UI,
+        message="headless cannot complete login UI",
+    )
+    assert ready_requires_usable_status(failure, _status(token_state="expired")) is failure
 
 
 def test_inspect_returns_status_without_jwt_material() -> None:
