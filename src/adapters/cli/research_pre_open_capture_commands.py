@@ -33,14 +33,15 @@ from src.adapters.cli.screen_pre_open_workflow_factory import (
 from src.application.services.pre_open_observation_payload import (
     PRE_OPEN_OBSERVATION_CONTRACT,
 )
-from src.application.services.pre_open_run_guard import build_pre_open_run_guard
+from src.application.services.pre_open_run_guard import (
+    build_pre_open_run_guard,
+    evaluate_pre_open_capture_window,
+)
 from src.application.use_case.pre_open_workflow_use_case import PreOpenWorkflowRequest
 from src.domain.value_objects.idx_market import (
     IDX_TIMEZONE,
     NCP_LOCK_TIME,
     PRE_OPEN_MATCHING_START,
-    PRE_OPEN_START,
-    REGULAR_OPEN,
 )
 from src.infrastructure.browser.stockbit_browser_provider import ManualBrowserDataProvider
 from src.infrastructure.config.app_config import load_app_config
@@ -117,10 +118,11 @@ def pre_open_capture(
         saham research pre-open capture
         saham research pre-open capture --fast
 
-    Capture requires the direct live provider and fails closed unless its whole
-    collection stays inside the same-session 08:56–08:58 locked-input window
-    and finishes before matching. Manual mover payloads and saved snapshots are
-    not authoritative.
+    Capture requires the direct live provider and fails closed unless the run
+    starts inside the same-session 08:56–08:58 locked-input window and the
+    whole collection finishes before matching. A late wake after 08:58 is
+    rejected with a late-wake reason before any lock is claimed. Manual mover
+    payloads and saved snapshots are not authoritative.
     """
     cfg = load_app_config()
     resolved_db = resolve_cli_db_path(db_path, configured_default=cfg.storage.db_path)
@@ -134,6 +136,22 @@ def pre_open_capture(
     config = load_pre_open_screen_config(resolved_config, overrides)
 
     run_at = datetime.now(IDX_TIMEZONE)
+    ncp = f"{NCP_LOCK_TIME.strftime('%H:%M')}–{PRE_OPEN_MATCHING_START.strftime('%H:%M')}"
+    capture_window = evaluate_pre_open_capture_window(run_at)
+    if capture_window.rejection:
+        if capture_window.late_wake:
+            tip = (
+                f"Re-run during {ncp} WIB on a trading day. "
+                "Do not pass --allow-non-trading-day to bypass a late wake. "
+                "Use `saham screen pre-open` for discovery-only outside the window."
+            )
+        else:
+            tip = (
+                f"Wait for {ncp} WIB on a trading day. "
+                "Use `saham screen pre-open` for discovery-only before the lock window."
+            )
+        raise_data_unavailable(capture_window.rejection, tip=tip)
+
     run_guard = build_pre_open_run_guard(
         run_at=run_at,
         market_status=resolve_pre_open_market_status(),
@@ -145,22 +163,6 @@ def pre_open_capture(
     )
     if run_guard.error:
         raise_user_error(f"Pre-open guard: {run_guard.error}")
-
-    if run_guard.outside_window:
-        window = f"{PRE_OPEN_START.strftime('%H:%M')}-{REGULAR_OPEN.strftime('%H:%M')}"
-        ncp = f"{NCP_LOCK_TIME.strftime('%H:%M')}–{PRE_OPEN_MATCHING_START.strftime('%H:%M')}"
-        raise_data_unavailable(
-            (
-                f"Capture rejected: outside the IDX pre-open window "
-                f"({window} Asia/Jakarta). Authoritative capture requires a "
-                f"live collection wholly inside the same-session {ncp} "
-                "NCP locked-input phase."
-            ),
-            tip=(
-                f"Re-run during {ncp} WIB on a trading day, or use "
-                "`saham screen pre-open` for discovery-only outside the window."
-            ),
-        )
 
     if movers_json is not None or order_books_json is not None:
         raise_user_error(

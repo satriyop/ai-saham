@@ -71,8 +71,10 @@ def reauth(
     Refresh Exodus JWT from the saved Stockbit browser profile.
 
     Default ``--mode headless`` opens no window: cookies/session mint a JWT or
-    the command fails closed (for cron). Use ``--mode headed`` when login UI
-    recovery is needed (password autofill / manual clicks).
+    the command fails closed (for cron). Success requires
+    ``saham fetch stockbit status`` to show a usable RS256 JWT. Use
+    ``--mode headed`` when login UI recovery is needed (password autofill /
+    manual clicks).
 
     Requires a profile from ``saham fetch stockbit login`` at least once.
 
@@ -82,9 +84,10 @@ def reauth(
         saham fetch stockbit reauth --mode headed --timeout 120
     """
     require_playwright_cli()
-    from src.application.ports.stockbit_auth import (
-        StockbitAuthFailure,
-        StockbitAuthRefreshMode,
+    from src.application.ports.stockbit_auth import StockbitAuthRefreshMode
+    from src.application.use_case.refresh_stockbit_session_use_case import (
+        RefreshStockbitSessionRequest,
+        RefreshStockbitSessionUseCase,
     )
     from src.infrastructure.composition.stockbit_auth_factory import create_stockbit_auth_port
 
@@ -95,10 +98,12 @@ def reauth(
         raise_user_error(f"Invalid --mode {mode!r}; expected 'headless' or 'headed'.")
 
     auth = create_stockbit_auth_port(reauth_timeout=timeout)
-    outcome = auth.force_refresh(refresh_mode)
-    if isinstance(outcome, StockbitAuthFailure):
+    result = RefreshStockbitSessionUseCase(auth).execute(
+        RefreshStockbitSessionRequest(mode=refresh_mode)
+    )
+    if result.failure is not None:
         raise_data_unavailable(
-            outcome.message,
+            result.failure.message,
             tip="Run: saham fetch stockbit reauth --mode headed",
         )
 

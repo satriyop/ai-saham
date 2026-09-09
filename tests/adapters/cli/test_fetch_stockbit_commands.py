@@ -52,7 +52,7 @@ def test_status_valid_token_shows_state_and_no_jwt_leak(monkeypatch):
 
 
 def test_reauth_command_success_exit_zero(monkeypatch):
-    fake = FakeStockbitAuth()
+    fake = FakeStockbitAuth(status=_status(token_state="valid"))
     captured: dict = {}
 
     def _factory(*, reauth_timeout: int = 180, **_kwargs):
@@ -120,7 +120,10 @@ def test_reauth_command_surfaces_profile_in_use_without_token_leak(monkeypatch):
 
 
 def test_reauth_command_passes_headed_mode(monkeypatch):
-    fake = FakeStockbitAuth(refresh_results={StockbitAuthRefreshMode.HEADED: StockbitAuthReady()})
+    fake = FakeStockbitAuth(
+        refresh_results={StockbitAuthRefreshMode.HEADED: StockbitAuthReady()},
+        status=_status(token_state="valid"),
+    )
     monkeypatch.setattr(_FACTORY, lambda **_kwargs: fake)
     monkeypatch.setattr(
         "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
@@ -132,6 +135,33 @@ def test_reauth_command_passes_headed_mode(monkeypatch):
     )
     assert result.exit_code == 0
     assert fake.refresh_calls == [StockbitAuthRefreshMode.HEADED]
+
+
+def test_reauth_headless_success_is_rejected_when_status_is_not_usable_rs256(
+    monkeypatch,
+):
+    fake = FakeStockbitAuth(
+        refresh_results={StockbitAuthRefreshMode.HEADLESS: StockbitAuthReady()},
+        status=_status(
+            token_state="expired",
+            token_expires_at="2026-09-09T00:34:55+00:00",
+            token_seconds_remaining=0,
+        ),
+    )
+    monkeypatch.setattr(_FACTORY, lambda **_kwargs: fake)
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
+        lambda: None,
+    )
+
+    result = runner.invoke(app, ["fetch", "stockbit", "reauth", "--mode", "headless"])
+    combined = result.stdout + result.stderr
+
+    assert result.exit_code == 2
+    assert "Error [data_unavailable]:" in combined
+    assert "usable RS256" in combined
+    assert fake.refresh_calls == [StockbitAuthRefreshMode.HEADLESS]
+    assert "eyJ" not in combined
 
 
 def test_reauth_command_rejects_invalid_mode(monkeypatch):

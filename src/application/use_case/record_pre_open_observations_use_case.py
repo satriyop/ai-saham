@@ -10,13 +10,16 @@ Layer: Application
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from src.application.services.pre_open_observation_persister import (
     PreOpenPersistedObservation,
     PreOpenPersistResult,
 )
+from src.application.services.pre_open_run_guard import evaluate_pre_open_capture_window
 from src.domain.value_objects.pre_open_signal_evidence import AuctionNcpProvenance
 
 if TYPE_CHECKING:
@@ -44,14 +47,21 @@ class RecordPreOpenObservationsUseCase:
         self,
         workflow_use_case: "PreOpenWorkflowUseCase",
         observation_persister: "PreOpenObservationPersister",
+        *,
+        capture_clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._workflow = workflow_use_case
         self._persister = observation_persister
+        self._capture_clock = capture_clock
 
     def execute(
         self,
         request: "PreOpenWorkflowRequest",
     ) -> RecordPreOpenObservationsResult:
+        if self._capture_clock is not None:
+            window = evaluate_pre_open_capture_window(self._capture_clock())
+            if window.rejection:
+                raise ValueError(window.rejection)
         response = self._workflow.execute(request)
         provenance = AuctionNcpProvenance(
             ticker="CAPTURE",

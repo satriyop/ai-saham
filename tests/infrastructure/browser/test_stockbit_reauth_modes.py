@@ -409,3 +409,61 @@ def test_headless_auth_ui_fails_closed_without_login_clicks(
     assert result.success is False
     assert clicks["n"] == 0
     assert "auth" in result.message.lower() or "headed" in result.message.lower()
+
+
+def test_headless_does_not_report_success_when_token_is_not_persisted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    (profile / "marker").write_text("x")
+    token = _make_jwt({"exp": _future_ts(2)}, alg="RS256")
+    page = _FakePage(url="https://stockbit.com/orderbook")
+    _patch_headless_runtime(monkeypatch, page, resolve_sequence=[token])
+    monkeypatch.setattr(session_mod, "_save_rs256_token_if_valid", lambda **_kwargs: False)
+
+    result = reauth_stockbit_session(profile_dir=profile, mode="headless")
+
+    assert result.success is False
+    assert result.token_saved is False
+    assert not (profile / "token.json").exists()
+    out = capsys.readouterr().out
+    assert "✓" not in out
+    assert "Headless JWT refresh OK" not in out
+    assert token not in out
+
+
+def test_headless_does_not_report_success_when_status_is_not_usable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from src.application.services.stockbit_session import StockbitSessionStatus
+
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    (profile / "marker").write_text("x")
+    token = _make_jwt({"exp": _future_ts(2)}, alg="RS256")
+    page = _FakePage(url="https://stockbit.com/orderbook")
+    _patch_headless_runtime(monkeypatch, page, resolve_sequence=[token])
+    monkeypatch.setattr(
+        session_mod,
+        "get_stockbit_session_status",
+        lambda _profile: StockbitSessionStatus(
+            profile_exists=True,
+            profile_path=str(profile),
+            browser_login_age_hours=24.6,
+            token_exists=True,
+            token_state="expired",
+            token_expires_at="2026-09-09T00:34:55+00:00",
+            token_seconds_remaining=0,
+            token_expiry_source="jwt_exp",
+        ),
+    )
+
+    result = reauth_stockbit_session(profile_dir=profile, mode="headless")
+
+    assert result.success is False
+    out = capsys.readouterr().out
+    assert "✓" not in out
+    assert "Headless JWT refresh OK" not in out
+    assert "token_state=expired" in out
+    assert token not in out

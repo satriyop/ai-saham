@@ -11,7 +11,7 @@ Layer: Adapter
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +44,7 @@ from src.application.use_case.record_pre_open_observations_use_case import (
 from src.domain.ports.broker_data_repository import BrokerDataRepository
 from src.domain.ports.browser_data_provider import BrowserDataProvider
 from src.domain.ports.market_data_repository import MarketDataRepository
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.market_status import MarketStatus
 from src.domain.value_objects.screener_result import MoverData
 from src.infrastructure.browser.playwright_stockbit_provider import PlaywrightStockbitProvider
@@ -285,6 +286,7 @@ def create_pre_open_cli_workflow(
             classification_config=signal_engine.signal_classification_config,
             producer_source_revision=resolve_producer_source_revision(),
         ),
+        capture_clock=lambda: datetime.now(tz=IDX_TIMEZONE),
     )
 
     return PreOpenCliWorkflow(

@@ -12,10 +12,86 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 
-from src.domain.value_objects.idx_market import IDX_TIMEZONE, PRE_OPEN_START
+from src.domain.value_objects.idx_market import (
+    IDX_TIMEZONE,
+    NCP_LOCK_TIME,
+    PRE_OPEN_MATCHING_START,
+    PRE_OPEN_START,
+)
 from src.domain.value_objects.idx_market import REGULAR_OPEN as PRE_OPEN_END
 from src.domain.value_objects.market_status import MarketStatus
+
+
+class PreOpenCaptureStartKind(str, Enum):
+    """Where a capture start sits relative to the 08:56–08:58 NCP lock window."""
+
+    IN_LOCK_WINDOW = "in_lock_window"
+    TOO_EARLY = "too_early"
+    LATE_WAKE = "late_wake"
+
+
+@dataclass(frozen=True)
+class PreOpenCaptureWindow:
+    """Authoritative capture start vs the NCP lock window (Asia/Jakarta)."""
+
+    run_at: datetime
+    kind: PreOpenCaptureStartKind
+    rejection: str | None = None
+
+    @property
+    def in_lock_window(self) -> bool:
+        return self.kind is PreOpenCaptureStartKind.IN_LOCK_WINDOW
+
+    @property
+    def late_wake(self) -> bool:
+        return self.kind is PreOpenCaptureStartKind.LATE_WAKE
+
+    @property
+    def too_early(self) -> bool:
+        return self.kind is PreOpenCaptureStartKind.TOO_EARLY
+
+
+def _jakarta_wall_clock(run_at: datetime) -> datetime:
+    """Interpret capture start in Asia/Jakarta. Naive times are Jakarta wall-clock."""
+    if run_at.tzinfo is None or run_at.tzinfo.utcoffset(run_at) is None:
+        return run_at.replace(tzinfo=IDX_TIMEZONE)
+    return run_at.astimezone(IDX_TIMEZONE)
+
+
+def evaluate_pre_open_capture_window(run_at: datetime) -> PreOpenCaptureWindow:
+    """Classify an authoritative capture start against [08:56, 08:58) Asia/Jakarta.
+
+    A start outside that interval must fail closed before any lock is claimed.
+    Starts at or after 08:58 are a late wake, not an NCP lock.
+    """
+    local_run_at = _jakarta_wall_clock(run_at)
+    current_time = local_run_at.time()
+    ncp = f"{NCP_LOCK_TIME.strftime('%H:%M')}–{PRE_OPEN_MATCHING_START.strftime('%H:%M')}"
+    stamp = local_run_at.strftime("%H:%M:%S")
+    if NCP_LOCK_TIME <= current_time < PRE_OPEN_MATCHING_START:
+        return PreOpenCaptureWindow(
+            run_at=local_run_at,
+            kind=PreOpenCaptureStartKind.IN_LOCK_WINDOW,
+        )
+    if current_time >= PRE_OPEN_MATCHING_START:
+        return PreOpenCaptureWindow(
+            run_at=local_run_at,
+            kind=PreOpenCaptureStartKind.LATE_WAKE,
+            rejection=(
+                f"Capture rejected: late wake at {stamp} Asia/Jakarta "
+                f"(after the {ncp} NCP lock window). No lock is claimed."
+            ),
+        )
+    return PreOpenCaptureWindow(
+        run_at=local_run_at,
+        kind=PreOpenCaptureStartKind.TOO_EARLY,
+        rejection=(
+            f"Capture rejected: started at {stamp} Asia/Jakarta, before the "
+            f"{ncp} NCP lock window. No lock is claimed."
+        ),
+    )
 
 
 @dataclass(frozen=True)

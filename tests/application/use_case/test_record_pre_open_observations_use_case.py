@@ -138,3 +138,35 @@ def test_capture_accepts_proven_same_session_ncp():
     assert result.observations[0].observation_id == "obs-1"
     workflow.execute.assert_called_once_with(workflow_request)
     persister.persist.assert_called_once_with(response, workflow_request)
+
+
+def test_capture_late_wake_fails_closed_before_workflow_or_lock():
+    workflow = MagicMock()
+    persister = MagicMock()
+    use_case = RecordPreOpenObservationsUseCase(
+        workflow,
+        persister,
+        capture_clock=lambda: datetime(2026, 9, 9, 9, 7, tzinfo=ZoneInfo("Asia/Jakarta")),
+    )
+
+    with pytest.raises(ValueError, match="late wake"):
+        use_case.execute(_request())
+
+    workflow.execute.assert_not_called()
+    persister.persist.assert_not_called()
+
+
+def test_capture_too_early_fails_closed_before_workflow_or_lock():
+    workflow = MagicMock()
+    persister = MagicMock()
+    use_case = RecordPreOpenObservationsUseCase(
+        workflow,
+        persister,
+        capture_clock=lambda: datetime(2026, 9, 9, 8, 50, tzinfo=ZoneInfo("Asia/Jakarta")),
+    )
+
+    with pytest.raises(ValueError, match="No lock is claimed"):
+        use_case.execute(_request())
+
+    workflow.execute.assert_not_called()
+    persister.persist.assert_not_called()

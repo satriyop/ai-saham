@@ -15,7 +15,10 @@ from src.application.ports.stockbit_auth import (
     StockbitAuthReady,
     StockbitAuthRefreshMode,
 )
-from src.application.services.stockbit_session import StockbitSessionStatus
+from src.application.services.stockbit_session import (
+    StockbitSessionStatus,
+    status_shows_usable_rs256,
+)
 from src.infrastructure.browser.stockbit_browser_context import default_stockbit_profile_dir
 from src.infrastructure.browser.stockbit_session_actions import (
     get_stockbit_session_status,
@@ -94,11 +97,23 @@ class StockbitAuthAdapter:
                 kind=StockbitAuthFailureKind.REFRESH_FAILED,
                 message=f"Stockbit refresh failed: {exc}",
             )
-        if result.success and self._store.load():
+        status = self.inspect()
+        if result.success and status_shows_usable_rs256(status):
             return StockbitAuthReady()
         if result.success:
+            if status.token_state == "expired":
+                kind = StockbitAuthFailureKind.EXPIRED
+            elif status.token_state == "invalid":
+                kind = StockbitAuthFailureKind.INVALID_TOKEN
+            elif not status.token_exists or status.token_state == "missing":
+                kind = StockbitAuthFailureKind.MISSING_TOKEN
+            else:
+                kind = StockbitAuthFailureKind.REFRESH_FAILED
             return StockbitAuthFailure(
-                kind=StockbitAuthFailureKind.REFRESH_FAILED,
-                message="Reauth reported success but no usable JWT was stored.",
+                kind=kind,
+                message=(
+                    "Reauth reported success but status has no usable RS256 JWT "
+                    f"(token_state={status.token_state})."
+                ),
             )
         return _map_reauth_failure(result.message)

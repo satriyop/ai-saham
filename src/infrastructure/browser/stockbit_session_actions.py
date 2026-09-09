@@ -589,6 +589,25 @@ def _reauth_headless_jwt_refresh(
 
         if diag.valid_rs256 and token:
             token_saved = _save_rs256_token_if_valid(profile_dir=profile_dir, token=token)
+            if not token_saved:
+                print(
+                    "  Captured JWT was not persisted as a usable RS256 token; "
+                    "not reporting success."
+                )
+                if attempt < attempts:
+                    print(f"  Retrying in {_HEADLESS_RETRY_PAUSE_S:.2f}s...")
+                    time.sleep(_HEADLESS_RETRY_PAUSE_S)
+                continue
+            status = get_stockbit_session_status(profile_dir)
+            if status.token_state != "valid":
+                print(
+                    "  Persisted token is not a usable RS256 JWT "
+                    f"(status token_state={status.token_state}); not reporting success."
+                )
+                if attempt < attempts:
+                    print(f"  Retrying in {_HEADLESS_RETRY_PAUSE_S:.2f}s...")
+                    time.sleep(_HEADLESS_RETRY_PAUSE_S)
+                continue
             _mark_profile_logged_in(profile_dir)
             if diag.reason == "ok_rs256_ambiguous_url":
                 msg = (
@@ -605,7 +624,7 @@ def _reauth_headless_jwt_refresh(
             print(f"✓ {msg}")
             return StockbitReauthResult(
                 success=True,
-                token_saved=token_saved,
+                token_saved=True,
                 already_authenticated=True,
                 auto_clicks=(),
                 message=msg,

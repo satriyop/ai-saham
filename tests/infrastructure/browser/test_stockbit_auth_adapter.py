@@ -161,7 +161,37 @@ def test_default_refresh_success_without_stored_jwt_is_failure(tmp_path: Path, m
     adapter = StockbitAuthAdapter(profile, store)
     result = adapter.force_refresh(StockbitAuthRefreshMode.HEADED)
     assert isinstance(result, StockbitAuthFailure)
-    assert result.kind is StockbitAuthFailureKind.REFRESH_FAILED
+    assert result.kind is StockbitAuthFailureKind.MISSING_TOKEN
+    assert "usable RS256" in result.message
+
+
+def test_default_refresh_success_with_expired_stored_jwt_is_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from src.infrastructure.browser import stockbit_auth_adapter as adapter_mod
+    from src.infrastructure.browser.stockbit_session_actions import StockbitReauthResult
+
+    profile = _profile(tmp_path)
+    store = StockbitTokenStore(profile / "token.json")
+    store.save(_jwt(exp_hours=-2.0))
+
+    def fake_reauth(**_kwargs: object) -> StockbitReauthResult:
+        return StockbitReauthResult(
+            success=True,
+            token_saved=False,
+            already_authenticated=True,
+            auto_clicks=(),
+            message="Headless JWT refresh OK — already authenticated.",
+            mode="headless",
+        )
+
+    monkeypatch.setattr(adapter_mod, "reauth_stockbit_session", fake_reauth)
+    adapter = StockbitAuthAdapter(profile, store)
+    result = adapter.force_refresh(StockbitAuthRefreshMode.HEADLESS)
+    assert isinstance(result, StockbitAuthFailure)
+    assert result.kind is StockbitAuthFailureKind.EXPIRED
+    assert "usable RS256" in result.message
+    assert adapter.inspect().token_state == "expired"
 
 
 def test_inspect_reports_store_without_jwt(tmp_path: Path) -> None:

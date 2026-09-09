@@ -52,3 +52,13 @@ class StockbitSessionStatus:
     token_expires_at: str | None  # ISO-8601 UTC
     token_seconds_remaining: int | None
     token_expiry_source: Literal["jwt_exp", "fallback_ttl"] | None
+
+
+def status_shows_usable_rs256(status: StockbitSessionStatus) -> bool:
+    """True when ``saham fetch stockbit status`` reports a locally usable RS256 JWT.
+
+    ``token_state == "valid"`` is the status view of a locally valid RS256
+    Exodus token: non-RS256 is reported as ``invalid``, and an expired exp
+    claim is ``expired``. This does not prove Stockbit accepted the token.
+    """
+    return bool(status.token_exists and status.token_state == "valid")
