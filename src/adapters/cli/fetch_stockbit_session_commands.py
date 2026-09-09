@@ -85,6 +85,7 @@ def reauth(
     from src.application.ports.stockbit_auth import (
         StockbitAuthFailure,
         StockbitAuthRefreshMode,
+        ready_requires_usable_status,
     )
     from src.infrastructure.composition.stockbit_auth_factory import create_stockbit_auth_port
 
@@ -95,7 +96,7 @@ def reauth(
         raise_user_error(f"Invalid --mode {mode!r}; expected 'headless' or 'headed'.")
 
     auth = create_stockbit_auth_port(reauth_timeout=timeout)
-    outcome = auth.force_refresh(refresh_mode)
+    outcome = ready_requires_usable_status(auth.force_refresh(refresh_mode), auth.inspect())
     if isinstance(outcome, StockbitAuthFailure):
         raise_data_unavailable(
             outcome.message,

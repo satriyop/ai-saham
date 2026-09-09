@@ -146,15 +146,25 @@ def pre_open_capture(
     if run_guard.error:
         raise_user_error(f"Pre-open guard: {run_guard.error}")
 
-    if run_guard.outside_window:
-        window = f"{PRE_OPEN_START.strftime('%H:%M')}-{REGULAR_OPEN.strftime('%H:%M')}"
-        ncp = f"{NCP_LOCK_TIME.strftime('%H:%M')}–{PRE_OPEN_MATCHING_START.strftime('%H:%M')}"
+    window = f"{PRE_OPEN_START.strftime('%H:%M')}-{REGULAR_OPEN.strftime('%H:%M')}"
+    ncp = f"{NCP_LOCK_TIME.strftime('%H:%M')}–{PRE_OPEN_MATCHING_START.strftime('%H:%M')}"
+    if run_guard.late_wake:
         raise_data_unavailable(
             (
-                f"Capture rejected: outside the IDX pre-open window "
-                f"({window} Asia/Jakarta). Authoritative capture requires a "
-                f"live collection wholly inside the same-session {ncp} "
-                "NCP locked-input phase."
+                f"Capture rejected: late wake — NCP lock {ncp} Asia/Jakarta "
+                "already missed. No authoritative capture."
+            ),
+            tip=(
+                "Do not use --allow-non-trading-day; the lock cannot be replayed. "
+                "Use `saham screen pre-open` for discovery-only."
+            ),
+        )
+    if not run_guard.in_ncp_lock_window:
+        raise_data_unavailable(
+            (
+                f"Capture rejected: outside the {ncp} NCP locked-input window "
+                f"(IDX pre-open is {window} Asia/Jakarta). Authoritative capture "
+                "requires a live collection wholly inside the same-session lock."
             ),
             tip=(
                 f"Re-run during {ncp} WIB on a trading day, or use "
