@@ -2,7 +2,7 @@
 CLI: saham backtest screen accum
 
 Offline historical replay of accumulation discovery filters (+ optional exit grid).
-Not corpus evaluate (`research accum evaluate`). Not portfolio sim (`backtest portfolio swing`).
+Historical filter audit, separate from corpus capture and portfolio simulation.
 
 Layer: Adapter
 """
@@ -152,7 +152,7 @@ def screen_accum(
     """
     Offline accum-screen filter replay: historical hits + forward/exit stats.
 
-    Not corpus (`research accum evaluate`). Not portfolio book (`backtest portfolio swing`).
+    Produces historical filter statistics, separate from corpus capture and portfolio simulation.
     Uses local candles/broker cache only — `saham fetch market --universe <name>` first.
     """
     cfg = load_app_config()

@@ -20,9 +20,7 @@ from src.adapters.cli.research_accum_capture_commands import (
     signal_catch_up_observations,
 )
 from src.adapters.cli.research_accum_evaluate_commands import (
-    accumulation_evaluate,
     accumulation_labels,
-    accumulation_replay,
     accumulation_status,
     accumulation_sync_session_calendar,
 )
@@ -39,7 +37,7 @@ research_app = typer.Typer(
     name="research",
     help=(
         "Research corpus / ML feeder only. "
-        "capture = save decisions; labels = outcomes; evaluate = cohort study. "
+        "capture = save decisions; labels = outcomes; pre-open evaluate = cohort study. "
         "Live without write: `saham screen`. Paper: `saham trade`. "
         "Policy apply: `saham policy accum`. Not live TradeSetup (`plan`)."
     ),
@@ -61,8 +59,8 @@ research_pre_open_app = typer.Typer(
 research_accum_app = typer.Typer(
     name="accum",
     help=(
-        "Accum corpus: capture, catch-up, backfill, labels, compatible-cohort "
-        "evaluation, replay inspection, and status."
+        "Accum corpus: capture, catch-up, backfill, path labels, and producer status. "
+        "Scoring / policy evaluation lives in sibling ml-saham."
     ),
     no_args_is_help=True,
     context_settings={"help_option_names": ["-h", "--help"]},
@@ -80,8 +78,6 @@ research_accum_app.command("backfill")(signal_backfill_observations)
 research_accum_app.command("backfill-phase-ledger")(backfill_phase_ledger)
 research_accum_app.command("sync-session-calendar")(accumulation_sync_session_calendar)
 research_accum_app.command("labels")(accumulation_labels)
-research_accum_app.command("evaluate")(accumulation_evaluate)
-research_accum_app.command("replay")(accumulation_replay)
 research_accum_app.command("status")(accumulation_status)
 
 research_app.add_typer(research_pre_open_app, name="pre-open")

@@ -43,7 +43,7 @@ BACKTEST
 | Flow detail | `saham plan swing TICKER --with-flow-detail` |
 | Broker flow harian | `saham view ticker flow TICKER --days 30` |
 | Sizing standalone | `plan swing --capital  # sizing TICKER --capital 10000000` |
-| Audit accumulation | `saham research accum evaluate --universe lq45` |
+| Audit accumulation | `saham backtest screen accum --universe lq45` |
 
 Gunakan `--help` untuk nama option dan default yang berlaku saat ini.
 

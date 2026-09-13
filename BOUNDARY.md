@@ -33,14 +33,14 @@ Full mirror of this contract: [`ml-saham/BOUNDARY.md`](../ml-saham/BOUNDARY.md) 
 |------|-------------|
 | ml-saham builds panels + metrics from `learning_observations` + `candles` | Does **not** need `research accum evaluate` or `learning_evaluations` for ACCUM |
 | Labels already freeze path outcomes per signal date | Real y for the corpus is **`learning_outcome_labels`**, not a rollup row |
-| Current `research accum evaluate` is one global pile of all AVAILABLE primary labels | Not time-bounded; weak research value; duplicates ml-saham’s job poorly |
+| Retired `research accum evaluate` pooled AVAILABLE primary labels within a compatibility cohort | Not time-bounded; weak research value; duplicates ml-saham’s job poorly |
 
 ### What is dropped / not product for accum
 
 | Item | Decision |
 |------|----------|
-| **`saham research accum evaluate`** | **Dropped as product.** Do not require it in cron, runbooks, or agent checklists. CLI may still exist until removed; treat as **legacy / do not use**. |
-| **`saham research accum replay`** (evaluation catalog) | Same — legacy if present; not part of the accum pipeline. |
+| **`saham research accum evaluate`** | **Dropped as product.** Do not require it in cron, runbooks, or agent checklists. CLI removed; use sibling `ml-saham` for scoring / policy evaluation. |
+| **`saham research accum replay`** (evaluation catalog) | CLI removed; not part of the accum pipeline. |
 | **Writing new ACCUM rows to `learning_evaluations`** | **Not required.** Existing rows are inert history; purge optional. |
 | **Automating multi-horizon evaluate (3/10/20)** | **No.** Not building time-bounded evaluate in ai-saham for accum. |
 

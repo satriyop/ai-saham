@@ -30,7 +30,7 @@ Canonical artifact ownership:
 | `saham trade pre-open log` | Paper journal for pre-open strategy | journal row with observation_id + opening_snapshot_id | Explicit notebook write via same assess use case; not a learning label |
 | `saham policy accum backtest` | Historical replay | typed learning evaluation | Walk-forward performance artifact, not a live verdict |
 | `# retired: retired trade backtest-intraday` | Historical proxy simulation | `IntradayBacktestResponse` | Daily-OHLC proxy performance artifact, not exact intraday replay |
-| `saham research accum evaluate` | Learning/audit replay | `AccumulationAuditResponse` | Forward-return audit of foreign-flow score evidence |
+| `saham backtest screen accum` | Learning/audit replay | `AccumulationAuditResponse` | Forward-return audit of foreign-flow score evidence |
 | `saham trade accum log` | Journal continuation | `LogSwingCandidateResponse` | Persistence outcome for a logged candidate |
 
 Composition rules:
