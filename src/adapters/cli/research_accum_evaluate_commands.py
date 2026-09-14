@@ -1,4 +1,4 @@
-"""CLI: research accum labels / evaluate / replay / status (corpus).
+"""CLI: research accum path labels / session calendar / producer status.
 
 Layer: Adapter
 """
@@ -13,7 +13,6 @@ import typer
 
 from src.adapters.cli.research_learning_helpers import (
     echo,
-    evaluate_cohort,
     repository,
     resolve_label_compatibility_ids,
     status_cohort,
@@ -220,21 +219,6 @@ def accumulation_labels(
     echo(payload, fmt)
 
 
-def accumulation_evaluate(
-    compatibility_id: Annotated[Optional[str], typer.Option("--compatibility-id")] = None,
-    db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
-    fmt: Annotated[str, typer.Option("--format")] = "table",
-) -> None:
-    """Evaluate one compatible chronological accumulation cohort."""
-
-    evaluate_cohort(
-        AssessmentPurpose.ACCUMULATION_DISCOVERY,
-        compatibility_id=compatibility_id,
-        db_path=db_path,
-        fmt=fmt,
-    )
-
-
 def accumulation_sync_session_calendar(
     start: Annotated[
         Optional[str],
@@ -379,29 +363,11 @@ def accumulation_status(
         ),
     ] = False,
 ) -> None:
-    """Show database-owned accumulation lifecycle counts."""
+    """Show per-cohort accumulation producer readiness."""
 
     status_cohort(
         AssessmentPurpose.ACCUMULATION_DISCOVERY,
         db_path=db_path,
         fmt=fmt,
         require_operational_success=require_operational_success,
-    )
-
-
-def accumulation_replay(
-    db_path: Annotated[Optional[Path], typer.Option("--db")] = None,
-    fmt: Annotated[str, typer.Option("--format")] = "table",
-) -> None:
-    """List immutable accumulation evaluations available for replay inspection."""
-
-    _, repo = repository(db_path)
-    evaluations = repo.list_evaluations(AssessmentPurpose.ACCUMULATION_DISCOVERY)
-    echo(
-        {
-            "artifact_type": "learning_evaluation_catalog",
-            "purpose": AssessmentPurpose.ACCUMULATION_DISCOVERY.value,
-            "evaluation_ids": [evaluation.evaluation_id for evaluation in evaluations],
-        },
-        fmt,
     )

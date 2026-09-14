@@ -111,7 +111,7 @@ amended by [ADR-056](ADR-056-accum-corpus-session-observation-and-accum-path-lab
 | Accumulation label (primary) | `price_path.accum_10d.v1` | **ADR-056** primary hold path |
 | Accumulation label (aux) | `price_path.accum_20d.v1` | **ADR-056** auxiliary only — not the sole accum label |
 | Pre-open label | `price_path.open_30m.v1` | Unchanged |
-| Accumulation evaluation | `forward_outcome_cohort.v1` | Product-dropped evaluate for accum still governed by later tasks; see live help |
+| Accumulation evaluation | `forward_outcome_cohort.v1` | Product-dropped; evaluate/replay CLI removed, stored rows retained per [BOUNDARY.md](../../BOUNDARY.md) |
 | Pre-open evaluation | `session_outcome_cohort.v1` | Unchanged |
 | Swing evaluation | `portfolio_walk_forward.v1` | Unchanged |
 | Swing proposal | `swing_policy_proposal.v1` | Unchanged |
@@ -167,7 +167,7 @@ Swing review is chronological and staged:
 Learning workflows are contextual:
 
 ```text
-saham research accum capture|backfill|labels|evaluate|replay|status
+saham research accum capture|catch-up|backfill|backfill-phase-ledger|sync-session-calendar|labels|status
 saham research pre-open capture|track|labels|evaluate|status
 saham policy accum backtest|tune|review|validate|apply|status
 saham trade pre-open log|outcome|review
@@ -176,6 +176,10 @@ saham trade accum log|review
 
 `research` is corpus / ML feeder only. `trade` is the human paper notebook only.
 `policy accum` is the guarded setup-config lifecycle (not paper, not corpus).
+
+Accum cohort `research accum evaluate` and `research accum replay` are removed
+per [BOUNDARY.md](../../BOUNDARY.md). Accum scoring / policy evaluation lives in
+sibling `ml-saham`; pre-open evaluation and stored historical evaluations remain.
 
 Retired command paths (clean break, no aliases): `research signal`,
 `research accumulation` (use `research accum`), pre-open `grade|prompt|tune`,
@@ -206,4 +210,3 @@ Adapter file ownership for these commands: [ADR-020](ADR-020-cli-adapter-file-na
 - No ML or AI authority, evidence promotion, or automatic configuration change.
 - No import or reinterpretation of historical learning artifacts.
 - No deletion of unrelated trade journals, market data, or source caches.
-

@@ -22,7 +22,15 @@ def test_contextual_routes_are_exposed() -> None:
     assert "accum" in research.stdout
     assert all(
         command in accum.stdout
-        for command in ("capture", "backfill", "labels", "evaluate", "replay", "status")
+        for command in (
+            "capture",
+            "catch-up",
+            "backfill",
+            "backfill-phase-ledger",
+            "sync-session-calendar",
+            "labels",
+            "status",
+        )
     )
     assert all(
         command in pre_open.stdout

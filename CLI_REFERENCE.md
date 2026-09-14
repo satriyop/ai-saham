@@ -1340,26 +1340,6 @@ saham research signal readiness [OPTIONS]
 
 ---
 
-## saham research accum evaluate
-
-Historical accumulation audit — replay accumulation signals and measure forward returns.
-
-```
-saham research accum evaluate [OPTIONS]
-saham research accum evaluate --universe idx80 --setup foreign-bounce
-saham research accum evaluate --universe lq45 --window 7 --min-score 70
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--universe` | idx80 | Universe name |
-| `--setup` | foreign-bounce | Setup lens |
-| `--window` | 7 | Accumulation window |
-| `--min-score` | 0 | Minimum score threshold |
-| `--simulate-exits` | false | Apply exit rules |
-
----
-
 ## saham strategy init
 
 Create a new strategy package with starter template.
@@ -1618,14 +1598,29 @@ saham trade accum review [OPTIONS]
 ## saham backtest screen accum
 
 Offline historical replay of accumulation **screen filters** + forward/exit stats.
-Not corpus (`research accum evaluate`). Not portfolio book.
+Produces historical filter statistics; corpus capture and portfolio simulation are separate workflows.
 
 ```
 saham backtest screen accum [TICKERS...] [OPTIONS]
 saham backtest screen accum --universe lq45 --setup foreign-bounce --start 2026-01-01
+saham backtest screen accum --universe lq45 --window 7 --min-foreign-flow-score 70
 ```
 
-See `config/accumulation_audit.yaml` setup presets. Fetch market data first.
+| Option | Default / resolution | Description |
+|--------|----------------------|-------------|
+| `--universe` | Setup preset, otherwise explicit tickers are needed | Universe name |
+| `--setup` | None | Named preset in `config/accumulation_audit.yaml` |
+| `--window` | Setup preset, otherwise 7 | Accumulation window in broker sessions |
+| `--min-foreign-flow-score` | Setup preset, otherwise 40 | Minimum composite foreign-flow score |
+| `--simulate-exits` | Setup preset, otherwise false | Run TP/SL/max-hold exit grid |
+
+Explicit options override the selected preset. For example, `foreign-bounce`
+enables exit simulation and sets the minimum foreign-flow score to 58.3.
+Fetch market data first; use `--help` for all options.
+
+Accum cohort `research accum evaluate` and `research accum replay` are removed.
+For accum scoring / policy evaluation, use sibling `ml-saham`; see [BOUNDARY.md](BOUNDARY.md).
+Pre-open cohort evaluation remains available as `saham research pre-open evaluate`.
 
 ---
 

@@ -1,5 +1,5 @@
 """
-Factory for the `saham research accum evaluate` workflow.
+Factory for the `saham backtest screen accum` workflow.
 
 Layer: Adapter
 

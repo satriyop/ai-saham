@@ -61,9 +61,11 @@ view ticker | view broker      →  browse facts (not decisions)
 Parallel (not Action authority):
 
 ```text
-research accum capture/labels/evaluate
+research accum capture/labels/status
 policy accum tune → review → validate → apply
 ```
+
+Accum scoring / policy evaluation lives in sibling `ml-saham`.
 
 ---
 

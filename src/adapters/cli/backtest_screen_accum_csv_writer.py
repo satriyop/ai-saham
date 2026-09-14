@@ -1,5 +1,5 @@
 """
-CSV writer for `saham research accum evaluate` raw audit records.
+CSV writer for `saham backtest screen accum` raw audit records.
 
 Layer: Adapter
 """

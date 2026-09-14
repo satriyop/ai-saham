@@ -240,7 +240,7 @@ SQLite DB and never auto-promotes config.
 |-----|--------|
 | Observations + path labels (3d/10d/20d) | **this repo** — `saham research accum capture\|labels\|status` |
 | Accum scoring / policy tournament / factor KEEP·DEMOTE | **`ml-saham`** — `challenge run` / `challenge factor` |
-| Accum cohort evaluate (`research accum evaluate`) | **Dropped** — see [BOUNDARY.md](BOUNDARY.md) |
+| Accum cohort evaluate / replay | **Removed from CLI** — see [BOUNDARY.md](BOUNDARY.md) |
 
 Research corpus writes (`research accum capture` / `backfill`) stamp membership as
 `{universe}@pit`: tradable names with a candle in the last N IHSG sessions
