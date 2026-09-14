@@ -43,6 +43,8 @@ htmlcov/
 .idea/
 .vscode/
 .cursor/
+.claude/*.local.*
+.claude/settings.local.json
 *.swp
 *.swo
 *~
@@ -70,9 +72,8 @@ output/
 reports/
 
 # Environment and secrets
-.env
-.env.local
-.env.*.local
+.env*
+!.env.example
 config/user.yaml
 *.pem
 *.key

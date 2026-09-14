@@ -390,6 +390,17 @@ and never use destructive Git cleanup without explicit approval and file scope.
 - Some older guides still contain retired risk profiles, command names, or
   pre-staged SignalEngine descriptions. The source-of-truth order above applies.
 
+## Disclaimer and Third-Party Notice
+
+### Financial Disclaimer
+
+AI Saham is an analytical and educational tool designed for personal research. It does **not** provide financial, investment, tax, or legal advice. All stock screening results, scores, technical indicators, and simulated setups are informational and must not be construed as investment recommendations. Trading in the Indonesia Stock Exchange (IDX) carries substantial financial risk, including the possible loss of principal.
+
+### Third-Party Service and Platform Notice
+
+* **Non-Affiliation**: AI Saham is an independent open-source project and is **not** affiliated, associated, authorized, endorsed by, or in any way officially connected with PT Stockbit Sekuritas Digital, the Indonesia Stock Exchange (PT Bursa Efek Indonesia / IDX), TradingEconomics, or any of their subsidiaries or affiliates.
+* **Provider Terms**: Any automated interactions or data-provider integrations in this repository are intended for personal research. Users are solely responsible for ensuring that their usage complies with all applicable laws, regulations, and third-party terms of service. The authors and contributors assume no liability for account actions, service disruptions, or financial outcomes arising from the use of this software.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
