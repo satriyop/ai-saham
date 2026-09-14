@@ -14,7 +14,7 @@ the boundary.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Protocol
 
 
@@ -26,4 +26,12 @@ class IEVBaselineReadPort(Protocol):
 
         Empty dict when no locked baseline exists for the date.
         """
+        ...
+
+
+class IevSessionCapturePort(Protocol):
+    """Read the same-session IEV snapshot capture time (sidecar preferred)."""
+
+    def captured_at_for(self, session_date: date) -> datetime | None:
+        """Timezone-aware IEV ``captured_at`` for the session, or None if absent."""
         ...

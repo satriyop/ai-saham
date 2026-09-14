@@ -1,5 +1,5 @@
 """
-JSON sidecar writer for IEV snapshots.
+JSON sidecar writer/reader for IEV snapshots.
 
 Layer: Infrastructure
 """
@@ -8,6 +8,7 @@ import json
 from datetime import date, datetime
 from pathlib import Path
 
+from src.domain.value_objects.idx_market import IDX_TIMEZONE
 from src.domain.value_objects.screener_result import MoverData
 
 
@@ -16,6 +17,29 @@ class IEVJsonSidecarWriter:
 
     def __init__(self, root_dir: str | Path = Path("data/iev")) -> None:
         self._root_dir = Path(root_dir).expanduser()
+
+    def snapshot_path(self, snapshot_date: date) -> Path:
+        return self._root_dir / snapshot_date.strftime("%Y%m%d") / "iev.json"
+
+    def read_captured_at(self, snapshot_date: date) -> datetime | None:
+        """Return sidecar ``captured_at`` for the session date, or None if absent."""
+        path = self.snapshot_path(snapshot_date)
+        if not path.is_file():
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError):
+            return None
+        raw = payload.get("captured_at") if isinstance(payload, dict) else None
+        if not raw:
+            return None
+        try:
+            captured = datetime.fromisoformat(str(raw))
+        except ValueError:
+            return None
+        if captured.tzinfo is None:
+            captured = captured.replace(tzinfo=IDX_TIMEZONE)
+        return captured
 
     def write_snapshot(
         self,
@@ -40,8 +64,7 @@ class IEVJsonSidecarWriter:
             ],
         }
 
-        target_dir = self._root_dir / snapshot_date.strftime("%Y%m%d")
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / "iev.json"
+        target_path = self.snapshot_path(snapshot_date)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         return target_path

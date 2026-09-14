@@ -130,6 +130,13 @@ class RefreshDailyWorkspaceUseCase:
             warnings.append(
                 f"{refresh_result.response.fail_count} ticker(s) failed during refresh."
             )
+        unavailable = list(refresh_result.response.unavailable_tickers)
+        if unavailable:
+            warnings.append(
+                "Same-session OHLC unavailable for: "
+                + ", ".join(unavailable)
+                + " (hung/timeout after retry)."
+            )
 
         return RefreshDailyWorkspaceResult(
             refresh=refresh_result,

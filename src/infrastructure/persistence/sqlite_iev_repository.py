@@ -399,6 +399,31 @@ class SQLiteIEVRepository:
             ).fetchone()
         return row is not None
 
+    def latest_collected_at(self, snapshot_date: date) -> datetime | None:
+        """Latest history ``collected_at`` for the date, or None if absent.
+
+        Read-only: missing tables/files become None rather than creating schema.
+        Naive timestamps are interpreted as Asia/Jakarta.
+        """
+        try:
+            with self._get_connection() as conn:
+                row = conn.execute(
+                    "SELECT MAX(collected_at) AS ts FROM iev_snapshot_history WHERE date = ?",
+                    (snapshot_date.isoformat(),),
+                ).fetchone()
+        except sqlite3.OperationalError:
+            return None
+        raw = row["ts"] if row is not None else None
+        if not raw:
+            return None
+        try:
+            collected = datetime.fromisoformat(str(raw))
+        except ValueError:
+            return None
+        if collected.tzinfo is None:
+            collected = collected.replace(tzinfo=IDX_TIMEZONE)
+        return collected
+
     def count_snapshot_rows(self, snapshot_date: date) -> int:
         """Number of rows stored for this date. Implements PreOpenIevSnapshotCountPort."""
         with self._get_connection() as conn:

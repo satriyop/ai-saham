@@ -86,6 +86,10 @@ class FetchMarketRefreshResponse:
     pit_coverage: list[EnrichmentPitTableCoverage] = field(default_factory=list)
     hang_count: int = 0
     hang_attempted: int = 0
+    unavailable_tickers: list[str] = field(default_factory=list)
+
+
+_HANG_STATUSES = frozenset({"ERR:timeout", "ERR:deadline"})
 
 
 class FetchMarketRefreshUseCase:
@@ -221,6 +225,22 @@ class FetchMarketRefreshUseCase:
             if on_ticker_complete is not None:
                 on_ticker_complete(result_item, len(ticker_results), len(ticker_list))
 
+        unavailable_tickers: list[str] = []
+        if request.candles_only:
+            hang_attempted, ok_count, fail_count, failures = self._retry_timeout_candles(
+                request,
+                ticker_results=ticker_results,
+                short_history=candle_short_history,
+                hang_attempted=hang_attempted,
+                ok_count=ok_count,
+                fail_count=fail_count,
+                failures=failures,
+            )
+            hang_count = sum(1 for item in ticker_results if item.candles_status in _HANG_STATUSES)
+            unavailable_tickers = [
+                item.ticker for item in ticker_results if item.candles_status.startswith("ERR:")
+            ]
+
         stock_tickers_only = [
             ticker
             for ticker in ticker_list
@@ -243,7 +263,65 @@ class FetchMarketRefreshUseCase:
             pit_coverage=pit_coverage,
             hang_count=hang_count,
             hang_attempted=hang_attempted,
+            unavailable_tickers=unavailable_tickers,
         )
+
+    def _retry_timeout_candles(
+        self,
+        request: FetchMarketRefreshRequest,
+        *,
+        ticker_results: list[FetchMarketTickerResult],
+        short_history: list[str],
+        hang_attempted: int,
+        ok_count: int,
+        fail_count: int,
+        failures: list[str],
+    ) -> tuple[int, int, int, list[str]]:
+        """One extra bounded pass over ERR:timeout tickers (not wall-deadline)."""
+        retry_indices = [
+            index
+            for index, item in enumerate(ticker_results)
+            if item.candles_status == "ERR:timeout"
+        ]
+        for index in retry_indices:
+            item = ticker_results[index]
+            candles_status, hang_attempted, _hang_count = self._fetch_candles_bounded(
+                request,
+                ticker=item.ticker,
+                short_history=short_history,
+                hang_attempted=hang_attempted,
+                hang_count=0,
+            )
+            any_error = (
+                "ERR:" in candles_status
+                or "ERR:" in item.broker_result.summaries
+                or "ERR:" in item.broker_result.flow
+                or "ERR:" in item.enrichment_status
+            )
+            enrichment_available = (
+                not request.no_enrichment and request.broker_provider_name == "stockbit"
+            )
+            all_cached = (
+                is_cached_status(candles_status)
+                and is_cached_status(item.broker_result.summaries)
+                and is_cached_status(item.broker_result.flow)
+                and (request.no_meta or item.meta_status.startswith("cached"))
+                and (not enrichment_available or item.enrichment_status.startswith("✓"))
+            )
+            ticker_results[index] = FetchMarketTickerResult(
+                ticker=item.ticker,
+                candles_status=candles_status,
+                broker_result=item.broker_result,
+                meta_status=item.meta_status,
+                enrichment_status=item.enrichment_status,
+                any_error=any_error,
+                all_cached=all_cached,
+            )
+            if item.any_error and not any_error:
+                fail_count -= 1
+                ok_count += 1
+                failures = [ticker for ticker in failures if ticker != item.ticker]
+        return hang_attempted, ok_count, fail_count, failures
 
     def _fetch_candles_bounded(
         self,
