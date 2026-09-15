@@ -14,6 +14,7 @@ from src.application.ports.stockbit_auth import (
     StockbitAuthOutcome,
     StockbitAuthReady,
     StockbitAuthRefreshMode,
+    ready_requires_jwt_exp_advance_when_short,
     ready_requires_usable_status,
 )
 from src.application.services.stockbit_session import StockbitSessionStatus
@@ -72,11 +73,16 @@ class StockbitAuthAdapter:
         return self.force_refresh(StockbitAuthRefreshMode.HEADLESS)
 
     def force_refresh(self, mode: StockbitAuthRefreshMode) -> StockbitAuthOutcome:
+        before = self.inspect() if mode is StockbitAuthRefreshMode.HEADLESS else None
         if self._refresh is not None:
             outcome = self._refresh(mode)
         else:
             outcome = self._default_refresh(mode)
-        return ready_requires_usable_status(outcome, self.inspect())
+        after = self.inspect()
+        outcome = ready_requires_usable_status(outcome, after)
+        if before is not None:
+            outcome = ready_requires_jwt_exp_advance_when_short(outcome, before, after)
+        return outcome
 
     def inspect(self) -> StockbitSessionStatus:
         return get_stockbit_session_status(self._profile_dir)

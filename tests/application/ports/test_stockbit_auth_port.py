@@ -11,11 +11,13 @@ import pytest
 
 from src.application.fakes.stockbit_auth import FakeStockbitAuth
 from src.application.ports.stockbit_auth import (
+    HEADLESS_JWT_SHORT_REMAINING_SECONDS,
     StockbitAuthFailure,
     StockbitAuthFailureKind,
     StockbitAuthPort,
     StockbitAuthReady,
     StockbitAuthRefreshMode,
+    ready_requires_jwt_exp_advance_when_short,
     ready_requires_usable_status,
 )
 from src.application.services.stockbit_session import StockbitSessionStatus
@@ -79,7 +81,10 @@ def test_force_refresh_headless_and_headed_are_distinct() -> None:
             StockbitAuthRefreshMode.HEADLESS: ready,
             StockbitAuthRefreshMode.HEADED: headed_fail,
         },
-        status=_status(token_state="valid"),
+        status=_status(
+            token_state="valid",
+            token_seconds_remaining=HEADLESS_JWT_SHORT_REMAINING_SECONDS + 1,
+        ),
     )
     assert isinstance(auth.force_refresh(StockbitAuthRefreshMode.HEADLESS), StockbitAuthReady)
     headed = auth.force_refresh(StockbitAuthRefreshMode.HEADED)
@@ -123,6 +128,106 @@ def test_ready_requires_usable_status_preserves_existing_failure() -> None:
         message="headless cannot complete login UI",
     )
     assert ready_requires_usable_status(failure, _status(token_state="expired")) is failure
+
+
+def test_ready_requires_jwt_exp_advance_when_short_fails_when_expiry_unchanged() -> None:
+    before = _status(
+        token_state="valid",
+        token_expires_at="2026-09-16T00:04:00+00:00",
+        token_seconds_remaining=12 * 3600,
+    )
+    after = _status(
+        token_state="valid",
+        token_expires_at="2026-09-16T00:04:00+00:00",
+        token_seconds_remaining=12 * 3600,
+    )
+    outcome = ready_requires_jwt_exp_advance_when_short(StockbitAuthReady(), before, after)
+    assert isinstance(outcome, StockbitAuthFailure)
+    assert outcome.kind is StockbitAuthFailureKind.REFRESH_FAILED
+    assert "jwt_exp" in outcome.message
+    assert "Headed login is required" in outcome.message
+    assert "720 min" in outcome.message
+    assert "eyJ" not in outcome.message
+
+
+def test_ready_requires_jwt_exp_advance_when_short_ready_when_expiry_moves_later() -> None:
+    before = _status(
+        token_state="valid",
+        token_expires_at="2026-09-16T00:04:00+00:00",
+        token_seconds_remaining=12 * 3600,
+    )
+    after = _status(
+        token_state="valid",
+        token_expires_at="2026-09-17T00:04:00+00:00",
+        token_seconds_remaining=36 * 3600,
+    )
+    outcome = ready_requires_jwt_exp_advance_when_short(StockbitAuthReady(), before, after)
+    assert isinstance(outcome, StockbitAuthReady)
+
+
+def test_ready_requires_jwt_exp_advance_when_short_ready_when_remaining_above_window() -> None:
+    expires_at = "2026-09-17T12:00:00+00:00"
+    before = _status(
+        token_state="valid",
+        token_expires_at=expires_at,
+        token_seconds_remaining=HEADLESS_JWT_SHORT_REMAINING_SECONDS + 60,
+    )
+    after = _status(
+        token_state="valid",
+        token_expires_at=expires_at,
+        token_seconds_remaining=HEADLESS_JWT_SHORT_REMAINING_SECONDS + 1,
+    )
+    outcome = ready_requires_jwt_exp_advance_when_short(StockbitAuthReady(), before, after)
+    assert isinstance(outcome, StockbitAuthReady)
+
+
+def test_ready_requires_jwt_exp_advance_when_short_fails_at_exact_36h_unchanged() -> None:
+    expires_at = "2026-09-16T12:00:00+00:00"
+    before = _status(
+        token_state="valid",
+        token_expires_at=expires_at,
+        token_seconds_remaining=HEADLESS_JWT_SHORT_REMAINING_SECONDS,
+    )
+    after = _status(
+        token_state="valid",
+        token_expires_at=expires_at,
+        token_seconds_remaining=HEADLESS_JWT_SHORT_REMAINING_SECONDS,
+    )
+    outcome = ready_requires_jwt_exp_advance_when_short(StockbitAuthReady(), before, after)
+    assert isinstance(outcome, StockbitAuthFailure)
+    assert outcome.kind is StockbitAuthFailureKind.REFRESH_FAILED
+
+
+def test_ready_requires_jwt_exp_advance_when_short_preserves_existing_failure() -> None:
+    failure = StockbitAuthFailure(
+        kind=StockbitAuthFailureKind.EXPIRED,
+        message="Refresh did not leave a usable RS256 JWT (token expired).",
+    )
+    before = _status(token_state="expired", token_seconds_remaining=0)
+    after = _status(token_state="expired", token_seconds_remaining=0)
+    assert ready_requires_jwt_exp_advance_when_short(failure, before, after) is failure
+
+
+def test_fake_force_refresh_headless_short_unchanged_jwt_is_failure() -> None:
+    auth = FakeStockbitAuth(
+        refresh_results={StockbitAuthRefreshMode.HEADLESS: StockbitAuthReady()},
+        status=_status(token_state="valid", token_seconds_remaining=12 * 3600),
+    )
+    result = auth.force_refresh(StockbitAuthRefreshMode.HEADLESS)
+    assert isinstance(result, StockbitAuthFailure)
+    assert result.kind is StockbitAuthFailureKind.REFRESH_FAILED
+    assert "jwt_exp" in result.message
+    assert "Headed login is required" in result.message
+    assert "eyJ" not in result.message
+
+
+def test_fake_force_refresh_headed_short_unchanged_jwt_stays_ready() -> None:
+    auth = FakeStockbitAuth(
+        refresh_results={StockbitAuthRefreshMode.HEADED: StockbitAuthReady()},
+        status=_status(token_state="valid", token_seconds_remaining=12 * 3600),
+    )
+    result = auth.force_refresh(StockbitAuthRefreshMode.HEADED)
+    assert isinstance(result, StockbitAuthReady)
 
 
 def test_inspect_returns_status_without_jwt_material() -> None:
