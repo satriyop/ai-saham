@@ -13,6 +13,7 @@ from typer.testing import CliRunner
 from src.adapters.cli.main import app
 from src.application.fakes.stockbit_auth import FakeStockbitAuth
 from src.application.ports.stockbit_auth import (
+    HEADLESS_JWT_SHORT_REMAINING_SECONDS,
     StockbitAuthFailure,
     StockbitAuthFailureKind,
     StockbitAuthReady,
@@ -52,7 +53,12 @@ def test_status_valid_token_shows_state_and_no_jwt_leak(monkeypatch):
 
 
 def test_reauth_command_success_exit_zero(monkeypatch):
-    fake = FakeStockbitAuth(status=_status(token_state="valid"))
+    fake = FakeStockbitAuth(
+        status=_status(
+            token_state="valid",
+            token_seconds_remaining=HEADLESS_JWT_SHORT_REMAINING_SECONDS + 1,
+        )
+    )
     captured: dict = {}
 
     def _factory(*, reauth_timeout: int = 180, **_kwargs):
@@ -145,6 +151,32 @@ def test_reauth_command_ready_with_expired_status_fails_closed(monkeypatch):
     assert result.exit_code == 2
     assert "data_unavailable" in combined
     assert "token expired" in combined.lower()
+    assert "eyJ" not in combined
+    assert fake.refresh_calls == [StockbitAuthRefreshMode.HEADLESS]
+
+
+def test_reauth_command_headless_short_unchanged_jwt_exits_nonzero(monkeypatch):
+    fake = FakeStockbitAuth(
+        refresh_results={StockbitAuthRefreshMode.HEADLESS: StockbitAuthReady()},
+        status=_status(
+            token_state="valid",
+            token_expires_at="2026-09-16T00:04:00+00:00",
+            token_seconds_remaining=12 * 3600,
+        ),
+    )
+    monkeypatch.setattr(_FACTORY, lambda **_kwargs: fake)
+    monkeypatch.setattr(
+        "src.adapters.cli.fetch_stockbit_session_commands.require_playwright_cli",
+        lambda: None,
+    )
+
+    result = runner.invoke(app, ["fetch", "stockbit", "reauth", "--mode", "headless"])
+    combined = result.stdout + result.stderr
+
+    assert result.exit_code == 2
+    assert "data_unavailable" in combined
+    assert "jwt_exp" in combined
+    assert "reauth --mode headed" in combined
     assert "eyJ" not in combined
     assert fake.refresh_calls == [StockbitAuthRefreshMode.HEADLESS]
 

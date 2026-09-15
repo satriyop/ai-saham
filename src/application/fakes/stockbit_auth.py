@@ -10,6 +10,7 @@ from src.application.ports.stockbit_auth import (
     StockbitAuthOutcome,
     StockbitAuthReady,
     StockbitAuthRefreshMode,
+    ready_requires_jwt_exp_advance_when_short,
     ready_requires_usable_status,
 )
 from src.application.services.stockbit_session import StockbitSessionStatus
@@ -50,13 +51,18 @@ class FakeStockbitAuth:
 
     def force_refresh(self, mode: StockbitAuthRefreshMode) -> StockbitAuthOutcome:
         self.refresh_calls.append(mode)
+        before = self.inspect()
         if mode in self.refresh_results:
             outcome = self.refresh_results[mode]
         elif isinstance(self.ensure_result, StockbitAuthFailure):
             outcome = self.ensure_result
         else:
             outcome = StockbitAuthReady()
-        return ready_requires_usable_status(outcome, self.inspect())
+        after = self.inspect()
+        outcome = ready_requires_usable_status(outcome, after)
+        if mode is StockbitAuthRefreshMode.HEADLESS:
+            outcome = ready_requires_jwt_exp_advance_when_short(outcome, before, after)
+        return outcome
 
     def inspect(self) -> StockbitSessionStatus:
         return self.status
