@@ -14,6 +14,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.adapters.shared.view_number_format import format_price
+
 
 @dataclass(frozen=True)
 class TickerMetric:
@@ -135,7 +137,7 @@ def build_ticker_desk_model_from_dashboard(
 ) -> TickerDeskModel:
     """Build design hierarchy from GetTickerDashboardUseCase result."""
     ticker = str(getattr(dashboard, "ticker", "?") or "?").upper()
-    price = _fmt_price(getattr(dashboard, "latest_close", None))
+    price = format_price(getattr(dashboard, "latest_close", None))
     as_of = getattr(dashboard, "as_of", None)
     as_of_s = str(as_of)[:10] if as_of is not None else "—"
 
@@ -490,8 +492,8 @@ def _pulse_structure(ps: Any) -> PulseCard:
         head,
         sub,
         (
-            ("52w low", _fmt_price(getattr(ps, "low_52w", None))),
-            ("52w high", _fmt_price(getattr(ps, "high_52w", None))),
+            ("52w low", format_price(getattr(ps, "low_52w", None))),
+            ("52w high", format_price(getattr(ps, "high_52w", None))),
             ("Vol day", _fmt_vol(getattr(ps, "volume", None))),
             ("20d avg", _fmt_vol(getattr(ps, "avg_volume_20d", None))),
         ),
@@ -1059,15 +1061,6 @@ def _window_buy_sell(points: list[Any], days: int) -> tuple[int | None, int | No
 
 
 # ── format helpers ─────────────────────────────────────────
-
-
-def _fmt_price(value: Any) -> str:
-    if value is None:
-        return "—"
-    try:
-        return f"{int(round(float(value))):,}"
-    except (TypeError, ValueError):
-        return str(value)
 
 
 def _fmt_pct(value: Any) -> tuple[str, str]:

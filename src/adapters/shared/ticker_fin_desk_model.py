@@ -13,6 +13,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from src.adapters.shared.view_number_format import format_date_short
+
 
 @dataclass(frozen=True)
 class FinPulse:
@@ -123,12 +125,7 @@ def _period_label(period: Any, *, period_type: str = "quarter") -> str:
 
 
 def _date_s(period: Any) -> str:
-    pe = getattr(period, "period_end", None)
-    if pe is None:
-        return "—"
-    if hasattr(pe, "isoformat"):
-        return str(pe.isoformat())[:10]
-    return str(pe)[:10]
+    return format_date_short(getattr(period, "period_end", None))
 
 
 def _income_metrics(p: Any) -> tuple[FinMetricRow, ...]:

@@ -14,7 +14,7 @@ from typing import Annotated, Optional
 import typer
 
 from src.adapters.cli.cli_errors import raise_user_error
-from src.adapters.cli.screen_contract_cli import echo_json, resolve_output_format
+from src.adapters.cli.cli_output import echo_json, resolve_output_format
 from src.adapters.cli.screen_pre_open_display import (
     display_raw_movers,
     display_results,

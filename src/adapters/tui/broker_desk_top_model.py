@@ -13,8 +13,8 @@ from decimal import Decimal
 from typing import Any
 
 from src.adapters.shared.trade_action_labels import ACTION_SCAN_TOKENS
+from src.adapters.shared.view_broker_desk_text import broker_type_label
 from src.adapters.shared.view_number_format import format_value
-from src.domain.entities.broker_flow import BrokerType
 
 DISPLAY_LIMIT: int = 12
 HUB_KEYS = "t buy/sell · f flow · c calendar · h history · m top 5 · v ticker · esc home"
@@ -56,16 +56,6 @@ class BrokerDeskTopModel:
             if token in f" {text} ":
                 return True
         return False
-
-
-def _type_label(broker_type: Any) -> str:
-    if broker_type == BrokerType.FOREIGN:
-        return "Foreign"
-    if broker_type == BrokerType.LOCAL:
-        return "Local"
-    if isinstance(broker_type, str):
-        return broker_type
-    return "—"
 
 
 def _signed_net(value: Decimal) -> str:
@@ -137,7 +127,7 @@ def build_broker_desk_top_model(
     return BrokerDeskTopModel(
         broker_code=code_u,
         broker_name=str(getattr(result, "broker_name", code_u) or code_u),
-        type_label=_type_label(getattr(result, "broker_type", None)),
+        type_label=broker_type_label(getattr(result, "broker_type", None)),
         session_date=date_s,
         scope_note=str(
             getattr(result, "scope_note", None) or "Tracked desk activity only (broker_daily_flow)"

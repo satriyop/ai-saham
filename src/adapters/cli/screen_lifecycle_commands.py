@@ -11,11 +11,10 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_output import echo_json, resolve_output_format
 from src.adapters.cli.screen_accum_commands import accumulation_run
 from src.adapters.cli.screen_contract_cli import (
-    echo_json,
     exit_missing_screen_data,
-    resolve_output_format,
 )
 from src.adapters.cli.screen_pre_open_commands import pre_open
 from src.adapters.composition.screen_accum_request import build_screen_accum_request

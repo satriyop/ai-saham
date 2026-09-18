@@ -26,6 +26,7 @@ from src.adapters.composition.screen_deps import (
     build_read_only_accumulation_judge_runner,
     build_screen_deps,
 )
+from src.adapters.shared.view_number_format import format_price
 from src.adapters.tui.board_snapshot import default_accum_snapshot_path
 from src.adapters.tui.controllers.board_controller import BoardController
 from src.adapters.tui.local_cache_health import load_local_cache_health
@@ -1052,9 +1053,9 @@ class _LocalPlanStructureRunner:
         entry_s = stop_s = target_s = lots_s = "—"
         incomplete = ""
         if chosen is not None and getattr(chosen, "lots", None):
-            entry_s = _fmt_price(getattr(chosen, "entry_price", None))
-            stop_s = _fmt_price(getattr(chosen, "stop_price", None))
-            target_s = _fmt_price(getattr(chosen, "target_price", None))
+            entry_s = format_price(getattr(chosen, "entry_price", None))
+            stop_s = format_price(getattr(chosen, "stop_price", None))
+            target_s = format_price(getattr(chosen, "target_price", None))
             lots_s = str(getattr(chosen, "lots", None) or "—")
             summary = (
                 f"structure {action} · entry {entry_s} · "
@@ -1078,11 +1079,11 @@ class _LocalPlanStructureRunner:
             summary = f"structure {action} · sizing incomplete · no order"
             # Still surface any partial geometry from plan builder if present
             if plan.entry_price is not None:
-                entry_s = _fmt_price(plan.entry_price)
+                entry_s = format_price(plan.entry_price)
             if plan.stop_price is not None:
-                stop_s = _fmt_price(plan.stop_price)
+                stop_s = format_price(plan.stop_price)
             if plan.target_price is not None:
-                target_s = _fmt_price(plan.target_price)
+                target_s = format_price(plan.target_price)
             if plan.lots is not None:
                 lots_s = str(plan.lots)
 
@@ -1105,15 +1106,6 @@ class _LocalPlanStructureRunner:
             risk_pct=risk_s,
             horizon="swing",
         )
-
-
-def _fmt_price(value: Any) -> str:
-    if value is None:
-        return "—"
-    try:
-        return f"{int(round(float(value))):,}"
-    except (TypeError, ValueError):
-        return str(value)
 
 
 class _LocalPaperLogFromPlanRunner:
@@ -1219,9 +1211,9 @@ class _LocalPaperLogFromPlanRunner:
                 return refuse_paper_log(ticker_u, f"journal write failed · {exc}")
 
         resp = workflow_result.response
-        entry_s = _fmt_price(resp.entry_price)
-        stop_s = _fmt_price(resp.planned_stop)
-        target_s = _fmt_price(resp.planned_target)
+        entry_s = format_price(resp.entry_price)
+        stop_s = format_price(resp.planned_stop)
+        target_s = format_price(resp.planned_target)
         plan_id = plan.plan_id[:8] if plan.plan_id else ""
         if not resp.written:
             return PaperLogResult(

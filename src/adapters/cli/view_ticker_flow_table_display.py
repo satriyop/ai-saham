@@ -6,25 +6,12 @@ Layer: Adapter
 
 from __future__ import annotations
 
-from decimal import Decimal
-
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-
-def format_value(value: Decimal) -> str:
-    abs_value = abs(value)
-    if abs_value >= 1_000_000_000_000:
-        return f"{value / 1_000_000_000_000:.2f}T"
-    if abs_value >= 1_000_000_000:
-        return f"{value / 1_000_000_000:.2f}B"
-    if abs_value >= 1_000_000:
-        return f"{value / 1_000_000:.2f}M"
-    if abs_value >= 1_000:
-        return f"{value / 1_000:.2f}K"
-    return f"{value:.2f}"
+from src.adapters.shared.view_number_format import format_value
 
 
 def display_ticker_flow_table(ticker: str, summaries: list) -> None:

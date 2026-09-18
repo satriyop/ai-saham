@@ -34,6 +34,7 @@ from src.adapters.tui.board_snapshot import (
     identity_from_live_payload,
     snapshot_from_board_view,
 )
+from src.adapters.tui.plan_structure_result import is_preopen_row
 from src.adapters.tui.screens.help import HelpModal
 from src.adapters.tui.screens.palette import CommandPalette
 from src.adapters.tui.state import ScreenState, ScreenStatus
@@ -4199,13 +4200,7 @@ class CockpitApp(App[None]):
 
     @staticmethod
     def _is_preopen_row(row: Any) -> bool:
-        if row is None:
-            return False
-        # Locked pre-open row shape (Act replaces Grd theater)
-        if all(hasattr(row, k) for k in ("iep", "action", "risk", "delta_pct", "ncp")):
-            return True
-        # Legacy test doubles that still expose grade
-        return all(hasattr(row, k) for k in ("iep", "grade", "risk", "delta_pct"))
+        return row is not None and is_preopen_row(row)
 
     def _format_row_detail(self, ticker: str, row: Any) -> str:
         if row is None:
