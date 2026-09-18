@@ -7,24 +7,23 @@ custom risk assessment rules without modifying engine source code.
 Layer: Application
 """
 
+from src.application.rules.condition_schema import (
+    CompoundCondition,
+    ConditionIndicatorVsIndicator,
+    ConditionIndicatorVsValue,
+    IndicatorRef,
+    Operator,
+)
 from src.application.rules.exceptions import (
     RulesError,
     RulesFileError,
     RulesSchemaError,
     RulesValidationError,
 )
+from src.application.rules.indicator_schema import Indicator
 from src.application.rules.interpreter import YamlRuleInterpreter
-from src.application.rules.schema import (
-    CompoundCondition,
-    ConditionIndicatorVsIndicator,
-    ConditionIndicatorVsValue,
-    Indicator,
-    IndicatorRef,
-    Operator,
-    Outcome,
-    Rule,
-    RuleSet,
-)
+from src.application.rules.outcome_schema import Outcome
+from src.application.rules.rule_schema import Rule, RuleSet
 
 __all__ = [
     # Exceptions

@@ -10,19 +10,17 @@ Layer: Application
 from decimal import Decimal
 from typing import TYPE_CHECKING, Callable, Union
 
-from src.application.rules.schema import (
-    BUILTIN_INDICATORS,
+from src.application.rules.condition_schema import (
     CompoundCondition,
     Condition,
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
     IndicatorRef,
-    IndicatorType,
     Operator,
-    Outcome,
-    Rule,
-    RuleSet,
 )
+from src.application.rules.indicator_schema import BUILTIN_INDICATORS, IndicatorType
+from src.application.rules.outcome_schema import Outcome
+from src.application.rules.rule_schema import Rule, RuleSet
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 from src.domain.value_objects.risk_signal import RiskLevel
 

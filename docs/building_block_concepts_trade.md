@@ -210,7 +210,7 @@ The three built-in profiles differ only in RSI thresholds:
 | balanced | RSI > 70 | RSI < 30 |
 | aggressive | RSI > 65 | RSI < 35 |
 
-**Key insight:** Risk and Strategy use the **exact same rule schema** (`src/application/rules/schema.py`). A strategy YAML can be passed as `--rules-file` for risk assessment, and a custom rules YAML can be passed as `--strategy` for backtesting. The same parser (`YamlConfigLoader`) and interpreter (`YamlRuleInterpreter`) handle both.
+**Key insight:** Risk and Strategy use the **exact same rule schema** (`src/application/rules/` schema modules). A strategy YAML can be passed as `--rules-file` for risk assessment, and a custom rules YAML can be passed as `--strategy` for backtesting. The same parser (`RulesYamlLoader`) and interpreter (`YamlRuleInterpreter`) handle both.
 
 ### 5. Backtest
 
@@ -282,7 +282,7 @@ SQLite DB
    │      ├── plugin   (plugins/indicators/*.py)
    │      └── formula  (config/formulas.yaml)
    │
-   ├──> StrategyLoader ──> YamlConfigLoader ──> YamlRuleInterpreter
+   ├──> StrategyLoader ──> RulesYamlLoader ──> YamlRuleInterpreter
    │      └── ./strategies/NAME/strategy.yaml
    │
    ├──> AssessRiskUseCase

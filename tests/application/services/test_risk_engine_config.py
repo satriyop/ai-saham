@@ -1,4 +1,4 @@
-from src.application.services.bootstrap import (
+from src.application.services.engine_bootstrap.risk_config_resolvers import (
     _resolve_indicator_evaluator_config,
     _resolve_market_context_gate,
     _resolve_risk_gates,

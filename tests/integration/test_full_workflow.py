@@ -32,7 +32,6 @@ from src.infrastructure.ai.formula_translator import FormulaTranslatorAdapter
 from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
 from src.infrastructure.composition.indicator_registry_factory import create_indicator_registry
 from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
-from src.infrastructure.config.yaml_loader import YamlConfigLoader
 from src.infrastructure.persistence.formula_storage import FormulaStorage
 from tests.integration.conftest import (
     create_custom_indicator_strategy,
@@ -63,7 +62,7 @@ class TestCustomIndicatorInBacktest:
         )
 
         # 3. Load and validate strategy
-        rule_set = YamlConfigLoader.load_from_string(strategy_yaml, registry=registry)
+        rule_set = RulesYamlLoader.load_from_string(strategy_yaml, registry=registry)
 
         assert rule_set.name == "smooth_rsi_test"
 
@@ -88,7 +87,7 @@ class TestCustomIndicatorInBacktest:
         actions = []
 
         # Signal mapping
-        from src.application.rules.schema import SignalMapping
+        from src.application.rules.outcome_schema import SignalMapping
 
         signal_mapping = rule_set.signal_mapping or SignalMapping()
 
@@ -173,7 +172,7 @@ class TestCustomIndicatorInBacktest:
         )
 
         # 5. Load strategy (should validate FAST_RSI exists)
-        rule_set = YamlConfigLoader.load_from_string(strategy_yaml, registry=registry)
+        rule_set = RulesYamlLoader.load_from_string(strategy_yaml, registry=registry)
 
         assert rule_set.name == "fast_rsi_strategy"
 
@@ -210,7 +209,7 @@ class TestAICreatedStrategyWorkflow:
         assert len(response.rule_set.rules) > 0
 
         # 4. Strategy should be re-loadable (validate the YAML)
-        reloaded = YamlConfigLoader.load_from_string(response.yaml_content, registry=registry)
+        reloaded = RulesYamlLoader.load_from_string(response.yaml_content, registry=registry)
         assert reloaded.name == response.rule_set.name
 
     def test_ai_strategy_backtest_execution(self, mock_candles):
@@ -246,7 +245,8 @@ class TestAICreatedStrategyWorkflow:
             indicator_series[name] = {d: v for d, v in values}
 
         # 5. Evaluate rules for each candle
-        from src.application.rules.schema import BUILTIN_INDICATORS, SignalMapping
+        from src.application.rules.indicator_schema import BUILTIN_INDICATORS
+        from src.application.rules.outcome_schema import SignalMapping
 
         signal_mapping = rule_set.signal_mapping or SignalMapping()
         actions = []
@@ -374,7 +374,7 @@ class TestMultipleCustomIndicators:
         )
 
         # 4. Load and validate
-        rule_set = YamlConfigLoader.load_from_string(strategy_yaml, registry=registry)
+        rule_set = RulesYamlLoader.load_from_string(strategy_yaml, registry=registry)
 
         assert rule_set.name == "multi_formula_strategy"
 
@@ -421,7 +421,7 @@ signal_mapping:
 """
 
         # Load should work (inline formula gets parsed)
-        rule_set = YamlConfigLoader.load_from_string(strategy_yaml, registry=registry)
+        rule_set = RulesYamlLoader.load_from_string(strategy_yaml, registry=registry)
 
         assert rule_set.name == "inline_formula_strategy"
         assert len(rule_set.indicators) == 1
@@ -439,7 +439,7 @@ class TestEMACrossoverStrategy:
         # 1. Create strategy
         strategy_yaml = create_ema_crossover_strategy("ema_cross_test")
 
-        rule_set = YamlConfigLoader.load_from_string(strategy_yaml, registry=registry)
+        rule_set = RulesYamlLoader.load_from_string(strategy_yaml, registry=registry)
 
         # 2. Get required indicators
         interpreter = YamlRuleInterpreter(rule_set)
@@ -457,7 +457,7 @@ class TestEMACrossoverStrategy:
             indicator_series[name] = {d: v for d, v in values}
 
         # 4. Evaluate and run backtest
-        from src.application.rules.schema import SignalMapping
+        from src.application.rules.outcome_schema import SignalMapping
 
         signal_mapping = rule_set.signal_mapping or SignalMapping()
         actions = []
@@ -507,7 +507,7 @@ class TestRSIOversoldStrategy:
         registry = IndicatorRegistry()
 
         strategy_yaml = create_rsi_oversold_strategy("rsi_test")
-        rule_set = YamlConfigLoader.load_from_string(strategy_yaml, registry=registry)
+        rule_set = RulesYamlLoader.load_from_string(strategy_yaml, registry=registry)
 
         interpreter = YamlRuleInterpreter(rule_set)
 
@@ -568,7 +568,7 @@ class TestErrorHandling:
         )
 
         with pytest.raises(Exception) as exc_info:
-            YamlConfigLoader.load_from_string(strategy_yaml, registry=registry)
+            RulesYamlLoader.load_from_string(strategy_yaml, registry=registry)
 
         assert (
             "undefined" in str(exc_info.value).lower() or "unknown" in str(exc_info.value).lower()
@@ -629,7 +629,7 @@ class TestCreateIndicatorFromIntent:
             indicator_name="MY_SMOOTH_RSI",
         )
 
-        rule_set = YamlConfigLoader.load_from_string(strategy_yaml, registry=registry)
+        rule_set = RulesYamlLoader.load_from_string(strategy_yaml, registry=registry)
 
         assert rule_set.name == "my_indicator_strategy"
 

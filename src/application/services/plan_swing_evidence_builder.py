@@ -257,7 +257,7 @@ class PlanSwingEvidenceBuilder:
         setup_phase = None
         if setup_eval is not None:
             try:
-                from src.application.services.setup_phase_detector import SetupPhaseConfig
+                from src.application.services.setup_phase_config import SetupPhaseConfig
 
                 setup_phase_config = getattr(
                     swing_policy,

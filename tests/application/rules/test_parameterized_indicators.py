@@ -16,18 +16,19 @@ from decimal import Decimal
 
 import pytest
 
-from src.application.rules.schema import (
-    BUILTIN_INDICATORS,
+from src.application.rules.condition_schema import (
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
-    IndicatorDefinition,
     IndicatorRef,
-    IndicatorType,
     Operator,
-    Outcome,
-    Rule,
-    RuleSet,
 )
+from src.application.rules.indicator_schema import (
+    BUILTIN_INDICATORS,
+    IndicatorDefinition,
+    IndicatorType,
+)
+from src.application.rules.outcome_schema import Outcome
+from src.application.rules.rule_schema import Rule, RuleSet
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 
 # --- IndicatorType Enum Tests ---

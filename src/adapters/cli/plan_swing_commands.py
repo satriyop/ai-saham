@@ -50,7 +50,6 @@ from src.application.use_case.evaluate_swing_setup_use_case import (
 from src.application.use_case.plan_swing_workflow_use_case import PlanSwingDataUnavailable
 from src.domain.value_objects.setup_evaluation import SetupEvaluation
 from src.infrastructure.config.app_config import load_app_config
-from src.infrastructure.config.user_config import get_swing_default
 
 _W = 70  # display width
 
@@ -214,7 +213,7 @@ def swing(
     resolved_flow_window = cfg.plan_swing_config.flow_detail_window_sessions
 
     if capital is None:
-        _cfg = get_swing_default("capital")
+        _cfg = getattr(load_app_config().swing, "capital", None)
         if _cfg is not None:
             capital = int(_cfg)
 

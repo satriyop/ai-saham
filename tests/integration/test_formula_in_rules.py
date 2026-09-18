@@ -22,14 +22,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.application.formula.parser import parse
+from src.application.rules.condition_schema import ConditionIndicatorVsValue, Operator
 from src.application.rules.interpreter import YamlRuleInterpreter
-from src.application.rules.schema import (
-    ConditionIndicatorVsValue,
-    Operator,
-    Outcome,
-    Rule,
-    RuleSet,
-)
+from src.application.rules.outcome_schema import Outcome
+from src.application.rules.rule_schema import Rule, RuleSet
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.use_case.assess_risk_use_case import AssessRiskRequest, AssessRiskUseCase
 from src.application.use_case.backtest_use_case import BacktestRequest, BacktestUseCase

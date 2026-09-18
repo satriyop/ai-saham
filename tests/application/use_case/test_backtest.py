@@ -6,7 +6,7 @@ These tests use mock repository to verify:
 - Request/response DTOs
 - Error handling
 - Signal mapping (defaults and custom)
-- Integration with YamlConfigLoader and BacktestEngine
+- Integration with RulesYamlLoader and BacktestEngine
 
 All tests run offline with no external dependencies.
 """

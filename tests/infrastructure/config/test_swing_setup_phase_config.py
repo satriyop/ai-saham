@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from src.application.services.setup_phase_detector import SetupPhaseConfig
+from src.application.services.setup_phase_config import SetupPhaseConfig
 from src.domain.value_objects.setup_phase import SetupPhaseState
 from src.infrastructure.config.swing_policy_config_loader import load_swing_policy_config
 

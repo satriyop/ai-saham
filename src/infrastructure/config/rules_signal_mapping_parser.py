@@ -7,7 +7,7 @@ Layer: Infrastructure
 from typing import Any
 
 from src.application.rules.exceptions import RulesSchemaError, RulesValidationError
-from src.application.rules.schema import SignalMapping
+from src.application.rules.outcome_schema import SignalMapping
 from src.domain.value_objects.trade_action import TradeAction
 
 

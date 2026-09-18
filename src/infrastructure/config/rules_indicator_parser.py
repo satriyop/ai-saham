@@ -7,12 +7,12 @@ Layer: Infrastructure
 from typing import TYPE_CHECKING, Any
 
 from src.application.rules.exceptions import RulesSchemaError, RulesValidationError
-from src.application.rules.schema import (
+from src.application.rules.indicator_schema import (
     BUILTIN_INDICATORS,
     IndicatorDefinition,
     IndicatorType,
-    RuleSet,
 )
+from src.application.rules.rule_schema import RuleSet
 from src.infrastructure.config.rules_parser_helpers import require_field
 
 if TYPE_CHECKING:

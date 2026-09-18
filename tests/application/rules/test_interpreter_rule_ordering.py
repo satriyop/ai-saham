@@ -1,5 +1,6 @@
+from src.application.rules.condition_schema import Operator
 from src.application.rules.interpreter import YamlRuleInterpreter
-from src.application.rules.schema import Operator, Outcome
+from src.application.rules.outcome_schema import Outcome
 from src.domain.value_objects.risk_signal import RiskLevel
 from tests.application.rules.interpreter_fixtures import (
     make_rule,

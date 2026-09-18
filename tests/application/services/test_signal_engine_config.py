@@ -3,7 +3,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.application.services.bootstrap import _resolve_signal_config
+from src.application.services.engine_bootstrap.signal_scoring_config_resolver import (
+    resolve_signal_engine_config as _resolve_signal_config,
+)
 from src.application.services.signal_engine_config import (
     AlphaTriggerConfig,
     DecisionPolicyConfig,
