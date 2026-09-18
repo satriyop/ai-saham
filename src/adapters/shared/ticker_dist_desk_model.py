@@ -14,6 +14,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from src.adapters.shared.view_number_format import format_date_short
+
 
 @dataclass(frozen=True)
 class DistPulse:
@@ -120,14 +122,6 @@ def _fmt_idr_amount(amount: int | float) -> str:
     return f"{amt:,}"
 
 
-def _date_s(raw: Any) -> str:
-    if raw is None:
-        return "—"
-    if hasattr(raw, "isoformat"):
-        return str(raw.isoformat())[:10]
-    return str(raw)[:10]
-
-
 def _side_rows(
     entries: Sequence[Any],
     *,
@@ -219,7 +213,7 @@ def build_ticker_dist_desk_model(
     sellers = _side_rows(getattr(snapshot, "top_sellers", ()) or ())
     empty = not buyers and not sellers
 
-    as_of_s = _date_s(as_of if as_of is not None else getattr(snapshot, "date", None))
+    as_of_s = format_date_short(as_of if as_of is not None else getattr(snapshot, "date", None))
     src = (source or "broker_distribution_cache").strip() or "cache"
 
     slogan = ""

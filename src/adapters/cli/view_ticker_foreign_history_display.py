@@ -6,24 +6,10 @@ Layer: Adapter
 
 from __future__ import annotations
 
-from decimal import Decimal
-
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
-
-
-def format_value(value: Decimal) -> str:
-    abs_value = abs(value)
-    if abs_value >= 1_000_000_000_000:
-        return f"{value / 1_000_000_000_000:.2f}T"
-    if abs_value >= 1_000_000_000:
-        return f"{value / 1_000_000_000:.2f}B"
-    if abs_value >= 1_000_000:
-        return f"{value / 1_000_000:.2f}M"
-    if abs_value >= 1_000:
-        return f"{value / 1_000:.2f}K"
-    return f"{value:.2f}"
+from src.adapters.shared.view_number_format import format_value
 
 
 def display_ticker_foreign_history(ticker: str, points: list) -> None:

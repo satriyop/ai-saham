@@ -13,7 +13,11 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from src.adapters.shared.view_number_format import format_value
+from src.adapters.shared.view_number_format import (
+    format_date_short,
+    format_signed,
+    tone_for_signed,
+)
 
 
 @dataclass(frozen=True)
@@ -85,28 +89,6 @@ class TickerFlowDeskModel:
         return "\n".join(lines)
 
 
-def _fmt_signed(value: Decimal | float | int) -> str:
-    d = value if isinstance(value, Decimal) else Decimal(str(value))
-    s = format_value(d)
-    if d > 0 and not s.startswith("+"):
-        return f"+{s}"
-    return s
-
-
-def _tone_for_signed(value: Decimal | float | int | None) -> str:
-    if value is None:
-        return "neutral"
-    try:
-        d = value if isinstance(value, Decimal) else Decimal(str(value))
-    except Exception:
-        return "neutral"
-    if d > 0:
-        return "pos"
-    if d < 0:
-        return "neg"
-    return "neutral"
-
-
 def _top_code(side: Any) -> str:
     if not side:
         return "—"
@@ -118,14 +100,6 @@ def _top_code(side: Any) -> str:
         code = first.get("broker_code")
     s = str(code or "").strip()
     return s if s else "—"
-
-
-def _date_s(raw: Any) -> str:
-    if raw is None:
-        return "—"
-    if hasattr(raw, "isoformat"):
-        return str(raw.isoformat())[:10]
-    return str(raw)[:10]
 
 
 def build_ticker_flow_desk_model(
@@ -202,7 +176,7 @@ def build_ticker_flow_desk_model(
 
     latest = chronological[-1]
     latest_net = getattr(latest, "foreign_net_value", Decimal("0"))
-    as_of_s = _date_s(as_of if as_of is not None else getattr(latest, "date", None))
+    as_of_s = format_date_short(as_of if as_of is not None else getattr(latest, "date", None))
     src = (source or getattr(latest, "source", None) or "cache").strip() or "cache"
 
     # Day rows: newest first for desk scan
@@ -232,9 +206,9 @@ def build_ticker_flow_desk_model(
             bar = 0
         day_rows.append(
             FlowDayRow(
-                date_s=_date_s(getattr(s, "date", None)),
-                net_s=_fmt_signed(net),
-                net_tone=_tone_for_signed(net),
+                date_s=format_date_short(getattr(s, "date", None)),
+                net_s=format_signed(net),
+                net_tone=tone_for_signed(net),
                 ratio_s=ratio_s,
                 buyer=_top_code(getattr(s, "top_buyers", None) or ()),
                 seller=_top_code(getattr(s, "top_sellers", None) or ()),
@@ -242,8 +216,8 @@ def build_ticker_flow_desk_model(
             )
         )
 
-    hero_big = _fmt_signed(total)
-    hero_tone = _tone_for_signed(total)
+    hero_big = format_signed(total)
+    hero_tone = tone_for_signed(total)
     hero_lab = f"FOREIGN FLOW · {n}d"
     hero_sub = (
         f"last {len(rows)} sessions · broker_summaries · as of {as_of_s} · "
@@ -257,8 +231,8 @@ def build_ticker_flow_desk_model(
         FlowPulse(
             "latest",
             "Latest",
-            _fmt_signed(latest_net),
-            _tone_for_signed(latest_net),
+            format_signed(latest_net),
+            tone_for_signed(latest_net),
         ),
     )
 

@@ -12,10 +12,9 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_output import echo_json, resolve_output_format
 from src.adapters.cli.view_ticker_contract_cli import (
-    echo_json,
     exit_missing_ticker_data,
-    resolve_output_format,
 )
 from src.adapters.cli.view_ticker_top_brokers_display import display_ticker_top_brokers
 from src.application.dto.view_ticker_contract import (

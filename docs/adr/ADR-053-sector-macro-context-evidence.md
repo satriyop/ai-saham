@@ -236,7 +236,7 @@ Diagnostic status alone never grants DecisionPolicy authority.
 | Infrastructure | `src/infrastructure/config/sector_macro_context_config_loader.py` |
 | Config | `config/sector_macro_context.yaml` |
 | Fingerprint | `smc_*` on `SignalObservationFingerprint` (observation schema v9) |
-| Adapter (panel) | `src/adapters/cli/screen_accum_sector_macro_display.py` — shared builder; used by single-ticker **screen** judgment and **view** full dashboard. `plan_swing_sector_macro_context_display.py` is a re-export only (plan is structure desk; ADR-054). |
+| Adapter (panel) | `src/adapters/cli/screen_accum_sector_macro_display.py` — shared builder; used by single-ticker **screen** judgment and **view** full dashboard. The former `plan_swing_sector_macro_context_display.py` re-export has been deleted (plan is structure desk; ADR-054). |
 | Surfaces | `saham screen accum TICKER` (judgment); `saham view ticker show` full (browse). Universe board skips attach for latency; fingerprints may still build SMC on observation persist. |
 | Fetch | Live-map Yahoo series auto-refresh on `saham fetch market` (`sector_macro` labels); macro calendar via ADR-055 (`BI_RATE` policy spine for bank map). |
 | Tests | builder/VO/loader + authority firewall + screen/view panel unit tests |

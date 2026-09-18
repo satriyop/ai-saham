@@ -18,6 +18,7 @@ from src.adapters.shared.trade_action_labels import (
 )
 from src.adapters.tui.plan_structure_result import (
     PlanStructureResult,
+    is_preopen_row,
     plan_structure_from_runner_object,
 )
 
@@ -149,7 +150,7 @@ def _board_judgment(row: Any | None) -> tuple[str, str, str, str, str]:
         accum = str(getattr(row, "accum", "—") or "—")
         why = build_accum_focus(row).why or "—"
         return action, gate, signal, accum, why
-    if _is_preopen_row(row):
+    if is_preopen_row(row):
         from src.adapters.tui.presenters.preopen_presenter import format_preopen_why
 
         action = str(getattr(row, "action", "—") or "—")
@@ -271,9 +272,3 @@ def _tone_action(action: str) -> str:
 
 def _is_accum_row(row: Any) -> bool:
     return all(hasattr(row, k) for k in ("signal", "accum", "action", "gate"))
-
-
-def _is_preopen_row(row: Any) -> bool:
-    if all(hasattr(row, k) for k in ("iep", "action", "risk", "delta_pct", "ncp")):
-        return True
-    return all(hasattr(row, k) for k in ("iep", "grade", "risk", "delta_pct"))

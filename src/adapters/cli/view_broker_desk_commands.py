@@ -14,11 +14,10 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_output import echo_json, resolve_output_format
 from src.adapters.cli.view_broker_contract_cli import (
     desk_envelope,
-    echo_json,
     exit_missing_desk_data,
-    resolve_output_format,
 )
 from src.adapters.cli.view_broker_desk_display import (
     display_desk_calendar,

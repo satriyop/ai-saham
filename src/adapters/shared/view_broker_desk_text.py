@@ -13,11 +13,14 @@ from src.adapters.shared.view_ticker_top_brokers_rows import format_netx_display
 from src.domain.entities.broker_flow import BrokerType
 
 
-def _type_label(broker_type: BrokerType) -> str:
+def broker_type_label(broker_type: "BrokerType | str") -> str:
+    """``Foreign``/``Local`` label for a ``BrokerType``; strings pass through."""
     if broker_type == BrokerType.FOREIGN:
         return "Foreign"
     if broker_type == BrokerType.LOCAL:
         return "Local"
+    if isinstance(broker_type, str):
+        return broker_type
     return "—"
 
 
@@ -25,7 +28,7 @@ def format_desk_show_text(result) -> str:
     """Plain-text desk show (same facts as CLI display_desk_show)."""
     lines = [
         f"Broker Desk · {result.broker_code} ({result.broker_name})",
-        f"type {_type_label(result.broker_type)} · as of {result.as_of}",
+        f"type {broker_type_label(result.broker_type)} · as of {result.as_of}",
         (
             f"Day net {format_value(result.day_net_value)} · "
             f"lot {result.day_net_lot:,} · tickers {result.day_ticker_count}"
@@ -75,7 +78,7 @@ def format_desk_top_stocks_text(result) -> str:
     """Plain-text top-stocks (same facts as CLI display_desk_top_stocks)."""
     lines = [
         f"Desk Top Stocks · {result.broker_code} ({result.broker_name})",
-        f"type {_type_label(result.broker_type)} · date {result.date}",
+        f"type {broker_type_label(result.broker_type)} · date {result.date}",
         str(result.scope_note),
         "",
         "Net buy (desk)",
@@ -99,7 +102,7 @@ def format_desk_flow_text(result) -> str:
     """Plain-text desk flow-by-day."""
     lines = [
         f"Desk Flow by Day · {result.broker_code} ({result.broker_name})",
-        f"type {_type_label(result.broker_type)}",
+        f"type {broker_type_label(result.broker_type)}",
         str(result.scope_note),
         "",
         f"{'Date':12}  {'Net':>10}  {'Lot':>10}  Tickers",
@@ -122,7 +125,7 @@ def format_desk_history_text(result, *, max_rows: int = 40) -> str:
     pin = f" · ticker {result.pinned_ticker}" if result.pinned_ticker else ""
     lines = [
         f"Desk History · {result.broker_code} ({result.broker_name}){pin}",
-        f"type {_type_label(result.broker_type)}",
+        f"type {broker_type_label(result.broker_type)}",
         str(result.scope_note),
         "",
         f"{'Date':12}  {'Ticker':6}  {'Net':>10}  {'Lot':>8}",
@@ -149,7 +152,7 @@ def format_desk_calendar_text(result) -> str:
     lines = [
         f"Desk Calendar · {result.broker_code} ({result.broker_name})",
         (
-            f"type {_type_label(result.broker_type)} · as of {result.as_of} · "
+            f"type {broker_type_label(result.broker_type)} · as of {result.as_of} · "
             f"sessions {result.sessions_cached}"
         ),
         str(result.scope_note),
@@ -190,7 +193,7 @@ def format_desk_top_matrix_text(result) -> str:
     lines = [
         f"Desk Top Matrix · {result.broker_code} ({result.broker_name})",
         (
-            f"type {_type_label(result.broker_type)} · as of {result.as_of} · "
+            f"type {broker_type_label(result.broker_type)} · as of {result.as_of} · "
             f"sessions cached {result.sessions_cached}"
         ),
         str(result.scope_note),
