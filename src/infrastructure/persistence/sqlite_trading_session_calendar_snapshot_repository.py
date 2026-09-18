@@ -29,6 +29,7 @@ from src.domain.value_objects.trading_session_calendar_snapshot import (
     validate_active_stockbit_calendar_snapshot,
     validate_trading_session_calendar_snapshot,
 )
+from src.infrastructure.persistence.sqlite_helpers import connect_readwrite
 
 _TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS trading_session_calendar_snapshots (
@@ -72,10 +73,7 @@ class SQLiteTradingSessionCalendarSnapshotRepository:
         self._ensure_schema()
 
     def _connect(self) -> sqlite3.Connection:
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
+        return connect_readwrite(self._db_path)
 
     def _ensure_schema(self) -> None:
         with self._connect() as conn:

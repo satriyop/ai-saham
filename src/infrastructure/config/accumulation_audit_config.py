@@ -8,13 +8,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from src.application.use_case.accumulation_audit_use_case import (
     AccumulationAuditPolicy,
     AuditBucketPolicy,
 )
 from src.infrastructure.config.app_config import AppConfig, load_app_config
+from src.infrastructure.config.yaml_file import read_yaml_dict
 
 
 def default_accumulation_audit_config_path(config: AppConfig | None = None) -> Path:
@@ -35,7 +34,7 @@ def load_accumulation_audit_config(
 ) -> AccumulationAuditConfig:
     """Load accumulation audit config including setup presets."""
     path = config_path or default_accumulation_audit_config_path()
-    raw = _read_yaml(path)
+    raw = read_yaml_dict(path)
     root = raw.get("accumulation_audit") or raw
     if not isinstance(root, dict):
         return AccumulationAuditConfig()
@@ -61,7 +60,7 @@ def load_accumulation_audit_policy(
     """Load accumulation audit policy. Defaults keep historical behavior."""
     defaults = AccumulationAuditPolicy()
     path = config_path or default_accumulation_audit_config_path()
-    raw = _read_yaml(path)
+    raw = read_yaml_dict(path)
     root = raw.get("accumulation_audit") or raw
     if not isinstance(root, dict):
         return defaults
@@ -118,15 +117,6 @@ def load_accumulation_audit_policy(
             ),
         ),
     )
-
-
-def _read_yaml(path: Path) -> dict[str, Any]:
-    try:
-        with open(path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
-    except FileNotFoundError:
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def _int(data: dict[str, Any], key: str, default: int) -> int:

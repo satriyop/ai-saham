@@ -8,9 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from src.infrastructure.config.app_config import AppConfig, load_app_config
+from src.infrastructure.config.yaml_file import read_yaml_dict
 
 
 def default_swing_backtest_config_path(config: AppConfig | None = None) -> Path:
@@ -50,7 +49,7 @@ def load_swing_backtest_config(
         max_hold_days=app_cfg.swing.max_hold,
         cost_bps=app_cfg.backtest.cost_bps,
     )
-    raw = _read_yaml(config_path or default_swing_backtest_config_path(app_cfg))
+    raw = read_yaml_dict(config_path or default_swing_backtest_config_path(app_cfg))
     root = raw.get("swing_backtest") or raw
     if not isinstance(root, dict):
         return defaults
@@ -89,15 +88,6 @@ def load_swing_backtest_config(
             defaults.attribution_mid_min_score,
         ),
     )
-
-
-def _read_yaml(path: Path) -> dict[str, Any]:
-    try:
-        with open(path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
-    except FileNotFoundError:
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def _int(data: dict[str, Any], key: str, default: int) -> int:

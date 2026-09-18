@@ -19,6 +19,12 @@ from src.application.use_case.audit_source_reconciliation_use_case import (
     RawCandlesOhlcObservation,
     RawForeignFlowReconciliationObservation,
 )
+from src.infrastructure.persistence.sqlite_helpers import (
+    connect_readonly,
+    rows_as_dicts,
+    table_columns,
+    table_exists,
+)
 
 _MAX_SAMPLE_ROWS = 10
 _TOLERANCE_IDR = 1.0
@@ -39,11 +45,11 @@ class SQLiteSourceReconciliationReader:
         if not self._db_path.exists():
             return RawCandlesOhlcObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, "candles"):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, "candles"):
                 return RawCandlesOhlcObservation(exists=False)
 
-            columns = self._columns(conn, "candles")
+            columns = table_columns(conn, "candles")
             row_count = conn.execute("SELECT COUNT(*) FROM candles").fetchone()[0]
 
             identity_columns_present = {"ticker", "date"} <= columns
@@ -75,7 +81,7 @@ class SQLiteSourceReconciliationReader:
             invalid_ohlc_count = conn.execute(
                 f"SELECT COUNT(*) FROM candles WHERE {invalid_condition}"
             ).fetchone()[0]
-            invalid_ohlc_samples = self._rows_as_dicts(
+            invalid_ohlc_samples = rows_as_dicts(
                 conn,
                 f"SELECT ticker, date, open, high, low, close FROM candles "
                 f"WHERE {invalid_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -84,7 +90,7 @@ class SQLiteSourceReconciliationReader:
             negative_volume_count = conn.execute(
                 "SELECT COUNT(*) FROM candles WHERE volume < 0"
             ).fetchone()[0]
-            negative_volume_samples = self._rows_as_dicts(
+            negative_volume_samples = rows_as_dicts(
                 conn,
                 f"SELECT ticker, date, volume FROM candles WHERE volume < 0 "
                 f"LIMIT {_MAX_SAMPLE_ROWS}",
@@ -102,7 +108,7 @@ class SQLiteSourceReconciliationReader:
                 # row is unverifiable for that dimension — treat as fully unknown
                 # rather than crashing on a nonexistent column.
                 unknown_provenance_count = row_count
-                unknown_provenance_samples = self._rows_as_dicts(
+                unknown_provenance_samples = rows_as_dicts(
                     conn,
                     "SELECT ticker, date"
                     + "".join(f", {c}" for c in provenance_columns)
@@ -116,7 +122,7 @@ class SQLiteSourceReconciliationReader:
                 unknown_provenance_count = conn.execute(
                     f"SELECT COUNT(*) FROM candles WHERE {unknown_condition}"
                 ).fetchone()[0]
-                unknown_provenance_samples = self._rows_as_dicts(
+                unknown_provenance_samples = rows_as_dicts(
                     conn,
                     "SELECT ticker, date"
                     + "".join(f", {c}" for c in provenance_columns)
@@ -158,11 +164,11 @@ class SQLiteSourceReconciliationReader:
         if not self._db_path.exists():
             return RawBrokerSummariesObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, "broker_summaries"):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, "broker_summaries"):
                 return RawBrokerSummariesObservation(exists=False)
 
-            columns = self._columns(conn, "broker_summaries")
+            columns = table_columns(conn, "broker_summaries")
             row_count = conn.execute("SELECT COUNT(*) FROM broker_summaries").fetchone()[0]
 
             identity_columns_present = {"ticker", "date", "source"} <= columns
@@ -190,7 +196,7 @@ class SQLiteSourceReconciliationReader:
             negative_value_count = conn.execute(
                 f"SELECT COUNT(*) FROM broker_summaries WHERE {negative_condition}"
             ).fetchone()[0]
-            negative_value_samples = self._rows_as_dicts(
+            negative_value_samples = rows_as_dicts(
                 conn,
                 "SELECT ticker, date, source, foreign_buy_value, foreign_sell_value, "
                 "foreign_buy_lot, foreign_sell_lot, total_value FROM broker_summaries "
@@ -203,7 +209,7 @@ class SQLiteSourceReconciliationReader:
                 "GROUP BY ticker, date, source HAVING cnt > 1"
                 ")"
             ).fetchone()[0]
-            duplicate_identity_samples = self._rows_as_dicts(
+            duplicate_identity_samples = rows_as_dicts(
                 conn,
                 "SELECT ticker, date, source, COUNT(*) AS duplicate_row_count "
                 "FROM broker_summaries GROUP BY ticker, date, source HAVING "
@@ -223,11 +229,11 @@ class SQLiteSourceReconciliationReader:
         if not self._db_path.exists():
             return RawBrokerDailyFlowObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, "broker_daily_flow"):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, "broker_daily_flow"):
                 return RawBrokerDailyFlowObservation(exists=False)
 
-            columns = self._columns(conn, "broker_daily_flow")
+            columns = table_columns(conn, "broker_daily_flow")
             row_count = conn.execute("SELECT COUNT(*) FROM broker_daily_flow").fetchone()[0]
 
             identity_columns_present = {"ticker", "date", "broker_code", "source"} <= columns
@@ -245,7 +251,7 @@ class SQLiteSourceReconciliationReader:
             negative_value_count = conn.execute(
                 f"SELECT COUNT(*) FROM broker_daily_flow WHERE {negative_condition}"
             ).fetchone()[0]
-            negative_value_samples = self._rows_as_dicts(
+            negative_value_samples = rows_as_dicts(
                 conn,
                 "SELECT ticker, date, broker_code, source, buy_value, sell_value "
                 f"FROM broker_daily_flow WHERE {negative_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -259,7 +265,7 @@ class SQLiteSourceReconciliationReader:
             net_mismatch_count = conn.execute(
                 f"SELECT COUNT(*) FROM broker_daily_flow WHERE {mismatch_condition}"
             ).fetchone()[0]
-            net_mismatch_samples = self._rows_as_dicts(
+            net_mismatch_samples = rows_as_dicts(
                 conn,
                 "SELECT ticker, date, broker_code, source, buy_value, sell_value, net_value "
                 f"FROM broker_daily_flow WHERE {mismatch_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -271,7 +277,7 @@ class SQLiteSourceReconciliationReader:
                 "GROUP BY ticker, date, broker_code, source HAVING cnt > 1"
                 ")"
             ).fetchone()[0]
-            duplicate_identity_samples = self._rows_as_dicts(
+            duplicate_identity_samples = rows_as_dicts(
                 conn,
                 "SELECT ticker, date, broker_code, source, COUNT(*) AS duplicate_row_count "
                 "FROM broker_daily_flow GROUP BY ticker, date, broker_code, source HAVING "
@@ -310,9 +316,9 @@ class SQLiteSourceReconciliationReader:
                 foreign_flow_points_schema_sufficient=False,
             )
 
-        with closing(self._connect()) as conn:
-            ffp_exists = self._table_exists(conn, "foreign_flow_points")
-            snapshots_exists = self._table_exists(conn, "foreign_flow_snapshots")
+        with closing(connect_readonly(self._db_path)) as conn:
+            ffp_exists = table_exists(conn, "foreign_flow_points")
+            snapshots_exists = table_exists(conn, "foreign_flow_snapshots")
 
             if not ffp_exists:
                 return RawForeignFlowReconciliationObservation(
@@ -321,8 +327,8 @@ class SQLiteSourceReconciliationReader:
                     foreign_flow_snapshots_exists=snapshots_exists,
                 )
 
-            ffp_columns = self._columns(conn, "foreign_flow_points")
-            bs_columns = self._columns(conn, "broker_summaries")
+            ffp_columns = table_columns(conn, "foreign_flow_points")
+            bs_columns = table_columns(conn, "broker_summaries")
             required_bs_columns = {
                 "ticker",
                 "date",
@@ -361,7 +367,7 @@ class SQLiteSourceReconciliationReader:
                 "AND bs.date = ffp.date AND bs.source = ffp.source "
                 f"WHERE {mismatch_condition}"
             ).fetchone()[0]
-            mismatch_samples = self._rows_as_dicts(
+            mismatch_samples = rows_as_dicts(
                 conn,
                 "SELECT ffp.ticker AS ticker, ffp.date AS date, ffp.source AS source, "
                 "ffp.net_val AS foreign_flow_points_net_val, "
@@ -384,24 +390,6 @@ class SQLiteSourceReconciliationReader:
             foreign_flow_snapshots_exists=snapshots_exists,
         )
 
-    def _table_exists(self, conn: sqlite3.Connection, table: str) -> bool:
-        row = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
-        ).fetchone()
-        return row is not None
-
-    def _columns(self, conn: sqlite3.Connection, table: str) -> set[str]:
-        return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-
     def _distribution(self, conn: sqlite3.Connection, table: str, column: str) -> dict:
         rows = conn.execute(f"SELECT {column}, COUNT(*) FROM {table} GROUP BY {column}").fetchall()
         return {(value if value is not None else "null"): count for value, count in rows}
-
-    def _rows_as_dicts(self, conn: sqlite3.Connection, query: str) -> tuple[dict, ...]:
-        cursor = conn.execute(query)
-        columns = [description[0] for description in cursor.description]
-        return tuple(dict(zip(columns, row)) for row in cursor.fetchall())
-
-    def _connect(self) -> sqlite3.Connection:
-        uri = f"file:{self._db_path}?mode=ro"
-        return sqlite3.connect(uri, uri=True)

@@ -25,6 +25,7 @@ from src.application.dto.source_reconciliation_dto import (
     SourceReconciliationCheckResult,
     SourceReconciliationFinding,
     aggregate_status,
+    schema_insufficient_result,
 )
 
 _MISSING_TABLE_IMPACT = "Reconciliation cannot be performed for this table."
@@ -52,29 +53,6 @@ def _missing_table_result(
     return check, (finding,)
 
 
-def _schema_insufficient_result(
-    name: str, table: str, code: str, row_count: int, missing_columns: tuple[str, ...]
-) -> tuple[SourceReconciliationCheckResult, tuple[SourceReconciliationFinding, ...]]:
-    finding = SourceReconciliationFinding(
-        severity="FAIL",
-        code=code,
-        table=table,
-        field=None,
-        message=f"{table} is missing required column(s): {', '.join(missing_columns)}.",
-        impact="Reconciliation cannot be performed for this table until the schema is repaired.",
-        row_count=row_count,
-    )
-    check = SourceReconciliationCheckResult(
-        name=name,
-        status="FAIL",
-        tables=(table,),
-        checked_row_count=row_count,
-        mismatch_count=None,
-        summary={"missing_columns": list(missing_columns)},
-    )
-    return check, (finding,)
-
-
 def evaluate_candidate_observations_identity(
     raw: RawCandidateObservationIdentityObservation,
 ) -> tuple[SourceReconciliationCheckResult, tuple[SourceReconciliationFinding, ...]]:
@@ -85,7 +63,7 @@ def evaluate_candidate_observations_identity(
         return _missing_table_result(name, table, "FAIL")
 
     if not raw.schema_sufficient:
-        return _schema_insufficient_result(
+        return schema_insufficient_result(
             name,
             table,
             "LEARNING_OBSERVATIONS_SCHEMA_INSUFFICIENT",
@@ -217,7 +195,7 @@ def evaluate_signal_forward_labels_linkage(
         return _missing_table_result(name, table, "FAIL")
 
     if not raw.schema_sufficient:
-        return _schema_insufficient_result(
+        return schema_insufficient_result(
             name,
             table,
             "LEARNING_OUTCOME_LABELS_SCHEMA_INSUFFICIENT",
@@ -343,7 +321,7 @@ def evaluate_market_context_snapshot_identity(
         return _missing_table_result(name, table, "WARN")
 
     if not raw.schema_sufficient:
-        return _schema_insufficient_result(
+        return schema_insufficient_result(
             name,
             table,
             "MARKET_CONTEXT_SNAPSHOT_SCHEMA_INSUFFICIENT",
@@ -437,7 +415,7 @@ def evaluate_regime_observations_identity(
         return _missing_table_result(name, table, "WARN")
 
     if not raw.schema_sufficient:
-        return _schema_insufficient_result(
+        return schema_insufficient_result(
             name,
             table,
             "REGIME_OBSERVATIONS_SCHEMA_INSUFFICIENT",
@@ -541,7 +519,7 @@ def evaluate_learning_observations_risk_pit(
         return _missing_table_result(name, table, "WARN")
 
     if not raw.schema_sufficient:
-        return _schema_insufficient_result(
+        return schema_insufficient_result(
             name,
             table,
             "LEARNING_OBSERVATIONS_SCHEMA_INSUFFICIENT",

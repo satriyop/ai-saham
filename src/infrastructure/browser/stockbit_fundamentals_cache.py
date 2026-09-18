@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from src.domain.value_objects.company_fundamentals import CompanyFundamentals
+from src.infrastructure.browser.stockbit_pit_cache import parse_fetched_at
 from src.infrastructure.persistence.sqlite_migration_runner import SqliteMigrationRunner
 
 logger = logging.getLogger(__name__)
@@ -43,18 +44,6 @@ _MIGRATIONS: list[tuple[int, str]] = [
 ]
 
 
-def _parse_fetched_at(raw: str | None) -> datetime | None:
-    if not raw:
-        return None
-    try:
-        return datetime.fromisoformat(raw)
-    except ValueError:
-        try:
-            return datetime.combine(date.fromisoformat(raw), time.min)
-        except (ValueError, TypeError):
-            return None
-
-
 class StockbitFundamentalsCache:
     """SQLite cache for CompanyFundamentals with TTL and PIT lookups."""
 
@@ -79,7 +68,7 @@ class StockbitFundamentalsCache:
                 ).fetchone()
             if not row:
                 return False
-            fetched_at = _parse_fetched_at(row[0])
+            fetched_at = parse_fetched_at(row[0])
             return (
                 fetched_at is not None
                 and (datetime.now() - fetched_at).days <= self._cache_ttl_days
@@ -106,7 +95,7 @@ class StockbitFundamentalsCache:
                 ).fetchone()
             if not row:
                 return None
-            fetched_at = _parse_fetched_at(row[0])
+            fetched_at = parse_fetched_at(row[0])
             if fetched_at is None:
                 return None
             if as_of_date is None and (datetime.now() - fetched_at).days > self._cache_ttl_days:
