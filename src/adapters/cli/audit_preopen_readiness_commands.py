@@ -155,7 +155,7 @@ def _run(
 
 def _read_session_status():
     """Deferred import: reading token health pulls in the browser stack."""
-    from src.infrastructure.browser.playwright_stockbit_provider import (
+    from src.infrastructure.browser.stockbit_session_actions import (
         get_stockbit_session_status,
     )
 

@@ -13,7 +13,7 @@ that instead of this module for the session itself.
 StockbitSessionStatus is the read-only authentication-health DTO used by
 `saham fetch stockbit status` and system-status checks. Its composer function
 (get_stockbit_session_status) lives in infrastructure — see
-src/infrastructure/browser/playwright_stockbit_browser.py — because building
+src/infrastructure/browser/stockbit_session_actions.py — because building
 it requires reading StockbitTokenStore and the browser profile marker
 directly, and application must not import infrastructure (see
 tests/architecture/test_layer_boundaries.py). Infrastructure is allowed to

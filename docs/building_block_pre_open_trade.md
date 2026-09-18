@@ -368,7 +368,7 @@ The `PreOpenPostOpenGatesUseCase` applies 8 deterministic gates in order:
 | `application/use_case/intraday_backtest.py` | 953 | Walk-forward backtest over history |
 | `application/services/pre_open_paper_journal.py` | 305 | Confirmation journal log + review + outcome |
 | `application/services/ai_research.py` | 88 | Claude-based AI ticker research |
-| `infrastructure/browser/playwright_stockbit.py` + `playwright_stockbit_browser.py` | 2232 combined | Playwright browser automation + session management for Stockbit |
+| `infrastructure/browser/stockbit_session_actions.py` + `stockbit_browser_context.py` | 2232 combined | Playwright browser automation + session management for Stockbit |
 | `infrastructure/browser/stockbit_browser.py` | 191 | Manual + instruction-based browser providers |
 | `infrastructure/persistence/pre_open_paper_journal_csv.py` | 229 | Confirmation journal CSV persistence |
 | `domain/ports/browser_data_provider.py` | 90 | Browser data provider interface |

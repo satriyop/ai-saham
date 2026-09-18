@@ -78,7 +78,7 @@ The same layers with their actual components visible:
 │  │ SwingBacktest   │  │ PositionSizer    │  │  Rule Engine      │   │
 │  │ MarketRegime    │  │ SkillGenerator   │  │  Schema Interp.   │   │
 │  │ PreOpenScreen   │  │ PaperJournal     │  └───────────────────┘   │
-│  │ FetchSentiment  │  │ Bootstrap        │  ┌───────────────────┐   │
+│  │ FetchSentiment  │  │ EngineBootstrap  │  ┌───────────────────┐   │
 │  │ CreateIndicator │  │ GroupMapping     │  │  4 App Ports      │   │
 │  │ ... (22 total)  │  │ ...              │  │ FormulaTranslator │   │
 │  └─────────────────┘  └──────────────────┘  │ StrategyTranslator│   │
@@ -149,7 +149,7 @@ The same layers with their actual components visible:
 | # | Subsystem | Purpose | Entry Points | Key Files |
 |---|-----------|---------|--------------|-----------|
 | 1 | **CLI Router** | Routes user commands to use cases via lifecycle groups. Parses flags, wires dependencies, displays output. | `saham <group> <cmd>` | `main.py`, `fetch_commands.py`, `trade_commands.py`, etc |
-| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch market`, `fetch broker`, `fetch stockbit`, `fetch iev`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `playwright_stockbit.py`, `playwright_stockbit_browser.py`, 20 Stockbit specialized providers, 6 sentiment providers, SQLite repos |
+| 2 | **Data Ingestion** | Fetches, caches, and serves OHLCV + broker + news data from external sources. | `fetch market`, `fetch broker`, `fetch stockbit`, `fetch iev`, `analyze sentiment` | `yahoo.py`, `idx_market.py`, `idx.py`, `stockbit_api_client.py`, Stockbit specialized providers, 6 sentiment providers, SQLite repos |
 | 3 | **Analysis Core** | Deterministic indicator computation, risk profiling, and composite analysis. | `indicator compute`, `indicator snapshot`, `analyze risk`, `analyze compare` | `sma.py`, `ema.py`, `rsi.py`, `indicator_registry.py`, 3 rule profiles, `rule_engine.py` |
 | 4 | **Screening Suite** | Multi-dimensional stock screening for accumulation patterns, pre-open movers, and swing candidates. | `screen accum`, `screen pre-open` | `accumulation_screen_use_case.py`, `screen_accum_commands.py`, `pre_open_screen_use_case.py`, `screen_pre_open_commands.py` |
 | 5 | **Strategy System** | Authoring, validation, loading, and execution of versioned strategy packages. | `strategy init/create/validate/list`, `strategy backtest` | `strategy_loader.py`, 3 strategy YAMLs, `strategy_commands.py` |
@@ -172,7 +172,7 @@ Each Big block decomposes into Medium modules:
 | Yahoo Finance Provider | `infrastructure/data_providers/yahoo.py` | ~80 | OHLCV via yfinance, auto-appends `.JK` |
 | IDX Market Provider | `infrastructure/data_providers/idx_market.py` | ~120 | OHLCV via IDX TradingSummary API |
 | IDX Broker Provider | `infrastructure/data_providers/idx.py` | ~322 | Foreign flow from IDX (estimated values) |
-| Stockbit Playwright Broker Provider | `infrastructure/browser/playwright_stockbit.py` (delegates browser lifecycle to `playwright_stockbit_browser.py`) | ~2000 | Broker provider + browser session management for Stockbit |
+| Stockbit Broker Provider | `infrastructure/browser/stockbit_broker_provider.py` (API-backed via `stockbit_api_client.py`; session utilities in `stockbit_session_actions.py`) | ~2000 | Broker provider + session management for Stockbit |
 | Stockbit Analyst Consensus | `infrastructure/browser/stockbit_analyst.py` | ~86 | Analyst ratings + price targets |
 | Stockbit Bandar Detector | `infrastructure/browser/stockbit_bandar.py` | ~177 | Institutional operator accumulation signal |
 | Stockbit Company Profile | `infrastructure/browser/stockbit_company_profile.py` | ~94 | Sector, industry, market cap |
@@ -455,7 +455,7 @@ Each Big block decomposes into Medium modules:
 | `YahooFinanceProvider` | `data_providers/yahoo.py` | MarketDataProvider | No | OHLCV |
 | `IdxMarketDataProvider` | `data_providers/idx_market.py` | MarketDataProvider | No | OHLCV |
 | `IdxBrokerDataProvider` | `data_providers/idx.py` | BrokerDataProvider | No | Foreign flow (estimated) |
-| `StockbitPlaywrightBrokerProvider` | `browser/playwright_stockbit.py` | BrokerDataProvider | Browser session (via `playwright_stockbit_browser.py`) | Foreign flow (exact + per-broker) |
+| `StockbitBrokerProvider` | `browser/stockbit_broker_provider.py` | BrokerDataProvider | Stockbit API session (`stockbit_api_client.py`) | Foreign flow (exact + per-broker) |
 
 #### Infrastructure AI (15 files)
 
@@ -514,7 +514,6 @@ Each Big block decomposes into Medium modules:
 | File | Purpose |
 |------|---------|
 | `browser/playwright_stockbit.py` | Broker provider (delegates browser lifecycle) |
-| `browser/playwright_stockbit_browser.py` | Browser automation + session management |
 | `browser/stockbit_browser.py` | Manual browser session management |
 | `browser/stockbit_analyst.py` | Analyst ratings + price targets |
 | `browser/stockbit_bandar.py` | Institutional operator accumulation signal |

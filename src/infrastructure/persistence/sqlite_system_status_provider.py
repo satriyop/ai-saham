@@ -216,7 +216,7 @@ class SQLiteSystemStatusProvider(SystemStatusProvider):
     def _check_stockbit_session(self) -> ProviderStatusDto:
         start = time.time()
         try:
-            from src.infrastructure.browser.playwright_stockbit_provider import (
+            from src.infrastructure.browser.stockbit_session_actions import (
                 get_stockbit_session_status,
             )
 
