@@ -3,6 +3,9 @@
 #
 # Ordered, fail-closed:
 #   1) fetch lq45 candles-only (EOD lag retry after the 18:30 job)
+#      A hung EOD retry is a CLI soft-success when the DB already has
+#      expected_trading_day candles for the requested stock universe; the CLI
+#      owns that gate. Do not skip this fetch step.
 #   2) research accum catch-up (replay IHSG dates with zero observations)
 #   3) research accum capture --universe lq45 --require-session
 #   4) research accum sync-session-calendar --auto

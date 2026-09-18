@@ -17,6 +17,7 @@ ACTIVE_CRON_LINES = tuple(line for line in INSTALL.splitlines() if line and line
 
 def test_wrapper_uses_fail_closed_shell_and_ordered_chain() -> None:
     assert "set -euo pipefail" in WRAPPER
+    assert "owns that gate" in WRAPPER
     fetch_at = WRAPPER.index("saham fetch market --universe lq45 --candles-only")
     catch_up_at = WRAPPER.index("saham research accum catch-up")
     capture_at = WRAPPER.index("saham research accum capture")
