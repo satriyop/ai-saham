@@ -526,11 +526,9 @@ Each Big block decomposes into Medium modules:
 | `browser/stockbit_forward_estimates.py` | EPS estimates, revenue forecasts |
 | `browser/stockbit_fundamentals.py` | P/E, ROE, Piotroski F-Score |
 | `browser/stockbit_insider.py` | Director/commissioner transaction flags |
-| `browser/stockbit_intraday_broker_chart.py` | Intraday broker chart data |
 | `browser/stockbit_market_time.py` | Market operating status |
 | `browser/stockbit_order_book.py` | Level 2 order book data |
 | `browser/stockbit_running_trade.py` | Real-time institutional absorption |
-| `browser/stockbit_running_trade_chart.py` | Running trade chart data |
 | `browser/stockbit_seasonality.py` | Monthly return/win rate |
 | `browser/stockbit_shareholding.py` | Institutional/individual split |
 | `browser/stockbit_ticker_notation.py` | Special notation/status badges |
