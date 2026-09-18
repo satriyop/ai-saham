@@ -18,7 +18,6 @@ Layer: Infrastructure
 
 from __future__ import annotations
 
-import sqlite3
 from contextlib import closing
 from pathlib import Path
 
@@ -29,6 +28,13 @@ from src.application.dto.source_reconciliation_dto import (
     RawSeasonalityObservation,
     RawStockMetaObservation,
     RawTickerNotationObservation,
+)
+from src.infrastructure.persistence.sqlite_helpers import (
+    connect_readonly,
+    missing_columns,
+    rows_as_dicts,
+    table_columns,
+    table_exists,
 )
 
 _MAX_SAMPLE_ROWS = 10
@@ -93,14 +99,14 @@ class SQLiteEnrichmentReconciliationReader:
         if not self._db_path.exists():
             return RawSeasonalityObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, table):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, table):
                 return RawSeasonalityObservation(exists=False)
 
-            columns = self._columns(conn, table)
+            columns = table_columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(columns, _SEASONALITY_REQUIRED_COLUMNS)
+            missing = missing_columns(columns, _SEASONALITY_REQUIRED_COLUMNS)
             if missing:
                 return RawSeasonalityObservation(
                     exists=True,
@@ -115,7 +121,7 @@ class SQLiteEnrichmentReconciliationReader:
             invalid_source_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {invalid_source_condition}"
             ).fetchone()[0]
-            invalid_source_samples = self._rows_as_dicts(
+            invalid_source_samples = rows_as_dicts(
                 conn,
                 f"SELECT ticker, year, month, source FROM {table} "
                 f"WHERE {invalid_source_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -124,7 +130,7 @@ class SQLiteEnrichmentReconciliationReader:
             null_fetched_at_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE fetched_at IS NULL"
             ).fetchone()[0]
-            null_fetched_at_samples = self._rows_as_dicts(
+            null_fetched_at_samples = rows_as_dicts(
                 conn,
                 f"SELECT ticker, year, month FROM {table} WHERE fetched_at IS NULL "
                 f"LIMIT {_MAX_SAMPLE_ROWS}",
@@ -141,7 +147,7 @@ class SQLiteEnrichmentReconciliationReader:
             fetched_month_mismatch_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {mismatch_condition}"
             ).fetchone()[0]
-            fetched_month_mismatch_samples = self._rows_as_dicts(
+            fetched_month_mismatch_samples = rows_as_dicts(
                 conn,
                 f"SELECT ticker, fetched_month, fetched_at FROM {table} "
                 f"WHERE {mismatch_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -181,14 +187,14 @@ class SQLiteEnrichmentReconciliationReader:
         if not self._db_path.exists():
             return RawPitCacheObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, table):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, table):
                 return RawPitCacheObservation(exists=False)
 
-            columns = self._columns(conn, table)
+            columns = table_columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(columns, _PIT_CACHE_REQUIRED_COLUMNS)
+            missing = missing_columns(columns, _PIT_CACHE_REQUIRED_COLUMNS)
             if missing:
                 return RawPitCacheObservation(
                     exists=True,
@@ -201,7 +207,7 @@ class SQLiteEnrichmentReconciliationReader:
             missing_identity_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {missing_identity_condition}"
             ).fetchone()[0]
-            missing_identity_samples = self._rows_as_dicts(
+            missing_identity_samples = rows_as_dicts(
                 conn,
                 f"SELECT ticker, fetched_date FROM {table} "
                 f"WHERE {missing_identity_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -214,7 +220,7 @@ class SQLiteEnrichmentReconciliationReader:
                 "GROUP BY ticker, fetched_date HAVING cnt > 1"
                 ")"
             ).fetchone()[0]
-            duplicate_identity_samples = self._rows_as_dicts(
+            duplicate_identity_samples = rows_as_dicts(
                 conn,
                 f"SELECT ticker, fetched_date, COUNT(*) AS duplicate_row_count FROM {table} "
                 "WHERE ticker IS NOT NULL AND fetched_date IS NOT NULL "
@@ -227,7 +233,7 @@ class SQLiteEnrichmentReconciliationReader:
                 all_metrics_null_count = conn.execute(
                     f"SELECT COUNT(*) FROM {table} WHERE {all_null_condition}"
                 ).fetchone()[0]
-                all_metrics_null_samples = self._rows_as_dicts(
+                all_metrics_null_samples = rows_as_dicts(
                     conn,
                     f"SELECT ticker, fetched_date FROM {table} "
                     f"WHERE {all_null_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -252,14 +258,14 @@ class SQLiteEnrichmentReconciliationReader:
         if not self._db_path.exists():
             return RawInsiderCacheObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, table):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, table):
                 return RawInsiderCacheObservation(exists=False)
 
-            columns = self._columns(conn, table)
+            columns = table_columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(columns, _INSIDER_REQUIRED_COLUMNS)
+            missing = missing_columns(columns, _INSIDER_REQUIRED_COLUMNS)
             if missing:
                 return RawInsiderCacheObservation(
                     exists=True,
@@ -275,7 +281,7 @@ class SQLiteEnrichmentReconciliationReader:
             missing_identity_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {missing_identity_condition}"
             ).fetchone()[0]
-            missing_identity_samples = self._rows_as_dicts(
+            missing_identity_samples = rows_as_dicts(
                 conn,
                 "SELECT ticker, name, action_type, transaction_date, fetched_date "
                 f"FROM {table} WHERE {missing_identity_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -292,7 +298,7 @@ class SQLiteEnrichmentReconciliationReader:
                 "HAVING cnt > 1"
                 ")"
             ).fetchone()[0]
-            duplicate_identity_samples = self._rows_as_dicts(
+            duplicate_identity_samples = rows_as_dicts(
                 conn,
                 "SELECT ticker, name, action_type, transaction_date, fetched_date, "
                 f"COUNT(*) AS duplicate_row_count FROM {table} WHERE {non_null_identity} "
@@ -317,9 +323,9 @@ class SQLiteEnrichmentReconciliationReader:
                 events_exists=False, event_dates_exists=False
             )
 
-        with closing(self._connect()) as conn:
-            events_exists = self._table_exists(conn, events_table)
-            event_dates_exists = self._table_exists(conn, dates_table)
+        with closing(connect_readonly(self._db_path)) as conn:
+            events_exists = table_exists(conn, events_table)
+            event_dates_exists = table_exists(conn, dates_table)
 
             if not events_exists or not event_dates_exists:
                 return RawCorporateActionLinkageObservation(
@@ -337,17 +343,17 @@ class SQLiteEnrichmentReconciliationReader:
                     ),
                 )
 
-            events_columns = self._columns(conn, events_table)
-            dates_columns = self._columns(conn, dates_table)
+            events_columns = table_columns(conn, events_table)
+            dates_columns = table_columns(conn, dates_table)
             events_row_count = conn.execute(f"SELECT COUNT(*) FROM {events_table}").fetchone()[0]
             event_dates_row_count = conn.execute(f"SELECT COUNT(*) FROM {dates_table}").fetchone()[
                 0
             ]
 
-            events_missing = self._missing_columns(
+            events_missing = missing_columns(
                 events_columns, _CORPORATE_ACTION_EVENTS_REQUIRED_COLUMNS
             )
-            dates_missing = self._missing_columns(
+            dates_missing = missing_columns(
                 dates_columns, _CORPORATE_ACTION_EVENT_DATES_REQUIRED_COLUMNS
             )
             if events_missing or dates_missing:
@@ -371,7 +377,7 @@ class SQLiteEnrichmentReconciliationReader:
                 f"LEFT JOIN {events_table} e ON {join_condition} "
                 "WHERE e.source IS NULL"
             ).fetchone()[0]
-            orphan_date_rows_samples = self._rows_as_dicts(
+            orphan_date_rows_samples = rows_as_dicts(
                 conn,
                 "SELECT d.source AS source, d.event_type AS event_type, "
                 "d.source_event_id AS source_event_id, d.ticker AS ticker, "
@@ -385,7 +391,7 @@ class SQLiteEnrichmentReconciliationReader:
                 f"LEFT JOIN {dates_table} d ON {join_condition} "
                 "WHERE d.source IS NULL"
             ).fetchone()[0]
-            events_without_dates_samples = self._rows_as_dicts(
+            events_without_dates_samples = rows_as_dicts(
                 conn,
                 "SELECT e.source AS source, e.event_type AS event_type, "
                 "e.source_event_id AS source_event_id, e.ticker AS ticker "
@@ -396,7 +402,7 @@ class SQLiteEnrichmentReconciliationReader:
             null_event_date_count = conn.execute(
                 f"SELECT COUNT(*) FROM {dates_table} WHERE event_date IS NULL"
             ).fetchone()[0]
-            null_event_date_samples = self._rows_as_dicts(
+            null_event_date_samples = rows_as_dicts(
                 conn,
                 "SELECT source, event_type, source_event_id, ticker, date_role "
                 f"FROM {dates_table} WHERE event_date IS NULL LIMIT {_MAX_SAMPLE_ROWS}",
@@ -425,14 +431,14 @@ class SQLiteEnrichmentReconciliationReader:
         if not self._db_path.exists():
             return RawTickerNotationObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, table):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, table):
                 return RawTickerNotationObservation(exists=False)
 
-            columns = self._columns(conn, table)
+            columns = table_columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(columns, _TICKER_NOTATION_REQUIRED_COLUMNS)
+            missing = missing_columns(columns, _TICKER_NOTATION_REQUIRED_COLUMNS)
             if missing:
                 return RawTickerNotationObservation(
                     exists=True,
@@ -445,7 +451,7 @@ class SQLiteEnrichmentReconciliationReader:
             missing_provenance_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {missing_provenance_condition}"
             ).fetchone()[0]
-            missing_provenance_samples = self._rows_as_dicts(
+            missing_provenance_samples = rows_as_dicts(
                 conn,
                 f"SELECT ticker, source, fetched_date FROM {table} "
                 f"WHERE {missing_provenance_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -463,14 +469,14 @@ class SQLiteEnrichmentReconciliationReader:
         if not self._db_path.exists():
             return RawStockMetaObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, table):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, table):
                 return RawStockMetaObservation(exists=False)
 
-            columns = self._columns(conn, table)
+            columns = table_columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(columns, _STOCK_META_REQUIRED_COLUMNS)
+            missing = missing_columns(columns, _STOCK_META_REQUIRED_COLUMNS)
             if missing:
                 return RawStockMetaObservation(
                     exists=True,
@@ -483,7 +489,7 @@ class SQLiteEnrichmentReconciliationReader:
             missing_identity_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {missing_identity_condition}"
             ).fetchone()[0]
-            missing_identity_samples = self._rows_as_dicts(
+            missing_identity_samples = rows_as_dicts(
                 conn,
                 f"SELECT ticker, source, fetched_at FROM {table} "
                 f"WHERE {missing_identity_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -496,7 +502,7 @@ class SQLiteEnrichmentReconciliationReader:
                 "GROUP BY ticker, fetched_at HAVING cnt > 1"
                 ")"
             ).fetchone()[0]
-            duplicate_identity_samples = self._rows_as_dicts(
+            duplicate_identity_samples = rows_as_dicts(
                 conn,
                 f"SELECT ticker, fetched_at, COUNT(*) AS duplicate_row_count FROM {table} "
                 "WHERE ticker IS NOT NULL AND fetched_at IS NOT NULL "
@@ -507,7 +513,7 @@ class SQLiteEnrichmentReconciliationReader:
             both_sector_industry_null_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {both_null_condition}"
             ).fetchone()[0]
-            both_sector_industry_null_samples = self._rows_as_dicts(
+            both_sector_industry_null_samples = rows_as_dicts(
                 conn,
                 f"SELECT ticker, fetched_at FROM {table} "
                 f"WHERE {both_null_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -523,24 +529,3 @@ class SQLiteEnrichmentReconciliationReader:
             both_sector_industry_null_count=both_sector_industry_null_count,
             both_sector_industry_null_samples=both_sector_industry_null_samples,
         )
-
-    def _missing_columns(self, columns: set[str], required: tuple[str, ...]) -> tuple[str, ...]:
-        return tuple(c for c in required if c not in columns)
-
-    def _table_exists(self, conn: sqlite3.Connection, table: str) -> bool:
-        row = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
-        ).fetchone()
-        return row is not None
-
-    def _columns(self, conn: sqlite3.Connection, table: str) -> set[str]:
-        return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-
-    def _rows_as_dicts(self, conn: sqlite3.Connection, query: str) -> tuple[dict, ...]:
-        cursor = conn.execute(query)
-        columns = [description[0] for description in cursor.description]
-        return tuple(dict(zip(columns, row)) for row in cursor.fetchall())
-
-    def _connect(self) -> sqlite3.Connection:
-        uri = f"file:{self._db_path}?mode=ro"
-        return sqlite3.connect(uri, uri=True)

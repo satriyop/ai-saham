@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, datetime, time
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -44,6 +44,7 @@ from src.domain.value_objects.shareholding_composition import ShareholdingCompos
 from src.infrastructure.browser.stockbit_base_provider import StockbitCachingProvider
 from src.infrastructure.browser.stockbit_pit_cache import (
     has_fresh_ticker_row,
+    parse_fetched_at,
     safe_cache_write,
     safe_schema_update,
 )
@@ -147,18 +148,6 @@ def _parse_date(raw: str) -> date | None:
         return datetime.strptime(raw.strip(), "%Y-%m-%d").date()
     except ValueError:
         return None
-
-
-def _parse_fetched_at(raw: str | None) -> datetime | None:
-    if not raw:
-        return None
-    try:
-        return datetime.fromisoformat(raw)
-    except ValueError:
-        try:
-            return datetime.combine(date.fromisoformat(raw), time.min)
-        except (ValueError, TypeError):
-            return None
 
 
 def _parse_composition(ticker: str, body: dict) -> ShareholdingComposition | None:
@@ -329,7 +318,7 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
                 ).fetchone()
             if not row:
                 return None
-            fetched_at = _parse_fetched_at(row[0])
+            fetched_at = parse_fetched_at(row[0])
             if fetched_at is None:
                 return None
             # Live + PIT: always surface the selected row. Refresh TTL is not a
@@ -389,7 +378,7 @@ class StockbitShareholdingProvider(ShareholdingProvider, StockbitCachingProvider
             return ()
         results: list[ShareholdingComposition] = []
         for row in rows:
-            fetched_at = _parse_fetched_at(row[0])
+            fetched_at = parse_fetched_at(row[0])
             if fetched_at is None:
                 continue
             results.append(

@@ -346,3 +346,27 @@ class RawLearningObservationsRiskPitObservation:
     gate_context_session_mismatch_samples: tuple[dict, ...] = ()
     risk_snapshot_unreadable_count: int = 0
     risk_snapshot_unreadable_samples: tuple[dict, ...] = ()
+
+
+def schema_insufficient_result(
+    name: str, table: str, code: str, row_count: int, missing_columns: tuple[str, ...]
+) -> tuple[SourceReconciliationCheckResult, tuple[SourceReconciliationFinding, ...]]:
+    """FAIL check+finding pair for a table missing required columns."""
+    finding = SourceReconciliationFinding(
+        severity="FAIL",
+        code=code,
+        table=table,
+        field=None,
+        message=f"{table} is missing required column(s): {', '.join(missing_columns)}.",
+        impact="Reconciliation cannot be performed for this table until the schema is repaired.",
+        row_count=row_count,
+    )
+    check = SourceReconciliationCheckResult(
+        name=name,
+        status="FAIL",
+        tables=(table,),
+        checked_row_count=row_count,
+        mismatch_count=None,
+        summary={"missing_columns": list(missing_columns)},
+    )
+    return check, (finding,)

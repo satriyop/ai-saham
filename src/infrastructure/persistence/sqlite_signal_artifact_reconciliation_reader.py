@@ -18,7 +18,6 @@ Layer: Infrastructure
 from __future__ import annotations
 
 import json
-import sqlite3
 from contextlib import closing
 from datetime import date
 from pathlib import Path
@@ -31,6 +30,13 @@ from src.application.dto.source_reconciliation_dto import (
     RawSignalForwardLabelsLinkageObservation,
 )
 from src.domain.value_objects.market_context import MarketRegime
+from src.infrastructure.persistence.sqlite_helpers import (
+    connect_readonly,
+    missing_columns,
+    rows_as_dicts,
+    table_columns,
+    table_exists,
+)
 
 _MAX_SAMPLE_ROWS = 10
 
@@ -105,16 +111,14 @@ class SQLiteSignalArtifactReconciliationReader:
         if not self._db_path.exists():
             return RawCandidateObservationIdentityObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, table):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, table):
                 return RawCandidateObservationIdentityObservation(exists=False)
 
-            columns = self._columns(conn, table)
+            columns = table_columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(
-                columns, _LEARNING_OBSERVATIONS_IDENTITY_REQUIRED_COLUMNS
-            )
+            missing = missing_columns(columns, _LEARNING_OBSERVATIONS_IDENTITY_REQUIRED_COLUMNS)
             if missing:
                 return RawCandidateObservationIdentityObservation(
                     exists=True,
@@ -142,7 +146,7 @@ class SQLiteSignalArtifactReconciliationReader:
             canonical_missing_identity_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {canonical_missing_condition}"
             ).fetchone()[0]
-            canonical_missing_identity_samples = self._rows_as_dicts(
+            canonical_missing_identity_samples = rows_as_dicts(
                 conn,
                 "SELECT observation_id, purpose, captured_at, contract_id, window_id, "
                 f"compatibility_id FROM {table} WHERE {canonical_missing_condition} "
@@ -157,7 +161,7 @@ class SQLiteSignalArtifactReconciliationReader:
                 "GROUP BY observation_id HAVING cnt > 1"
                 ")"
             ).fetchone()[0]
-            duplicate_canonical_identity_samples = self._rows_as_dicts(
+            duplicate_canonical_identity_samples = rows_as_dicts(
                 conn,
                 "SELECT observation_id, COUNT(*) AS duplicate_row_count "
                 f"FROM {table} "
@@ -170,7 +174,7 @@ class SQLiteSignalArtifactReconciliationReader:
             invalid_payload_json_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE json_valid(decision_payload_json) = 0"
             ).fetchone()[0]
-            invalid_payload_json_samples = self._rows_as_dicts(
+            invalid_payload_json_samples = rows_as_dicts(
                 conn,
                 f"SELECT observation_id, purpose, captured_at FROM {table} "
                 f"WHERE json_valid(decision_payload_json) = 0 LIMIT {_MAX_SAMPLE_ROWS}",
@@ -183,7 +187,7 @@ class SQLiteSignalArtifactReconciliationReader:
             payload_missing_schema_marker_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {payload_missing_marker_condition}"
             ).fetchone()[0]
-            payload_missing_schema_marker_samples = self._rows_as_dicts(
+            payload_missing_schema_marker_samples = rows_as_dicts(
                 conn,
                 f"SELECT observation_id, purpose, captured_at FROM {table} "
                 f"WHERE {payload_missing_marker_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -216,14 +220,14 @@ class SQLiteSignalArtifactReconciliationReader:
         if not self._db_path.exists():
             return RawSignalForwardLabelsLinkageObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, table):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, table):
                 return RawSignalForwardLabelsLinkageObservation(exists=False)
 
-            columns = self._columns(conn, table)
+            columns = table_columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(columns, _LEARNING_OUTCOME_LABELS_REQUIRED_COLUMNS)
+            missing = missing_columns(columns, _LEARNING_OUTCOME_LABELS_REQUIRED_COLUMNS)
             if missing:
                 return RawSignalForwardLabelsLinkageObservation(
                     exists=True,
@@ -240,7 +244,7 @@ class SQLiteSignalArtifactReconciliationReader:
             missing_identity_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {missing_identity_condition}"
             ).fetchone()[0]
-            missing_identity_samples = self._rows_as_dicts(
+            missing_identity_samples = rows_as_dicts(
                 conn,
                 f"SELECT label_id, observation_id, contract_id FROM {table} "
                 f"WHERE {missing_identity_condition} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -257,7 +261,7 @@ class SQLiteSignalArtifactReconciliationReader:
                 "GROUP BY observation_id, contract_id HAVING cnt > 1"
                 ")"
             ).fetchone()[0]
-            duplicate_identity_samples = self._rows_as_dicts(
+            duplicate_identity_samples = rows_as_dicts(
                 conn,
                 "SELECT observation_id, contract_id, "
                 f"COUNT(*) AS duplicate_row_count FROM {table} WHERE {non_null_identity} "
@@ -268,16 +272,14 @@ class SQLiteSignalArtifactReconciliationReader:
             invalid_fingerprint_json_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE json_valid(metrics_json) = 0"
             ).fetchone()[0]
-            invalid_fingerprint_json_samples = self._rows_as_dicts(
+            invalid_fingerprint_json_samples = rows_as_dicts(
                 conn,
                 f"SELECT label_id, observation_id, contract_id FROM {table} "
                 f"WHERE json_valid(metrics_json) = 0 LIMIT {_MAX_SAMPLE_ROWS}",
             )
 
-            linkage_provable = self._table_exists(
-                conn, "learning_observations"
-            ) and not self._missing_columns(
-                self._columns(conn, "learning_observations"),
+            linkage_provable = table_exists(conn, "learning_observations") and not missing_columns(
+                table_columns(conn, "learning_observations"),
                 _LEARNING_OBSERVATIONS_LINKAGE_COLUMNS,
             )
 
@@ -294,7 +296,7 @@ class SQLiteSignalArtifactReconciliationReader:
                     "ON o.observation_id = l.observation_id "
                     f"WHERE {orphan_where}"
                 ).fetchone()[0]
-                orphan_linkage_samples = self._rows_as_dicts(
+                orphan_linkage_samples = rows_as_dicts(
                     conn,
                     "SELECT l.label_id AS label_id, l.observation_id AS observation_id, "
                     "l.contract_id AS contract_id "
@@ -324,14 +326,14 @@ class SQLiteSignalArtifactReconciliationReader:
         if not self._db_path.exists():
             return RawMarketContextSnapshotObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, table):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, table):
                 return RawMarketContextSnapshotObservation(exists=False)
 
-            columns = self._columns(conn, table)
+            columns = table_columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(columns, _MARKET_CONTEXT_SNAPSHOT_REQUIRED_COLUMNS)
+            missing = missing_columns(columns, _MARKET_CONTEXT_SNAPSHOT_REQUIRED_COLUMNS)
             if missing:
                 return RawMarketContextSnapshotObservation(
                     exists=True,
@@ -343,7 +345,7 @@ class SQLiteSignalArtifactReconciliationReader:
             invalid_regime_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {_INVALID_REGIME_CONDITION}"
             ).fetchone()[0]
-            invalid_regime_samples = self._rows_as_dicts(
+            invalid_regime_samples = rows_as_dicts(
                 conn,
                 f"SELECT as_of_date, regime FROM {table} "
                 f"WHERE {_INVALID_REGIME_CONDITION} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -354,7 +356,7 @@ class SQLiteSignalArtifactReconciliationReader:
                 f"SELECT COUNT(*) AS cnt FROM {table} GROUP BY as_of_date HAVING cnt > 1"
                 ")"
             ).fetchone()[0]
-            duplicate_identity_samples = self._rows_as_dicts(
+            duplicate_identity_samples = rows_as_dicts(
                 conn,
                 f"SELECT as_of_date, COUNT(*) AS duplicate_row_count FROM {table} "
                 f"GROUP BY as_of_date HAVING COUNT(*) > 1 LIMIT {_MAX_SAMPLE_ROWS}",
@@ -363,7 +365,7 @@ class SQLiteSignalArtifactReconciliationReader:
             missing_provenance_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE created_at IS NULL"
             ).fetchone()[0]
-            missing_provenance_samples = self._rows_as_dicts(
+            missing_provenance_samples = rows_as_dicts(
                 conn,
                 f"SELECT as_of_date FROM {table} WHERE created_at IS NULL LIMIT {_MAX_SAMPLE_ROWS}",
             )
@@ -371,7 +373,7 @@ class SQLiteSignalArtifactReconciliationReader:
             invalid_factors_json_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE json_valid(factors_json) = 0"
             ).fetchone()[0]
-            invalid_factors_json_samples = self._rows_as_dicts(
+            invalid_factors_json_samples = rows_as_dicts(
                 conn,
                 f"SELECT as_of_date FROM {table} WHERE json_valid(factors_json) = 0 "
                 f"LIMIT {_MAX_SAMPLE_ROWS}",
@@ -395,14 +397,14 @@ class SQLiteSignalArtifactReconciliationReader:
         if not self._db_path.exists():
             return RawRegimeObservationsObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, table):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, table):
                 return RawRegimeObservationsObservation(exists=False)
 
-            columns = self._columns(conn, table)
+            columns = table_columns(conn, table)
             row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-            missing = self._missing_columns(columns, _REGIME_OBSERVATIONS_REQUIRED_COLUMNS)
+            missing = missing_columns(columns, _REGIME_OBSERVATIONS_REQUIRED_COLUMNS)
             if missing:
                 return RawRegimeObservationsObservation(
                     exists=True,
@@ -414,7 +416,7 @@ class SQLiteSignalArtifactReconciliationReader:
             invalid_regime_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE {_INVALID_REGIME_CONDITION}"
             ).fetchone()[0]
-            invalid_regime_samples = self._rows_as_dicts(
+            invalid_regime_samples = rows_as_dicts(
                 conn,
                 f"SELECT observation_date, regime FROM {table} "
                 f"WHERE {_INVALID_REGIME_CONDITION} LIMIT {_MAX_SAMPLE_ROWS}",
@@ -430,7 +432,7 @@ class SQLiteSignalArtifactReconciliationReader:
                 f"SELECT COUNT(*) AS cnt FROM {table} GROUP BY observation_date HAVING cnt > 1"
                 ")"
             ).fetchone()[0]
-            duplicate_identity_samples = self._rows_as_dicts(
+            duplicate_identity_samples = rows_as_dicts(
                 conn,
                 f"SELECT observation_date, COUNT(*) AS duplicate_row_count FROM {table} "
                 f"GROUP BY observation_date HAVING COUNT(*) > 1 LIMIT {_MAX_SAMPLE_ROWS}",
@@ -439,7 +441,7 @@ class SQLiteSignalArtifactReconciliationReader:
             invalid_detection_inputs_json_count = conn.execute(
                 f"SELECT COUNT(*) FROM {table} WHERE json_valid(detection_inputs_json) = 0"
             ).fetchone()[0]
-            invalid_detection_inputs_json_samples = self._rows_as_dicts(
+            invalid_detection_inputs_json_samples = rows_as_dicts(
                 conn,
                 f"SELECT observation_date FROM {table} "
                 f"WHERE json_valid(detection_inputs_json) = 0 LIMIT {_MAX_SAMPLE_ROWS}",
@@ -471,12 +473,12 @@ class SQLiteSignalArtifactReconciliationReader:
         if not self._db_path.exists():
             return RawLearningObservationsRiskPitObservation(exists=False)
 
-        with closing(self._connect()) as conn:
-            if not self._table_exists(conn, table):
+        with closing(connect_readonly(self._db_path)) as conn:
+            if not table_exists(conn, table):
                 return RawLearningObservationsRiskPitObservation(exists=False)
 
-            columns = self._columns(conn, table)
-            missing = self._missing_columns(columns, _LEARNING_OBSERVATIONS_REQUIRED_COLUMNS)
+            columns = table_columns(conn, table)
+            missing = missing_columns(columns, _LEARNING_OBSERVATIONS_REQUIRED_COLUMNS)
             if missing:
                 total = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
                 return RawLearningObservationsRiskPitObservation(
@@ -495,27 +497,6 @@ class SQLiteSignalArtifactReconciliationReader:
             payloads=[row[0] for row in rows],
             sample_cap=_MAX_SAMPLE_ROWS,
         )
-
-    def _missing_columns(self, columns: set[str], required: tuple[str, ...]) -> tuple[str, ...]:
-        return tuple(c for c in required if c not in columns)
-
-    def _table_exists(self, conn: sqlite3.Connection, table: str) -> bool:
-        row = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
-        ).fetchone()
-        return row is not None
-
-    def _columns(self, conn: sqlite3.Connection, table: str) -> set[str]:
-        return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-
-    def _rows_as_dicts(self, conn: sqlite3.Connection, query: str) -> tuple[dict, ...]:
-        cursor = conn.execute(query)
-        columns = [description[0] for description in cursor.description]
-        return tuple(dict(zip(columns, row)) for row in cursor.fetchall())
-
-    def _connect(self) -> sqlite3.Connection:
-        uri = f"file:{self._db_path}?mode=ro"
-        return sqlite3.connect(uri, uri=True)
 
 
 def _parse_iso_date(value: object) -> date | None:

@@ -33,6 +33,7 @@ from src.domain.value_objects.idx_market import (
     PRE_OPEN_MATCHING_START,
 )
 from src.domain.value_objects.screener_result import MoverData
+from src.infrastructure.persistence.sqlite_helpers import connect_readwrite
 
 
 @dataclass(frozen=True)
@@ -56,10 +57,7 @@ class SQLiteIEVRepository:
             self._ensure_schema()
 
     def _get_connection(self) -> sqlite3.Connection:
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
+        return connect_readwrite(self._db_path)
 
     def _ensure_schema(self) -> None:
         with self._get_connection() as conn:

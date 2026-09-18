@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from src.infrastructure.persistence.sqlite_helpers import connect_readwrite
+
 if TYPE_CHECKING:
     from src.application.use_case.repair_seasonality_cache_use_case import (
         SeasonalityCacheRepairRow,
@@ -94,10 +96,7 @@ class SQLiteSeasonalityCacheRepairer:
         self._db_path = Path(db_path).expanduser()
 
     def _connect(self) -> sqlite3.Connection:
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self._db_path))
-        conn.row_factory = sqlite3.Row
-        return conn
+        return connect_readwrite(self._db_path)
 
     def ensure_quarantine_table(self) -> None:
         with self._connect() as conn:

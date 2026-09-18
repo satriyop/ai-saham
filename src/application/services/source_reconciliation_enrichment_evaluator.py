@@ -21,6 +21,7 @@ from src.application.dto.source_reconciliation_dto import (
     SourceReconciliationCheckResult,
     SourceReconciliationFinding,
     aggregate_status,
+    schema_insufficient_result,
 )
 
 _MISSING_TABLE_IMPACT = "Reconciliation cannot be performed for this table."
@@ -60,33 +61,6 @@ def _empty_table_finding(table: str) -> SourceReconciliationFinding:
     )
 
 
-def _schema_insufficient_result(
-    name: str,
-    table: str,
-    code: str,
-    row_count: int,
-    missing_columns: tuple[str, ...],
-) -> tuple[SourceReconciliationCheckResult, tuple[SourceReconciliationFinding, ...]]:
-    finding = SourceReconciliationFinding(
-        severity="FAIL",
-        code=code,
-        table=table,
-        field=None,
-        message=f"{table} is missing required column(s): {', '.join(missing_columns)}.",
-        impact="Reconciliation cannot be performed for this table until the schema is repaired.",
-        row_count=row_count,
-    )
-    check = SourceReconciliationCheckResult(
-        name=name,
-        status="FAIL",
-        tables=(table,),
-        checked_row_count=row_count,
-        mismatch_count=None,
-        summary={"missing_columns": list(missing_columns)},
-    )
-    return check, (finding,)
-
-
 def evaluate_seasonality(
     raw: RawSeasonalityObservation,
 ) -> tuple[SourceReconciliationCheckResult, tuple[SourceReconciliationFinding, ...]]:
@@ -95,7 +69,7 @@ def evaluate_seasonality(
         return _missing_enrichment_table_result("seasonality_provenance_consistency", table)
 
     if not raw.schema_sufficient:
-        return _schema_insufficient_result(
+        return schema_insufficient_result(
             "seasonality_provenance_consistency",
             table,
             "SEASONALITY_SCHEMA_INSUFFICIENT",
@@ -231,7 +205,7 @@ def _evaluate_pit_cache(
         return _missing_enrichment_table_result(check_name, table)
 
     if not raw.schema_sufficient:
-        return _schema_insufficient_result(
+        return schema_insufficient_result(
             check_name, table, schema_insufficient_code, raw.row_count, raw.missing_columns
         )
 
@@ -368,7 +342,7 @@ def evaluate_insider_cache(
         return _missing_enrichment_table_result("insider_cache_pit_coverage", table)
 
     if not raw.schema_sufficient:
-        return _schema_insufficient_result(
+        return schema_insufficient_result(
             "insider_cache_pit_coverage",
             table,
             "INSIDER_SCHEMA_INSUFFICIENT",
@@ -628,7 +602,7 @@ def evaluate_ticker_notation_cache(
         return _missing_enrichment_table_result("ticker_notation_cache_limitation", table)
 
     if not raw.schema_sufficient:
-        return _schema_insufficient_result(
+        return schema_insufficient_result(
             "ticker_notation_cache_limitation",
             table,
             "TICKER_NOTATION_SCHEMA_INSUFFICIENT",
@@ -693,7 +667,7 @@ def evaluate_stock_meta(
         return _missing_enrichment_table_result("stock_meta_provenance", table)
 
     if not raw.schema_sufficient:
-        return _schema_insufficient_result(
+        return schema_insufficient_result(
             "stock_meta_provenance",
             table,
             "STOCK_META_SCHEMA_INSUFFICIENT",
