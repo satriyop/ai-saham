@@ -238,3 +238,108 @@ def test_candles_only_hung_fetch_fails_cleanly_and_counts_hangs():
     assert response.hang_count >= 1
     assert response.hang_attempted >= 1
     assert response.fail_count >= 1
+    assert "BBCA" in response.unavailable_tickers
+
+
+def test_candles_only_retry_reduces_hang_count_when_second_pass_succeeds():
+    calls: dict[str, int] = {}
+
+    def fetch_candles(**kwargs):
+        ticker = kwargs["ticker"]
+        calls[ticker] = calls.get(ticker, 0) + 1
+        if ticker == "BBCA" and calls[ticker] == 1:
+            import time
+
+            time.sleep(0.4)
+            return "✓(2026-09-08)"
+        return "✓(2026-09-08)"
+
+    use_case = FetchMarketRefreshUseCase(
+        fetch_candles=fetch_candles,
+        fetch_broker=lambda **kwargs: BrokerFetchResult("skip", "skip"),
+        fetch_meta=lambda ticker, db_path: "skip",
+        fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        _request(
+            candles_only=True,
+            no_meta=True,
+            tickers=["BBCA"],
+            candle_call_timeout_s=0.05,
+        )
+    )
+
+    statuses = {item.ticker: item.candles_status for item in response.ticker_results}
+    assert calls["BBCA"] == 2
+    assert statuses["BBCA"].startswith("✓")
+    assert response.hang_count == 0
+    assert "BBCA" not in response.unavailable_tickers
+    assert response.fail_count == 0
+
+
+def test_candles_only_remaining_hangs_after_retry_are_unavailable():
+    def fetch_candles(**kwargs):
+        if kwargs["ticker"] == "BBCA":
+            import time
+
+            time.sleep(0.4)
+            return "✓(2026-09-08)"
+        return "✓(2026-09-07)"
+
+    use_case = FetchMarketRefreshUseCase(
+        fetch_candles=fetch_candles,
+        fetch_broker=lambda **kwargs: BrokerFetchResult("skip", "skip"),
+        fetch_meta=lambda ticker, db_path: "skip",
+        fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        _request(
+            candles_only=True,
+            no_meta=True,
+            tickers=["BBCA"],
+            candle_call_timeout_s=0.05,
+        )
+    )
+
+    statuses = {item.ticker: item.candles_status for item in response.ticker_results}
+    assert statuses["BBCA"] == "ERR:timeout"
+    assert "BBCA" in response.unavailable_tickers
+    assert response.hang_count >= 1
+    assert response.fail_count >= 1
+
+
+def test_candles_only_does_not_retry_deadline_exhausted_wall():
+    calls: dict[str, int] = {}
+
+    def fetch_candles(**kwargs):
+        ticker = kwargs["ticker"]
+        calls[ticker] = calls.get(ticker, 0) + 1
+        return "✓(2026-09-08)"
+
+    use_case = FetchMarketRefreshUseCase(
+        fetch_candles=fetch_candles,
+        fetch_broker=lambda **kwargs: BrokerFetchResult("skip", "skip"),
+        fetch_meta=lambda ticker, db_path: "skip",
+        fetch_enrichment=lambda ticker, db_path, broker_provider, force_refresh=False: "skip",
+        universe_loader=MagicMock(),
+    )
+
+    response = use_case.execute(
+        _request(
+            candles_only=True,
+            no_meta=True,
+            tickers=["BBCA"],
+            deadline_at=0.0,
+            candle_call_timeout_s=0.05,
+        )
+    )
+
+    statuses = {item.ticker: item.candles_status for item in response.ticker_results}
+    assert calls == {}
+    assert statuses["BBCA"] == "ERR:deadline"
+    assert "BBCA" in response.unavailable_tickers
+    assert response.hang_count >= 1
