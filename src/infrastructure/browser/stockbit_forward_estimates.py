@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date, datetime, time
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -40,6 +40,7 @@ from src.infrastructure.browser.stockbit_pit_cache import (
     fetched_at_is_fresh,
     fetched_date_as_of_filter,
     latest_fetched_order,
+    parse_fetched_at,
     safe_cache_read,
     safe_cache_write,
     safe_schema_update,
@@ -145,18 +146,6 @@ def _parse_consensus_estimates(ticker: str, body: dict) -> ForwardEstimates | No
     )
 
 
-def _parse_fetched_at(raw: str | None) -> datetime | None:
-    if not raw:
-        return None
-    try:
-        return datetime.fromisoformat(raw)
-    except ValueError:
-        try:
-            return datetime.combine(date.fromisoformat(raw), time.min)
-        except (ValueError, TypeError):
-            return None
-
-
 class StockbitForwardEstimatesProvider(ForwardEstimatesProvider, StockbitCachingProvider):
     """Fetches forward EPS/Revenue estimates from Stockbit consensus endpoint.
 
@@ -243,7 +232,7 @@ class StockbitForwardEstimatesProvider(ForwardEstimatesProvider, StockbitCaching
                 ).fetchone()
             if not row:
                 return None
-            fetched_at = _parse_fetched_at(row[0])
+            fetched_at = parse_fetched_at(row[0])
             if require_fresh and not fetched_at_is_fresh(fetched_at, ttl_days=0):
                 return None
             return ForwardEstimates(

@@ -15,6 +15,7 @@ from rich.table import Table
 from rich.text import Text
 
 from src.adapters.shared.view_broker_desk_text import (
+    broker_type_label,
     format_broker_list_text,
     format_desk_calendar_text,
     format_desk_flow_text,
@@ -25,7 +26,6 @@ from src.adapters.shared.view_broker_desk_text import (
 )
 from src.adapters.shared.view_number_format import format_value
 from src.adapters.shared.view_ticker_top_brokers_rows import format_netx_display
-from src.domain.entities.broker_flow import BrokerType
 
 __all__ = [
     "format_value",
@@ -45,14 +45,6 @@ __all__ = [
 ]
 
 
-def _type_label(broker_type: BrokerType) -> str:
-    if broker_type == BrokerType.FOREIGN:
-        return "Foreign"
-    if broker_type == BrokerType.LOCAL:
-        return "Local"
-    return "—"
-
-
 def display_desk_show(result) -> None:
     c = Console()
     c.print("")
@@ -60,7 +52,7 @@ def display_desk_show(result) -> None:
     header = Text()
     header.append(f"{result.broker_code} ", style="bold cyan")
     header.append(f"({result.broker_name}) · ")
-    header.append(_type_label(result.broker_type), style="bold")
+    header.append(broker_type_label(result.broker_type), style="bold")
     header.append(f" · as of {result.as_of}")
     header.append("\n")
     header.append("Day net: ", style="bold")
@@ -79,7 +71,7 @@ def display_desk_top_stocks(result) -> None:
     c.print("")
     header = Text()
     header.append(f"{result.broker_code} ", style="bold cyan")
-    header.append(f"({result.broker_name}) · {_type_label(result.broker_type)}")
+    header.append(f"({result.broker_name}) · {broker_type_label(result.broker_type)}")
     header.append(f" · {result.date}")
     header.append("\n")
     header.append(result.scope_note, style="yellow")
@@ -101,7 +93,7 @@ def display_desk_top_matrix(result) -> None:
     c.print("")
     header = Text()
     header.append(f"{result.broker_code} ", style="bold cyan")
-    header.append(f"({result.broker_name}) · {_type_label(result.broker_type)}")
+    header.append(f"({result.broker_name}) · {broker_type_label(result.broker_type)}")
     header.append(f" · as of {result.as_of}")
     header.append(f" · sessions {result.sessions_cached}")
     header.append("\n")
@@ -172,7 +164,7 @@ def display_desk_flow(result) -> None:
     c.print("")
     header = Text()
     header.append(f"{result.broker_code} ", style="bold cyan")
-    header.append(f"({result.broker_name}) · {_type_label(result.broker_type)}")
+    header.append(f"({result.broker_name}) · {broker_type_label(result.broker_type)}")
     header.append("\n")
     header.append(result.scope_note, style="yellow")
     c.print(Panel(header, title="[bold]Desk Flow by Day[/bold]", border_style="cyan", expand=False))
@@ -198,7 +190,7 @@ def display_desk_calendar(result) -> None:
     c.print("")
     header = Text()
     header.append(f"{result.broker_code} ", style="bold cyan")
-    header.append(f"({result.broker_name}) · {_type_label(result.broker_type)}")
+    header.append(f"({result.broker_name}) · {broker_type_label(result.broker_type)}")
     header.append(f" · as of {result.as_of} · sessions {result.sessions_cached}")
     header.append("\n")
     header.append(result.scope_note, style="yellow")
@@ -236,7 +228,7 @@ def display_desk_history(result) -> None:
     pin = f" · ticker {result.pinned_ticker}" if result.pinned_ticker else ""
     header = Text()
     header.append(f"{result.broker_code} ", style="bold cyan")
-    header.append(f"({result.broker_name}) · {_type_label(result.broker_type)}{pin}")
+    header.append(f"({result.broker_name}) · {broker_type_label(result.broker_type)}{pin}")
     header.append("\n")
     header.append(result.scope_note, style="yellow")
     c.print(Panel(header, title="[bold]Desk History[/bold]", border_style="cyan", expand=False))

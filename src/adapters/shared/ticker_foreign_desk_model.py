@@ -14,7 +14,11 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from src.adapters.shared.view_number_format import format_value
+from src.adapters.shared.view_number_format import (
+    format_date_short,
+    format_signed,
+    tone_for_signed,
+)
 
 
 @dataclass(frozen=True)
@@ -83,36 +87,6 @@ class TickerForeignDeskModel:
         lines.append("")
         lines.append(self.footer)
         return "\n".join(lines)
-
-
-def _fmt_signed(value: Decimal | float | int) -> str:
-    d = value if isinstance(value, Decimal) else Decimal(str(value))
-    s = format_value(d)
-    if d > 0 and not s.startswith("+"):
-        return f"+{s}"
-    return s
-
-
-def _tone_for_signed(value: Decimal | float | int | None) -> str:
-    if value is None:
-        return "neutral"
-    try:
-        d = value if isinstance(value, Decimal) else Decimal(str(value))
-    except Exception:
-        return "neutral"
-    if d > 0:
-        return "pos"
-    if d < 0:
-        return "neg"
-    return "neutral"
-
-
-def _date_s(raw: Any) -> str:
-    if raw is None:
-        return "—"
-    if hasattr(raw, "isoformat"):
-        return str(raw.isoformat())[:10]
-    return str(raw)[:10]
 
 
 def _window_net(points: Sequence[Any], n: int) -> Decimal | None:
@@ -188,7 +162,7 @@ def build_ticker_foreign_desk_model(
     n = window_days if window_days is not None else len(chronological)
     latest = chronological[-1]
     latest_net = getattr(latest, "net_val", Decimal("0"))
-    as_of_s = _date_s(as_of if as_of is not None else getattr(latest, "date", None))
+    as_of_s = format_date_short(as_of if as_of is not None else getattr(latest, "date", None))
     src = (resolved_source or getattr(latest, "source", None) or "—").strip() or "—"
 
     net5 = _window_net(chronological, 5)
@@ -224,18 +198,18 @@ def build_ticker_foreign_desk_model(
             bar = 0
         day_rows.append(
             ForeignDayRow(
-                date_s=_date_s(getattr(p, "date", None)),
+                date_s=format_date_short(getattr(p, "date", None)),
                 source=str(getattr(p, "source", None) or src or "—"),
-                net_s=_fmt_signed(net),
-                net_tone=_tone_for_signed(net),
+                net_s=format_signed(net),
+                net_tone=tone_for_signed(net),
                 lot_s=lot_s,
                 avg_s=avg_s,
                 bar_pct=bar,
             )
         )
 
-    hero_big = _fmt_signed(latest_net)
-    hero_tone = _tone_for_signed(latest_net)
+    hero_big = format_signed(latest_net)
+    hero_tone = tone_for_signed(latest_net)
     hero_sub = (
         f"latest day · source={src} · last {len(chronological)} days · "
         f"foreign net only · as of {as_of_s} · local cache"
@@ -244,7 +218,7 @@ def build_ticker_foreign_desk_model(
     def _pulse_net(key: str, label: str, val: Decimal | None) -> ForeignPulse:
         if val is None:
             return ForeignPulse(key, label, "—")
-        return ForeignPulse(key, label, _fmt_signed(val), _tone_for_signed(val))
+        return ForeignPulse(key, label, format_signed(val), tone_for_signed(val))
 
     pulses = (
         _pulse_net("net5", "5d net", net5),

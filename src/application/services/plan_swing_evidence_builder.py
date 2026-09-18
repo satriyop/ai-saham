@@ -41,6 +41,12 @@ from src.application.services.candidate_setup_phase_evidence_assembler import (
 from src.application.services.candidate_ticker_profile_evidence_assembler import (
     CandidateTickerProfileEvidenceAssembler,
 )
+from src.application.services.evidence_builder_defaults import (
+    normalize_company_quality_context_factory,
+    normalize_institutional_accumulation_factory,
+    normalize_sector_context_factory,
+    normalize_sector_macro_context_factory,
+)
 from src.application.services.strategy_loader import StrategyLoader
 
 if TYPE_CHECKING:
@@ -54,9 +60,6 @@ if TYPE_CHECKING:
     )
     from src.application.services.flow_confirmation_evidence_builder import (
         FlowConfirmationEvidenceBuilder,
-    )
-    from src.application.services.institutional_accumulation_evidence_builder import (
-        InstitutionalAccumulationEvidenceBuilder,
     )
     from src.application.services.institutional_flow_config import (
         InstitutionalAccumulationConfig,
@@ -157,10 +160,10 @@ class PlanSwingEvidenceBuilder:
         self._signal_engine = signal_engine
         self._corporate_action_risk_use_case = corporate_action_risk_use_case
         self._ticker_profile_classifier_factory = ticker_profile_classifier_factory
-        self._sector_context_builder_factory = _normalize_sector_context_factory(
+        self._sector_context_builder_factory = normalize_sector_context_factory(
             sector_context_builder_factory
         )
-        self._sector_macro_context_builder_factory = _normalize_sector_macro_context_factory(
+        self._sector_macro_context_builder_factory = normalize_sector_macro_context_factory(
             sector_macro_context_builder_factory
         )
 
@@ -174,7 +177,7 @@ class PlanSwingEvidenceBuilder:
             setup_phase_history_repository=setup_phase_history_repository,
         )
         self._institutional_assembler = CandidateInstitutionalAccumulationEvidenceAssembler(
-            _normalize_institutional_accumulation_factory(institutional_accumulation_config_factory)
+            normalize_institutional_accumulation_factory(institutional_accumulation_config_factory)
         )
         self._ticker_profile_assembler = CandidateTickerProfileEvidenceAssembler(
             ticker_profile_classifier_factory
@@ -182,7 +185,7 @@ class PlanSwingEvidenceBuilder:
         self._sector_context_assembler = CandidateSectorContextEvidenceAssembler()
         self._sector_macro_context_assembler = CandidateSectorMacroContextEvidenceAssembler()
         self._company_quality_assembler = CandidateCompanyQualityContextEvidenceAssembler(
-            _normalize_company_quality_context_factory(company_quality_context_builder_factory)
+            normalize_company_quality_context_factory(company_quality_context_builder_factory)
         )
 
     def build(
@@ -464,87 +467,3 @@ class PlanSwingEvidenceBuilder:
             broker_summaries=broker_summaries,
             warnings=tuple(warnings),
         )
-
-
-def _normalize_sector_macro_context_factory(
-    builder_factory: "Callable[[], SectorMacroContextEvidenceBuilder] | None",
-) -> "Callable[[], SectorMacroContextEvidenceBuilder]":
-    if builder_factory is not None:
-        return builder_factory
-
-    def _build() -> "SectorMacroContextEvidenceBuilder":
-        from src.application.services.sector_macro_context_evidence_builder import (
-            SectorMacroContextConfig,
-            SectorMacroContextEvidenceBuilder,
-        )
-
-        # Empty maps → deterministic unavailable for every ticker.
-        return SectorMacroContextEvidenceBuilder(
-            SectorMacroContextConfig.from_mapping(
-                {
-                    "sector_macro_context": {
-                        "factor_library": {
-                            "_placeholder": {
-                                "series": "MTF=F",
-                                "thresholds": {
-                                    "supportive_min": 0.05,
-                                    "headwind_max": -0.05,
-                                },
-                            }
-                        },
-                        "sector_maps": {},
-                    }
-                }
-            )
-        )
-
-    return _build
-
-
-def _normalize_sector_context_factory(
-    builder_factory: "Callable[[], SectorContextEvidenceBuilder] | None",
-) -> "Callable[[], SectorContextEvidenceBuilder]":
-    if builder_factory is not None:
-        return builder_factory
-
-    def _build() -> "SectorContextEvidenceBuilder":
-        from src.application.services.sector_context_evidence_builder import (
-            SectorContextConfig,
-            SectorContextEvidenceBuilder,
-        )
-
-        return SectorContextEvidenceBuilder(SectorContextConfig.from_mapping({}), {})
-
-    return _build
-
-
-def _normalize_institutional_accumulation_factory(
-    config_factory: Callable[[], "InstitutionalAccumulationConfig"] | None,
-) -> Callable[[], "InstitutionalAccumulationEvidenceBuilder"]:
-    def _build() -> "InstitutionalAccumulationEvidenceBuilder":
-        from src.application.services.institutional_accumulation_evidence_builder import (
-            InstitutionalAccumulationEvidenceBuilder,
-        )
-
-        if config_factory is not None:
-            return InstitutionalAccumulationEvidenceBuilder(config_factory())
-        return InstitutionalAccumulationEvidenceBuilder()
-
-    return _build
-
-
-def _normalize_company_quality_context_factory(
-    builder_factory: Callable[[], "CompanyQualityContextEvidenceBuilder"] | None,
-) -> Callable[[], "CompanyQualityContextEvidenceBuilder"]:
-    if builder_factory is not None:
-        return builder_factory
-
-    def _build() -> "CompanyQualityContextEvidenceBuilder":
-        from src.application.services.company_quality_context_evidence_builder import (
-            CompanyQualityContextConfig,
-            CompanyQualityContextEvidenceBuilder,
-        )
-
-        return CompanyQualityContextEvidenceBuilder(CompanyQualityContextConfig.from_mapping({}))
-
-    return _build

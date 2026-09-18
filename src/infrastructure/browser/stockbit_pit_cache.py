@@ -64,11 +64,11 @@ def has_fresh_ticker_row(
     ).fetchone()
     if row is None:
         return False
-    fetched_at = _parse_fetched_at(row[0])
+    fetched_at = parse_fetched_at(row[0])
     return fetched_at_is_fresh(fetched_at, ttl_days=ttl_days)
 
 
-def _parse_fetched_at(raw: str | None) -> datetime | None:
+def parse_fetched_at(raw: str | None) -> datetime | None:
     if not raw:
         return None
     try:

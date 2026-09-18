@@ -12,8 +12,8 @@ from decimal import Decimal
 from typing import Any
 
 from src.adapters.shared.trade_action_labels import ACTION_SCAN_TOKENS
-from src.adapters.shared.view_number_format import format_value
-from src.domain.entities.broker_flow import BrokerType
+from src.adapters.shared.view_broker_desk_text import broker_type_label
+from src.adapters.shared.view_number_format import signed_with_tone
 
 DISPLAY_LIMIT: int = 20
 HUB_KEYS = "t buy/sell · f flow · c calendar · h history · m top 5 · v ticker · esc home"
@@ -48,27 +48,6 @@ class BrokerDeskFlowModel:
         return False
 
 
-def _type_label(broker_type: Any) -> str:
-    if broker_type == BrokerType.FOREIGN:
-        return "Foreign"
-    if broker_type == BrokerType.LOCAL:
-        return "Local"
-    if isinstance(broker_type, str):
-        return broker_type
-    return "—"
-
-
-def _signed(value: Decimal) -> tuple[str, str]:
-    base = format_value(value)
-    if value > 0 and not base.startswith("+"):
-        return f"+{base}", "pos"
-    if value < 0:
-        return base if base.startswith("-") or base.startswith(
-            "−"
-        ) else f"-{base.lstrip('-')}", "neg"
-    return base, "flat"
-
-
 def build_broker_desk_flow_model(
     result: Any | None,
     *,
@@ -99,7 +78,7 @@ def build_broker_desk_flow_model(
     rows: list[BrokerFlowDayRow] = []
     for d, av in zip(raw_days, abs_vals, strict=True):
         nv = Decimal(str(getattr(d, "net_value", 0) or 0))
-        net_s, tone = _signed(nv)
+        net_s, tone = signed_with_tone(nv)
         lot = int(getattr(d, "net_lot", 0) or 0)
         tc = int(getattr(d, "ticker_count", 0) or 0)
         dt = getattr(d, "date", None)
@@ -119,7 +98,7 @@ def build_broker_desk_flow_model(
     return BrokerDeskFlowModel(
         broker_code=code_u,
         broker_name=str(getattr(result, "broker_name", code_u) or code_u),
-        type_label=_type_label(getattr(result, "broker_type", None)),
+        type_label=broker_type_label(getattr(result, "broker_type", None)),
         scope_note=str(
             getattr(result, "scope_note", None) or "Tracked desk activity only (broker_daily_flow)"
         )

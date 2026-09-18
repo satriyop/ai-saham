@@ -19,8 +19,9 @@ from typing import Any
 from rich.console import Group
 from rich.text import Text
 
-from src.adapters.cli.plan_swing_formatters import fmt_date, notation_detail
+from src.adapters.cli.plan_swing_formatters import fmt_date
 from src.adapters.cli.rich_display import compact_table, panel
+from src.adapters.cli.ticker_notation_display import notation_detail
 from src.application.dto.plan_swing import (
     ScreenJudgmentReference,
     ScreenJudgmentStatus,

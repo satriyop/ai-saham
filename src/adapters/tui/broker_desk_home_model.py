@@ -18,8 +18,8 @@ from src.adapters.shared.trade_action_labels import (
     ACTION_SCAN_TOKENS,
     ACTION_WATCH,
 )
+from src.adapters.shared.view_broker_desk_text import broker_type_label
 from src.adapters.shared.view_number_format import format_value
-from src.domain.entities.broker_flow import BrokerType
 
 # Operator hub keys (Stage 1) — deep pages stay plain text.
 HUB_KEY_LEGEND = "t buy/sell · f flow · c calendar · h history · m top 5 · v ticker · esc trail"
@@ -81,16 +81,6 @@ class BrokerDeskHomeModel:
         if text.strip() in {ACTION_ENTER, ACTION_WATCH, ACTION_AVOID}:
             return True
         return False
-
-
-def _type_label(broker_type: Any) -> str:
-    if broker_type == BrokerType.FOREIGN:
-        return "Foreign"
-    if broker_type == BrokerType.LOCAL:
-        return "Local"
-    if isinstance(broker_type, str):
-        return broker_type
-    return "—"
 
 
 def _signed_amount(value: Decimal) -> tuple[str, str, str]:
@@ -204,7 +194,7 @@ def build_broker_desk_home_model(
     return BrokerDeskHomeModel(
         broker_code=code_u,
         broker_name=str(getattr(result, "broker_name", code_u) or code_u),
-        type_label=_type_label(getattr(result, "broker_type", None)),
+        type_label=broker_type_label(getattr(result, "broker_type", None)),
         as_of=as_of_s,
         day_net_sign=sign,
         day_net_amount=amount,

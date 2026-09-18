@@ -8,9 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from src.infrastructure.config.app_config import AppConfig, load_app_config
+from src.infrastructure.config.yaml_file import read_yaml_dict
 
 
 def default_plan_swing_config_path(config: AppConfig | None = None) -> Path:
@@ -33,7 +32,7 @@ class PlanSwingConfig:
 
 def load_plan_swing_config(config_path: Path | None = None) -> PlanSwingConfig:
     defaults = PlanSwingConfig()
-    raw = _read_yaml(config_path or default_plan_swing_config_path())
+    raw = read_yaml_dict(config_path or default_plan_swing_config_path())
     root = raw.get("plan_swing") or raw
     if not isinstance(root, dict):
         return defaults
@@ -69,15 +68,6 @@ def load_plan_swing_config(config_path: Path | None = None) -> PlanSwingConfig:
             candidate, "min_accum_score", defaults.candidate_min_accum_score
         ),
     )
-
-
-def _read_yaml(path: Path) -> dict[str, Any]:
-    try:
-        with open(path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
-    except FileNotFoundError:
-        return {}
-    return data if isinstance(data, dict) else {}
 
 
 def _int(data: dict[str, Any], key: str, default: int) -> int:

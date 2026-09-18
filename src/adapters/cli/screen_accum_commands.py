@@ -17,6 +17,7 @@ from src.adapters.cli.cli_errors import (
     raise_user_error,
     resolve_cli_db_path,
 )
+from src.adapters.cli.cli_output import echo_json, resolve_output_format
 from src.adapters.cli.effective_session_display import parse_as_of_option
 from src.adapters.cli.screen_accum_display import (
     display_multi,
@@ -27,7 +28,6 @@ from src.adapters.cli.screen_accum_formatters import (
     AccumulationDisplayConfig,
     accumulation_display_config_from_screener,
 )
-from src.adapters.cli.screen_contract_cli import echo_json, resolve_output_format
 from src.adapters.composition.screen_accum_request import build_screen_accum_request
 from src.adapters.composition.screen_deps import build_screen_deps
 from src.application.dto.screen_accum_payload import (
