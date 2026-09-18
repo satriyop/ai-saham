@@ -13,6 +13,7 @@ from typing import Any
 
 from src.adapters.tui.plan_structure_result import (
     PlanStructureResult,
+    is_preopen_row,
     plan_structure_from_runner_object,
     structure_lines,
 )
@@ -45,7 +46,7 @@ def present_plan_stage(
 
     if row is not None and _is_accum_row(row):
         lines.extend(_accum_facts(row))
-    elif row is not None and _is_preopen_row(row):
+    elif row is not None and is_preopen_row(row):
         lines.extend(_preopen_facts(row))
     else:
         lines.append("[dim]No board row facts[/]")
@@ -106,9 +107,3 @@ def _preopen_facts(row: Any) -> list[str]:
 
 def _is_accum_row(row: Any) -> bool:
     return all(hasattr(row, k) for k in ("signal", "accum", "action", "gate"))
-
-
-def _is_preopen_row(row: Any) -> bool:
-    if all(hasattr(row, k) for k in ("iep", "action", "risk", "delta_pct", "ncp")):
-        return True
-    return all(hasattr(row, k) for k in ("iep", "grade", "risk", "delta_pct"))

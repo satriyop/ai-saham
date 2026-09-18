@@ -13,8 +13,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from src.adapters.shared.view_number_format import format_value
-
 
 @dataclass(frozen=True)
 class TickerJobText:
@@ -34,14 +32,6 @@ class TickerJobText:
 
     def as_text(self) -> str:
         return f"{self.title}\n\n{self.body}".strip()
-
-
-def _fmt_signed(value: Decimal | float | int) -> str:
-    d = value if isinstance(value, Decimal) else Decimal(str(value))
-    s = format_value(d)
-    if d > 0 and not s.startswith("+"):
-        return f"+{s}"
-    return s
 
 
 def format_ticker_brokers_job(

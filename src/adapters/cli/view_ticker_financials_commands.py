@@ -11,10 +11,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from src.adapters.cli.view_ticker_contract_cli import (
-    echo_json,
-    resolve_output_format,
-)
+from src.adapters.cli.cli_output import echo_json, resolve_output_format
 from src.adapters.cli.view_ticker_financials_display import display_ticker_financials_many
 from src.application.dto.view_ticker_contract import (
     ViewResultStatus,

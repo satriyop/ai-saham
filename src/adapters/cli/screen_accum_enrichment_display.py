@@ -14,8 +14,8 @@ from src.adapters.cli.rich_display import compact_table
 from src.adapters.cli.screen_accum_formatters import (
     AccumulationDisplayConfig,
     format_disc_pct_plain,
-    notation_detail,
 )
+from src.adapters.cli.ticker_notation_display import notation_detail
 from src.application.dto.accumulation_screen import AccumulationCandidate
 from src.domain.services.trading_calendar import trading_sessions_apart
 

@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from src.adapters.shared.view_number_format import format_value
-from src.domain.entities.broker_flow import BrokerType
+from src.adapters.shared.view_broker_desk_text import broker_type_label
+from src.adapters.shared.view_number_format import signed_with_tone
 
 DISPLAY_LIMIT: int = 40
 HUB_KEYS = "t buy/sell · f flow · c calendar · h history · m top 5 · v ticker · esc home"
@@ -52,25 +52,6 @@ class BrokerDeskHistoryModel:
         return False
 
 
-def _type_label(broker_type: Any) -> str:
-    if broker_type == BrokerType.FOREIGN:
-        return "Foreign"
-    if broker_type == BrokerType.LOCAL:
-        return "Local"
-    if isinstance(broker_type, str):
-        return broker_type
-    return "—"
-
-
-def _signed(value: Decimal) -> tuple[str, str]:
-    base = format_value(value)
-    if value > 0 and not base.startswith("+"):
-        return f"+{base}", "pos"
-    if value < 0:
-        return base, "neg"
-    return base, "flat"
-
-
 def build_broker_desk_history_model(
     result: Any | None,
     *,
@@ -108,7 +89,7 @@ def build_broker_desk_history_model(
     rows: list[BrokerHistoryRow] = []
     for f in shown:
         nv = Decimal(str(getattr(f, "net_value", 0) or 0))
-        net_s, tone = _signed(nv)
+        net_s, tone = signed_with_tone(nv)
         lot = int(getattr(f, "net_lot", 0) or 0)
         dt = getattr(f, "date", None)
         date_s = dt.isoformat() if hasattr(dt, "isoformat") else str(dt or "—")
@@ -128,7 +109,7 @@ def build_broker_desk_history_model(
     return BrokerDeskHistoryModel(
         broker_code=code_u,
         broker_name=str(getattr(result, "broker_name", code_u) or code_u),
-        type_label=_type_label(getattr(result, "broker_type", None)),
+        type_label=broker_type_label(getattr(result, "broker_type", None)),
         scope_note=str(
             getattr(result, "scope_note", None) or "Tracked desk activity only (broker_daily_flow)"
         )

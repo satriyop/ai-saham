@@ -89,3 +89,10 @@ def plan_structure_from_runner_object(obj: Any) -> PlanStructureResult:
         risk_pct=str(getattr(obj, "risk_pct", "—") or "—"),
         horizon=str(getattr(obj, "horizon", "swing") or "swing"),
     )
+
+
+def is_preopen_row(row: Any) -> bool:
+    """Duck-type check for a pre-open board row (vs accum/plan rows)."""
+    if all(hasattr(row, k) for k in ("iep", "action", "risk", "delta_pct", "ncp")):
+        return True
+    return all(hasattr(row, k) for k in ("iep", "grade", "risk", "delta_pct"))

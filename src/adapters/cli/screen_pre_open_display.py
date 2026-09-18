@@ -13,6 +13,7 @@ from rich.console import Group
 from rich.text import Text
 
 from src.adapters.cli.rich_display import compact_table, console, panel
+from src.adapters.cli.ticker_notation_display import notation_label
 from src.adapters.cli.view_market_context_display import (
     REGIME_DISPLAY_LABEL,
     context_conviction_score,
@@ -320,24 +321,6 @@ def display_pre_open_summary_panel(
             subtitle=screened_date.isoformat(),
         )
     )
-
-
-def notation_label(snapshot) -> str:
-    if snapshot is None:
-        return "-"
-    parts = []
-    if getattr(snapshot, "codes", None):
-        parts.append(",".join(snapshot.codes))
-    if getattr(snapshot, "tradeable", None) is False:
-        parts.append("NO-TRADE")
-    status = getattr(snapshot, "status", None)
-    if status and status != "STATUS_ACTIVE":
-        parts.append(status.replace("STATUS_", ""))
-    if getattr(snapshot, "suspend_info", None):
-        parts.append("SUSP")
-    if getattr(snapshot, "has_uma", None):
-        parts.append("UMA")
-    return "+".join(parts) if parts else "-"
 
 
 def display_results(

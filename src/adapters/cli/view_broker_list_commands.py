@@ -10,10 +10,9 @@ from typing import Annotated, Optional
 
 import typer
 
+from src.adapters.cli.cli_output import echo_json, resolve_output_format
 from src.adapters.cli.view_broker_contract_cli import (
     desk_envelope,
-    echo_json,
-    resolve_output_format,
 )
 from src.application.services.broker_desk_from_daily_flow import classify_desk_type
 from src.domain.entities.broker_flow import BrokerType
