@@ -3,16 +3,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.application.rules.condition_schema import ConditionIndicatorVsValue, Operator
+from src.application.rules.indicator_schema import IndicatorDefinition, IndicatorType
 from src.application.rules.interpreter import YamlRuleInterpreter
-from src.application.rules.schema import (
-    ConditionIndicatorVsValue,
-    IndicatorDefinition,
-    IndicatorType,
-    Operator,
-    Outcome,
-    Rule,
-    RuleSet,
-)
+from src.application.rules.outcome_schema import Outcome
+from src.application.rules.rule_schema import Rule, RuleSet
 from tests.application.rules.interpreter_fixtures import (
     make_indicator_rule,
     make_rule,

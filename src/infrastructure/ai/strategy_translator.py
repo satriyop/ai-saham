@@ -7,17 +7,6 @@ Implements the StrategyTranslator port using various LLM providers
 Layer: Infrastructure
 """
 
-# Compatibility surface:
-# - Canonical import(s):
-#   - canonicalize_yaml -> src.infrastructure.ai.strategy_translator_output
-# - Allowed contents:
-#   - re-export only for canonicalize_yaml. This module remains canonical
-#     for StrategyTranslatorAdapter itself, which is not part of the
-#     compatibility surface.
-# - Expiry:
-#   - permanent public API, or remove after internal imports migrate to
-#     src.infrastructure.ai.strategy_translator_output directly.
-
 import logging
 import os
 import time
@@ -43,12 +32,9 @@ logger = logging.getLogger("ai_saham.ai.strategy_translator")
 SUPPORTED_PROVIDERS = ("claude", "openai", "gemini", "ollama", "mock")
 
 
-# Re-exported for backward compatibility with existing imports:
-# from src.infrastructure.ai.strategy_translator import canonicalize_yaml
 __all__ = [
     "SUPPORTED_PROVIDERS",
     "StrategyTranslatorAdapter",
-    "canonicalize_yaml",
 ]
 
 

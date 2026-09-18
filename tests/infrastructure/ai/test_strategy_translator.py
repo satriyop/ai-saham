@@ -12,16 +12,11 @@ from src.application.ports.strategy_translator import (
     StrategyTranslatorRateLimitError,
     StrategyTranslatorTimeoutError,
 )
-from src.infrastructure.ai.strategy_translator import (
-    StrategyTranslatorAdapter,
-    canonicalize_yaml,
-)
+from src.infrastructure.ai.strategy_translator import StrategyTranslatorAdapter
 from src.infrastructure.ai.strategy_translator_mock_templates import (
     call_mock_strategy_translator,
 )
-from src.infrastructure.ai.strategy_translator_output import (
-    canonicalize_yaml as output_canonicalize_yaml,
-)
+from src.infrastructure.ai.strategy_translator_output import canonicalize_yaml
 from src.infrastructure.ai.strategy_translator_prompt import (
     build_retry_prompt,
     build_system_prompt,
@@ -464,15 +459,11 @@ class TestMockYamlValidation:
 
 
 class TestOutputCanonicalizeYaml:
-    """Direct import coverage for strategy_translator_output.canonicalize_yaml."""
-
-    def test_matches_facade_reexport(self):
-        """Facade re-export should be the same function object."""
-        assert canonicalize_yaml is output_canonicalize_yaml
+    """Coverage for strategy_translator_output.canonicalize_yaml."""
 
     def test_strips_markdown_fence(self):
         """Should strip a fenced yaml code block."""
-        result = output_canonicalize_yaml("```yaml\nversion: 1\n```")
+        result = canonicalize_yaml("```yaml\nversion: 1\n```")
 
         assert result == "version: 1"
 

@@ -7,7 +7,7 @@ Layer: Application
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from src.application.rules.schema import RuleSet
+from src.application.rules.rule_schema import RuleSet
 from src.application.services.indicator_registry import IndicatorRegistry
 
 

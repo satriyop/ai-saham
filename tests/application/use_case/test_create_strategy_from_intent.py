@@ -13,7 +13,7 @@ from src.application.ports.strategy_translator import (
     StrategyTranslatorRateLimitError,
     StrategyTranslatorTimeoutError,
 )
-from src.application.rules.schema import RuleSet
+from src.application.rules.rule_schema import RuleSet
 from src.application.use_case.create_strategy_from_intent_use_case import (
     CreateStrategyFromIntentRequest,
     CreateStrategyFromIntentResponse,
@@ -475,9 +475,9 @@ class TestResponseFactoryMethods:
 
     def test_success_response(self, registry):
         """Test success_response factory method."""
-        from src.infrastructure.config.yaml_loader import YamlConfigLoader
+        from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
-        rule_set = YamlConfigLoader.load_from_string(VALID_RSI_YAML, registry=registry)
+        rule_set = RulesYamlLoader.load_from_string(VALID_RSI_YAML, registry=registry)
         response = CreateStrategyFromIntentResponse.success_response(
             intent="RSI strategy",
             yaml_content=VALID_RSI_YAML,

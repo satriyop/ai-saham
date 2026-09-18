@@ -279,9 +279,9 @@ Important composition points:
 | Daily briefing | `src/application/use_case/daily_briefing_use_case.py` |
 | Architecture enforcement | `tests/architecture/test_layer_boundaries.py` |
 
-`src/application/services/bootstrap.py` is a compatibility facade. Put new
-engine construction in the focused `engine_bootstrap/` modules rather than
-growing the facade.
+Engine config resolving lives in the focused
+`src/application/services/engine_bootstrap/` modules; concrete engine
+construction lives in the infrastructure composition package.
 
 ## Data and configuration
 

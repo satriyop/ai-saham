@@ -7,14 +7,14 @@ Layer: Infrastructure
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from src.application.rules.exceptions import RulesSchemaError, RulesValidationError
-from src.application.rules.schema import (
+from src.application.rules.condition_schema import (
     CompoundCondition,
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
     IndicatorRef,
     Operator,
 )
+from src.application.rules.exceptions import RulesSchemaError, RulesValidationError
 from src.infrastructure.config.rules_parser_helpers import require_field
 
 

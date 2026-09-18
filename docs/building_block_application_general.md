@@ -416,7 +416,6 @@ Each Big block decomposes into Medium modules:
 | `SkillGenerator` | `services/skill_generator.py` | Auto-generates SKILL.md from artifacts |
 | `AccumulationJournal` | `services/accumulation_journal.py` | CSV-based accumulation candidate journal |
 | `PreOpenPostOpenAssessmentJournal` | `services/pre_open_paper_journal.py` | CSV-based confirmation journal |
-| `Bootstrap` | `services/bootstrap.py` | System initialization |
 | `GroupMapping` | `services/group_mapping.py` | Stock sector/group classification |
 | `AIResearch` | `services/ai_research.py` | AI research orchestration |
 
@@ -445,7 +444,7 @@ Each Big block decomposes into Medium modules:
 
 | Component | File | Purpose |
 |-----------|------|---------|
-| Schema | `rules/schema.py` | YAML rule schema definitions |
+| Schema | `rules/condition_schema.py`, `rules/indicator_schema.py`, `rules/outcome_schema.py`, `rules/rule_schema.py` | YAML rule schema definitions |
 | Interpreter | `rules/interpreter.py` | Runtime rule evaluation engine |
 | Exceptions | `rules/exceptions.py` | Rule-specific errors |
 
@@ -537,12 +536,11 @@ Each Big block decomposes into Medium modules:
 | `browser/stockbit_universe.py` | Ticker universe definitions |
 | `browser/stockbit_valuation.py` | P/E TTM, EPS TTM valuation metrics |
 
-#### Infrastructure Config/CSV (4 files)
+#### Infrastructure Config/CSV
 
 | File | Purpose |
 |------|---------|
-| `config/yaml_loader.py` | YAML config loading |
-| `config/user_config.py` | User configuration management |
+| `config/rules_yaml_loader.py` | Rules/strategy YAML loading |
 | `csv/format_detector.py` | Auto-detect CSV format |
 | `csv/mapping_loader.py` | Column mapping loader |
 | `csv/broker_csv_adapter.py` | CSV broker data parser |

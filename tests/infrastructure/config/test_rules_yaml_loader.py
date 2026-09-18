@@ -1,5 +1,5 @@
 """
-Tests for YamlConfigLoader.
+Tests for RulesYamlLoader.
 
 Tests cover:
 - Valid file loading
@@ -16,18 +16,18 @@ from pathlib import Path
 
 import pytest
 
+from src.application.rules.condition_schema import (
+    ConditionIndicatorVsIndicator,
+    ConditionIndicatorVsValue,
+    Operator,
+)
 from src.application.rules.exceptions import (
     RulesFileError,
     RulesSchemaError,
     RulesValidationError,
 )
-from src.application.rules.schema import (
-    ConditionIndicatorVsIndicator,
-    ConditionIndicatorVsValue,
-    Operator,
-    Outcome,
-)
-from src.infrastructure.config.yaml_loader import YamlConfigLoader
+from src.application.rules.outcome_schema import Outcome
+from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
 # --- Test Fixtures ---
 
@@ -92,7 +92,7 @@ class TestValidFileLoading:
         """Should load a minimal valid YAML file."""
         path = write_yaml(VALID_YAML)
         try:
-            rule_set = YamlConfigLoader.load(path)
+            rule_set = RulesYamlLoader.load(path)
 
             assert rule_set.version == 1
             assert rule_set.name == "test_rules"
@@ -105,7 +105,7 @@ class TestValidFileLoading:
         """Should load a complete YAML file with all features."""
         path = write_yaml(VALID_YAML_FULL)
         try:
-            rule_set = YamlConfigLoader.load(path)
+            rule_set = RulesYamlLoader.load(path)
 
             assert rule_set.version == 1
             assert rule_set.name == "full_test"
@@ -119,7 +119,7 @@ class TestValidFileLoading:
         """Should correctly parse indicator-vs-value conditions."""
         path = write_yaml(VALID_YAML)
         try:
-            rule_set = YamlConfigLoader.load(path)
+            rule_set = RulesYamlLoader.load(path)
             rule = rule_set.rules[0]
 
             assert isinstance(rule.condition, ConditionIndicatorVsValue)
@@ -133,7 +133,7 @@ class TestValidFileLoading:
         """Should correctly parse indicator-vs-indicator conditions."""
         path = write_yaml(VALID_YAML_FULL)
         try:
-            rule_set = YamlConfigLoader.load(path)
+            rule_set = RulesYamlLoader.load(path)
             rule = rule_set.rules[1]
 
             assert isinstance(rule.condition, ConditionIndicatorVsIndicator)
@@ -147,7 +147,7 @@ class TestValidFileLoading:
         """Should accept string path in addition to Path object."""
         path = write_yaml(VALID_YAML)
         try:
-            rule_set = YamlConfigLoader.load(str(path))
+            rule_set = RulesYamlLoader.load(str(path))
             assert rule_set.name == "test_rules"
         finally:
             path.unlink()
@@ -156,7 +156,7 @@ class TestValidFileLoading:
         """Should correctly load priority values."""
         path = write_yaml(VALID_YAML_FULL)
         try:
-            rule_set = YamlConfigLoader.load(path)
+            rule_set = RulesYamlLoader.load(path)
 
             assert rule_set.rules[0].priority == 10
             assert rule_set.rules[1].priority == 20
@@ -167,7 +167,7 @@ class TestValidFileLoading:
         """Should use default priority when not specified."""
         path = write_yaml(VALID_YAML)
         try:
-            rule_set = YamlConfigLoader.load(path)
+            rule_set = RulesYamlLoader.load(path)
 
             assert rule_set.rules[0].priority == 100  # default
         finally:
@@ -202,7 +202,7 @@ rules:
 """
         path = write_yaml(yaml_content)
         try:
-            rule_set = YamlConfigLoader.load(path)
+            rule_set = RulesYamlLoader.load(path)
 
             operators = [r.condition.operator for r in rule_set.rules]
             assert Operator.LT in operators
@@ -224,13 +224,13 @@ class TestFileErrors:
     def test_file_not_found(self):
         """Should raise RulesFileError when file doesn't exist."""
         with pytest.raises(RulesFileError, match="not found"):
-            YamlConfigLoader.load("/nonexistent/path/rules.yaml")
+            RulesYamlLoader.load("/nonexistent/path/rules.yaml")
 
     def test_directory_instead_of_file(self):
         """Should raise appropriate error for directory path."""
         with tempfile.TemporaryDirectory() as tmpdir:
             with pytest.raises(RulesFileError):
-                YamlConfigLoader.load(tmpdir)
+                RulesYamlLoader.load(tmpdir)
 
 
 # --- YAML Syntax Error Tests ---
@@ -249,7 +249,7 @@ name: test
         path = write_yaml(invalid_yaml)
         try:
             with pytest.raises(RulesSchemaError, match="Invalid YAML"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -258,7 +258,7 @@ name: test
         path = write_yaml("")
         try:
             with pytest.raises(RulesSchemaError, match="Empty"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -267,7 +267,7 @@ name: test
         path = write_yaml("- just\n- a\n- list")
         try:
             with pytest.raises(RulesSchemaError, match="must be a YAML mapping"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -291,7 +291,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="missing required field 'version'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -308,7 +308,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="missing required field 'name'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -325,7 +325,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="missing required field 'default_outcome'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -339,7 +339,7 @@ default_outcome: MODERATE
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="missing required field 'rules'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -354,7 +354,7 @@ rules: []
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="at least one rule"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -371,7 +371,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="missing required field 'name'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -388,7 +388,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="missing required field 'when'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -405,7 +405,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="missing required field 'outcome'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -430,7 +430,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesValidationError, match="undefined indicator 'MACD'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -448,7 +448,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesValidationError, match="Unknown operator '~'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -466,7 +466,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesValidationError, match="Unknown outcome 'BUY'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -484,7 +484,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesValidationError, match="Unknown outcome 'NEUTRAL'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -505,7 +505,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesValidationError, match="Duplicate: 'same_name'"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -523,7 +523,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="Unsupported version 2"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -542,7 +542,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesValidationError, match="priority: must be an integer"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -560,7 +560,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="must have either"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -585,7 +585,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="expected int, got str"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -600,7 +600,7 @@ rules: "not a list"
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="expected list, got str"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -616,7 +616,7 @@ rules:
         path = write_yaml(yaml_content)
         try:
             with pytest.raises(RulesSchemaError, match="rule must be a mapping"):
-                YamlConfigLoader.load(path)
+                RulesYamlLoader.load(path)
         finally:
             path.unlink()
 
@@ -628,10 +628,10 @@ class TestRulesYamlLoaderCompatibility:
         """Should import RulesYamlLoader and verify load_from_string has same behavior."""
         from src.infrastructure.config.rules_yaml_loader import RulesYamlLoader
 
-        rules_from_string_old = YamlConfigLoader.load_from_string(VALID_YAML)
+        rules_from_string_old = RulesYamlLoader.load_from_string(VALID_YAML)
         rules_from_string_new = RulesYamlLoader.load_from_string(VALID_YAML)
 
-        assert RulesYamlLoader is YamlConfigLoader
+        assert RulesYamlLoader is RulesYamlLoader
         assert rules_from_string_new.name == rules_from_string_old.name
         assert len(rules_from_string_new.rules) == len(rules_from_string_old.rules)
         assert rules_from_string_new.rules[0].name == rules_from_string_old.rules[0].name

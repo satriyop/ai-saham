@@ -1,15 +1,14 @@
 from datetime import date
 from decimal import Decimal
 
-from src.application.rules.schema import (
+from src.application.rules.condition_schema import (
     ConditionIndicatorVsIndicator,
     ConditionIndicatorVsValue,
     IndicatorRef,
     Operator,
-    Outcome,
-    Rule,
-    RuleSet,
 )
+from src.application.rules.outcome_schema import Outcome
+from src.application.rules.rule_schema import Rule, RuleSet
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot
 
 

@@ -10,8 +10,8 @@ from typing import Union
 
 from src.application.dto.assess_risk import AssessRiskRequest, AssessRiskResponse
 from src.application.ports.rules_loader import RulesLoader
+from src.application.rules.indicator_schema import BUILTIN_INDICATORS, IndicatorType
 from src.application.rules.interpreter import YamlRuleInterpreter
-from src.application.rules.schema import BUILTIN_INDICATORS, IndicatorType
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.domain.ports.market_data_repository import MarketDataRepository
 from src.domain.value_objects.indicator_snapshot import IndicatorSnapshot

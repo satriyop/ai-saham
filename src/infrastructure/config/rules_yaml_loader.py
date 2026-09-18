@@ -18,7 +18,8 @@ from src.application.rules.exceptions import (
     RulesSchemaError,
     RulesValidationError,
 )
-from src.application.rules.schema import Outcome, Rule, RuleSet
+from src.application.rules.outcome_schema import Outcome
+from src.application.rules.rule_schema import Rule, RuleSet
 from src.infrastructure.config.rules_condition_parser import build_rule_condition
 from src.infrastructure.config.rules_indicator_parser import (
     build_rule_indicators,
@@ -301,7 +302,3 @@ class RulesYamlLoader(RulesLoader):
             priority=priority,
             rationale=rationale,
         )
-
-
-# Backward-compatible alias
-YamlConfigLoader = RulesYamlLoader

@@ -12,10 +12,8 @@ from src.application.ports.formula_translator import (
     TranslatorRateLimitError,
     TranslatorTimeoutError,
 )
-from src.infrastructure.ai.formula_translator import (
-    FormulaTranslatorAdapter,
-    canonicalize_formula,
-)
+from src.infrastructure.ai.formula_translator import FormulaTranslatorAdapter
+from src.infrastructure.ai.formula_translator_output import canonicalize_formula
 from src.infrastructure.ai.formula_translator_prompt import (
     DEFAULT_SERIES,
     build_retry_prompt,
@@ -342,20 +340,6 @@ class TestNewModuleImports:
         result = cf("sma(close, 20)")
         assert result == "SMA(CLOSE, 20)"
 
-    def test_canonicalize_formula_from_orchestration_module(self):
-        """canonicalize_formula should be re-exported from formula_translator (compat)."""
-        from src.infrastructure.ai.formula_translator import canonicalize_formula as cf
-
-        result = cf("sma(close, 20)")
-        assert result == "SMA(CLOSE, 20)"
-
-    def test_both_imports_return_same_function(self):
-        """Both import paths should return the same function object."""
-        from src.infrastructure.ai.formula_translator import canonicalize_formula as cf1
-        from src.infrastructure.ai.formula_translator_output import canonicalize_formula as cf2
-
-        assert cf1 is cf2
-
     def test_function_name_pattern_from_output_module(self):
         """FUNCTION_NAME_PATTERN should be importable from formula_translator_output."""
         from src.infrastructure.ai.formula_translator_output import FUNCTION_NAME_PATTERN
@@ -368,7 +352,7 @@ class TestNewModuleImports:
 
         assert "SUPPORTED_PROVIDERS" in __all__
         assert "FormulaTranslatorAdapter" in __all__
-        assert "canonicalize_formula" in __all__
+        assert "canonicalize_formula" not in __all__
 
 
 class TestCallMockFormulaTranslator:

@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Union
 
 from src.application.ports.rules_loader import RulesLoader
+from src.application.rules.indicator_schema import BUILTIN_INDICATORS, IndicatorType
 from src.application.rules.interpreter import YamlRuleInterpreter
-from src.application.rules.schema import BUILTIN_INDICATORS, IndicatorType
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.application.services.strategy_loader import StrategyLoader
 from src.domain.entities.candle import Candle

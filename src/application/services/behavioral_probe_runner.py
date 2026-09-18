@@ -85,7 +85,7 @@ from src.application.dto.signal_evidence_execution_context import (
     SignalEvidenceExecutionContext,
 )
 from src.application.ports.rules_loader import RulesLoader
-from src.application.rules.schema import RuleSet
+from src.application.rules.rule_schema import RuleSet
 from src.application.services.behavioral_probe_set import (
     CORE_PROBE_SET_ID,
     BehavioralProbe,

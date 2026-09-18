@@ -26,7 +26,7 @@ from src.application.rules.exceptions import (
 )
 
 if TYPE_CHECKING:
-    from src.application.rules.schema import RuleSet
+    from src.application.rules.rule_schema import RuleSet
     from src.application.services.indicator_registry import IndicatorRegistry
 
 

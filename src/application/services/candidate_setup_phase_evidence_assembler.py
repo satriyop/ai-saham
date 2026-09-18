@@ -20,10 +20,8 @@ from typing import TYPE_CHECKING, Any
 from src.application.dto.built_evidence import BuiltSetupEvidence
 from src.application.services.candle_provenance import resolve_candle_source
 from src.application.services.setup_evidence_builder import SetupEvidenceBuilder
-from src.application.services.setup_phase_detector import (
-    SetupPhaseConfig,
-    SetupPhaseDetector,
-)
+from src.application.services.setup_phase_config import SetupPhaseConfig
+from src.application.services.setup_phase_detector import SetupPhaseDetector
 from src.application.services.setup_phase_history import (
     SetupPhaseHistoryIndex,
     load_previous_setup_phases,

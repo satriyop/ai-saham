@@ -15,12 +15,9 @@ from pathlib import Path
 from typing import Union
 
 from src.application.ports.rules_loader import RulesLoader
+from src.application.rules.indicator_schema import BUILTIN_INDICATORS, IndicatorType
 from src.application.rules.interpreter import YamlRuleInterpreter
-from src.application.rules.schema import (
-    BUILTIN_INDICATORS,
-    IndicatorType,
-    SignalMapping,
-)
+from src.application.rules.outcome_schema import SignalMapping
 from src.application.services.indicator_registry import IndicatorRegistry
 from src.domain.entities.candle import Candle
 from src.domain.ports.market_data_repository import MarketDataRepository

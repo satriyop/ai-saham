@@ -1,12 +1,14 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
-from src.application.services.setup_phase_detector import (
+from src.application.services.setup_phase_config import (
     SetupPhaseConfig,
-    SetupPhaseDetector,
     SetupPhaseRequirementConfig,
     VolumeTriggerValidityConfig,
-    _volume_trigger_evidence,
+)
+from src.application.services.setup_phase_detector import SetupPhaseDetector
+from src.application.services.setup_phase_volume_trigger import (
+    volume_trigger_evidence as _volume_trigger_evidence,
 )
 from src.domain.entities.candle import Candle
 from src.domain.value_objects.benchmark_excess_return import (

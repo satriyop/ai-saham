@@ -7,17 +7,6 @@ Implements the FormulaTranslator port using various LLM providers
 Layer: Infrastructure
 """
 
-# Compatibility surface:
-# - Canonical import(s):
-#   - canonicalize_formula -> src.infrastructure.ai.formula_translator_output
-# - Allowed contents:
-#   - re-export only for canonicalize_formula. This module remains canonical
-#     for FormulaTranslatorAdapter itself, which is not part of the
-#     compatibility surface.
-# - Expiry:
-#   - permanent public API, or remove after internal imports migrate to
-#     src.infrastructure.ai.formula_translator_output directly.
-
 import logging
 import os
 import time
@@ -46,12 +35,9 @@ logger = logging.getLogger("ai_saham.ai.translator")
 SUPPORTED_PROVIDERS = ("claude", "openai", "gemini", "ollama", "mock")
 
 
-# Re-exported for backward compatibility with existing imports:
-# from src.infrastructure.ai.formula_translator import canonicalize_formula
 __all__ = [
     "SUPPORTED_PROVIDERS",
     "FormulaTranslatorAdapter",
-    "canonicalize_formula",
 ]
 
 
