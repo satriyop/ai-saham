@@ -9,8 +9,7 @@ Broker/foreign-flow JSON parsing lives in stockbit_broker_parsers.py.
 IEV/orderbook JSON parsing lives in stockbit_preopen_parsers.py.
 
 Browser session utilities (login, spy, browse, JWT extraction) live in
-stockbit_session_actions.py / stockbit_token_extractor.py (with a compatibility
-facade in playwright_stockbit_browser.py) and are re-exported from here.
+stockbit_session_actions.py / stockbit_token_extractor.py.
 
 Phase D+E: browser launches removed from data-fetching methods. All Exodus API
 calls now go through StockbitApiClient (JWT managed by StockbitTokenStore).
@@ -38,60 +37,13 @@ from src.domain.value_objects.screener_result import (
     OrderBookTopOfBook,
 )
 from src.infrastructure.browser.stockbit_api_client import StockbitApiClient
-from src.infrastructure.browser.stockbit_browser_context import (
-    ORDERBOOK_PAGE_URL as ORDERBOOK_PAGE_URL,
-)
-from src.infrastructure.browser.stockbit_browser_context import (
-    _persistent_context as _persistent_context,
-)
-from src.infrastructure.browser.stockbit_browser_context import (
-    _require_playwright as _require_playwright,
-)
 from src.infrastructure.browser.stockbit_preopen_parsers import (
     _parse_iev_response,
     _parse_top_of_book,
 )
-from src.infrastructure.browser.stockbit_session_actions import (
-    browse_stockbit_session as browse_stockbit_session,
-)
-from src.infrastructure.browser.stockbit_session_actions import (
-    get_stockbit_session_status as get_stockbit_session_status,
-)
-from src.infrastructure.browser.stockbit_session_actions import (
-    reauth_stockbit_session as reauth_stockbit_session,
-)
-from src.infrastructure.browser.stockbit_session_actions import (
-    save_stockbit_session as save_stockbit_session,
-)
-from src.infrastructure.browser.stockbit_token_extractor import (
-    _intercept_token as _intercept_token,
-)
-from src.infrastructure.browser.stockbit_token_extractor import (
-    _resolve_token as _resolve_token,
-)
 from src.infrastructure.config.stockbit_config import StockbitConfig, load_stockbit_config
 
 logger = logging.getLogger(__name__)
-
-# ── Session utilities — live in playwright_stockbit_browser, imported here ──
-# Imports above remain explicit aliases for backward-compatible re-export.
-#
-# Compatibility surface:
-# - Canonical import(s):
-#   - ORDERBOOK_PAGE_URL, _persistent_context,
-#     _require_playwright -> src.infrastructure.browser.stockbit_browser_context
-#   - browse_stockbit_session, get_stockbit_session_status,
-#     save_stockbit_session, reauth_stockbit_session
-#     -> src.infrastructure.browser.stockbit_session_actions
-#   - _intercept_token, _resolve_token ->
-#     src.infrastructure.browser.stockbit_token_extractor
-# - Allowed contents:
-#   - re-export/delegation only for the compatibility symbols above. This
-#     module remains canonical for PlaywrightStockbitProvider itself, which
-#     is not part of the compatibility surface.
-# - Expiry:
-#   - permanent public API, or remove after internal imports migrate to the
-#     canonical modules above.
 
 # ── Main provider ──────────────────────────────────────────────────────────
 

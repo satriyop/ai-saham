@@ -39,7 +39,7 @@ def login(
         saham fetch stockbit login --timeout 180
     """
     require_playwright_cli()
-    from src.infrastructure.browser.playwright_stockbit_provider import save_stockbit_session
+    from src.infrastructure.browser.stockbit_session_actions import save_stockbit_session
 
     try:
         save_stockbit_session(timeout=timeout)
@@ -186,7 +186,7 @@ def browse(
         saham fetch stockbit browse --url https://stockbit.com/stocks/BBCA
     """
     require_playwright_cli()
-    from src.infrastructure.browser.playwright_stockbit_provider import browse_stockbit_session
+    from src.infrastructure.browser.stockbit_session_actions import browse_stockbit_session
 
     target = url or "https://stockbit.com/stream"
     try:

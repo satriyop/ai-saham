@@ -74,10 +74,10 @@ Orchestrates domain logic to fulfill user requests. All I/O is abstracted behind
 | Directory | Responsibility | Key Files |
 |-----------|----------------|-----------|
 | `use_case/` | Business operations (22 use cases) | `FetchMarketData`, `ComputeSMA/EMA/RSI`, `AssessRisk`, `ExplainRisk`, `Backtest`, `SwingBacktest`, `MarketRegime`, `PreOpenScreen`, `FetchSentiment`, `AuditSentiment`, `FetchBrokerData`, `AccumulationScreen`, `AccumulationAudit`, `CreateIndicatorFromIntent`, `CreateStrategyFromIntent`, etc. |
-| `services/` | Cross-cutting application logic | `indicator_registry.py`, `strategy_loader.py`, `universe_loader.py`, `position_sizer.py`, `skill_generator.py`, `pre_open_paper_journal.py`, `accumulation_journal.py`, `bootstrap.py` |
+| `services/` | Cross-cutting application logic | `indicator_registry.py`, `strategy_loader.py`, `universe_loader.py`, `position_sizer.py`, `skill_generator.py`, `pre_open_paper_journal.py`, `accumulation_journal.py`, `engine_bootstrap/` |
 | `ports/` | Application-level interfaces | `formula_translator.py`, `strategy_translator.py`, `indicator_plugin.py`, `skill_writer.py` |
 | `formula/` | Formula DSL engine | `ast_nodes.py`, `tokenizer.py`, `parser.py`, `evaluator.py`, `validator.py` |
-| `rules/` | Formula-based rule system | `schema.py`, `interpreter.py`, `exceptions.py` |
+| `rules/` | Formula-based rule system | `condition_schema.py`, `indicator_schema.py`, `outcome_schema.py`, `rule_schema.py`, `interpreter.py`, `exceptions.py` |
 | `dto/` | Data transfer objects | `AnalysisRequest`, `IndicatorSnapshot` |
 
 **Key rule:** Use cases depend only on domain ports, never on concrete implementations.
@@ -92,8 +92,8 @@ Implements domain and application ports with concrete external systems.
 | `persistence/` | Data storage | `sqlite_market_repository.py`, `sqlite_broker_repository.py`, `sentiment_repository.py`, `formula_storage.py`, CSV journal writers |
 | `ai/` | AI adapters | 6 explainers (`deepseek_explainer`, `claude_explainer`, `openai_explainer`, `gemini_explainer`, `ollama_explainer`, `mock_explainer`) + `factory.py`, `formula_translator.py`, `strategy_translator.py`, `sentiment_analyzer.py` |
 | `sentiment/` | News pipeline | `google_news_provider.py`, `cnbc_indonesia_provider.py`, `kontan_provider.py`, `composite_provider.py`, `keyword_classifier.py`, `ai_classifier.py`, `factory.py`, `deduplication.py` |
-| `browser/` | Stockbit providers (21 files) | `playwright_stockbit.py` (broker provider, delegates to browser module), `playwright_stockbit_browser.py` (browser lifecycle + session management), `stockbit_browser.py`, `stockbit_analyst.py`, `stockbit_bandar.py`, `stockbit_broker_distribution.py`, `stockbit_company_profile.py`, `stockbit_corp_action.py`, `stockbit_earnings.py`, `stockbit_forward_estimates.py`, `stockbit_fundamentals.py`, `stockbit_insider.py`, `stockbit_market_time.py`, `stockbit_order_book.py`, `stockbit_running_trade.py`, `stockbit_seasonality.py`, `stockbit_shareholding.py`, `stockbit_ticker_notation.py`, `stockbit_universe.py`, `stockbit_valuation.py` |
-| `config/` | Configuration loading | `yaml_loader.py` |
+| `browser/` | Stockbit providers (21 files) | `playwright_stockbit_provider.py` (IEV/order-book provider), `stockbit_broker_provider.py` (broker provider), `stockbit_session_actions.py` (login/spy/browse session utilities), `stockbit_browser.py`, `stockbit_analyst.py`, `stockbit_bandar.py`, `stockbit_broker_distribution.py`, `stockbit_company_profile.py`, `stockbit_corp_action.py`, `stockbit_earnings.py`, `stockbit_forward_estimates.py`, `stockbit_fundamentals.py`, `stockbit_insider.py`, `stockbit_market_time.py`, `stockbit_order_book.py`, `stockbit_running_trade.py`, `stockbit_seasonality.py`, `stockbit_shareholding.py`, `stockbit_ticker_notation.py`, `stockbit_universe.py`, `stockbit_valuation.py` |
+| `config/` | Configuration loading | `rules_yaml_loader.py`, `app_config.py` |
 | `csv/` | CSV import pipeline | `format_detector.py`, `mapping_loader.py`, `broker_csv_adapter.py` |
 | `plugins/` | Plugin indicator loader | `indicator_loader.py` |
 | `skill/` | Self-documentation system | `annotation_reader.py`, `index_writer.py`, `markdown_writer.py`, `rules_hasher.py` |

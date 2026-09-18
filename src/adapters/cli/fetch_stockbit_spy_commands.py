@@ -61,7 +61,7 @@ def spy(
         saham fetch stockbit spy --wait 10 --output journals/my-capture.json
     """
     require_playwright_cli()
-    from src.infrastructure.browser.playwright_stockbit_provider import spy_stockbit_session
+    from src.infrastructure.browser.stockbit_session_actions import spy_stockbit_session
 
     resolved_output = output or DEFAULT_SPY_OUTPUT
 
