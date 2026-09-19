@@ -101,6 +101,9 @@ journals/
 # Stockbit persistent browser profile (contains session tokens)
 .stockbit_profile/
 
+# Playwright browsers (shared cache; do not commit)
+.playwright-browsers/
+
 # Jupyter (if used for analysis exploration)
 .ipynb_checkpoints/
 
