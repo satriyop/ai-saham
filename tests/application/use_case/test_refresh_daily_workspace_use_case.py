@@ -116,3 +116,33 @@ def test_refresh_daily_workspace_surfaces_failed_ticker_warning() -> None:
     result = use_case.execute(RefreshDailyWorkspaceRequest(universe="lq45"))
 
     assert result.warnings == ("2 ticker(s) failed during refresh.",)
+
+
+def test_refresh_daily_workspace_lists_unavailable_ohlc_tickers() -> None:
+    refresh_response = FetchMarketRefreshResponse(
+        ticker_list=["BBCA", "BMRI"],
+        stock_tickers_only=["BBCA", "BMRI"],
+        ticker_results=[],
+        ok_count=0,
+        fail_count=2,
+        failures=["BBCA", "BMRI"],
+        hang_count=2,
+        hang_attempted=2,
+        unavailable_tickers=["BBCA", "BMRI"],
+    )
+    mock_workflow_result = MagicMock(spec=FetchMarketCommandWorkflowResult)
+    mock_workflow_result.response = refresh_response
+    mock_briefing_use_case = MagicMock(spec=DailyBriefingUseCase)
+    mock_briefing_use_case.execute.return_value = MagicMock(spec=DailyBriefingResponse)
+
+    use_case = RefreshDailyWorkspaceUseCase(
+        refresh_market_data_capability=MagicMock(return_value=mock_workflow_result),
+        daily_briefing_use_case=mock_briefing_use_case,
+    )
+
+    result = use_case.execute(RefreshDailyWorkspaceRequest(universe="lq45"))
+
+    assert result.warnings == (
+        "2 ticker(s) failed during refresh.",
+        "Same-session OHLC unavailable for: BBCA, BMRI (hung/timeout after retry).",
+    )

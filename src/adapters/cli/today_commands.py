@@ -535,13 +535,17 @@ def _resolve_briefing_response(
 
             attempted = refresh_response.hang_attempted
             hung = refresh_response.hang_count
+            unavailable = ", ".join(getattr(refresh_response, "unavailable_tickers", []) or [])
+            note = "today live refresh"
+            if unavailable:
+                note = f"today live refresh; same-session OHLC unavailable: {unavailable}"
             log_hang_rate(
                 HangRateRecord(
                     surface="today-candles-only",
                     attempted=attempted,
                     hung=hung,
                     rate=(hung / attempted) if attempted else 0.0,
-                    note="today live refresh",
+                    note=note,
                 )
             )
         return _BriefingResolution("LIVE", result.briefing, list(result.warnings))

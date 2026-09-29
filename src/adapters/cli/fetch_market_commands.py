@@ -291,6 +291,8 @@ def fetch_market(
     )
     if response.failures:
         typer.echo(f"Failed: {', '.join(response.failures)}")
+    if response.unavailable_tickers:
+        typer.echo("Same-session OHLC unavailable: " + ", ".join(response.unavailable_tickers))
     echo_note_group(
         title=(
             f"⚠  Candle cache shorter than --days {days} for "
@@ -347,16 +349,20 @@ def fetch_market(
         attempted = response.hang_attempted
         hung = response.hang_count
         rate = (hung / attempted) if attempted else 0.0
+        unavailable = ", ".join(response.unavailable_tickers)
+        note = deadline_note
+        if unavailable:
+            note = f"{deadline_note}; same-session OHLC unavailable: {unavailable}"
         log_hang_rate(
             HangRateRecord(
                 surface="fetch-market-candles-only",
                 attempted=attempted,
                 hung=hung,
                 rate=rate,
-                note=deadline_note,
+                note=note,
             )
         )
-        typer.echo(f"hung-fetch: {hung}/{attempted} rate={rate:.4f} {deadline_note}")
+        typer.echo(f"hung-fetch: {hung}/{attempted} rate={rate:.4f} {note}")
         if hung:
             raise typer.Exit(1)
 

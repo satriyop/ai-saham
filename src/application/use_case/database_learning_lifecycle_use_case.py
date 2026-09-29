@@ -9,6 +9,7 @@ from decimal import Decimal
 from statistics import mean
 from typing import Any, Protocol, Sequence
 
+from src.application.ports.iev_snapshot_repository import IevSessionCapturePort
 from src.application.services.accumulation_price_contract import (
     parse_canonical_positive_decimal_text,
 )
@@ -18,6 +19,7 @@ from src.domain.ports.learning_artifact_repositories import (
     LearningOutcomeLabelRepository,
     LearningTrackSnapshotRepository,
 )
+from src.domain.value_objects.idx_market import IDX_TIMEZONE, PRE_OPEN_MATCHING_START
 from src.domain.value_objects.learning_artifacts import (
     AssessmentPurpose,
     EvaluationMethod,
@@ -749,6 +751,7 @@ class PreOpenSessionStatus:
     lines: tuple[PreOpenSessionObservationLine, ...]
     next_actions: tuple[str, ...]
     corpus: LearningStatus
+    miss_reason: str | None = None
 
 
 class GetPreOpenSessionStatusUseCase:
@@ -761,14 +764,16 @@ class GetPreOpenSessionStatusUseCase:
         tracks: LearningTrackSnapshotRepository,
         labels: LearningOutcomeLabelRepository,
         evaluations: LearningEvaluationRepository,
+        iev_capture: IevSessionCapturePort | None = None,
     ) -> None:
         self._observations = observations
         self._tracks = tracks
         self._labels = labels
         self._evaluations = evaluations
+        self._iev_capture = iev_capture
 
     def execute(self, session_date: date) -> PreOpenSessionStatus:
-        from src.domain.value_objects.idx_market import IDX_TIMEZONE, REGULAR_OPEN
+        from src.domain.value_objects.idx_market import REGULAR_OPEN
 
         corpus = GetLearningStatusUseCase(
             observations=self._observations,
@@ -856,6 +861,10 @@ class GetPreOpenSessionStatusUseCase:
                 )
             )
 
+        miss_reason = self._miss_reason(
+            session_date=session_date,
+            observation_count=len(session_obs),
+        )
         next_actions = self._next_actions(
             session_date=session_date,
             observation_count=len(session_obs),
@@ -863,6 +872,7 @@ class GetPreOpenSessionStatusUseCase:
             missing_open=missing_open,
             labeled=labeled,
             lines=lines,
+            miss_reason=miss_reason,
         )
         return PreOpenSessionStatus(
             session_date=session_date,
@@ -873,7 +883,22 @@ class GetPreOpenSessionStatusUseCase:
             lines=tuple(lines),
             next_actions=next_actions,
             corpus=corpus,
+            miss_reason=miss_reason,
         )
+
+    def _miss_reason(self, *, session_date: date, observation_count: int) -> str | None:
+        """Fail-closed late IEV: never invent observations from a post-lock snapshot."""
+        if observation_count != 0 or self._iev_capture is None:
+            return None
+        captured = self._iev_capture.captured_at_for(session_date)
+        if captured is None:
+            return None
+        local = captured.astimezone(IDX_TIMEZONE)
+        if local.date() != session_date:
+            return None
+        if local.timetz().replace(tzinfo=None) >= PRE_OPEN_MATCHING_START:
+            return "late_capture"
+        return None
 
     @staticmethod
     def _next_actions(
@@ -884,14 +909,24 @@ class GetPreOpenSessionStatusUseCase:
         missing_open: int,
         labeled: int,
         lines: Sequence[PreOpenSessionObservationLine],
+        miss_reason: str | None = None,
     ) -> tuple[str, ...]:
         actions: list[str] = []
         day = session_date.isoformat()
         if observation_count == 0:
-            actions.append(
-                f"No capture for {day}: run `saham research pre-open capture` "
-                "(NCP window) or check cron/logs."
-            )
+            if miss_reason == "late_capture":
+                lock_end = PRE_OPEN_MATCHING_START.strftime("%H:%M")
+                actions.append(
+                    f"miss_reason=late_capture for {day}: IEV captured after NCP "
+                    f"lock end ({lock_end} Asia/Jakarta). Do not treat capture as "
+                    "still pending in-window; the lock cannot be replayed. Use "
+                    "`saham screen pre-open` for discovery-only."
+                )
+            else:
+                actions.append(
+                    f"No capture for {day}: run `saham research pre-open capture` "
+                    "(NCP window) or check cron/logs."
+                )
             return tuple(actions)
         no_track = sum(1 for line in lines if line.readiness == "NO_TRACK")
         if no_track:

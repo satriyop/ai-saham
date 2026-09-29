@@ -20,6 +20,9 @@ from src.application.use_case.database_learning_lifecycle_use_case import (
     GetPreOpenSessionStatusUseCase,
 )
 from src.domain.value_objects.learning_artifacts import AssessmentPurpose
+from src.infrastructure.persistence.iev_session_capture_lookup import (
+    IevSessionCaptureLookup,
+)
 
 
 def pre_open_evaluate(
@@ -51,12 +54,13 @@ def pre_open_status(
     """Show pre-open session readiness (capture / track open / labels)."""
 
     session_date = resolve_session_date(session)
-    _, repo = repository(db_path)
+    resolved_db, repo = repository(db_path)
     status = GetPreOpenSessionStatusUseCase(
         observations=repo,
         tracks=repo,
         labels=repo,
         evaluations=repo,
+        iev_capture=IevSessionCaptureLookup(db_path=resolved_db),
     ).execute(session_date)
     payload = {
         "artifact_type": "pre_open_session_status",
@@ -65,6 +69,7 @@ def pre_open_status(
         "with_opening_price": status.with_opening_price,
         "missing_opening_price": status.missing_opening_price,
         "labeled_count": status.labeled_count,
+        "miss_reason": status.miss_reason,
         "next_actions": list(status.next_actions),
         "lines": [
             {
@@ -96,6 +101,7 @@ def pre_open_status(
         f"with_open: {status.with_opening_price}  "
         f"missing_open: {status.missing_opening_price}  "
         f"labeled: {status.labeled_count}"
+        + (f"  miss_reason: {status.miss_reason}" if status.miss_reason else "")
     )
     if status.lines:
         typer.echo("  lines:")
