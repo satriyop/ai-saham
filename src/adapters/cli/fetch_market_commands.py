@@ -343,22 +343,47 @@ def fetch_market(
 
     if candles_only:
         from src.application.services.bounded_call import HangRateRecord, log_hang_rate
+        from src.application.services.candles_only_hung_gate import (
+            candles_only_unavailable_tickers,
+            hung_candles_only_fails_closed,
+            missing_required_session_candles,
+        )
+        from src.domain.ports.market_data_repository import MarketDataRepositoryError
+        from src.infrastructure.persistence.sqlite_market_repository import (
+            SQLiteMarketRepository,
+        )
 
         attempted = response.hang_attempted
         hung = response.hang_count
         rate = (hung / attempted) if attempted else 0.0
+        unavailable_tickers = candles_only_unavailable_tickers(response)
+        unavailable = ", ".join(unavailable_tickers)
+        note = deadline_note
+        if unavailable:
+            note = f"{deadline_note}; same-session OHLC unavailable: {unavailable}"
         log_hang_rate(
             HangRateRecord(
                 surface="fetch-market-candles-only",
                 attempted=attempted,
                 hung=hung,
                 rate=rate,
-                note=deadline_note,
+                note=note,
             )
         )
-        typer.echo(f"hung-fetch: {hung}/{attempted} rate={rate:.4f} {deadline_note}")
+        typer.echo(f"hung-fetch: {hung}/{attempted} rate={rate:.4f} {note}")
+        if unavailable_tickers:
+            typer.echo("Same-session OHLC unavailable: " + unavailable)
         if hung:
-            raise typer.Exit(1)
+            try:
+                missing = missing_required_session_candles(
+                    response.stock_tickers_only,
+                    result.expected_trading_day,
+                    SQLiteMarketRepository(resolved_db, initialize_schema=False),
+                )
+            except (MarketDataRepositoryError, OSError):
+                raise typer.Exit(1) from None
+            if hung_candles_only_fails_closed(hung_count=hung, missing_tickers=missing):
+                raise typer.Exit(1)
 
     if response.pit_coverage:
         render_enrichment_pit_coverage(response.pit_coverage)
