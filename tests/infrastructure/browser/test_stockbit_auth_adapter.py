@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from src.application.ports.stockbit_auth import (
+    HEADLESS_JWT_SHORT_REMAINING_SECONDS,
     StockbitAuthFailure,
     StockbitAuthFailureKind,
     StockbitAuthPort,
@@ -199,6 +200,76 @@ def test_default_refresh_success_with_expired_jwt_is_expired(tmp_path: Path, mon
     assert isinstance(result, StockbitAuthFailure)
     assert result.kind is StockbitAuthFailureKind.EXPIRED
     assert adapter.inspect().token_state == "expired"
+
+
+def test_force_refresh_headless_ready_without_extending_short_jwt_is_failure(
+    tmp_path: Path,
+) -> None:
+    profile = _profile(tmp_path)
+    store = StockbitTokenStore(profile / "token.json")
+    store.save(_jwt(exp_hours=12.0))
+    adapter = StockbitAuthAdapter(profile, store, refresh=lambda _m: StockbitAuthReady())
+    before = adapter.inspect()
+    assert before.token_state == "valid"
+    assert before.token_seconds_remaining is not None
+    assert before.token_seconds_remaining <= HEADLESS_JWT_SHORT_REMAINING_SECONDS
+
+    result = adapter.force_refresh(StockbitAuthRefreshMode.HEADLESS)
+
+    after = adapter.inspect()
+    assert after.token_expires_at == before.token_expires_at
+    assert isinstance(result, StockbitAuthFailure)
+    assert result.kind is StockbitAuthFailureKind.REFRESH_FAILED
+    assert "jwt_exp" in result.message
+    assert "Headed login is required" in result.message
+    assert "eyJ" not in result.message
+
+
+def test_force_refresh_headless_ready_when_short_jwt_exp_moves_later(tmp_path: Path) -> None:
+    profile = _profile(tmp_path)
+    store = StockbitTokenStore(profile / "token.json")
+    store.save(_jwt(exp_hours=12.0))
+
+    def refresh(_mode: StockbitAuthRefreshMode) -> StockbitAuthReady:
+        store.save(_jwt(exp_hours=48.0))
+        return StockbitAuthReady()
+
+    adapter = StockbitAuthAdapter(profile, store, refresh=refresh)
+    before = adapter.inspect()
+    result = adapter.force_refresh(StockbitAuthRefreshMode.HEADLESS)
+    after = adapter.inspect()
+    assert isinstance(result, StockbitAuthReady)
+    assert after.token_expires_at is not None
+    assert before.token_expires_at is not None
+    assert after.token_expires_at > before.token_expires_at
+
+
+def test_force_refresh_headless_ready_when_remaining_above_window_unchanged(
+    tmp_path: Path,
+) -> None:
+    profile = _profile(tmp_path)
+    store = StockbitTokenStore(profile / "token.json")
+    store.save(_jwt(exp_hours=48.0))
+    adapter = StockbitAuthAdapter(profile, store, refresh=lambda _m: StockbitAuthReady())
+    before = adapter.inspect()
+    assert before.token_seconds_remaining is not None
+    assert before.token_seconds_remaining > HEADLESS_JWT_SHORT_REMAINING_SECONDS
+
+    result = adapter.force_refresh(StockbitAuthRefreshMode.HEADLESS)
+
+    after = adapter.inspect()
+    assert after.token_expires_at == before.token_expires_at
+    assert isinstance(result, StockbitAuthReady)
+
+
+def test_force_refresh_headed_short_unchanged_jwt_stays_ready(tmp_path: Path) -> None:
+    profile = _profile(tmp_path)
+    store = StockbitTokenStore(profile / "token.json")
+    store.save(_jwt(exp_hours=12.0))
+    adapter = StockbitAuthAdapter(profile, store, refresh=lambda _m: StockbitAuthReady())
+    result = adapter.force_refresh(StockbitAuthRefreshMode.HEADED)
+    assert isinstance(result, StockbitAuthReady)
+    assert adapter.inspect().token_state == "valid"
 
 
 def test_inspect_reports_store_without_jwt(tmp_path: Path) -> None:
